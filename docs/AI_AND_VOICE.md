@@ -1,0 +1,24 @@
+# Production AI and Voice Architecture
+
+## Multi-provider architecture
+AI Gateway выбирает модели по типу операции, языку, качеству, цене, latency и политике данных. Возможные STT: Groq Whisper, ElevenLabs Scribe, Google, OpenAI; LLM: GPT-OSS, Gemini, Mistral, DeepSeek, OpenAI; TTS: системный Android/iOS и облачные. **Список кандидатов, не контракт:** цены, языки, API и условия проверяются перед интеграцией.
+
+## Separate pipelines
+- Speech-to-text (STT): получение аудио, кодек/нормализация, детекция языка, выравнивание сегментов, транскрипт и confidence; повтор более качественным провайдером при низкой уверенности; пользовательское исправление.
+- Text extraction: JSON Schema структурированные факты/намерения, классификация, даты, суммы, валюта, имена, связи, цитаты на источник.
+- Context resolution: поиск известных сущностей, генерация кандидатов связей без автоматического слияния при неоднозначности.
+- Deterministic validation: проверка правил, разрешений, дат/валют/бизнес-инвариантов, idempotency; auto-commit безопасного либо очередь подтверждения.
+- Retrieval/response: tenant-scoped hybrid search + exact SQL + bounded LLM composition; ответ с источниками и уровнем неопределённости.
+- TTS: локальная озвучка при поддержке нужного языка и пользователя; cloud TTS по желанию; realtime voice — отдельно управляемый тарифный режим.
+
+## Accuracy tests: mandatory languages
+RU, AZ, EN и RU/AZ code-switching; разговорная и шумная речь, имена, топонимы, BMW/технические названия, даты и манаты. Проверять не только word error rate: **critical slot accuracy** (кто кому должен, дата, сумма, валюта, знак, отрицание, обещание vs факт) и долю ложных записей. Строить анонимизированный или явно разрешённый test corpus с эталонами; закрывать доступ к личным аудио.
+
+## Robust model I/O
+JSON schema + серверная проверка, ограниченное число retry, model/provider version pinning, fallback только в пределах разрешённой data residency и согласия. Не отправлять всю историю в каждый запрос. Извлечённый контент и документы — недоверенные данные: prompt injection не имеет прав вызывать инструменты.
+
+## Cost controller
+Учитывать input/output/reasoning/cache tokens, аудиоминуты, TTS-символы/аудиотокены, провайдер, retry, стоимость по версии тарифа, tenant, тип операции. Квоты, budget alerts, degraded mode, кэш безопасных результатов, batching где применимо, cap на контекст. Стоимость считать как actual usage, а не сумму из предположений.
+
+## Model evaluation & release
+Dataset по сценарию → offline score → human review critical errors → canary on consented test accounts → regression monitoring → roll back. Никогда не делать прямой вывод о точности из цен или рекламных утверждений провайдера.
