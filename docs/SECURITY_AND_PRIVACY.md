@@ -1,5 +1,9 @@
 # Security, Privacy and Human Control
 
+## Этапы защиты — уточнение 2026-10-29
+
+Сначала нативное Android-приложение с локальными данными/логикой; после тестирования и подтверждения всего функционала — серверная адаптация по разделу 1.1 [ENGINEERING_PLAN.md](ENGINEERING_PLAN.md). До личных записей обязательны локальная защита БД/файлов/ключей, политика системных резервных копий, экспорт/удаление и безопасная диагностика. Способ доступа к внешнему AI определяется ADR; общий секрет в распространяемом APK недопустим. Серверные сессии, tenant/space isolation, удалённый отзыв и серверные хранилища из следующих разделов реализуются и проверяются после перехода. Локальная проверка не является доказательством их безопасности.
+
 ## Threat model
 Sensitive personal finances, debts, third-party names, private speech and documents; attack vectors include stolen devices/tokens, prompt injection, cross-tenant leakage, insecure media URLs, compromised integrations, malicious attachments, insider misuse, replay, data poisoning and billing abuse.
 

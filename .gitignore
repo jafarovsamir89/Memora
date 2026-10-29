@@ -1,2 +1,13 @@
 # macOS Finder metadata is not part of the project.
 .DS_Store
+
+# Android / Gradle machine state and generated artifacts
+.gradle/
+.kotlin/
+**/build/
+local.properties
+.idea/
+*.iml
+*.jks
+*.keystore
+artifacts/

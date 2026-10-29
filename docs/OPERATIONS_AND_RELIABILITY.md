@@ -1,5 +1,9 @@
 # Operating Memora as a commercial service
 
+## Порядок ввода инфраструктуры — решение 2026-10-29
+
+Сначала разрабатываем и проверяем нативное Android-приложение с локальными данными/логикой. После тестирования и подтверждения всего функционала владельцем адаптируем приложение к серверной инфраструктуре; до этого собственного backend в начальном фундаменте нет. Сборка/CI, локальные миграции, сохранность, безопасная диагностика и восстановление Android нужны с начала. Серверные окружения, очереди, мониторинг сервиса, резервирование БД и SLO ниже относятся к последующему этапу. Миграция существующих локальных данных и повторная приёмка — отдельные работы MEM-14.10–MEM-14.14; детали — раздел 1.1 [ENGINEERING_PLAN.md](ENGINEERING_PLAN.md).
+
 ## Environments
 Development, staging with synthetic/redacted data, production. IaC, secret manager, automatic migrations with rollback, CI/CD with tests/security scans, staged release + feature flags.
 
