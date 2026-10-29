@@ -17,3 +17,9 @@ Before launch, conduct jurisdiction-specific analysis (Azerbaijan, EU/EEA and an
 
 ## Operational policies
 Audit sensitive access without storing secrets/transcripts in logs. Access to production personal records restricted, monitored and justified; operator-facing diagnostics redacted. Backups encrypted; restores and deletion cascade tested. Incident classification, escalation, breach-response timing set by legal obligations. Threat models updated for each integration.
+
+## Уточнения контрактов доверия
+
+Права и подтверждение проверяются для точного содержания и версии действия перед исполнением, включая отложенные задания. Отзыв доступа распространяется на поиск, экспорт, контекст модели и будущие уведомления. Нельзя гарантировать немедленное стирание ранее скачанной копии с отключённого устройства или отзыв уже сделанного экспорта; пределы офлайн-доступа и очистку нужно явно определить.
+
+Исправление, удаление источника и отзыв прав инвалидируют зависимые сводки/кэши/индексы. До открытия восстановленной резервной копии повторно применяются актуальные удаления и ограничения доступа. Prompt injection проверяется также на попытки подменить сумму, адресата или ссылку-источник. Это требования к будущим контрактам, не реализованные гарантии. Связанные сценарии — S29, S35–S37 в [SCENARIOS.md](SCENARIOS.md); план — [ENGINEERING_PLAN.md](ENGINEERING_PLAN.md).

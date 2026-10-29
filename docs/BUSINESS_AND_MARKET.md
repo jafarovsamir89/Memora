@@ -1,5 +1,7 @@
 # Business strategy and economics — assumptions, not forecasts
 
+**Текущее указание владельца:** ценовые вопросы полностью отложены. Этот документ сохраняется как контекст полного видения; его примеры не являются утверждёнными тарифами, бюджетом или задачей текущего этапа. Возвращаться к ценовым расчётам по новому указанию владельца. Текущий план — [ENGINEERING_PLAN.md](ENGINEERING_PLAN.md).
+
 ## Positioning
 Personal AI secretary with accountable memory, debts, income/expenses, tasks, calendar, people and proactive daily briefings. Competes with separate AI voice notes (e.g. Voicenotes), knowledge apps, task managers and budgeting tools. Validate competitor offerings and downloads periodically: store installations are cumulative thresholds, not active users or revenue.
 
