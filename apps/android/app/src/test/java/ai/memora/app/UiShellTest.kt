@@ -17,6 +17,17 @@ import org.robolectric.annotation.Config
 import org.robolectric.annotation.GraphicsMode
 import org.robolectric.annotation.LooperMode
 import java.io.File
+import java.util.UUID
+import javax.crypto.KeyGenerator
+import android.content.Context
+import androidx.test.core.app.ApplicationProvider
+import ai.memora.app.data.AppearanceStore
+import ai.memora.app.data.AppearanceSettings
+import ai.memora.app.data.AtomicAppearanceStore
+import ai.memora.app.data.CapturePersistence
+import ai.memora.app.data.EncryptedCaptureStore
+import ai.memora.app.data.LocalCapturePersistence
+import org.junit.Before
 
 /** Runs Android 13 UI semantics and native rasterization on the JVM, not a phone. */
 @RunWith(RobolectricTestRunner::class)
@@ -25,6 +36,21 @@ import java.io.File
 @LooperMode(LooperMode.Mode.PAUSED)
 class UiShellTest {
     @get:Rule val compose = createComposeRule()
+    private lateinit var captureStore: CapturePersistence
+    private lateinit var appearanceStore: AppearanceStore
+
+    @Before fun setupCaptureStore() {
+        val context = ApplicationProvider.getApplicationContext<Context>()
+        appearanceStore = AtomicAppearanceStore(File(context.cacheDir, "ui-settings-${UUID.randomUUID()}"), AppearanceSettings(theme = "light"))
+        val key = KeyGenerator.getInstance("AES").apply { init(256) }.generateKey()
+        captureStore = LocalCapturePersistence(EncryptedCaptureStore(File(context.cacheDir, "ui-capture-${UUID.randomUUID()}.bin")) { key })
+    }
+
+    private fun awaitCaptureReady() {
+        compose.waitUntil(10_000) {
+            compose.onAllNodes(hasTestTag("capture_input") and isEnabled()).fetchSemanticsNodes().isNotEmpty()
+        }
+    }
 
     private fun screenshot(name: String) {
         compose.waitForIdle()
@@ -45,7 +71,7 @@ class UiShellTest {
     }
 
     @Test fun navigationSearchAndSource() {
-        compose.setContent { MemoraApp(initialTheme = "light") }
+        compose.setContent { MemoraApp(initialTheme = "light", capturePersistenceOverride = captureStore, appearanceStoreOverride = appearanceStore) }
         compose.onNodeWithTag("capture_voice").assertIsDisplayed()
         screenshot("01-home-light")
         compose.onNodeWithTag("nav_memory").performClick()
@@ -57,18 +83,20 @@ class UiShellTest {
     }
 
     @Test fun textDraftGoesToInboxWithoutAi() {
-        compose.setContent { MemoraApp(initialTheme = "light") }
+        compose.setContent { MemoraApp(initialTheme = "light", capturePersistenceOverride = captureStore, appearanceStoreOverride = appearanceStore) }
         compose.onNodeWithTag("capture_text").performClick()
+        awaitCaptureReady()
         compose.onNodeWithTag("save_draft").assertIsNotEnabled()
         compose.onNodeWithTag("capture_input").performTextInput("A synthetic preview note")
         compose.onNodeWithTag("save_draft").performScrollTo().performClick()
+        compose.waitUntil(10_000) { compose.onAllNodesWithTag("draft_0").fetchSemanticsNodes().isNotEmpty() }
         compose.onNodeWithText("A synthetic preview note").assertIsDisplayed()
-        compose.onNodeWithText("Черновик").assertIsDisplayed()
+        compose.onNodeWithText("Сохранено локально").assertIsDisplayed()
         screenshot("04-inbox-light")
     }
 
     @Test fun completingTaskChangesDoneFilter() {
-        compose.setContent { MemoraApp(initialRoute = "tasks", initialTheme = "light") }
+        compose.setContent { MemoraApp(initialRoute = "tasks", initialTheme = "light", capturePersistenceOverride = captureStore, appearanceStoreOverride = appearanceStore) }
         screenshot("05-tasks-light")
         compose.onNodeWithTag("task_sensor").performClick()
         compose.onNodeWithTag("task_sensor").assertDoesNotExist()
@@ -77,20 +105,56 @@ class UiShellTest {
     }
 
     @Test fun darkThemeAndLanguageSwitch() {
-        compose.setContent { MemoraApp(initialRoute = "settings", initialTheme = "light") }
+        compose.setContent { MemoraApp(initialRoute = "settings", initialTheme = "light", capturePersistenceOverride = captureStore, appearanceStoreOverride = appearanceStore) }
+        compose.waitUntil(10_000) { compose.onAllNodes(hasTestTag("filter_dark") and isEnabled()).fetchSemanticsNodes().isNotEmpty() }
         compose.onNodeWithTag("filter_dark").performClick()
+        compose.waitUntil(10_000) { compose.onAllNodes(hasTestTag("filter_en") and isEnabled()).fetchSemanticsNodes().isNotEmpty() }
         screenshot("06-settings-dark")
         compose.onNodeWithTag("filter_en").performClick()
         compose.onNodeWithText("Appearance").assertExists()
+        compose.waitUntil(10_000) { compose.onAllNodes(hasTestTag("filter_az") and isEnabled()).fetchSemanticsNodes().isNotEmpty() }
         compose.onNodeWithTag("filter_az").performClick()
         compose.onNodeWithText("Görünüş").assertExists()
+        compose.waitUntil(10_000) { compose.onAllNodes(hasTestTag("filter_ru") and isEnabled()).fetchSemanticsNodes().isNotEmpty() }
         compose.onNodeWithTag("filter_ru").performClick()
         compose.onNodeWithTag("nav_home").performClick()
         screenshot("07-home-dark")
     }
 
+    @Test fun storedAppearanceIsAppliedAtStartup() {
+        appearanceStore.write(AppearanceSettings("az", "dark"))
+        compose.setContent { MemoraApp(initialRoute = "settings", initialTheme = "light", capturePersistenceOverride = captureStore, appearanceStoreOverride = appearanceStore) }
+        compose.waitUntil(10_000) { compose.onAllNodesWithText("Görünüş").fetchSemanticsNodes().isNotEmpty() }
+        compose.onNodeWithTag("filter_az").assertIsSelected()
+        compose.onNodeWithTag("filter_dark").assertIsSelected()
+    }
+
+    @Test fun settingsWriteFailureRequiresReloadAndNeverShowsFalseSuccess() {
+        var stored = AppearanceSettings(theme = "light")
+        var failWrites = true
+        val store = object : AppearanceStore {
+            override fun read() = stored
+            override fun write(settings: AppearanceSettings) {
+                if (failWrites) throw java.io.IOException("synthetic failure")
+                stored = settings
+            }
+        }
+        compose.setContent { MemoraApp(initialRoute = "settings", initialTheme = "light", capturePersistenceOverride = captureStore, appearanceStoreOverride = store) }
+        compose.waitUntil(10_000) { compose.onAllNodes(hasTestTag("filter_az") and isEnabled()).fetchSemanticsNodes().isNotEmpty() }
+        compose.onNodeWithTag("filter_az").performClick()
+        compose.waitUntil(10_000) { compose.onAllNodesWithTag("settings_storage_error").fetchSemanticsNodes().isNotEmpty() }
+        compose.onNodeWithTag("filter_az").assertIsNotEnabled()
+        compose.onNodeWithText("Оформление").assertExists()
+        failWrites = false
+        compose.onNodeWithTag("settings_retry").performClick()
+        compose.waitUntil(10_000) { compose.onAllNodes(hasTestTag("filter_az") and isEnabled()).fetchSemanticsNodes().isNotEmpty() }
+        compose.onNodeWithTag("filter_az").performClick()
+        compose.waitUntil(10_000) { compose.onAllNodesWithText("Görünüş").fetchSemanticsNodes().isNotEmpty() }
+        assert(stored.language == "az")
+    }
+
     @Test fun financePreviewHasCoverageAndCorrectAmounts() {
-        compose.setContent { MemoraApp(initialRoute = "finance", initialTheme = "light") }
+        compose.setContent { MemoraApp(initialRoute = "finance", initialTheme = "light", capturePersistenceOverride = captureStore, appearanceStoreOverride = appearanceStore) }
         compose.onNodeWithText("230 ₼").assertIsDisplayed()
         compose.onNodeWithText("По 2 демонстрационным операциям, не баланс счёта").assertExists()
         screenshot("08-finance-light")
@@ -99,7 +163,7 @@ class UiShellTest {
     }
 
     @Test fun voiceInputRequiresAnExplicitStart() {
-        compose.setContent { MemoraApp(initialTheme = "light") }
+        compose.setContent { MemoraApp(initialTheme = "light", capturePersistenceOverride = captureStore, appearanceStoreOverride = appearanceStore) }
         compose.onNodeWithTag("capture_voice").performClick()
         compose.onNodeWithTag("cloud_voice_start").assertExists()
         compose.onNodeWithText("Тестовый разговор с Google Gemini. Память и задачи не подключены. Используйте вымышленные данные.").assertExists()
@@ -108,12 +172,14 @@ class UiShellTest {
 
     @Test fun draftSurvivesUiRecreation() {
         val restoration = StateRestorationTester(compose)
-        restoration.setContent { MemoraApp(initialTheme = "light") }
+        restoration.setContent { MemoraApp(initialTheme = "light", capturePersistenceOverride = captureStore, appearanceStoreOverride = appearanceStore) }
         compose.onNodeWithTag("capture_text").performClick()
+        awaitCaptureReady()
         compose.onNodeWithTag("capture_input").performTextInput("Synthetic saved state")
         restoration.emulateSavedInstanceStateRestore()
         compose.onNodeWithTag("capture_input").assertTextContains("Synthetic saved state")
         compose.onNodeWithTag("save_draft").performScrollTo().performClick()
+        compose.waitUntil(10_000) { compose.onAllNodesWithTag("draft_0").fetchSemanticsNodes().isNotEmpty() }
         compose.onNodeWithText("Synthetic saved state").assertIsDisplayed()
     }
 
@@ -122,7 +188,7 @@ class UiShellTest {
         compose.setContent {
             val density = LocalDensity.current.density
             CompositionLocalProvider(LocalDensity provides Density(density, fontScale = 1.4f)) {
-                MemoraApp(initialTheme = "light")
+                MemoraApp(initialTheme = "light", capturePersistenceOverride = captureStore, appearanceStoreOverride = appearanceStore)
             }
         }
         compose.onNodeWithTag("capture_text").assertExists().performScrollTo().performClick()
@@ -132,7 +198,7 @@ class UiShellTest {
 
     @Test @Config(qualifiers = "w960dp-h600dp-land-xhdpi")
     fun tabletLandscapeKeepsNavigationReachable() {
-        compose.setContent { MemoraApp(initialTheme = "light") }
+        compose.setContent { MemoraApp(initialTheme = "light", capturePersistenceOverride = captureStore, appearanceStoreOverride = appearanceStore) }
         compose.onNodeWithTag("nav_memory").assertIsDisplayed().performClick()
         compose.onNodeWithTag("memory_search").assertIsDisplayed()
         screenshot("11-tablet-landscape")

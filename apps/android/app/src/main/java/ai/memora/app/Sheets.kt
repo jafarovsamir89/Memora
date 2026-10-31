@@ -13,35 +13,68 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import ai.memora.app.ui.*
 import ai.memora.app.voice.VoiceInput
 import ai.memora.app.voice.ResponseSpeech
 import ai.memora.app.voice.CloudVoiceInput
 import ai.memora.app.ai.FirebaseAssistantGateway
 import ai.memora.app.ai.AssistantGateway
+import ai.memora.app.data.CaptureSessionState
+import ai.memora.app.data.CaptureImportPreview
 import kotlinx.coroutines.launch
 
 @Composable
-fun CaptureSheet(voice: Boolean, setVoice: (Boolean) -> Unit, draft: String, setDraft: (String) -> Unit, onSave: () -> Unit, onClose: () -> Unit, language: String) {
+fun CaptureImportDialog(preview: CaptureImportPreview.Ready, onConfirm: () -> Unit, onCancel: () -> Unit) {
+    AlertDialog(onDismissRequest = onCancel, title = { Text(s(R.string.capture_import)) },
+        text = { Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            Text(LocalStrings.current.getString(R.string.capture_import_summary, preview.newSources, preview.existingSources))
+            Text(s(if (preview.restoresDraft) R.string.capture_import_draft_yes else R.string.capture_import_draft_no))
+            Text(s(R.string.capture_import_warning))
+            preview.draftSample?.let { Text(s(R.string.capture_import_draft_sample) + " " + it) }
+            preview.samples.forEach { Text("• $it") }
+        } },
+        confirmButton = { TextButton(onClick = onConfirm, modifier = Modifier.testTag("capture_import_confirm")) { Text(s(R.string.capture_import_confirm)) } },
+        dismissButton = { TextButton(onClick = onCancel, modifier = Modifier.testTag("capture_import_cancel")) { Text(s(R.string.task_cancel)) } })
+}
+
+@Composable
+fun CaptureSheet(voice: Boolean, setVoice: (Boolean) -> Unit, state: CaptureSessionState, setDraft: (String) -> Unit,
+    onSave: () -> Unit, onRetry: () -> Unit, onClose: () -> Unit, language: String) {
+    val draft = state.draft
+    val editable = state.ready && !state.submitting && !state.retrySubmission && !state.managementBusy
+    val canClose = !state.dirty && !state.saving && !state.submitting && !state.retrySubmission
     Column(Modifier.fillMaxWidth().verticalScroll(rememberScrollState()).imePadding()
         .padding(horizontal = 24.dp).padding(bottom = 28.dp), verticalArrangement = Arrangement.spacedBy(18.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Text(s(R.string.new_memory), style = MaterialTheme.typography.headlineMedium, color = colors.ink, modifier = Modifier.weight(1f))
-            IconButton(onClose) { Icon(Glyph.Close, s(R.string.close), tint = colors.muted) }
+            IconButton(onClose, enabled = canClose) { Icon(Glyph.Close, s(R.string.close), tint = colors.muted) }
         }
-        Filters(listOf("text" to s(R.string.text_tab), "voice" to s(R.string.voice_tab)), if (voice) "voice" else "text", { setVoice(it == "voice") })
-        if (voice) {
+        Text(s(R.string.capture_synthetic_only), style = MaterialTheme.typography.bodySmall, color = colors.muted)
+        if (state.loading) Text(s(R.string.capture_loading), modifier = Modifier.testTag("capture_status"))
+        if (state.error) {
+            Text(s(if (state.retrySubmission) R.string.capture_retry_submission else if (state.limitReached) R.string.capture_limit else R.string.capture_storage_error),
+                color = MaterialTheme.colorScheme.error, modifier = Modifier.testTag("capture_error"))
+            OutlinedButton(onClick = onRetry, modifier = Modifier.testTag("capture_retry")) { Text(s(R.string.capture_retry)) }
+        }
+        if (state.ready && !state.error && (state.saving || state.dirty || state.submitting))
+            Text(s(if (state.submitting) R.string.capture_submitting else R.string.capture_saving), modifier = Modifier.testTag("capture_status"))
+        if (state.ready && !state.error && !state.dirty && !state.saving && !state.submitting)
+            Text(s(R.string.capture_saved_local), modifier = Modifier.testTag("capture_status"))
+        if (editable) Filters(listOf("text" to s(R.string.text_tab), "voice" to s(R.string.voice_tab)), if (voice) "voice" else "text", { setVoice(it == "voice") })
+        if (voice && editable) {
             VoiceInput(language, draft, setDraft, { setVoice(false) })
         } else {
             OutlinedTextField(
                 value = draft, onValueChange = { if (it.length <= 2000) setDraft(it) },
                 modifier = Modifier.fillMaxWidth().testTag("capture_input"),
                 label = { Text(s(R.string.capture_label)) }, placeholder = { Text(s(R.string.capture_placeholder)) },
-                minLines = 4, maxLines = 8, shape = RoundedCornerShape(20.dp),
+                enabled = editable, minLines = 4, maxLines = 8, shape = RoundedCornerShape(20.dp),
                 supportingText = { Text("${draft.length}/2000") },
             )
             Text(s(R.string.draft_hint), style = MaterialTheme.typography.bodySmall, color = colors.muted)
-            Button(onSave, Modifier.fillMaxWidth().heightIn(min = 54.dp).testTag("save_draft"), enabled = draft.isNotBlank()) {
+            Button(onSave, Modifier.fillMaxWidth().heightIn(min = 54.dp).testTag("save_draft"), enabled = editable && draft.isNotBlank() && !state.error) {
                 Icon(Glyph.Plus, null, Modifier.size(18.dp)); Spacer(Modifier.width(8.dp)); Text(s(R.string.add_draft))
             }
         }
@@ -82,6 +115,7 @@ fun ChatScreen(language: String = "ru", gatewayOverride: AssistantGateway? = nul
     var failed by remember { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
     val context = LocalContext.current
+    val textFocus = remember { FocusRequester() }
     val defaultGateway = remember(context) { FirebaseAssistantGateway(context) }
     val gateway = gatewayOverride ?: defaultGateway
     if (confirm) AlertDialog(
@@ -132,9 +166,9 @@ fun ChatScreen(language: String = "ru", gatewayOverride: AssistantGateway? = nul
                 ResponseSpeech(response, language)
             }
         }
-        CloudVoiceInput()
+        CloudVoiceInput(onText = { textFocus.requestFocus() })
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            OutlinedTextField(question, { if (it.length <= 2000) question = it }, Modifier.weight(1f).testTag("chat_input"),
+            OutlinedTextField(question, { if (it.length <= 2000) question = it }, Modifier.weight(1f).focusRequester(textFocus).testTag("chat_input"),
                 label = { Text(s(R.string.question)) }, shape = RoundedCornerShape(20.dp), maxLines = 4)
             FilledIconButton({ confirm = true }, Modifier.size(52.dp).testTag("chat_send"), enabled = question.isNotBlank() && !loading) {
                 Icon(Glyph.Arrow, s(R.string.send))

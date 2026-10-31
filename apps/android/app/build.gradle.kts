@@ -34,6 +34,8 @@ dependencies {
     val composeBom = platform("androidx.compose:compose-bom:2025.05.01")
     implementation(composeBom)
     implementation("androidx.activity:activity-compose:1.10.1")
+    implementation("androidx.lifecycle:lifecycle-viewmodel-compose:2.8.7")
+    implementation("androidx.lifecycle:lifecycle-viewmodel-ktx:2.8.7")
     implementation("androidx.compose.material3:material3")
     implementation("androidx.compose.ui:ui-tooling-preview")
     implementation(platform("com.google.firebase:firebase-bom:35.1.0"))
@@ -52,5 +54,5 @@ dependencies {
 tasks.withType<Test>().configureEach {
     maxHeapSize = "2g"
     systemProperty("robolectric.dependency.repo.url", "https://repo.maven.apache.org/maven2")
-    systemProperty("memora.screenshots", rootProject.file("../../artifacts/ui").absolutePath)
+    systemProperty("memora.screenshots", layout.buildDirectory.dir("test-screenshots").get().asFile.absolutePath)
 }

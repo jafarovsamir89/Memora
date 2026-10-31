@@ -24,7 +24,7 @@ import java.time.ZoneId
 enum class ReminderStatus { None, Scheduled, Past, Denied, Invalid }
 
 object TaskReminders {
-    private const val CHANNEL = "task-reminders"
+    const val CHANNEL = "task-reminders"
     private const val MAX_LATE_MS = 60 * 60 * 1000L
     private fun pending(context: Context, id: String, due: Long = 0): PendingIntent {
         val intent = Intent(context, TaskReminderReceiver::class.java)
@@ -33,9 +33,12 @@ object TaskReminders {
         return PendingIntent.getBroadcast(context, 0, intent, PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
     }
 
-    fun available(context: Context): Boolean =
-        (Build.VERSION.SDK_INT < 33 || context.checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) == PackageManager.PERMISSION_GRANTED) &&
-            context.getSystemService(NotificationManager::class.java).areNotificationsEnabled()
+    fun available(context: Context): Boolean {
+        val manager = context.getSystemService(NotificationManager::class.java)
+        val channel = manager.getNotificationChannel(CHANNEL)
+        return (Build.VERSION.SDK_INT < 33 || context.checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) == PackageManager.PERMISSION_GRANTED) &&
+            manager.areNotificationsEnabled() && (channel == null || channel.importance != NotificationManager.IMPORTANCE_NONE)
+    }
 
     fun dueAt(task: Task): Long? {
         return try {

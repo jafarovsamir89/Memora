@@ -2,6 +2,8 @@ package ai.memora.app
 
 import android.content.res.Configuration
 import androidx.activity.compose.BackHandler
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
@@ -20,17 +22,42 @@ import androidx.compose.ui.unit.sp
 import ai.memora.app.ui.*
 import ai.memora.app.data.EncryptedTaskStore
 import ai.memora.app.data.TaskStoreKey
+import ai.memora.app.data.AppearanceSettings
+import ai.memora.app.data.AppearanceStore
+import ai.memora.app.data.AppearanceViewModel
+import ai.memora.app.data.CapturePersistence
+import ai.memora.app.data.CaptureSubmissionIds
+import ai.memora.app.data.CaptureRevisionRequest
+import ai.memora.app.data.CaptureViewModel
+import ai.memora.app.data.CaptureExport
+import ai.memora.app.data.CaptureImportPreview
+import ai.memora.app.data.CaptureFileRead
+import ai.memora.app.data.CaptureImportReader
+import androidx.lifecycle.viewmodel.compose.viewModel
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import java.io.File
+import java.time.Instant
+import java.time.ZoneId
 import java.util.Locale
+import java.util.UUID
+
+private data class PendingCaptureImport(val text: String, val preview: CaptureImportPreview.Ready)
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun MemoraApp(initialRoute: String = "home", initialTheme: String = "system") {
-    var language by rememberSaveable { mutableStateOf("ru") }
-    var theme by rememberSaveable { mutableStateOf(initialTheme) }
+fun MemoraApp(initialRoute: String = "home", initialTheme: String = "system", capturePersistenceOverride: CapturePersistence? = null, appearanceStoreOverride: AppearanceStore? = null) {
     val context = LocalContext.current
+    val appearanceFactory = remember(context, appearanceStoreOverride, initialTheme) { AppearanceViewModel.Factory(context, AppearanceSettings(theme = initialTheme), appearanceStoreOverride) }
+    val appearanceModel: AppearanceViewModel = viewModel(factory = appearanceFactory)
+    val appearance by appearanceModel.state.collectAsState()
+    val language = appearance.settings.language
+    val theme = appearance.settings.theme
     val taskStore = remember(context) { EncryptedTaskStore(File(context.filesDir, "tasks-prototype.bin"), TaskStoreKey::get) }
+    val captureFactory = remember(context, capturePersistenceOverride) { CaptureViewModel.Factory(context, capturePersistenceOverride) }
+    val captureModel: CaptureViewModel = viewModel(factory = captureFactory)
+    val captureState by captureModel.session.state.collectAsState()
     val systemConfiguration = LocalConfiguration.current
     val resources = remember(language, systemConfiguration, context) {
         val localized = Configuration(systemConfiguration).apply { setLocale(Locale.forLanguageTag(language)) }
@@ -43,17 +70,75 @@ fun MemoraApp(initialRoute: String = "home", initialTheme: String = "system") {
             var parent by rememberSaveable { mutableStateOf("home") }
             var capture by rememberSaveable { mutableStateOf(false) }
             var voice by rememberSaveable { mutableStateOf(false) }
-            var draft by rememberSaveable { mutableStateOf("") }
-            var drafts by rememberSaveable { mutableStateOf<List<String>>(emptyList()) }
+            var pendingCommand by rememberSaveable { mutableStateOf<String?>(null) }
             var completed by rememberSaveable { mutableStateOf<List<String>>(emptyList()) }
             var detailId by rememberSaveable { mutableStateOf<String?>(null) }
             var about by rememberSaveable { mutableStateOf(false) }
+            var confirmCaptureExport by remember { mutableStateOf(false) }
+            var captureExportError by remember { mutableStateOf(false) }
+            var captureImportIssue by remember { mutableStateOf<Int?>(null) }
+            var captureImportBusy by remember { mutableStateOf(false) }
+            var pendingImport by remember { mutableStateOf<PendingCaptureImport?>(null) }
             val snackbar = remember { SnackbarHostState() }
             val screens = rememberSaveableStateHolder()
             val scope = rememberCoroutineScope()
+            val exportLauncher = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("application/json")) { uri ->
+                if (uri != null) scope.launch {
+                    val result = captureModel.session.export()
+                    val success = if (result !is CaptureExport.Ready) false else withContext(Dispatchers.IO) {
+                        try {
+                            val output = context.contentResolver.openOutputStream(uri) ?: return@withContext false
+                            output.use { it.write(result.json.toByteArray(Charsets.UTF_8)); it.flush() }
+                            true
+                        } catch (_: Exception) { false }
+                    }
+                    captureExportError = !success
+                    if (success) snackbar.showSnackbar(resources.getString(R.string.capture_export_success))
+                }
+            }
+            val importLauncher = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
+                if (uri != null) {
+                    captureImportBusy = true
+                    captureImportIssue = null
+                    scope.launch {
+                        val file = withContext(Dispatchers.IO) {
+                            try {
+                                val input = context.contentResolver.openInputStream(uri) ?: return@withContext CaptureFileRead.Unavailable
+                                input.use { CaptureImportReader.read(it) }
+                            } catch (_: Exception) { CaptureFileRead.Unavailable }
+                        }
+                        if (file is CaptureFileRead.Ready) {
+                            when (val preview = captureModel.session.previewImport(file.text)) {
+                                is CaptureImportPreview.Ready -> pendingImport = PendingCaptureImport(file.text, preview)
+                                CaptureImportPreview.Invalid -> captureImportIssue = R.string.capture_import_invalid
+                                CaptureImportPreview.Conflict -> captureImportIssue = R.string.capture_import_conflict
+                                CaptureImportPreview.LimitReached -> captureImportIssue = R.string.capture_import_limit
+                                CaptureImportPreview.Unavailable -> captureImportIssue = R.string.capture_management_error
+                            }
+                        } else captureImportIssue = when (file) {
+                            CaptureFileRead.TooLarge -> R.string.capture_import_limit
+                            CaptureFileRead.InvalidEncoding -> R.string.capture_import_invalid
+                            else -> R.string.capture_management_error
+                        }
+                        captureImportBusy = false
+                    }
+                }
+            }
             val navigate: (String) -> Unit = { destination -> parent = route; route = destination }
             val topRoutes = setOf("home", "memory", "tasks", "more")
             val goBack: () -> Unit = { route = if (route in topRoutes) "home" else parent.takeIf { it != route } ?: "home"; parent = "home" }
+            val added = s(R.string.draft_added)
+            LaunchedEffect(captureState.captures, pendingCommand) {
+                val command = pendingCommand
+                if (command != null && captureState.captures.any { it.commandId == command }) {
+                    pendingCommand = null
+                    if (capture) {
+                        capture = false
+                        if (route != "inbox") { parent = route; route = "inbox" }
+                        scope.launch { snackbar.showSnackbar(added) }
+                    }
+                }
+            }
             BackHandler(enabled = route != "home" && !capture && detailId == null && !about, onBack = goBack)
 
             val openCapture: (Boolean) -> Unit = { showVoice ->
@@ -128,11 +213,21 @@ fun MemoraApp(initialRoute: String = "home", initialTheme: String = "system") {
                             "memory" -> MemoryScreen({ detailId = it }, { openCapture(false) })
                             "tasks" -> TasksScreen(language, completed, toggleTask, { openCapture(false) }, taskStore)
                             "more" -> MoreScreen(navigate, { about = true })
-                            "inbox" -> InboxScreen(drafts, { openCapture(false) })
+                            "inbox" -> InboxScreen(captureState.captures, captureState.loading, captureState.error && !captureState.ready,
+                                captureState.managementError || captureExportError,
+                                captureState.ready && (!captureState.error || captureState.limitReached) && !captureState.dirty && !captureState.saving &&
+                                    !captureState.submitting && !captureState.retrySubmission && !captureState.managementBusy && !captureImportBusy,
+                                { captureModel.session.retryLoad() }, { openCapture(false) },
+                                { captureExportError = false; confirmCaptureExport = true },
+                                { captureImportIssue = null; importLauncher.launch(arrayOf("application/json", "text/plain")) },
+                                captureImportIssue?.let { resources.getString(it) }, captureState.importDone, captureState.importStale,
+                                { entries, archived -> captureModel.session.archive(entries, archived) },
+                                captureState.managementBusy, { request -> captureModel.session.revise(request) },
+                                { entry -> captureModel.session.delete(entry.source.id, entry.source.revisions.last().id) })
                             "finance" -> FinanceScreen { detailId = "payment" }
                             "people" -> PeopleScreen { detailId = it }
                             "projects" -> ProjectsScreen { detailId = it }
-                            "settings" -> SettingsScreen(theme, { theme = it }, language, { language = it }, { about = true })
+                            "settings" -> SettingsScreen(theme, { appearanceModel.change(theme = it) }, language, { appearanceModel.change(language = it) }, appearance.ready && !appearance.busy, appearance.error, { appearanceModel.load() }, { about = true })
                             "chat" -> ChatScreen(language)
                         }
                       }
@@ -141,19 +236,39 @@ fun MemoraApp(initialRoute: String = "home", initialTheme: String = "system") {
             }
 
             if (capture) ModalBottomSheet(
-                onDismissRequest = { capture = false },
+                onDismissRequest = {
+                    if (!captureState.dirty && !captureState.saving && !captureState.submitting && !captureState.retrySubmission)
+                        capture = false
+                },
                 sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
                 containerColor = colors.background,
             ) {
-                val added = s(R.string.draft_added)
-                CaptureSheet(voice, { voice = it }, draft, { draft = it }, onSave = {
-                    if (draft.isNotBlank()) {
-                        drafts = drafts + draft.trim()
-                        draft = ""; capture = false
-                        if (route != "inbox") { parent = route; route = "inbox" }
-                        scope.launch { snackbar.showSnackbar(added) }
-                    }
-                }, onClose = { capture = false }, language = language)
+                val submit: () -> Unit = {
+                    val command = if (captureState.retrySubmission) pendingCommand ?: UUID.randomUUID().toString()
+                        else UUID.randomUUID().toString()
+                    pendingCommand = command
+                    captureModel.session.submit(CaptureSubmissionIds(command, UUID.randomUUID().toString(),
+                        UUID.randomUUID().toString(), Instant.now(), ZoneId.systemDefault().id))
+                }
+                CaptureSheet(voice, { voice = it }, captureState, { captureModel.session.edit(it) }, onSave = submit,
+                    onRetry = {
+                        when {
+                            !captureState.ready -> captureModel.session.retryLoad()
+                            captureState.retrySubmission -> submit()
+                            else -> captureModel.session.retrySave()
+                        }
+                    }, onClose = { capture = false }, language = language)
+            }
+            if (confirmCaptureExport) AlertDialog(onDismissRequest = { confirmCaptureExport = false },
+                title = { Text(s(R.string.capture_export)) }, text = { Text(s(R.string.capture_export_warning)) },
+                confirmButton = { TextButton(onClick = { confirmCaptureExport = false; exportLauncher.launch("memora-captures.json") },
+                    modifier = Modifier.testTag("capture_export_confirm")) { Text(s(R.string.capture_export)) } },
+                dismissButton = { TextButton(onClick = { confirmCaptureExport = false }) { Text(s(R.string.task_cancel)) } })
+            pendingImport?.let { pending ->
+                CaptureImportDialog(pending.preview, onConfirm = {
+                        pendingImport = null
+                        captureModel.session.applyImport(pending.text, pending.preview.ticket)
+                    }, onCancel = { pendingImport = null })
             }
             val detail = exampleMemories.find { it.id == detailId }
             if (detail != null) ModalBottomSheet(

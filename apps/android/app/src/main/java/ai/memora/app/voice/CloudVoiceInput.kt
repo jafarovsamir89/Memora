@@ -19,7 +19,7 @@ import ai.memora.app.ui.s
 import kotlinx.coroutines.*
 
 @Composable
-fun CloudVoiceInput(gatewayOverride: CloudVoiceGateway? = null) {
+fun CloudVoiceInput(gatewayOverride: CloudVoiceGateway? = null, onText: (() -> Unit)? = null) {
     val context = LocalContext.current
     val lifecycle = (context as? LifecycleOwner)?.lifecycle
     val defaultGateway = remember(context) { FirebaseCloudVoiceGateway(context) }
@@ -47,7 +47,9 @@ fun CloudVoiceInput(gatewayOverride: CloudVoiceGateway? = null) {
         inputTranscript = ""
         outputTranscript = ""
         state = "connecting"
-        job = scope.launch {
+        // Store the job before it can complete: a synchronous connection failure must
+        // not leave a completed job blocking all subsequent attempts.
+        job = scope.launch(start = CoroutineStart.LAZY) {
             var handle: CloudVoiceHandle? = null
             var outcome = "idle"
             try {
@@ -82,6 +84,7 @@ fun CloudVoiceInput(gatewayOverride: CloudVoiceGateway? = null) {
                 if (attempt == generation) { job = null; state = outcome }
             }
         }
+        job?.start()
     }
     val launcher = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
         val requested = permissionPending
@@ -116,6 +119,9 @@ fun CloudVoiceInput(gatewayOverride: CloudVoiceGateway? = null) {
             "denied" -> Text(s(R.string.voice_denied), modifier = Modifier.testTag("cloud_voice_status"))
             "ended" -> Text(s(R.string.cloud_voice_timeout), modifier = Modifier.testTag("cloud_voice_status"))
             "error" -> Text(s(R.string.cloud_voice_error), modifier = Modifier.testTag("cloud_voice_status"))
+        }
+        if (state == "denied" && onText != null) {
+            TextButton(onClick = onText, modifier = Modifier.fillMaxWidth().testTag("cloud_voice_text_alternative")) { Text(s(R.string.go_text)) }
         }
         if (state == "connecting" || state == "active" || state == "stopping") {
             OutlinedButton(onClick = { stop() }, Modifier.fillMaxWidth().heightIn(min = 52.dp).testTag("cloud_voice_stop"), enabled = state != "stopping") { Text(s(R.string.cloud_voice_stop)) }

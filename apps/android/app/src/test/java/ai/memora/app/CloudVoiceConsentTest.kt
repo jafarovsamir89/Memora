@@ -107,4 +107,62 @@ class CloudVoiceConsentTest {
         compose.runOnIdle { assertEquals(0, starts) }
         compose.onNodeWithTag("cloud_voice_start").assertExists()
     }
+
+    @Test fun immediateConnectionFailureAllowsRetryWithNewConsent() {
+        shadowOf(ApplicationProvider.getApplicationContext<Application>()).grantPermissions(Manifest.permission.RECORD_AUDIO)
+        var attempts = 0
+        val gateway = object : CloudVoiceGateway {
+            override suspend fun connect(onTranscript: (String?, String?) -> Unit): CloudVoiceHandle {
+                attempts++
+                error("Synthetic connection failure")
+            }
+        }
+        compose.setContent {
+            val resources = LocalContext.current.resources
+            CompositionLocalProvider(LocalStrings provides resources) { MemoraTheme("light") { CloudVoiceInput(gateway) } }
+        }
+        repeat(2) {
+            compose.onNodeWithTag("cloud_voice_start").performClick()
+            compose.onNodeWithTag("cloud_voice_confirm").performClick()
+            compose.waitForIdle()
+            compose.onNodeWithTag("cloud_voice_start").assertExists()
+        }
+        compose.runOnIdle { assertEquals(2, attempts) }
+    }
+
+    @Test fun lateTranscriptAfterStopIsNotShownOrCarriedIntoNextSession() {
+        shadowOf(ApplicationProvider.getApplicationContext<Application>()).grantPermissions(Manifest.permission.RECORD_AUDIO)
+        var callback: ((String?, String?) -> Unit)? = null
+        val handle = object : CloudVoiceHandle {
+            override suspend fun begin() = Unit
+            override fun stop() = Unit
+            override suspend fun close() = Unit
+            override fun isClosed() = false
+        }
+        val gateway = object : CloudVoiceGateway {
+            override suspend fun connect(onTranscript: (String?, String?) -> Unit): CloudVoiceHandle {
+                callback = onTranscript
+                return handle
+            }
+        }
+        compose.setContent {
+            val resources = LocalContext.current.resources
+            CompositionLocalProvider(LocalStrings provides resources) { MemoraTheme("light") { CloudVoiceInput(gateway) } }
+        }
+        compose.onNodeWithTag("cloud_voice_start").performClick()
+        compose.onNodeWithTag("cloud_voice_confirm").performClick()
+        compose.runOnIdle { callback?.invoke("first test", null) }
+        compose.onNodeWithTag("cloud_voice_input_transcript").assertTextContains("first test", substring = true)
+        val oldCallback = callback
+        compose.onNodeWithTag("cloud_voice_stop").performClick()
+        compose.waitForIdle()
+        compose.runOnIdle { oldCallback?.invoke("late test", null) }
+        compose.onNodeWithTag("cloud_voice_input_transcript").assertTextContains("first test", substring = true)
+        compose.onNodeWithText("late test", substring = true).assertDoesNotExist()
+        compose.onNodeWithTag("cloud_voice_start").performClick()
+        compose.onNodeWithTag("cloud_voice_confirm").performClick()
+        compose.runOnIdle { oldCallback?.invoke("late test", null) }
+        compose.onNodeWithTag("cloud_voice_input_transcript").assertDoesNotExist()
+        compose.onNodeWithTag("cloud_voice_stop").performClick()
+    }
 }
