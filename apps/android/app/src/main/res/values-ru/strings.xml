@@ -209,4 +209,22 @@
     <string name="audio_note_use_original">Вернуть исходный текст</string>
     <string name="audio_note_writing_failed">Не удалось проверить письменность. Внимательно проверьте исходное распознавание.</string>
     <string name="audio_note_review_notice">Проверьте имена, суммы и отрицания. Сохранится только подтверждённый вами текст.</string>
+    <string name="voice_first_button">Удерживайте, чтобы говорить</string>
+    <string name="voice_first_hint">Удерживайте кнопку и говорите</string>
+    <string name="voice_first_listening">Слушаю…</string>
+    <string name="voice_first_release">Отпустите кнопку, чтобы продолжить</string>
+    <string name="voice_first_processing">Думаю…</string>
+    <string name="voice_first_speaking">Отвечаю…</string>
+    <string name="voice_first_error">Не получилось. Попробуйте ещё раз.</string>
+    <string name="voice_first_sound_error">Не удалось воспроизвести звук. Ответ показан ниже.</string>
+    <string name="voice_first_consent_title">Голосовой помощник с Google</string>
+    <string name="voice_first_consent_body">С вашего согласия сказанное аудио и его текст отправляются Google Gemini. Для озвучки Google получает текст ответа, включая связанные имя и сумму. Google может использовать данные бесплатного сервиса для улучшения продуктов. Весь архив памяти не отправляется. Согласие сохраняется на устройстве.</string>
+    <string name="voice_first_menu_hint">Проведите влево, чтобы открыть меню</string>
+    <string name="voice_memory_title">Голосовая память</string>
+    <string name="voice_memory_help">Сохранённые передачи и исходный текст. Ошибочную запись можно удалить и произнести заново.</string>
+    <string name="voice_memory_delete_title">Удалить запись?</string>
+    <string name="voice_memory_delete_body">Эта передача будет удалена из памяти.</string>
+    <string name="voice_revoke_consent">Отозвать согласие на голосовой сервис Google</string>
+    <string name="voice_memory_export">Экспортировать память</string>
+    <string name="voice_memory_export_warning">Экспортируемый файл не зашифрован и содержит личные данные. Храните его в безопасном месте.</string>
 </resources>

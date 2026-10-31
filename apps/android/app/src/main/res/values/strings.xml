@@ -209,4 +209,22 @@
     <string name="audio_note_use_original">İlkin mətni qaytar</string>
     <string name="audio_note_writing_failed">Yazı formasını yoxlamaq mümkün olmadı. İlkin tanınmanı diqqətlə yoxlayın.</string>
     <string name="audio_note_review_notice">Adları, məbləğləri və inkarı yoxlayın. Yalnız təsdiqlədiyiniz mətn saxlanacaq.</string>
+    <string name="voice_first_button">Danışmaq üçün saxlayın</string>
+    <string name="voice_first_hint">Düyməni basıb saxlayın və danışın</string>
+    <string name="voice_first_listening">Dinləyirəm…</string>
+    <string name="voice_first_release">Davam etmək üçün düyməni buraxın</string>
+    <string name="voice_first_processing">Düşünürəm…</string>
+    <string name="voice_first_speaking">Cavab verirəm…</string>
+    <string name="voice_first_error">Alınmadı. Yenidən cəhd edin.</string>
+    <string name="voice_first_sound_error">Səs səsləndirilə bilmədi. Cavab aşağıdadır.</string>
+    <string name="voice_first_consent_title">Google ilə səsli köməkçi</string>
+    <string name="voice_first_consent_body">Sizin razılığınızla danışdığınız səs və onun mətni Google Gemini-yə göndərilir. Cavabı səsləndirmək üçün cavabın özü, o cümlədən əlaqəli ad və məbləğ Google-a göndərilir. Google pulsuz xidmət məlumatlarından məhsullarını yaxşılaşdırmaq üçün istifadə edə bilər. Bütün yaddaş arxivi göndərilmir. Razılıq bu cihazda saxlanılır.</string>
+    <string name="voice_first_menu_hint">Menyu üçün sola sürüşdürün</string>
+    <string name="voice_memory_title">Səs yaddaşı</string>
+    <string name="voice_memory_help">Yazılmış köçürmələr və ilkin mətn. Səhv qeydi silib yenidən deyə bilərsiniz.</string>
+    <string name="voice_memory_delete_title">Qeydi silmək?</string>
+    <string name="voice_memory_delete_body">Bu köçürmə yaddaşdan silinəcək.</string>
+    <string name="voice_revoke_consent">Google səs razılığını geri götür</string>
+    <string name="voice_memory_export">Yaddaşı ixrac et</string>
+    <string name="voice_memory_export_warning">İxrac edilən fayl şifrələnmir və şəxsi məlumatları ehtiva edir. Faylı təhlükəsiz yerdə saxlayın.</string>
 </resources>

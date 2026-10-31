@@ -209,4 +209,22 @@
     <string name="audio_note_use_original">Restore original text</string>
     <string name="audio_note_writing_failed">Writing system check failed. Review the original recognition carefully.</string>
     <string name="audio_note_review_notice">Check names, amounts and negation. Only the text you confirm will be saved.</string>
+    <string name="voice_first_button">Hold to talk</string>
+    <string name="voice_first_hint">Hold the button and speak</string>
+    <string name="voice_first_listening">Listening…</string>
+    <string name="voice_first_release">Release the button to continue</string>
+    <string name="voice_first_processing">Thinking…</string>
+    <string name="voice_first_speaking">Speaking…</string>
+    <string name="voice_first_error">Something went wrong. Try again.</string>
+    <string name="voice_first_sound_error">Could not play audio. The answer is shown below.</string>
+    <string name="voice_first_consent_title">Voice assistant with Google</string>
+    <string name="voice_first_consent_body">With your consent, your voice and transcript are sent to Google Gemini. To produce speech, Google receives the answer, including the relevant name and amount. Google may use free-service data to improve products. Your entire memory archive is not sent. Consent is saved on this device.</string>
+    <string name="voice_first_menu_hint">Swipe left to open the menu</string>
+    <string name="voice_memory_title">Voice memory</string>
+    <string name="voice_memory_help">Saved transfers and original text. Delete an incorrect entry and say it again.</string>
+    <string name="voice_memory_delete_title">Delete entry?</string>
+    <string name="voice_memory_delete_body">This transfer will be removed from memory.</string>
+    <string name="voice_revoke_consent">Revoke Google voice consent</string>
+    <string name="voice_memory_export">Export memory</string>
+    <string name="voice_memory_export_warning">The exported file is not encrypted and contains personal data. Store it securely.</string>
 </resources>

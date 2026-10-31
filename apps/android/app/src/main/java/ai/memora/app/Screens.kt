@@ -64,6 +64,8 @@ fun MoreScreen(navigate: (String) -> Unit, about: () -> Unit) {
     ScreenColumn {
         ScreenHeading(s(R.string.more_title), s(R.string.more_subtitle))
         MemoraCard {
+            MenuRow(Glyph.Mic, s(R.string.voice_memory_title), s(R.string.voice_memory_help)) { navigate("voice_memory") }
+            HorizontalDivider(color = colors.line)
             MenuRow(Glyph.Inbox, s(R.string.inbox), s(R.string.inbox_hint)) { navigate("inbox") }
             HorizontalDivider(color = colors.line)
             MenuRow(Glyph.Wallet, s(R.string.finance), s(R.string.finance_hint), 1) { navigate("finance") }
@@ -219,6 +221,9 @@ fun InboxScreen(drafts: List<CaptureEntry>, loading: Boolean, error: Boolean, ma
 
 @Composable
 fun SettingsScreen(theme: String, changeTheme: (String) -> Unit, language: String, changeLanguage: (String) -> Unit, ready: Boolean, error: Boolean, retry: () -> Unit, about: () -> Unit) {
+    val context = androidx.compose.ui.platform.LocalContext.current
+    val voiceConsent = remember(context) { context.getSharedPreferences("voice-first-consent", 0) }
+    var granted by remember { mutableStateOf(voiceConsent.getBoolean("google-audio-and-answer-v1", false)) }
     ScreenColumn {
         ScreenHeading(s(R.string.settings), s(R.string.settings_subtitle))
         if (error) {
@@ -230,6 +235,9 @@ fun SettingsScreen(theme: String, changeTheme: (String) -> Unit, language: Strin
         SectionHeading(s(R.string.language))
         Filters(listOf("ru" to "Русский", "az" to "Azərbaycan", "en" to "English"), language, changeLanguage, enabled = ready)
         DevicePermissionSettings()
+        if (granted) OutlinedButton(onClick = {
+            if (voiceConsent.edit().remove("google-audio-and-answer-v1").commit()) granted = false
+        }) { Text(s(R.string.voice_revoke_consent)) }
         MemoraCard { MenuRow(Glyph.Shield, s(R.string.privacy), s(R.string.privacy_hint), 1, about) }
         MemoraCard { MenuRow(Glyph.Spark, s(R.string.about), s(R.string.version), onClick = about) }
     }

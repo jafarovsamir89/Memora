@@ -20,6 +20,8 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import ai.memora.app.ui.*
+import ai.memora.app.voice.VoiceFirstScreen
+import ai.memora.app.voice.VoiceMemoryScreen
 import ai.memora.app.data.EncryptedTaskStore
 import ai.memora.app.data.TaskStoreKey
 import ai.memora.app.data.AppearanceSettings
@@ -151,12 +153,14 @@ fun MemoraApp(initialRoute: String = "home", initialTheme: String = "system", ca
                 "memory" -> R.string.nav_memory; "tasks" -> R.string.nav_tasks; "more" -> R.string.nav_more
                 "inbox" -> R.string.inbox; "finance" -> R.string.finance; "people" -> R.string.people
                 "projects" -> R.string.projects; "settings" -> R.string.settings; "chat" -> R.string.chat
+                "voice_memory" -> R.string.voice_memory_title
                 else -> R.string.app_name
             }
 
             Scaffold(
                 containerColor = colors.background,
                 topBar = {
+                    if (route != "home") {
                     Row(
                         Modifier.fillMaxWidth().statusBarsPadding().padding(horizontal = 20.dp, vertical = 10.dp),
                         horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = Alignment.CenterVertically,
@@ -175,8 +179,10 @@ fun MemoraApp(initialRoute: String = "home", initialTheme: String = "system", ca
                             Icon(Glyph.Settings, s(R.string.settings), tint = colors.muted, modifier = Modifier.size(22.dp))
                         }
                     }
+                    }
                 },
                 bottomBar = {
+                    if (route != "home") {
                     NavigationBar(containerColor = colors.card, tonalElevation = 0.dp) {
                         routes.forEachIndexed { index, destination ->
                             val isCapture = destination == "capture"
@@ -198,6 +204,7 @@ fun MemoraApp(initialRoute: String = "home", initialTheme: String = "system", ca
                             )
                         }
                     }
+                    }
                 },
                 snackbarHost = { SnackbarHost(snackbar) },
             ) { insets ->
@@ -205,10 +212,11 @@ fun MemoraApp(initialRoute: String = "home", initialTheme: String = "system", ca
                     Box(Modifier.widthIn(max = 720.dp).fillMaxSize()) {
                       screens.SaveableStateProvider(route) {
                         when (route) {
-                            "home" -> WorkingHomeScreen(language, captureState, navigate, openCapture, { detailId = it })
+                            "home" -> VoiceFirstScreen(onOpenMenu = { navigate("more") })
                             "memory" -> WorkingMemoryScreen(captureState, { detailId = it }, { openCapture(false) }, { navigate("inbox") })
                             "tasks" -> ScreenColumn { ScreenHeading(s(R.string.tasks_title), s(R.string.working_tasks_hint)); TaskPrototype(taskStore) }
                             "more" -> MoreScreen(navigate, { about = true })
+                            "voice_memory" -> VoiceMemoryScreen()
                             "inbox" -> InboxScreen(captureState.captures, captureState.loading, captureState.error && !captureState.ready,
                                 captureState.managementError || captureExportError,
                                 captureState.ready && (!captureState.error || captureState.limitReached) && !captureState.dirty && !captureState.saving &&

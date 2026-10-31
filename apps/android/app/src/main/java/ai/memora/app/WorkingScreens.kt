@@ -69,7 +69,7 @@ fun WorkingMemoryScreen(state: CaptureSessionState, detail: (String) -> Unit, ca
         if (state.ready && matches.isEmpty()) EmptyState(s(R.string.working_memory_empty), s(R.string.working_no_matches))
         matches.forEach { match -> StoredMemoryCard(match.entry) { detail(match.entry.source.id) } }
         OutlinedButton(onClick = manage, modifier = Modifier.fillMaxWidth().testTag("memory_manage")) { Text(s(R.string.working_manage)) }
-        Button(onClick = capture, modifier = Modifier.fillMaxWidth()) { Text(s(R.string.new_memory)) }
+        Button(onClick = capture, modifier = Modifier.fillMaxWidth().testTag("capture_text")) { Text(s(R.string.new_memory)) }
     }
 }
 

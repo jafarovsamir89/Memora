@@ -54,7 +54,7 @@ class CaptureUiIntegrationTest {
         compose.setContent {
             key(owner.value) {
                 CompositionLocalProvider(LocalViewModelStoreOwner provides owner.value) {
-                    MemoraApp(initialLanguage = "ru", initialRoute = if (showInbox.value) "inbox" else "home", capturePersistenceOverride = disk)
+                    MemoraApp(initialLanguage = "ru", initialRoute = if (showInbox.value) "inbox" else "memory", capturePersistenceOverride = disk)
                 }
             }
         }
@@ -88,7 +88,7 @@ class CaptureUiIntegrationTest {
         }
         val owner = Owner()
         compose.setContent {
-            CompositionLocalProvider(LocalViewModelStoreOwner provides owner) { MemoraApp(initialLanguage = "ru", capturePersistenceOverride = unreliable) }
+            CompositionLocalProvider(LocalViewModelStoreOwner provides owner) { MemoraApp(initialLanguage = "ru", initialRoute = "memory", capturePersistenceOverride = unreliable) }
         }
         compose.onNodeWithTag("capture_text").performClick()
         awaitReady()
@@ -116,7 +116,7 @@ class CaptureUiIntegrationTest {
                 return if (calls.incrementAndGet() == 1 && result == CaptureWrite.Recorded) CaptureWrite.Unavailable else result
             }
         }
-        compose.setContent { MemoraApp(initialLanguage = "ru", capturePersistenceOverride = unreliable) }
+        compose.setContent { MemoraApp(initialLanguage = "ru", initialRoute = "memory", capturePersistenceOverride = unreliable) }
         compose.onNodeWithTag("capture_text").performClick()
         awaitReady()
         compose.onNodeWithTag("capture_input").performTextInput("synthetic one")
@@ -132,7 +132,7 @@ class CaptureUiIntegrationTest {
 
     @Test fun deleteNeedsConfirmationAndExportExplainsPlaintext() {
         val disk = disk()
-        compose.setContent { MemoraApp(initialLanguage = "ru", capturePersistenceOverride = disk) }
+        compose.setContent { MemoraApp(initialLanguage = "ru", initialRoute = "memory", capturePersistenceOverride = disk) }
         compose.onNodeWithTag("capture_text").performClick()
         awaitReady()
         compose.onNodeWithTag("capture_input").performTextInput("synthetic removal")
