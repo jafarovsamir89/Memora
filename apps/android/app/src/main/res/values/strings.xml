@@ -106,7 +106,7 @@
     <string name="draft_added">Черновик добавлен во входящие</string>
     <string name="draft">Черновик</string>
     <string name="voice_title">Расскажите голосом</string>
-    <string name="voice_body">После нажатия и разрешения микрофона используем доступное распознавание на устройстве. Текст можно проверить и исправить. AI пока не подключён.</string>
+    <string name="voice_body">После нажатия и разрешения микрофона используем доступное распознавание на устройстве. Текст можно проверить и исправить.</string>
     <string name="go_text">Записать текстом</string>
     <string name="appearance">Оформление</string>
     <string name="theme_system">Системная</string>
@@ -169,4 +169,27 @@
     <string name="voice_denied">Доступ к микрофону не разрешён. Можно продолжить текстом.</string>
     <string name="voice_error">Не удалось распознать речь. Попробуйте ещё раз или введите текст.</string>
     <string name="voice_too_long">Текст слишком длинный. Черновик не изменён.</string>
+    <string name="ai_chat_body">Тестовый разговор с Google Gemini. Память и задачи не подключены. Используйте вымышленные данные.</string>
+    <string name="ai_consent_title">Отправить текст в Google?</string>
+    <string name="ai_consent_body">Ниже показан весь текст, который будет отправлен Google Gemini для ответа. На бесплатном уровне Google может использовать запросы для улучшения своих продуктов. Используйте только вымышленные данные. Записи и задачи не передаются.</string>
+    <string name="ai_send_confirm">Отправить в Google</string>
+    <string name="ai_loading">Получаю ответ Google…</string>
+    <string name="ai_failed">Ответ недоступен. Проверьте подключение и настройку Firebase, затем повторите.</string>
+    <string name="ai_voice">Сказать вопрос</string>
+    <string name="ai_speak">Озвучить ответ</string>
+    <string name="ai_stop_speech">Остановить</string>
+    <string name="ai_tts_unavailable">Озвучка для этого языка недоступна на устройстве.</string>
+    <string name="ai_tts_notice">Озвучивание зависит от системного движка телефона; он может использовать сеть.</string>
+    <string name="cloud_voice_start">Начать облачный голосовой разговор</string>
+    <string name="cloud_voice_stop">Остановить микрофон и разговор</string>
+    <string name="cloud_voice_consent_title">Отправлять голос в Google?</string>
+    <string name="cloud_voice_consent_body">После запуска звук с микрофона будет непрерывно передаваться в Google Gemini до остановки или выхода из приложения. Google может использовать данные бесплатного сервиса для улучшения продуктов. Используйте только вымышленные данные. Задачи и память не передаются. Тестовая сессия остановится через минуту.</string>
+    <string name="cloud_voice_confirm">Разрешить и начать</string>
+    <string name="cloud_voice_connecting">Подключаюсь к Google…</string>
+    <string name="cloud_voice_stopping">Останавливаю микрофон и соединение…</string>
+    <string name="cloud_voice_active">Микрофон включён, голос передаётся Google. Можно говорить.</string>
+    <string name="cloud_voice_timeout">Тестовая сессия завершена. Чтобы продолжить, начните новую.</string>
+    <string name="cloud_voice_error">Голосовой разговор недоступен. Проверьте интернет и доступность модели, затем попробуйте снова.</string>
+    <string name="cloud_voice_you">Вы</string>
+    <string name="cloud_voice_assistant">Помощник</string>
 </resources>

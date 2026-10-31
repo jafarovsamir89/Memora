@@ -56,7 +56,10 @@ fun MemoraApp(initialRoute: String = "home", initialTheme: String = "system") {
             val goBack: () -> Unit = { route = if (route in topRoutes) "home" else parent.takeIf { it != route } ?: "home"; parent = "home" }
             BackHandler(enabled = route != "home" && !capture && detailId == null && !about, onBack = goBack)
 
-            val openCapture: (Boolean) -> Unit = { showVoice -> voice = showVoice; capture = true }
+            val openCapture: (Boolean) -> Unit = { showVoice ->
+                if (showVoice) { parent = route; route = "chat" }
+                else { voice = false; capture = true }
+            }
             val toggleTask: (String) -> Unit = { id ->
                 completed = if (id in completed) completed - id else completed + id
             }
@@ -130,7 +133,7 @@ fun MemoraApp(initialRoute: String = "home", initialTheme: String = "system") {
                             "people" -> PeopleScreen { detailId = it }
                             "projects" -> ProjectsScreen { detailId = it }
                             "settings" -> SettingsScreen(theme, { theme = it }, language, { language = it }, { about = true })
-                            "chat" -> ChatScreen()
+                            "chat" -> ChatScreen(language)
                         }
                       }
                     }

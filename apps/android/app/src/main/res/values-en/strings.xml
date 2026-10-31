@@ -106,7 +106,7 @@
     <string name="draft_added">Draft added to the inbox</string>
     <string name="draft">Draft</string>
     <string name="voice_title">Say it out loud</string>
-    <string name="voice_body">After you tap and allow microphone access, available on-device speech recognition is used. You can review and edit the text. AI is not connected yet.</string>
+    <string name="voice_body">After you tap and allow microphone access, available on-device speech recognition is used. You can review and edit the text.</string>
     <string name="go_text">Write it down</string>
     <string name="appearance">Appearance</string>
     <string name="theme_system">System</string>
@@ -169,4 +169,27 @@
     <string name="voice_denied">Microphone access was not granted. You can use text instead.</string>
     <string name="voice_error">Speech could not be recognized. Try again or enter text.</string>
     <string name="voice_too_long">The text is too long. Your draft was not changed.</string>
+    <string name="ai_chat_body">Test chat with Google Gemini. Memories and tasks are not connected. Use fictional data.</string>
+    <string name="ai_consent_title">Send this text to Google?</string>
+    <string name="ai_consent_body">The text below will be sent to Google Gemini for a response. On the free tier Google may use requests to improve its products. Use fictional data only. Memories and tasks are not sent.</string>
+    <string name="ai_send_confirm">Send to Google</string>
+    <string name="ai_loading">Waiting for Google…</string>
+    <string name="ai_failed">No response. Check your connection and Firebase setup, then retry.</string>
+    <string name="ai_voice">Speak a question</string>
+    <string name="ai_speak">Speak answer</string>
+    <string name="ai_stop_speech">Stop</string>
+    <string name="ai_tts_unavailable">Speech for this language is unavailable on this device.</string>
+    <string name="ai_tts_notice">Speech uses your device text-to-speech engine, which may use the network.</string>
+    <string name="cloud_voice_start">Start cloud voice conversation</string>
+    <string name="cloud_voice_stop">Stop microphone and conversation</string>
+    <string name="cloud_voice_consent_title">Send your voice to Google?</string>
+    <string name="cloud_voice_consent_body">After starting, microphone audio is continuously sent to Google Gemini until you stop or leave the app. Google may use data from its free service to improve its products. Use fictional data only. Tasks and memories are not sent. The test session ends after one minute.</string>
+    <string name="cloud_voice_confirm">Allow and start</string>
+    <string name="cloud_voice_connecting">Connecting to Google…</string>
+    <string name="cloud_voice_stopping">Stopping the microphone and connection…</string>
+    <string name="cloud_voice_active">Microphone is on and audio is being sent to Google. You can speak.</string>
+    <string name="cloud_voice_timeout">The test session ended. Start a new session to continue.</string>
+    <string name="cloud_voice_error">Voice conversation is unavailable. Check your connection and model availability, then try again.</string>
+    <string name="cloud_voice_you">You</string>
+    <string name="cloud_voice_assistant">Assistant</string>
 </resources>

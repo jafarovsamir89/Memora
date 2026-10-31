@@ -106,7 +106,7 @@
     <string name="draft_added">Qaralama gələnlərə əlavə edildi</string>
     <string name="draft">Qaralama</string>
     <string name="voice_title">Səslə danışın</string>
-    <string name="voice_body">Düyməyə basıb mikrofona icazə verdikdən sonra cihazda mövcud səs tanınması işləyir. Mətni yoxlayıb düzəldə bilərsiniz. AI hələ qoşulmayıb.</string>
+    <string name="voice_body">Düyməyə basıb mikrofona icazə verdikdən sonra cihazda mövcud səs tanınması işləyir. Mətni yoxlayıb düzəldə bilərsiniz.</string>
     <string name="go_text">Mətnlə yaz</string>
     <string name="appearance">Görünüş</string>
     <string name="theme_system">Sistem</string>
@@ -169,4 +169,27 @@
     <string name="voice_denied">Mikrofona icazə verilmədi. Mətndən istifadə edə bilərsiniz.</string>
     <string name="voice_error">Səs tanınmadı. Yenidən cəhd edin və ya mətn daxil edin.</string>
     <string name="voice_too_long">Mətn çox uzundur. Qaralama dəyişdirilmədi.</string>
+    <string name="ai_chat_body">Google Gemini ilə sınaq söhbəti. Yaddaş və tapşırıqlar qoşulmayıb. Uydurma məlumatlardan istifadə edin.</string>
+    <string name="ai_consent_title">Mətn Google-a göndərilsin?</string>
+    <string name="ai_consent_body">Aşağıdakı mətn cavab üçün Google Gemini-yə göndəriləcək. Ödənişsiz səviyyədə Google sorğulardan məhsullarını yaxşılaşdırmaq üçün istifadə edə bilər. Yalnız uydurma məlumatlardan istifadə edin. Yaddaş və tapşırıqlar göndərilmir.</string>
+    <string name="ai_send_confirm">Google-a göndər</string>
+    <string name="ai_loading">Google cavabını gözləyirik…</string>
+    <string name="ai_failed">Cavab alınmadı. Bağlantını və Firebase ayarlarını yoxlayıb yenidən cəhd edin.</string>
+    <string name="ai_voice">Sualı səslə ver</string>
+    <string name="ai_speak">Cavabı səsləndir</string>
+    <string name="ai_stop_speech">Dayandır</string>
+    <string name="ai_tts_unavailable">Bu dildə səsləndirmə cihazda mövcud deyil.</string>
+    <string name="ai_tts_notice">Səsləndirmə telefonun sistem mühərrikindən istifadə edir; o, şəbəkədən istifadə edə bilər.</string>
+    <string name="cloud_voice_start">Buludda səsli söhbətə başla</string>
+    <string name="cloud_voice_stop">Mikrofonu və söhbəti dayandır</string>
+    <string name="cloud_voice_consent_title">Səs Google-a göndərilsin?</string>
+    <string name="cloud_voice_consent_body">Başladıqdan sonra mikrofondan gələn səs dayandırılana və ya tətbiqdən çıxana qədər Google Gemini-yə fasiləsiz göndərilir. Google ödənişsiz xidmət məlumatlarından məhsullarını yaxşılaşdırmaq üçün istifadə edə bilər. Yalnız uydurma məlumatlardan istifadə edin. Tapşırıqlar və yaddaş göndərilmir. Sınaq sessiyası bir dəqiqədən sonra bitir.</string>
+    <string name="cloud_voice_confirm">İcazə ver və başla</string>
+    <string name="cloud_voice_connecting">Google-a qoşulur…</string>
+    <string name="cloud_voice_stopping">Mikrofon və bağlantı dayandırılır…</string>
+    <string name="cloud_voice_active">Mikrofon aktivdir, səs Google-a göndərilir. Danışa bilərsiniz.</string>
+    <string name="cloud_voice_timeout">Sınaq sessiyası bitdi. Davam etmək üçün yeni sessiya başladın.</string>
+    <string name="cloud_voice_error">Səsli söhbət mövcud deyil. İnterneti və modelin əlçatanlığını yoxlayıb yenidən cəhd edin.</string>
+    <string name="cloud_voice_you">Siz</string>
+    <string name="cloud_voice_assistant">Köməkçi</string>
 </resources>

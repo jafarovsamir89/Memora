@@ -101,8 +101,8 @@ class UiShellTest {
     @Test fun voiceInputRequiresAnExplicitStart() {
         compose.setContent { MemoraApp(initialTheme = "light") }
         compose.onNodeWithTag("capture_voice").performClick()
-        compose.onNodeWithTag("voice_start").assertExists()
-        compose.onNodeWithText("После нажатия и разрешения микрофона используем доступное распознавание на устройстве. Текст можно проверить и исправить. AI пока не подключён.").assertExists()
+        compose.onNodeWithTag("cloud_voice_start").assertExists()
+        compose.onNodeWithText("Тестовый разговор с Google Gemini. Память и задачи не подключены. Используйте вымышленные данные.").assertExists()
         screenshot("09-voice-preview")
     }
 

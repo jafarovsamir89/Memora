@@ -12,8 +12,14 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.platform.LocalContext
 import ai.memora.app.ui.*
 import ai.memora.app.voice.VoiceInput
+import ai.memora.app.voice.ResponseSpeech
+import ai.memora.app.voice.CloudVoiceInput
+import ai.memora.app.ai.FirebaseAssistantGateway
+import ai.memora.app.ai.AssistantGateway
+import kotlinx.coroutines.launch
 
 @Composable
 fun CaptureSheet(voice: Boolean, setVoice: (Boolean) -> Unit, draft: String, setDraft: (String) -> Unit, onSave: () -> Unit, onClose: () -> Unit, language: String) {
@@ -67,15 +73,51 @@ fun MemoryDetail(item: ExampleMemory, onClose: () -> Unit) {
 }
 
 @Composable
-fun ChatScreen() {
+fun ChatScreen(language: String = "ru", gatewayOverride: AssistantGateway? = null) {
     var question by rememberSaveable { mutableStateOf("") }
     var submitted by rememberSaveable { mutableStateOf("") }
+    var response by rememberSaveable { mutableStateOf("") }
+    var confirm by remember { mutableStateOf(false) }
+    var loading by remember { mutableStateOf(false) }
+    var failed by remember { mutableStateOf(false) }
+    val scope = rememberCoroutineScope()
+    val context = LocalContext.current
+    val defaultGateway = remember(context) { FirebaseAssistantGateway(context) }
+    val gateway = gatewayOverride ?: defaultGateway
+    if (confirm) AlertDialog(
+        onDismissRequest = { confirm = false },
+        title = { Text(s(R.string.ai_consent_title)) },
+        text = { Text(s(R.string.ai_consent_body) + "\n\n" + question.trim()) },
+        confirmButton = { TextButton(onClick = {
+            val prompt = question.trim()
+            confirm = false
+            submitted = prompt
+            response = ""
+            failed = false
+            loading = true
+            scope.launch {
+                try { response = kotlinx.coroutines.withTimeout(30_000) { gateway.answer(prompt) } }
+                catch (_: kotlinx.coroutines.TimeoutCancellationException) { failed = true }
+                catch (cancelled: kotlinx.coroutines.CancellationException) { throw cancelled }
+                catch (error: Exception) {
+                    // Never record prompts, provider responses, tokens or exception messages.
+                    val status = Regex("\\b[45]\\d\\d\\b").find(error.message.orEmpty())?.value ?: "unknown"
+                    val category = listOf("quota", "region", "location", "permission", "billing", "not found", "key", "app check", "internal", "unavailable", "unsupported", "model", "server", "exhausted", "credentials", "token", "network", "failed")
+                        .filter { error.message.orEmpty().contains(it, ignoreCase = true) }.joinToString(",")
+                    android.util.Log.w("MemoraAI", "Request failed: ${error.javaClass.simpleName}; cause: ${error.cause?.javaClass?.simpleName ?: "none"}; HTTP status: $status; categories: $category")
+                    failed = true
+                }
+                finally { loading = false }
+            }
+        }) { Text(s(R.string.ai_send_confirm)) } },
+        dismissButton = { TextButton(onClick = { confirm = false }) { Text(s(R.string.task_cancel)) } },
+    )
     ScreenColumn {
         Spacer(Modifier.height(16.dp))
         Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) { IconBubble(Glyph.Spark, size = 72) }
         Text(s(R.string.chat_title), Modifier.fillMaxWidth(), style = MaterialTheme.typography.headlineMedium,
             color = colors.ink, textAlign = TextAlign.Center)
-        Text(s(R.string.chat_body), Modifier.fillMaxWidth(), style = MaterialTheme.typography.bodyLarge,
+        Text(s(R.string.ai_chat_body), Modifier.fillMaxWidth(), style = MaterialTheme.typography.bodyLarge,
             color = colors.muted, textAlign = TextAlign.Center)
         val one = s(R.string.suggestion_one)
         val two = s(R.string.suggestion_two)
@@ -83,12 +125,18 @@ fun ChatScreen() {
         OutlinedButton({ question = two }, Modifier.fillMaxWidth().heightIn(min = 52.dp)) { Text(two) }
         if (submitted.isNotBlank()) {
             MemoraCard(tint = colors.softAccent) { Text(submitted, color = colors.ink, style = MaterialTheme.typography.bodyLarge) }
-            MemoraCard { Text(s(R.string.chat_unavailable), color = colors.muted, style = MaterialTheme.typography.bodyMedium) }
+            if (loading) MemoraCard { Text(s(R.string.ai_loading), color = colors.muted) }
+            if (failed) MemoraCard { Text(s(R.string.ai_failed), color = colors.muted) }
+            if (response.isNotBlank()) MemoraCard {
+                Text(response, color = colors.ink, style = MaterialTheme.typography.bodyMedium)
+                ResponseSpeech(response, language)
+            }
         }
+        CloudVoiceInput()
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             OutlinedTextField(question, { if (it.length <= 2000) question = it }, Modifier.weight(1f).testTag("chat_input"),
                 label = { Text(s(R.string.question)) }, shape = RoundedCornerShape(20.dp), maxLines = 4)
-            FilledIconButton({ submitted = question.trim(); question = "" }, Modifier.size(52.dp).testTag("chat_send"), enabled = question.isNotBlank()) {
+            FilledIconButton({ confirm = true }, Modifier.size(52.dp).testTag("chat_send"), enabled = question.isNotBlank() && !loading) {
                 Icon(Glyph.Arrow, s(R.string.send))
             }
         }

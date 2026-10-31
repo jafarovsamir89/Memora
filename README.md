@@ -45,7 +45,11 @@ cd Memora
 
 Если репозиторий уже склонирован, сначала проверить `git status` и сохранить свои незавершённые изменения, затем на ветке `main` выполнить `git pull --ff-only`. При расхождении истории разобраться с изменениями, не использовать принудительный сброс.
 
-Перед продолжением прочитать `AGENTS.md`, `docs/AGENT_DIARY.md`, `docs/ACTION_LOG.md`, `docs/ENGINEERING_PLAN.md`, `docs/UI_SHELL.md` и `TODO.md`. Владелец утвердил дизайн; оформлены ADR-001–009, начаты [доменный контракт](docs/DOMAIN_CONTRACT_DRAFT.md), [правила задач](docs/TASK_DOMAIN_CONTRACT.md), [локальное хранение](docs/TASK_STORAGE_CONTRACT.md), [напоминания](docs/TASK_REMINDER_CONTRACT.md) и [голосовой ввод](docs/VOICE_INPUT_PROTOTYPE.md). Тестовая сборка предназначена для вымышленных данных до проверки на устройстве. Полный AI-помощник не реализован; телефон сейчас подключить невозможно.
+Перед продолжением прочитать `AGENTS.md`, `docs/AGENT_DIARY.md`, `docs/ACTION_LOG.md`, `docs/ENGINEERING_PLAN.md`, `docs/UI_SHELL.md` и `TODO.md`. Владелец утвердил дизайн; оформлены ADR-001–009, начаты [доменный контракт](docs/DOMAIN_CONTRACT_DRAFT.md), [правила задач](docs/TASK_DOMAIN_CONTRACT.md), [локальное хранение](docs/TASK_STORAGE_CONTRACT.md), [напоминания](docs/TASK_REMINDER_CONTRACT.md) и [голосовой ввод](docs/VOICE_INPUT_PROTOTYPE.md). [Экспериментальный маршрут Google AI](docs/VOICE_ASSISTANT_NEXT.md) получил ответ на один синтетический текстовый запрос на Redmi. Тестовая сборка предназначена для вымышленных данных; полный AI-помощник и допуск личных данных не завершены.
+
+По отдельному уточнению владельца добавлен [тест облачного голосового диалога Gemini Live](docs/CLOUD_VOICE_TEST_CONTRACT.md): речь и аудиоответ обрабатываются Google после явного согласия. Оценка азербайджанского, русского, английского и смешанной речи на устройстве ещё требуется.
+
+Для облачного теста на другом компьютере скачайте конфигурацию зарегистрированного Android-приложения `ai.memora.app` из проекта Firebase и сохраните её локально как `apps/android/app/google-services.json`. Файл исключён из Git. Без него приложение собирается, но облачный маршрут не настроен. Доступ тестовой сборки на устройстве также зависит от разрешённого в Firebase App Check debug-токена; не публикуйте токены. Подпись debug-сборки на другом компьютере может отличаться, и Android может отказаться обновлять установленное приложение: не удаляйте его без отдельной проверки и согласия, поскольку удаление стирает локальные данные.
 
 ## Суть продукта
 
@@ -66,6 +70,7 @@ cd Memora
 | [docs/USER_EXPERIENCE.md](docs/USER_EXPERIENCE.md) | UX/UI, экраны, доступность, голосовые и текстовые сценарии |
 | [docs/MEMORY_AND_TRUST.md](docs/MEMORY_AND_TRUST.md) | Контекстная память, факты, связи, происхождение, изменения, противоречия |
 | [docs/AI_AND_VOICE.md](docs/AI_AND_VOICE.md) | Мультимодельная архитектура, STT/LLM/TTS, языки, проверка качества, стоимость |
+| [docs/CLOUD_VOICE_TEST_CONTRACT.md](docs/CLOUD_VOICE_TEST_CONTRACT.md) | Тест облачного голосового диалога, согласие, остановка и проверка AZ/RU/EN |
 | [docs/DOMAIN_AND_DATA.md](docs/DOMAIN_AND_DATA.md) | Сущности, ограничения, денежная и временная семантика, жизненные циклы |
 | [docs/TECHNICAL_ARCHITECTURE.md](docs/TECHNICAL_ARCHITECTURE.md) | Клиенты, сервисы, API, фоновые процессы, синхронизация, интеграции |
 | [docs/SECURITY_AND_PRIVACY.md](docs/SECURITY_AND_PRIVACY.md) | Приватность, безопасность, управление данными, угрозы и политики |
