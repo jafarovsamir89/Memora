@@ -27,6 +27,7 @@ import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import ai.memora.app.ui.*
+import ai.memora.app.data.EncryptedTaskStore
 import java.time.LocalDate
 import java.time.format.DateTimeFormatter
 import java.util.Locale
@@ -150,7 +151,7 @@ fun TaskRow(task: ExampleTask, done: Boolean, onToggle: () -> Unit) {
 }
 
 @Composable
-fun TasksScreen(language: String, completed: List<String>, toggle: (String) -> Unit, capture: () -> Unit) {
+fun TasksScreen(language: String, completed: List<String>, toggle: (String) -> Unit, capture: () -> Unit, taskStore: EncryptedTaskStore) {
     var filter by rememberSaveable { mutableStateOf("today") }
     val today = LocalDate.now()
     val shown = exampleTasks.filter { when (filter) {
@@ -160,6 +161,7 @@ fun TasksScreen(language: String, completed: List<String>, toggle: (String) -> U
     } }
     ScreenColumn {
         ScreenHeading(s(R.string.tasks_title), s(R.string.tasks_subtitle))
+        TaskPrototype(taskStore)
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
             (-2L..4L).forEach { shift ->
                 val day = today.plusDays(shift)

@@ -13,9 +13,10 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import ai.memora.app.ui.*
+import ai.memora.app.voice.VoiceInput
 
 @Composable
-fun CaptureSheet(voice: Boolean, setVoice: (Boolean) -> Unit, draft: String, setDraft: (String) -> Unit, onSave: () -> Unit, onClose: () -> Unit) {
+fun CaptureSheet(voice: Boolean, setVoice: (Boolean) -> Unit, draft: String, setDraft: (String) -> Unit, onSave: () -> Unit, onClose: () -> Unit, language: String) {
     Column(Modifier.fillMaxWidth().verticalScroll(rememberScrollState()).imePadding()
         .padding(horizontal = 24.dp).padding(bottom = 28.dp), verticalArrangement = Arrangement.spacedBy(18.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically) {
@@ -24,10 +25,7 @@ fun CaptureSheet(voice: Boolean, setVoice: (Boolean) -> Unit, draft: String, set
         }
         Filters(listOf("text" to s(R.string.text_tab), "voice" to s(R.string.voice_tab)), if (voice) "voice" else "text", { setVoice(it == "voice") })
         if (voice) {
-            Waveform(Modifier.padding(vertical = 12.dp))
-            Text(s(R.string.voice_title), style = MaterialTheme.typography.titleLarge, color = colors.ink)
-            Text(s(R.string.voice_body), style = MaterialTheme.typography.bodyMedium, color = colors.muted)
-            Button({ setVoice(false) }, Modifier.fillMaxWidth().heightIn(min = 52.dp)) { Text(s(R.string.go_text)) }
+            VoiceInput(language, draft, setDraft, { setVoice(false) })
         } else {
             OutlinedTextField(
                 value = draft, onValueChange = { if (it.length <= 2000) setDraft(it) },

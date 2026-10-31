@@ -18,7 +18,10 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import ai.memora.app.ui.*
+import ai.memora.app.data.EncryptedTaskStore
+import ai.memora.app.data.TaskStoreKey
 import kotlinx.coroutines.launch
+import java.io.File
 import java.util.Locale
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -27,6 +30,7 @@ fun MemoraApp(initialRoute: String = "home", initialTheme: String = "system") {
     var language by rememberSaveable { mutableStateOf("ru") }
     var theme by rememberSaveable { mutableStateOf(initialTheme) }
     val context = LocalContext.current
+    val taskStore = remember(context) { EncryptedTaskStore(File(context.filesDir, "tasks-prototype.bin"), TaskStoreKey::get) }
     val systemConfiguration = LocalConfiguration.current
     val resources = remember(language, systemConfiguration, context) {
         val localized = Configuration(systemConfiguration).apply { setLocale(Locale.forLanguageTag(language)) }
@@ -119,7 +123,7 @@ fun MemoraApp(initialRoute: String = "home", initialTheme: String = "system") {
                         when (route) {
                             "home" -> HomeScreen(language, completed, toggleTask, navigate, openCapture, { detailId = it })
                             "memory" -> MemoryScreen({ detailId = it }, { openCapture(false) })
-                            "tasks" -> TasksScreen(language, completed, toggleTask, { openCapture(false) })
+                            "tasks" -> TasksScreen(language, completed, toggleTask, { openCapture(false) }, taskStore)
                             "more" -> MoreScreen(navigate, { about = true })
                             "inbox" -> InboxScreen(drafts, { openCapture(false) })
                             "finance" -> FinanceScreen { detailId = "payment" }
@@ -146,7 +150,7 @@ fun MemoraApp(initialRoute: String = "home", initialTheme: String = "system") {
                         if (route != "inbox") { parent = route; route = "inbox" }
                         scope.launch { snackbar.showSnackbar(added) }
                     }
-                }, onClose = { capture = false })
+                }, onClose = { capture = false }, language = language)
             }
             val detail = exampleMemories.find { it.id == detailId }
             if (detail != null) ModalBottomSheet(

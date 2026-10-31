@@ -98,10 +98,11 @@ class UiShellTest {
         compose.onNodeWithText("300 ₼").assertExists()
     }
 
-    @Test fun voicePreviewDoesNotClaimRecording() {
+    @Test fun voiceInputRequiresAnExplicitStart() {
         compose.setContent { MemoraApp(initialTheme = "light") }
         compose.onNodeWithTag("capture_voice").performClick()
-        compose.onNodeWithText("Запись и распознавание подключим при разработке голосового модуля. Сейчас микрофон не используется.").assertExists()
+        compose.onNodeWithTag("voice_start").assertExists()
+        compose.onNodeWithText("После нажатия и разрешения микрофона используем доступное распознавание на устройстве. Текст можно проверить и исправить. AI пока не подключён.").assertExists()
         screenshot("09-voice-preview")
     }
 
