@@ -9,6 +9,9 @@ import ai.memora.app.ai.configureAppCheck
 import ai.memora.app.voice.FirebaseAudioNoteGateway
 import ai.memora.app.voice.TranscriptOrthography
 import ai.memora.app.voice.VoiceLanguagePolicy
+import ai.memora.app.voice.GeminiSpokenIntentParser
+import ai.memora.app.voice.GeminiSpeechOutput
+import ai.memora.app.voice.SpokenIntent
 import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.withContext
 import com.google.firebase.Firebase
@@ -28,6 +31,9 @@ class GeminiSyntheticProbe : Instrumentation() {
     private var useTranscribeLive = false
     private var restoreOrthography = false
     private var orthographyOnly = false
+    private var intentOnly = false
+    private var speechOnly = false
+    private var playbackOnly = false
     private var onlyCase: String? = null
     override fun onCreate(arguments: Bundle?) {
         super.onCreate(arguments)
@@ -35,6 +41,9 @@ class GeminiSyntheticProbe : Instrumentation() {
         useTranscribeLive = arguments?.getString("transcribeLive") == "true"
         restoreOrthography = arguments?.getString("restoreOrthography") != "false"
         orthographyOnly = arguments?.getString("orthographyOnly") == "true"
+        intentOnly = arguments?.getString("intentOnly") == "true"
+        speechOnly = arguments?.getString("speechOnly") == "true"
+        playbackOnly = arguments?.getString("playbackOnly") == "true"
         onlyCase = arguments?.getString("case")?.takeIf { it in setOf("az", "ru", "mixed") }
         start()
     }
@@ -44,6 +53,51 @@ class GeminiSyntheticProbe : Instrumentation() {
         val results = Bundle()
         FirebaseApp.initializeApp(targetContext)
         configureAppCheck(targetContext)
+        if (playbackOnly) {
+            val started = System.nanoTime()
+            try {
+                runBlocking { withTimeout(30_000) { GeminiSpeechOutput().speak("Hər şey hazırdır.") } }
+                results.putString("status", "playback_completed")
+            } catch (error: Exception) {
+                results.putString("status", error.javaClass.simpleName)
+                results.putString("frames", error.stackTrace.take(6).joinToString(" | ") { "${it.className}.${it.methodName}:${it.lineNumber}" })
+            }
+            results.putLong("speech_ms", (System.nanoTime() - started) / 1_000_000)
+            finish(Activity.RESULT_OK, results); return
+        }
+        if (speechOnly) {
+            val started = System.nanoTime()
+            runBlocking { try {
+                val model = Firebase.ai(backend = GenerativeBackend.googleAI()).generativeModel(
+                    "gemini-3.1-flash-tts-preview", generationConfig = generationConfig {
+                        responseModalities = listOf(ResponseModality.AUDIO); speechConfig = SpeechConfig(voice = Voice("Kore"))
+                    })
+                val response = withTimeout(30_000) { model.generateContent("Read this Azerbaijani text exactly: Hər şey hazırdır.") }
+                val audio = response.candidates.firstOrNull()?.content?.parts?.filterIsInstance<InlineDataPart>().orEmpty()
+                results.putInt("audio_bytes", audio.sumOf { it.inlineData.size })
+                results.putString("audio_mime", audio.firstOrNull()?.mimeType ?: "none")
+            } catch (error: Exception) { results.putString("error", error.javaClass.simpleName) } }
+            results.putLong("speech_ms", (System.nanoTime() - started) / 1_000_000)
+            finish(Activity.RESULT_OK, results); return
+        }
+        if (intentOnly) {
+            val samples = listOf("Lalə mənə 100 manat verdi.", "Lalə mənə yüz manat verdi.",
+                "Lalə mənə nə qədər pul vermişdi?", "Salam, necəsən?")
+            runBlocking { samples.forEachIndexed { index, sample ->
+                val started = System.nanoTime()
+                try {
+                    val intent = withTimeout(30_000) { GeminiSpokenIntentParser().parse(sample) }
+                    results.putString("case_${index}_type", when (intent) {
+                        is SpokenIntent.Received -> "received:${intent.amount}"
+                        is SpokenIntent.ReceivedQuestion -> "received_question"
+                        SpokenIntent.Clarify -> "clarify"
+                    })
+                } catch (error: Exception) { results.putString("case_${index}_type", error.javaClass.simpleName) }
+                results.putLong("case_${index}_ms", (System.nanoTime() - started) / 1_000_000)
+            } }
+            finish(Activity.RESULT_OK, results)
+            return
+        }
         if (orthographyOnly) {
             val samples = listOf("Zavtra v 7 chasov pozvoni Leyle.",
                 "Sabah saat 7-də pozvoni Leyle, 40 manat değil, 50 manat.",

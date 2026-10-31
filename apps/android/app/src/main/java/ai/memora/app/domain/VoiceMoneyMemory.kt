@@ -11,7 +11,10 @@ data class VoiceReceipt(
     val id: String, val commandId: String, val personId: String, val minorUnits: Long,
     val currency: String, val source: String, val recordedAt: Instant, val occurredAt: Instant? = null,
 )
-data class VoiceMoneySnapshot(val persons: List<VoicePerson> = emptyList(), val receipts: List<VoiceReceipt> = emptyList())
+data class VoiceDebt(val id: String, val commandId: String, val personId: String, val minorUnits: Long,
+    val currency: String, val source: String, val recordedAt: Instant)
+data class VoiceMoneySnapshot(val persons: List<VoicePerson> = emptyList(), val receipts: List<VoiceReceipt> = emptyList(),
+    val debts: List<VoiceDebt> = emptyList())
 data class VoiceReceiptCommand(
     val commandId: String, val personId: String, val receiptId: String, val personName: String,
     val amount: String, val source: String, val recordedAt: Instant, val occurredAt: Instant? = null,
@@ -40,9 +43,10 @@ object VoiceMoneyRules {
     private val denied = Regex("(?iu)(?<!\\p{L})(?:deyil|değil|yox|vermədi|vermedi|almadım|almadim|не|нет)(?!\\p{L})")
     private val receivedVerb = Regex("(?iu)(?<!\\p{L})(?:verdi|verib|vermişdi|vermisdi|передал|передала|дал|дала)(?!\\p{L})")
     private val recipient = Regex("(?iu)(?<!\\p{L})(?:mənə|mene|мне)(?!\\p{L})")
-    private val money = Regex("(?iu)(?<![\\p{L}\\p{N}])([0-9]+(?:[.,][0-9]{1,2})?)\\s*(?:manat|azn|манат|маната|манатов)(?!\\p{L})")
+    private val money = Regex("(?iu)(?<![\\p{L}\\p{N}])([0-9]+(?:[.,][0-9]{1,2})?|yüz|yuz)\\s*(?:manat|azn|манат|маната|манатов)(?!\\p{L})")
 
     fun parseMinor(value: String): Long? {
+        if (value.equals("yüz", true) || value.equals("yuz", true)) return 10_000L
         if (!Regex("[0-9]{1,14}(?:[.,][0-9]{1,2})?").matches(value)) return null
         return runCatching { BigDecimal(value.replace(',', '.')).movePointRight(2).longValueExact() }
             .getOrNull()?.takeIf { it > 0 }
@@ -55,7 +59,7 @@ object VoiceMoneyRules {
         val source = key(command.source)
         val person = key(command.personName)
         val amounts = money.findAll(source).map { parseMinor(it.groupValues[1]) }.toList()
-        val quantity = "[0-9]+(?:[.,][0-9]{1,2})?\\s*(?:manat|azn|манат|маната|манатов)"
+        val quantity = "(?:[0-9]+(?:[.,][0-9]{1,2})?|yüz|yuz)\\s*(?:manat|azn|манат|маната|манатов)"
         val verb = "(?:verdi|verib|vermişdi|vermisdi|передал|передала|дал|дала)"
         val simpleStatement = Regex("(?iu)^\\s*${Regex.escape(person)}\\s+(?:(?:mənə|mene|мне)\\s+$quantity\\s+$verb|$verb\\s+мне\\s+$quantity)[.!]?\\s*$")
         if (command.occurredAt != null || !Regex("(?<!\\p{L})${Regex.escape(person)}(?!\\p{L})").containsMatchIn(source) ||
@@ -72,7 +76,7 @@ object VoiceMoneyRules {
         state.receipts.find { it.commandId == command.commandId }?.let {
             return if (it == receipt) VoiceMemoryChange.Duplicate else VoiceMemoryChange.Conflict
         }
-        if (state.receipts.any { it.id == command.receiptId } ||
+        if (state.receipts.any { it.id == command.receiptId } || state.debts.any { it.id == command.receiptId || it.commandId == command.commandId } ||
             (existing == null && state.persons.any { it.id == command.personId })) return VoiceMemoryChange.Conflict
         return VoiceMemoryChange.Applied(state.copy(
             persons = if (existing == null) state.persons + resolved else state.persons,

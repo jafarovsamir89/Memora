@@ -19,6 +19,7 @@ fun VoiceMemoryScreen() {
     val store = remember { VoiceMoneyStore(File(context.filesDir, "voice-memory.bin"), VoiceMoneyKey::get) }
     var result by remember { mutableStateOf(store.load()) }
     var pending by remember { mutableStateOf<String?>(null) }
+    var pendingDebt by remember { mutableStateOf(false) }
     var confirmExport by remember { mutableStateOf(false) }
     var exportError by remember { mutableStateOf(false) }
     val export = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("application/json")) { uri ->
@@ -38,14 +39,24 @@ fun VoiceMemoryScreen() {
             is VoiceStoreRead.Ready -> {
                 OutlinedButton(onClick = { confirmExport = true }) { Text(s(R.string.voice_memory_export)) }
                 if (exportError) Text(s(R.string.capture_management_error))
-                if (read.snapshot.receipts.isEmpty()) Text(s(R.string.working_no_data))
+                if (read.snapshot.receipts.isEmpty() && read.snapshot.debts.isEmpty()) Text(s(R.string.working_no_data))
+                read.snapshot.debts.asReversed().forEach { debt ->
+                    val name = read.snapshot.persons.firstOrNull { it.id == debt.personId }?.name.orEmpty()
+                    MemoraCard {
+                        Text(name, style = MaterialTheme.typography.titleMedium)
+                        Text(s(R.string.voice_debt_label))
+                        Text("${debt.minorUnits / 100},${(debt.minorUnits % 100).toString().padStart(2, '0')} AZN")
+                        Text(debt.source)
+                        TextButton(onClick = { pendingDebt = true; pending = debt.id }) { Text(s(R.string.task_delete)) }
+                    }
+                }
                 read.snapshot.receipts.asReversed().forEach { receipt ->
                     val name = read.snapshot.persons.firstOrNull { it.id == receipt.personId }?.name.orEmpty()
                     MemoraCard {
                         Text(name, style = MaterialTheme.typography.titleMedium)
                         Text("${receipt.minorUnits / 100},${(receipt.minorUnits % 100).toString().padStart(2, '0')} AZN")
                         Text(receipt.source)
-                        TextButton(onClick = { pending = receipt.id }) { Text(s(R.string.task_delete)) }
+                        TextButton(onClick = { pendingDebt = false; pending = receipt.id }) { Text(s(R.string.task_delete)) }
                     }
                 }
             }
@@ -59,7 +70,7 @@ fun VoiceMemoryScreen() {
         title = { Text(s(R.string.voice_memory_delete_title)) },
         text = { Text(s(R.string.voice_memory_delete_body)) },
         confirmButton = { TextButton(onClick = {
-            if (store.deleteReceipt(pending!!)) result = store.load() else result = VoiceStoreRead.Unavailable
+            if (if (pendingDebt) store.deleteDebt(pending!!) else store.deleteReceipt(pending!!)) result = store.load() else result = VoiceStoreRead.Unavailable
             pending = null
         }) { Text(s(R.string.task_delete)) } },
         dismissButton = { TextButton(onClick = { pending = null }) { Text(s(R.string.task_cancel)) } })

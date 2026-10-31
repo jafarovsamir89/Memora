@@ -73,4 +73,44 @@ class VoiceFirstAssistantTest {
         assertEquals("Всё готово.", (assistant.handle("Samir дал мне 100 манат.") as VoiceFirstResult.Ready).spoken)
         assertEquals("Samir передал вам 100 манат.", (assistant.handle("Samir сколько мне дал?") as VoiceFirstResult.Ready).spoken)
     }
+
+    @Test fun debtQuestionUsesOnlyExplicitDebtAndSkipsRemoteClassification() = runBlocking {
+        val store = VoiceMoneyStore(File(folder.root, "debt.bin")) { key }
+        val parser = object : SpokenIntentParser { override suspend fun parse(transcript: String): SpokenIntent = error("unexpected remote call") }
+        val assistant = VoiceFirstAssistant(store, parser, clock)
+        val missing = assistant.handle("Salam, Samirin mene negede borcu var?") as VoiceFirstResult.Ready
+        assertTrue(missing.spoken.contains("məlumat yoxdur"))
+        assertTrue((assistant.handle("Samirin mənə yüz manat borcu var.") as VoiceFirstResult.Ready).saved)
+        val answer = assistant.handle("Salam, Samirin mənə nə qədər borcu var?") as VoiceFirstResult.Ready
+        assertTrue(answer.spoken.contains("100 manat")); assertTrue(answer.spoken.contains("borcludur"))
+        val russian = assistant.handle("Сколько Samir мне должен?") as VoiceFirstResult.Ready
+        assertTrue(russian.spoken.contains("100 манат"))
+    }
+
+    @Test fun receivedMoneyNeverBecomesDebtAndLaterReceiptMakesDebtUncertain() = runBlocking {
+        val store = VoiceMoneyStore(File(folder.root, "direction.bin")) { key }
+        val parser = object : SpokenIntentParser { override suspend fun parse(transcript: String) = SpokenIntent.Received("Samir", "100") }
+        val assistant = VoiceFirstAssistant(store, parser, clock)
+        assertTrue((assistant.handle("Samir mənə 100 manat verdi.") as VoiceFirstResult.Ready).saved)
+        assertTrue((assistant.handle("Samirin mənə nə qədər borcu var?") as VoiceFirstResult.Ready).spoken.contains("məlumat yoxdur"))
+        assertTrue((assistant.handle("Samirin mənə 100 manat borcu var.") as VoiceFirstResult.Ready).saved)
+        assertTrue((assistant.handle("Samirin mənə nə qədər borcu var?") as VoiceFirstResult.Ready).spoken.contains("dəqiqləşdirmək"))
+    }
+
+    @Test fun spokenHundredIsAcceptedWhenBothModelAndTranscriptAgree() = runBlocking {
+        val store = VoiceMoneyStore(File(folder.root, "spoken.bin")) { key }
+        val parser = object : SpokenIntentParser { override suspend fun parse(transcript: String) = SpokenIntent.Received("Samir", "yüz") }
+        assertTrue((VoiceFirstAssistant(store, parser, clock).handle("Samir mənə yüz manat verdi.") as VoiceFirstResult.Ready).saved)
+        assertFalse((VoiceFirstAssistant(store, parser, clock).handle("Samir mənə iyirmi manat verdi.") as VoiceFirstResult.Ready).saved)
+    }
+
+    @Test fun debtNameSuffixAndAmbiguousMultipleDebtStatements() = runBlocking {
+        val store = VoiceMoneyStore(File(folder.root, "multiple.bin")) { key }
+        val parser = object : SpokenIntentParser { override suspend fun parse(transcript: String): SpokenIntent = error("unexpected call") }
+        val assistant = VoiceFirstAssistant(store, parser, clock)
+        assertTrue((assistant.handle("Lalənin mənə 100 manat borcu var.") as VoiceFirstResult.Ready).saved)
+        assertTrue((assistant.handle("Lalənin mənə 20 manat borcu var.") as VoiceFirstResult.Ready).saved)
+        val result = assistant.handle("Lalənin mənə nə qədər borcu var?") as VoiceFirstResult.Ready
+        assertTrue(result.spoken.contains("dəqiqləşdirmək")); assertFalse(result.spoken.contains("120"))
+    }
 }

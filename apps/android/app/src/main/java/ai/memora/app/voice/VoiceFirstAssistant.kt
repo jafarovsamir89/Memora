@@ -67,6 +67,31 @@ class VoiceFirstAssistant(private val store: VoiceMoneyStore, private val parser
         if (transcript.isBlank() || transcript.length > 20_000) return VoiceFirstResult.Ready("Zəhmət olmasa, bir daha deyin.", false)
         val russian = Regex("(?iu)[а-яё]{2,}").findAll(transcript).count() >= 2
         fun say(az: String, ru: String) = if (russian) ru else az
+        val debtPerson = VoiceDebtRules.questionPerson(transcript)
+        if (debtPerson != null) return withContext(Dispatchers.IO) {
+            when (val data = store.load()) {
+                VoiceStoreRead.Unavailable -> VoiceFirstResult.Unavailable
+                is VoiceStoreRead.Ready -> {
+                    val people = data.snapshot.persons.filter { VoiceMoneyRules.key(it.name) == VoiceMoneyRules.key(debtPerson) }
+                    val debts = if (people.size == 1) data.snapshot.debts.filter { it.personId == people.single().id } else emptyList()
+                    val uncertain = debts.size > 1 || (debts.size == 1 && data.snapshot.receipts.any {
+                        it.personId == debts.single().personId && !it.recordedAt.isBefore(debts.single().recordedAt)
+                    })
+                    when {
+                        people.size > 1 || uncertain -> VoiceFirstResult.Ready(say("Borc barədə qeydləri dəqiqləşdirmək lazımdır.", "Нужно уточнить записи об этом долге."), false)
+                        debts.isEmpty() -> VoiceFirstResult.Ready(say("Səs yaddaşımda bu şəxsin borcu barədə məlumat yoxdur.", "В голосовой памяти нет сведений о долге этого человека."), false)
+                        else -> VoiceFirstResult.Ready(say("Qeydə görə, ${people.single().name} sizə ${formatManat(debts.single().minorUnits)} manat borcludur.", "Согласно записи, ${people.single().name} должен вам ${formatManat(debts.single().minorUnits)} манат."), false)
+                    }
+                }
+            }
+        }
+        if (VoiceDebtRules.statement(transcript) != null) return withContext(Dispatchers.IO) {
+            when (store.saveDebt(transcript, ids(), ids(), ids(), clock.instant())) {
+                VoiceStoreWrite.Saved, VoiceStoreWrite.Duplicate -> VoiceFirstResult.Ready("Hər şey hazırdır.", true)
+                VoiceStoreWrite.Unavailable -> VoiceFirstResult.Unavailable
+                else -> VoiceFirstResult.Ready("Borcu və şəxsi dəqiqləşdirin.", false)
+            }
+        }
         val intent = parser.parse(transcript)
         return withContext(Dispatchers.IO) {
             when (intent) {

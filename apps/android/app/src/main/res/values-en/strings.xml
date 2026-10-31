@@ -221,10 +221,11 @@
     <string name="voice_first_consent_body">With your consent, your voice and transcript are sent to Google Gemini. To produce speech, Google receives the answer, including the relevant name and amount. Google may use free-service data to improve products. Your entire memory archive is not sent. Consent is saved on this device.</string>
     <string name="voice_first_menu_hint">Swipe left to open the menu</string>
     <string name="voice_memory_title">Voice memory</string>
-    <string name="voice_memory_help">Saved transfers and original text. Delete an incorrect entry and say it again.</string>
+    <string name="voice_memory_help">Saved transfers, debts and original text. Delete an incorrect entry and say it again.</string>
     <string name="voice_memory_delete_title">Delete entry?</string>
-    <string name="voice_memory_delete_body">This transfer will be removed from memory.</string>
+    <string name="voice_memory_delete_body">This record will be removed from memory.</string>
     <string name="voice_revoke_consent">Revoke Google voice consent</string>
     <string name="voice_memory_export">Export memory</string>
     <string name="voice_memory_export_warning">The exported file is not encrypted and contains personal data. Store it securely.</string>
+    <string name="voice_debt_label">Debt record</string>
 </resources>

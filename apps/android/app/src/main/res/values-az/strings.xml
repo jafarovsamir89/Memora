@@ -221,10 +221,11 @@
     <string name="voice_first_consent_body">Sizin razılığınızla danışdığınız səs və onun mətni Google Gemini-yə göndərilir. Cavabı səsləndirmək üçün cavabın özü, o cümlədən əlaqəli ad və məbləğ Google-a göndərilir. Google pulsuz xidmət məlumatlarından məhsullarını yaxşılaşdırmaq üçün istifadə edə bilər. Bütün yaddaş arxivi göndərilmir. Razılıq bu cihazda saxlanılır.</string>
     <string name="voice_first_menu_hint">Menyu üçün sola sürüşdürün</string>
     <string name="voice_memory_title">Səs yaddaşı</string>
-    <string name="voice_memory_help">Yazılmış köçürmələr və ilkin mətn. Səhv qeydi silib yenidən deyə bilərsiniz.</string>
+    <string name="voice_memory_help">Yazılmış köçürmələr, borclar və ilkin mətn. Səhv qeydi silib yenidən deyə bilərsiniz.</string>
     <string name="voice_memory_delete_title">Qeydi silmək?</string>
-    <string name="voice_memory_delete_body">Bu köçürmə yaddaşdan silinəcək.</string>
+    <string name="voice_memory_delete_body">Bu qeyd yaddaşdan silinəcək.</string>
     <string name="voice_revoke_consent">Google səs razılığını geri götür</string>
     <string name="voice_memory_export">Yaddaşı ixrac et</string>
     <string name="voice_memory_export_warning">İxrac edilən fayl şifrələnmir və şəxsi məlumatları ehtiva edir. Faylı təhlükəsiz yerdə saxlayın.</string>
+    <string name="voice_debt_label">Borc qeydi</string>
 </resources>

@@ -55,13 +55,46 @@ class VoiceMoneyStoreTest {
         assertTrue((VoiceMoneyStore(path) { key }.load() as VoiceStoreRead.Ready).snapshot.receipts.isEmpty())
     }
 
+    @Test fun previousSchemaPreservesExistingReceiptsWhenAddingDebt() {
+        val path = File(folder.root, "legacy.bin")
+        val header = byteArrayOf(0x4d, 0x56, 0x01)
+        val legacy = org.json.JSONObject().put("schema", 1)
+            .put("people", org.json.JSONArray().put(org.json.JSONObject().put("id", "person").put("name", "Samir")))
+            .put("receipts", org.json.JSONArray().put(org.json.JSONObject().put("id", "receipt").put("command", "cmd")
+                .put("person", "person").put("minor", 10_000).put("currency", "AZN").put("source", command().source)
+                .put("recorded", "2026-10-31T12:00:00Z").put("occurred", org.json.JSONObject.NULL)))
+        val cipher = javax.crypto.Cipher.getInstance("AES/GCM/NoPadding")
+        cipher.init(javax.crypto.Cipher.ENCRYPT_MODE, key); cipher.updateAAD(header)
+        path.writeBytes(header + cipher.iv + cipher.doFinal(legacy.toString().toByteArray(Charsets.UTF_8)))
+        val store = VoiceMoneyStore(path) { key }
+        assertEquals(VoiceStoreWrite.Saved, store.saveDebt("Samirin mənə 100 manat borcu var.", "unused", "d1", "c1", Instant.parse("2026-10-31T12:00:00Z")))
+        val result = (VoiceMoneyStore(path) { key }.load() as VoiceStoreRead.Ready).snapshot
+        assertEquals(1, result.receipts.size); assertEquals(1, result.debts.size); assertEquals(1, result.persons.size)
+    }
+
     @Test fun explicitExportIncludesEvidenceAndFailsClosedWithoutKey() {
         val path = File(folder.root, "export.bin")
         val store = VoiceMoneyStore(path) { key }
         assertEquals(VoiceStoreWrite.Saved, store.save(command()))
         val export = org.json.JSONObject(store.exportJson()!!)
-        assertEquals("memora-voice-memory-v1", export.getString("format"))
+        assertEquals("memora-voice-memory-v2", export.getString("format"))
         assertEquals(command().source, export.getJSONArray("receipts").getJSONObject(0).getString("source"))
         assertNull(VoiceMoneyStore(path) { null }.exportJson())
+    }
+
+    @Test fun debtIsEncryptedExportedAndDeletingReceiptPreservesSharedPerson() {
+        val path = File(folder.root, "debt.bin")
+        val store = VoiceMoneyStore(path) { key }
+        assertEquals(VoiceStoreWrite.Saved, store.save(command()))
+        val source = "Samirin mənə yüz manat borcu var."
+        assertEquals(VoiceStoreWrite.Saved, store.saveDebt(source, "person2", "debt", "debt-command", Instant.parse("2026-10-31T12:00:00Z")))
+        assertFalse(path.readBytes().toString(Charsets.ISO_8859_1).contains("Samir"))
+        assertTrue(store.deleteReceipt("receipt"))
+        val reopened = VoiceMoneyStore(path) { key }
+        val snapshot = (reopened.load() as VoiceStoreRead.Ready).snapshot
+        assertEquals(1, snapshot.persons.size); assertEquals(10_000L, snapshot.debts.single().minorUnits)
+        assertEquals(source, org.json.JSONObject(reopened.exportJson()!!).getJSONArray("debts").getJSONObject(0).getString("source"))
+        assertTrue(reopened.deleteDebt("debt"))
+        assertTrue((reopened.load() as VoiceStoreRead.Ready).snapshot.persons.isEmpty())
     }
 }

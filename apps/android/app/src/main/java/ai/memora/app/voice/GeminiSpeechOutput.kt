@@ -22,6 +22,21 @@ import kotlinx.coroutines.withTimeout
 
 interface SpeechOutput { suspend fun speak(text: String) }
 
+internal object GeminiAudioFormat {
+    fun accepts(mime: String): Boolean {
+        val fields = mime.split(';').map { it.trim().lowercase() }
+        if (fields.firstOrNull() !in setOf("audio/pcm", "audio/l16")) return false
+        return fields.drop(1).all { parameter ->
+            val parts = parameter.split('=', limit = 2).map { it.trim() }
+            parts.size == 2 && when (parts[0]) {
+                "rate" -> parts[1] == "24000"
+                "channels" -> parts[1] == "1"
+                else -> false
+            }
+        }
+    }
+}
+
 /** Only the short answer is sent to Google for speech; the archive remains local. */
 class GeminiSpeechOutput : SpeechOutput {
     override suspend fun speak(text: String) = withTimeout(30_000) {
@@ -34,7 +49,7 @@ class GeminiSpeechOutput : SpeechOutput {
             })
         val response = model.generateContent("Read the following text exactly in its original language, without adding or translating words: $text")
         val parts = response.candidates.firstOrNull()?.content?.parts?.filterIsInstance<InlineDataPart>().orEmpty()
-        require(parts.isNotEmpty() && parts.all { it.mimeType.startsWith("audio/pcm") })
+        require(parts.isNotEmpty() && parts.all { GeminiAudioFormat.accepts(it.mimeType) })
         val length = parts.fold(0L) { n, part -> n + part.inlineData.size }
         require(length in 2..1_500_000 && length % 2 == 0L)
         val audio = ByteArray(length.toInt())
@@ -50,8 +65,9 @@ class GeminiSpeechOutput : SpeechOutput {
                 .setSampleRate(24_000).setChannelMask(AudioFormat.CHANNEL_OUT_MONO).build())
             .setTransferMode(AudioTrack.MODE_STATIC).setBufferSizeInBytes(audio.size).build()
         try {
-            check(track.state == AudioTrack.STATE_INITIALIZED)
+            check(track.state == AudioTrack.STATE_NO_STATIC_DATA || track.state == AudioTrack.STATE_INITIALIZED)
             check(track.write(audio, 0, audio.size, AudioTrack.WRITE_BLOCKING) == audio.size)
+            check(track.state == AudioTrack.STATE_INITIALIZED)
             currentCoroutineContext().ensureActive()
             track.play()
             while (track.playbackHeadPosition.toLong() < audio.size / 2L) {
