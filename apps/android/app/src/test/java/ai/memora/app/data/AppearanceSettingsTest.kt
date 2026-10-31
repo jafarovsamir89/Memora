@@ -44,4 +44,29 @@ class AppearanceSettingsTest {
         try { AppearanceSettings("tr", "dark"); fail("Expected rejection") } catch (_: IllegalArgumentException) { }
         try { AppearanceSettings("az", "sepia"); fail("Expected rejection") } catch (_: IllegalArgumentException) { }
     }
+
+    @Test fun legacyBackupIsRecoveredBeforeSavingNewSettings() {
+        val file = File(folder.root, "appearance")
+        file.writeText("MEMORA_SETTINGS_1\nen\nlight\n")
+        File(file.path + ".bak").writeText("MEMORA_SETTINGS_1\naz\ndark\n")
+        val store = AtomicAppearanceStore(file)
+        assertEquals(AppearanceSettings("az", "dark"), store.read())
+        store.write(AppearanceSettings("ru", "light"))
+        assertEquals(AppearanceSettings("ru", "light"), AtomicAppearanceStore(file).read())
+        assertFalse(File(file.path + ".bak").exists())
+    }
+
+    @Test fun failedStagingWritePreservesCommittedSettingsAndAllowsRetry() {
+        val file = File(folder.root, "appearance")
+        val store = AtomicAppearanceStore(file)
+        store.write(AppearanceSettings("az", "dark"))
+        val pending = File(file.path + ".new").apply { mkdir() }
+        val obstruction = File(pending, "obstruction").apply { writeText("synthetic") }
+        try { store.write(AppearanceSettings("en", "light")); fail("Expected failure") } catch (_: IOException) { }
+        assertEquals(AppearanceSettings("az", "dark"), AtomicAppearanceStore(file).read())
+        assertTrue(obstruction.delete())
+        assertTrue(pending.delete())
+        store.write(AppearanceSettings("en", "light"))
+        assertEquals(AppearanceSettings("en", "light"), AtomicAppearanceStore(file).read())
+    }
 }

@@ -33,9 +33,11 @@ fun ResponseSpeech(text: String, language: String) {
     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
         OutlinedButton(onClick = {
             val tts = engine
-            val locale = Locale.forLanguageTag(when (language) { "az" -> "az-AZ"; "en" -> "en-US"; else -> "ru-RU" })
+            val locale = VoiceLanguagePolicy.locale(language)
             val languageStatus = tts?.setLanguage(locale)
             failed = !ready || tts == null || languageStatus == TextToSpeech.LANG_MISSING_DATA || languageStatus == TextToSpeech.LANG_NOT_SUPPORTED
+            // Some engines accept a locale but silently select a different language.
+            if (!failed) failed = !VoiceLanguagePolicy.acceptsVoice(language, tts?.voice?.locale)
             if (!failed) failed = tts?.speak(text, TextToSpeech.QUEUE_FLUSH, null, "memora-response") != TextToSpeech.SUCCESS
         }, modifier = Modifier.testTag("response_speak"), enabled = ready) { Text(s(R.string.ai_speak)) }
         OutlinedButton(onClick = { engine?.stop() }, modifier = Modifier.testTag("response_stop")) { Text(s(R.string.ai_stop_speech)) }

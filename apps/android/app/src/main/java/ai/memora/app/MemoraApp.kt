@@ -47,14 +47,15 @@ private data class PendingCaptureImport(val text: String, val preview: CaptureIm
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun MemoraApp(initialRoute: String = "home", initialTheme: String = "system", capturePersistenceOverride: CapturePersistence? = null, appearanceStoreOverride: AppearanceStore? = null) {
+fun MemoraApp(initialRoute: String = "home", initialTheme: String = "system", capturePersistenceOverride: CapturePersistence? = null,
+    appearanceStoreOverride: AppearanceStore? = null, initialLanguage: String = "az", taskStoreOverride: EncryptedTaskStore? = null) {
     val context = LocalContext.current
-    val appearanceFactory = remember(context, appearanceStoreOverride, initialTheme) { AppearanceViewModel.Factory(context, AppearanceSettings(theme = initialTheme), appearanceStoreOverride) }
+    val appearanceFactory = remember(context, appearanceStoreOverride, initialTheme, initialLanguage) { AppearanceViewModel.Factory(context, AppearanceSettings(initialLanguage, initialTheme), appearanceStoreOverride) }
     val appearanceModel: AppearanceViewModel = viewModel(factory = appearanceFactory)
     val appearance by appearanceModel.state.collectAsState()
     val language = appearance.settings.language
     val theme = appearance.settings.theme
-    val taskStore = remember(context) { EncryptedTaskStore(File(context.filesDir, "tasks-prototype.bin"), TaskStoreKey::get) }
+    val taskStore = remember(context, taskStoreOverride) { taskStoreOverride ?: EncryptedTaskStore(File(context.filesDir, "tasks-prototype.bin"), TaskStoreKey::get) }
     val captureFactory = remember(context, capturePersistenceOverride) { CaptureViewModel.Factory(context, capturePersistenceOverride) }
     val captureModel: CaptureViewModel = viewModel(factory = captureFactory)
     val captureState by captureModel.session.state.collectAsState()
@@ -71,7 +72,6 @@ fun MemoraApp(initialRoute: String = "home", initialTheme: String = "system", ca
             var capture by rememberSaveable { mutableStateOf(false) }
             var voice by rememberSaveable { mutableStateOf(false) }
             var pendingCommand by rememberSaveable { mutableStateOf<String?>(null) }
-            var completed by rememberSaveable { mutableStateOf<List<String>>(emptyList()) }
             var detailId by rememberSaveable { mutableStateOf<String?>(null) }
             var about by rememberSaveable { mutableStateOf(false) }
             var confirmCaptureExport by remember { mutableStateOf(false) }
@@ -142,11 +142,7 @@ fun MemoraApp(initialRoute: String = "home", initialTheme: String = "system", ca
             BackHandler(enabled = route != "home" && !capture && detailId == null && !about, onBack = goBack)
 
             val openCapture: (Boolean) -> Unit = { showVoice ->
-                if (showVoice) { parent = route; route = "chat" }
-                else { voice = false; capture = true }
-            }
-            val toggleTask: (String) -> Unit = { id ->
-                completed = if (id in completed) completed - id else completed + id
+                voice = showVoice; capture = true
             }
             val routes = listOf("home", "memory", "capture", "tasks", "more")
             val labels = listOf(R.string.nav_home, R.string.nav_memory, R.string.nav_capture, R.string.nav_tasks, R.string.nav_more)
@@ -174,7 +170,7 @@ fun MemoraApp(initialRoute: String = "home", initialTheme: String = "system", ca
                                 else MaterialTheme.typography.titleLarge, color = colors.ink)
                             if (route == "home") Text(s(R.string.tagline), style = MaterialTheme.typography.bodySmall, color = colors.muted)
                         }
-                        TextButton(onClick = { about = true }, modifier = Modifier.testTag("demo_info")) { Pill(s(R.string.demo)) }
+                        IconButton(onClick = { about = true }, modifier = Modifier.testTag("app_info")) { Icon(Glyph.Shield, s(R.string.about)) }
                         if (route == "home") IconButton({ navigate("settings") }, Modifier.testTag("open_settings")) {
                             Icon(Glyph.Settings, s(R.string.settings), tint = colors.muted, modifier = Modifier.size(22.dp))
                         }
@@ -209,9 +205,9 @@ fun MemoraApp(initialRoute: String = "home", initialTheme: String = "system", ca
                     Box(Modifier.widthIn(max = 720.dp).fillMaxSize()) {
                       screens.SaveableStateProvider(route) {
                         when (route) {
-                            "home" -> HomeScreen(language, completed, toggleTask, navigate, openCapture, { detailId = it })
-                            "memory" -> MemoryScreen({ detailId = it }, { openCapture(false) })
-                            "tasks" -> TasksScreen(language, completed, toggleTask, { openCapture(false) }, taskStore)
+                            "home" -> WorkingHomeScreen(language, captureState, navigate, openCapture, { detailId = it })
+                            "memory" -> WorkingMemoryScreen(captureState, { detailId = it }, { openCapture(false) }, { navigate("inbox") })
+                            "tasks" -> ScreenColumn { ScreenHeading(s(R.string.tasks_title), s(R.string.working_tasks_hint)); TaskPrototype(taskStore) }
                             "more" -> MoreScreen(navigate, { about = true })
                             "inbox" -> InboxScreen(captureState.captures, captureState.loading, captureState.error && !captureState.ready,
                                 captureState.managementError || captureExportError,
@@ -224,11 +220,18 @@ fun MemoraApp(initialRoute: String = "home", initialTheme: String = "system", ca
                                 { entries, archived -> captureModel.session.archive(entries, archived) },
                                 captureState.managementBusy, { request -> captureModel.session.revise(request) },
                                 { entry -> captureModel.session.delete(entry.source.id, entry.source.revisions.last().id) })
-                            "finance" -> FinanceScreen { detailId = "payment" }
-                            "people" -> PeopleScreen { detailId = it }
-                            "projects" -> ProjectsScreen { detailId = it }
+                            "finance" -> UnavailableModuleScreen(s(R.string.finance))
+                            "people" -> UnavailableModuleScreen(s(R.string.people))
+                            "projects" -> UnavailableModuleScreen(s(R.string.projects))
                             "settings" -> SettingsScreen(theme, { appearanceModel.change(theme = it) }, language, { appearanceModel.change(language = it) }, appearance.ready && !appearance.busy, appearance.error, { appearanceModel.load() }, { about = true })
-                            "chat" -> ChatScreen(language)
+                            "chat" -> ChatScreen(language, memories = captureState.captures, onSource = { detailId = it },
+                                memoriesReady = captureState.ready, onRecordNote = { voice = true; capture = true }, onRemember = { text ->
+                                if (captureState.ready && !captureState.submitting && !captureState.retrySubmission &&
+                                    !captureState.managementBusy && !captureState.dirty && !captureState.saving &&
+                                    captureState.draft.isBlank() && ai.memora.app.domain.TextSourceRules.validDraft(text)) {
+                                    captureModel.session.edit(text); openCapture(false); true
+                                } else false
+                            })
                         }
                       }
                     }
@@ -270,19 +273,19 @@ fun MemoraApp(initialRoute: String = "home", initialTheme: String = "system", ca
                         captureModel.session.applyImport(pending.text, pending.preview.ticket)
                     }, onCancel = { pendingImport = null })
             }
-            val detail = exampleMemories.find { it.id == detailId }
+            val detail = captureState.captures.find { it.source.id == detailId }
             if (detail != null) ModalBottomSheet(
                 onDismissRequest = { detailId = null },
                 sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true), containerColor = colors.background,
-            ) { MemoryDetail(detail) { detailId = null } }
+            ) { StoredMemoryDetail(detail) { detailId = null } }
             if (about) ModalBottomSheet(
                 onDismissRequest = { about = false },
                 sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true), containerColor = colors.background,
             ) {
                 Column(Modifier.padding(24.dp).navigationBarsPadding(), verticalArrangement = Arrangement.spacedBy(18.dp)) {
                     BrandMark()
-                    Text(s(R.string.demo_title), style = MaterialTheme.typography.headlineMedium, color = colors.ink)
-                    Text(s(R.string.demo_body), style = MaterialTheme.typography.bodyLarge, color = colors.muted)
+                    Text(s(R.string.about), style = MaterialTheme.typography.headlineMedium, color = colors.ink)
+                    Text(s(R.string.working_about), style = MaterialTheme.typography.bodyLarge, color = colors.muted)
                     Button({ about = false }, Modifier.fillMaxWidth().heightIn(min = 52.dp)) { Text(s(R.string.close)) }
                     Spacer(Modifier.height(16.dp))
                 }

@@ -165,4 +165,35 @@ class CloudVoiceConsentTest {
         compose.onNodeWithTag("cloud_voice_input_transcript").assertDoesNotExist()
         compose.onNodeWithTag("cloud_voice_stop").performClick()
     }
+
+    @Test fun memoryReviewReceivesOnlyUserTranscriptAfterStopping() {
+        shadowOf(ApplicationProvider.getApplicationContext<Application>()).grantPermissions(Manifest.permission.RECORD_AUDIO)
+        var callback: ((String?, String?) -> Unit)? = null
+        var reviewed: String? = null
+        val gateway = object : CloudVoiceGateway {
+            override suspend fun connect(onTranscript: (String?, String?) -> Unit): CloudVoiceHandle {
+                callback = onTranscript
+                return object : CloudVoiceHandle {
+                    override suspend fun begin() = Unit
+                    override fun stop() = Unit
+                    override suspend fun close() = Unit
+                    override fun isClosed() = false
+                }
+            }
+        }
+        compose.setContent {
+            CompositionLocalProvider(LocalStrings provides LocalContext.current.resources) {
+                MemoraTheme("light") { CloudVoiceInput(gateway, onRemember = { reviewed = it; false }) }
+            }
+        }
+        compose.onNodeWithTag("cloud_voice_start").performClick()
+        compose.onNodeWithTag("cloud_voice_confirm").performClick()
+        compose.runOnIdle { callback?.invoke("Əli, 20 manat. Завтра.", "Yadda saxladım.") }
+        compose.onNodeWithTag("cloud_voice_review").assertDoesNotExist()
+        compose.onNodeWithTag("cloud_voice_stop").performClick()
+        compose.onNodeWithTag("cloud_voice_review").performClick()
+        compose.runOnIdle { assertEquals("Əli, 20 manat. Завтра.", reviewed) }
+        compose.onNodeWithTag("cloud_voice_draft_busy").assertExists()
+        compose.onNodeWithTag("cloud_voice_input_transcript").assertTextContains("Əli, 20 manat. Завтра.", substring = true)
+    }
 }

@@ -16,8 +16,9 @@ android {
         applicationId = "ai.memora.app"
         minSdk = 26
         targetSdk = 36
-        versionCode = 4
-        versionName = "0.4.0-voice-demo"
+        versionCode = 5
+        versionName = "0.5.0-az-memory"
+        testInstrumentationRunner = "ai.memora.app.GeminiSyntheticProbe"
     }
     buildFeatures { compose = true }
     compileOptions {
@@ -40,6 +41,8 @@ dependencies {
     implementation("androidx.compose.ui:ui-tooling-preview")
     implementation(platform("com.google.firebase:firebase-bom:35.1.0"))
     implementation("com.google.firebase:firebase-ai")
+    // Match the Firebase AI transport dependency; expose language hints missing from SDK 18.1.0.
+    implementation("com.squareup.okhttp3:okhttp:4.12.0")
     debugImplementation("com.google.firebase:firebase-appcheck-debug")
     releaseImplementation("com.google.firebase:firebase-appcheck-playintegrity")
     debugImplementation("androidx.compose.ui:ui-tooling")

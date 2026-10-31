@@ -103,4 +103,27 @@ class CaptureRevisionTest {
         assertEquals(2L, restored.organizationVersion)
         assertEquals(listOf("Legacy synthetic", "Updated synthetic"), restored.source.revisions.map { it.text })
     }
+
+    @Test fun allLegacySchemasPreserveSourceWhenAddingRevision() {
+        for (schema in 1..4) {
+            val legacyFile = File(file.parentFile, "legacy-$schema-${UUID.randomUUID()}.bin")
+            val entry = JSONObject().put("command", "command").put("draftVersion", 1).put("source", source)
+                .put("revision", first).put("text", "Legacy synthetic").put("recordedAt", time.toString()).put("zone", "UTC")
+            if (schema >= 3) entry.put("origin", "LOCAL")
+            if (schema >= 4) entry.put("archived", true).put("organizationVersion", 2)
+            val plain = JSONObject().put("schema", schema).put("draft", "").put("draftVersion", 2)
+                .put("captures", JSONArray().put(entry))
+            if (schema >= 2) plain.put("deleted", JSONArray())
+            val header = byteArrayOf(0x4d, 0x43, 0x01)
+            val cipher = Cipher.getInstance("AES/GCM/NoPadding")
+            cipher.init(Cipher.ENCRYPT_MODE, key); cipher.updateAAD(header)
+            legacyFile.writeBytes(header + cipher.iv + cipher.doFinal(plain.toString().toByteArray(Charsets.UTF_8)))
+            val legacyStore = EncryptedCaptureStore(legacyFile) { key }
+            assertEquals("schema $schema", CaptureWrite.Recorded, legacyStore.revise(source, first, second, "Corrected synthetic", time.plusSeconds(1)))
+            val restored = (EncryptedCaptureStore(legacyFile) { key }.load() as CaptureRead.Ready).snapshot.captures.single()
+            assertEquals(listOf(first, second), restored.source.revisions.map { it.id })
+            assertEquals(listOf("Legacy synthetic", "Corrected synthetic"), restored.source.revisions.map { it.text })
+            assertEquals(schema >= 4, restored.archived)
+        }
+    }
 }

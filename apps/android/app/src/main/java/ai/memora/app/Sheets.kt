@@ -19,6 +19,7 @@ import ai.memora.app.ui.*
 import ai.memora.app.voice.VoiceInput
 import ai.memora.app.voice.ResponseSpeech
 import ai.memora.app.voice.CloudVoiceInput
+import ai.memora.app.voice.AudioNoteInput
 import ai.memora.app.ai.FirebaseAssistantGateway
 import ai.memora.app.ai.AssistantGateway
 import ai.memora.app.data.CaptureSessionState
@@ -43,6 +44,7 @@ fun CaptureImportDialog(preview: CaptureImportPreview.Ready, onConfirm: () -> Un
 fun CaptureSheet(voice: Boolean, setVoice: (Boolean) -> Unit, state: CaptureSessionState, setDraft: (String) -> Unit,
     onSave: () -> Unit, onRetry: () -> Unit, onClose: () -> Unit, language: String) {
     val draft = state.draft
+    var voiceMode by rememberSaveable { mutableStateOf("cloud") }
     val editable = state.ready && !state.submitting && !state.retrySubmission && !state.managementBusy
     val canClose = !state.dirty && !state.saving && !state.submitting && !state.retrySubmission
     Column(Modifier.fillMaxWidth().verticalScroll(rememberScrollState()).imePadding()
@@ -64,14 +66,16 @@ fun CaptureSheet(voice: Boolean, setVoice: (Boolean) -> Unit, state: CaptureSess
             Text(s(R.string.capture_saved_local), modifier = Modifier.testTag("capture_status"))
         if (editable) Filters(listOf("text" to s(R.string.text_tab), "voice" to s(R.string.voice_tab)), if (voice) "voice" else "text", { setVoice(it == "voice") })
         if (voice && editable) {
-            VoiceInput(language, draft, setDraft, { setVoice(false) })
+            Filters(listOf("cloud" to "Google Gemini", "local" to s(R.string.voice_title)), voiceMode, { voiceMode = it })
+            if (voiceMode == "cloud") AudioNoteInput(draft, setDraft, { setVoice(false) })
+            else VoiceInput(language, draft, setDraft, { setVoice(false) })
         } else {
             OutlinedTextField(
-                value = draft, onValueChange = { if (it.length <= 2000) setDraft(it) },
+                value = draft, onValueChange = { if (ai.memora.app.domain.TextSourceRules.validDraft(it)) setDraft(it) },
                 modifier = Modifier.fillMaxWidth().testTag("capture_input"),
                 label = { Text(s(R.string.capture_label)) }, placeholder = { Text(s(R.string.capture_placeholder)) },
                 enabled = editable, minLines = 4, maxLines = 8, shape = RoundedCornerShape(20.dp),
-                supportingText = { Text("${draft.length}/2000") },
+                supportingText = { Text("${draft.length}/20000") },
             )
             Text(s(R.string.draft_hint), style = MaterialTheme.typography.bodySmall, color = colors.muted)
             Button(onSave, Modifier.fillMaxWidth().heightIn(min = 54.dp).testTag("save_draft"), enabled = editable && draft.isNotBlank() && !state.error) {
@@ -81,38 +85,20 @@ fun CaptureSheet(voice: Boolean, setVoice: (Boolean) -> Unit, state: CaptureSess
     }
 }
 
-@Composable
-fun MemoryDetail(item: ExampleMemory, onClose: () -> Unit) {
-    Column(Modifier.fillMaxWidth().verticalScroll(rememberScrollState()).padding(horizontal = 24.dp).padding(bottom = 32.dp),
-        verticalArrangement = Arrangement.spacedBy(20.dp)) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Pill(s(item.category), item.tone)
-            Spacer(Modifier.weight(1f))
-            IconButton(onClose) { Icon(Glyph.Close, s(R.string.close), tint = colors.muted) }
-        }
-        Text(s(item.title), style = MaterialTheme.typography.headlineMedium, color = colors.ink)
-        Text(s(item.body), style = MaterialTheme.typography.bodyLarge, color = colors.muted)
-        Text(s(R.string.time_recent), style = MaterialTheme.typography.bodySmall, color = colors.muted)
-        MemoraCard {
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
-                Icon(Glyph.Note, null, Modifier.size(19.dp), tint = colors.accent)
-                Text(s(R.string.source), style = MaterialTheme.typography.titleMedium, color = colors.ink)
-            }
-            Text(s(item.source), style = MaterialTheme.typography.bodyLarge, color = colors.ink)
-            Text(s(R.string.source_hint), style = MaterialTheme.typography.bodySmall, color = colors.muted)
-        }
-        Text(s(R.string.sample_only), style = MaterialTheme.typography.bodySmall, color = colors.muted)
-    }
-}
 
 @Composable
-fun ChatScreen(language: String = "ru", gatewayOverride: AssistantGateway? = null) {
+fun ChatScreen(language: String = "az", gatewayOverride: AssistantGateway? = null,
+    memories: List<ai.memora.app.data.CaptureEntry> = emptyList(), onSource: (String) -> Unit = {},
+    onRemember: ((String) -> Boolean)? = null, onRecordNote: (() -> Unit)? = null, memoriesReady: Boolean = true) {
     var question by rememberSaveable { mutableStateOf("") }
     var submitted by rememberSaveable { mutableStateOf("") }
     var response by rememberSaveable { mutableStateOf("") }
     var confirm by remember { mutableStateOf(false) }
     var loading by remember { mutableStateOf(false) }
     var failed by remember { mutableStateOf(false) }
+    var searchMemory by remember { mutableStateOf(false) }
+    var rememberFailed by remember { mutableStateOf(false) }
+    var liveBusy by remember { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
     val context = LocalContext.current
     val textFocus = remember { FocusRequester() }
@@ -166,9 +152,22 @@ fun ChatScreen(language: String = "ru", gatewayOverride: AssistantGateway? = nul
                 ResponseSpeech(response, language)
             }
         }
-        CloudVoiceInput(onText = { textFocus.requestFocus() })
+        OutlinedButton(onClick = { searchMemory = true }, modifier = Modifier.fillMaxWidth().testTag("chat_search_memory"),
+            enabled = question.isNotBlank() && memoriesReady) { Text(s(R.string.working_search_memory)) }
+        if (searchMemory) {
+            val matches = ai.memora.app.domain.LocalMemoryIndex.search(memories, question)
+            if (matches.isEmpty()) Text(s(R.string.working_no_matches), modifier = Modifier.testTag("chat_memory_empty"))
+            matches.take(10).forEach { match -> StoredMemoryCard(match.entry) { onSource(match.entry.source.id) } }
+        }
+        if (onRemember != null) TextButton(onClick = { rememberFailed = !onRemember(question) },
+            modifier = Modifier.testTag("chat_remember"), enabled = question.isNotBlank() && !liveBusy) { Text(s(R.string.working_review_memory)) }
+        if (rememberFailed) Text(s(R.string.working_draft_busy), color = MaterialTheme.colorScheme.error)
+        CloudVoiceInput(onText = { textFocus.requestFocus() }, onRemember = onRemember, onBusyChange = { liveBusy = it })
+        if (onRecordNote != null) OutlinedButton(onClick = onRecordNote, enabled = !liveBusy, modifier = Modifier.fillMaxWidth().testTag("open_audio_note")) {
+            Text(s(R.string.audio_note_title))
+        }
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            OutlinedTextField(question, { if (it.length <= 2000) question = it }, Modifier.weight(1f).focusRequester(textFocus).testTag("chat_input"),
+            OutlinedTextField(question, { if (it.length <= 2000) { question = it; searchMemory = false } }, Modifier.weight(1f).focusRequester(textFocus).testTag("chat_input"),
                 label = { Text(s(R.string.question)) }, shape = RoundedCornerShape(20.dp), maxLines = 4)
             FilledIconButton({ confirm = true }, Modifier.size(52.dp).testTag("chat_send"), enabled = question.isNotBlank() && !loading) {
                 Icon(Glyph.Arrow, s(R.string.send))

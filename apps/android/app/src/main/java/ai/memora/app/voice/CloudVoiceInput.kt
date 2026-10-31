@@ -19,7 +19,8 @@ import ai.memora.app.ui.s
 import kotlinx.coroutines.*
 
 @Composable
-fun CloudVoiceInput(gatewayOverride: CloudVoiceGateway? = null, onText: (() -> Unit)? = null) {
+fun CloudVoiceInput(gatewayOverride: CloudVoiceGateway? = null, onText: (() -> Unit)? = null,
+    onRemember: ((String) -> Boolean)? = null, onBusyChange: (Boolean) -> Unit = {}) {
     val context = LocalContext.current
     val lifecycle = (context as? LifecycleOwner)?.lifecycle
     val defaultGateway = remember(context) { FirebaseCloudVoiceGateway(context) }
@@ -33,6 +34,8 @@ fun CloudVoiceInput(gatewayOverride: CloudVoiceGateway? = null, onText: (() -> U
     var generation by remember { mutableIntStateOf(0) }
     var inputTranscript by remember { mutableStateOf("") }
     var outputTranscript by remember { mutableStateOf("") }
+    var overflow by remember { mutableStateOf(false) }
+    var rememberFailed by remember { mutableStateOf(false) }
 
     fun stop() {
         permissionPending = false
@@ -46,7 +49,10 @@ fun CloudVoiceInput(gatewayOverride: CloudVoiceGateway? = null, onText: (() -> U
         val attempt = ++generation
         inputTranscript = ""
         outputTranscript = ""
+        overflow = false; rememberFailed = false
+        val transcript = VoiceTranscriptBuffer()
         state = "connecting"
+        onBusyChange(true)
         // Store the job before it can complete: a synchronous connection failure must
         // not leave a completed job blocking all subsequent attempts.
         job = scope.launch(start = CoroutineStart.LAZY) {
@@ -57,8 +63,11 @@ fun CloudVoiceInput(gatewayOverride: CloudVoiceGateway? = null, onText: (() -> U
                     val connected = gateway.connect { input, output ->
                         scope.launch {
                             if (attempt == generation && (state == "connecting" || state == "active")) {
-                                if (input != null) inputTranscript = (inputTranscript + input).takeLast(4000)
-                                if (output != null) outputTranscript = (outputTranscript + output).takeLast(4000)
+                                transcript.append(input, output)
+                                inputTranscript = transcript.input
+                                outputTranscript = transcript.output
+                                overflow = transcript.overflow
+                                if (overflow) stop()
                             }
                         }
                     }
@@ -81,7 +90,7 @@ fun CloudVoiceInput(gatewayOverride: CloudVoiceGateway? = null, onText: (() -> U
                     runCatching { connection.stop() }
                     withContext(NonCancellable) { runCatching { connection.close() } }
                 }
-                if (attempt == generation) { job = null; state = outcome }
+                if (attempt == generation) { job = null; state = outcome; onBusyChange(false) }
             }
         }
         job?.start()
@@ -112,6 +121,12 @@ fun CloudVoiceInput(gatewayOverride: CloudVoiceGateway? = null, onText: (() -> U
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
         if (inputTranscript.isNotBlank()) Text(s(R.string.cloud_voice_you) + ": " + inputTranscript, modifier = Modifier.testTag("cloud_voice_input_transcript"))
         if (outputTranscript.isNotBlank()) Text(s(R.string.cloud_voice_assistant) + ": " + outputTranscript, modifier = Modifier.testTag("cloud_voice_output_transcript"))
+        if (overflow) Text(s(R.string.voice_transcript_limit), modifier = Modifier.testTag("cloud_voice_limit"))
+        if (onRemember != null && inputTranscript.isNotBlank() && state !in listOf("connecting", "active", "stopping") && !overflow) {
+            OutlinedButton(onClick = { rememberFailed = !onRemember(inputTranscript) },
+                modifier = Modifier.fillMaxWidth().testTag("cloud_voice_review")) { Text(s(R.string.working_review_memory)) }
+            if (rememberFailed) Text(s(R.string.working_draft_busy), modifier = Modifier.testTag("cloud_voice_draft_busy"))
+        }
         when (state) {
             "connecting" -> Text(s(R.string.cloud_voice_connecting), modifier = Modifier.testTag("cloud_voice_status"))
             "active" -> Text(s(R.string.cloud_voice_active), color = MaterialTheme.colorScheme.primary, modifier = Modifier.testTag("cloud_voice_status"))

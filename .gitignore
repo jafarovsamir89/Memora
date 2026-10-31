@@ -14,3 +14,4 @@ artifacts/
 
 # Project-specific configuration remains local until deliberately reviewed.
 apps/android/app/google-services.json
+.local/

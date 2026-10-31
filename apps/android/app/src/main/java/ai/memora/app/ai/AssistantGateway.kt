@@ -5,6 +5,8 @@ import com.google.firebase.FirebaseApp
 import android.content.Context
 import com.google.firebase.ai.ai
 import com.google.firebase.ai.type.GenerativeBackend
+import com.google.firebase.ai.type.content
+import ai.memora.app.voice.VoiceLanguagePolicy
 
 interface AssistantGateway {
     suspend fun answer(text: String): String
@@ -15,7 +17,7 @@ class FirebaseAssistantGateway(private val context: Context) : AssistantGateway 
     override suspend fun answer(text: String): String {
         check(FirebaseApp.getApps(context).isNotEmpty()) { "Firebase is not configured" }
         val result = Firebase.ai(backend = GenerativeBackend.googleAI())
-            .generativeModel("gemini-3.1-flash-lite")
+            .generativeModel(VoiceLanguagePolicy.TEXT_MODEL, systemInstruction = content { text(VoiceLanguagePolicy.instruction()) })
             .generateContent(text)
         return result.text?.takeIf { it.isNotBlank() } ?: error("Empty response")
     }

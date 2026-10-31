@@ -1,7 +1,6 @@
 package ai.memora.app.data
 
 import android.content.Context
-import android.util.AtomicFile
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
@@ -11,10 +10,13 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.io.File
+import java.io.FileOutputStream
 import java.io.IOException
+import java.nio.file.Files
+import java.nio.file.StandardCopyOption
 
 /** Only non-sensitive presentation settings; no country or currency is inferred. */
-data class AppearanceSettings(val language: String = "ru", val theme: String = "system") {
+data class AppearanceSettings(val language: String = "az", val theme: String = "system") {
     init {
         require(language in setOf("ru", "az", "en"))
         require(theme in setOf("system", "light", "dark"))
@@ -27,14 +29,21 @@ interface AppearanceStore {
 }
 
 class AtomicAppearanceStore(private val file: File, private val defaults: AppearanceSettings = AppearanceSettings()) : AppearanceStore {
-    private val atomic = AtomicFile(file)
+    private val pending = File(file.path + ".new")
+    private val backup = File(file.path + ".bak")
+
+    private fun replace(source: File) {
+        Files.move(source.toPath(), file.toPath(), StandardCopyOption.ATOMIC_MOVE, StandardCopyOption.REPLACE_EXISTING)
+    }
 
     override fun read(): AppearanceSettings {
-        if (!file.exists() && !File(file.path + ".bak").exists()) {
-            if (File(file.path + ".new").exists()) throw IOException("Incomplete settings file")
+        // Recover files written by the previous AtomicFile implementation as well.
+        if (backup.exists()) replace(backup)
+        if (!file.exists()) {
+            if (pending.exists()) throw IOException("Incomplete settings file")
             return defaults
         }
-        val bytes = atomic.openRead().use { input ->
+        val bytes = file.inputStream().use { input ->
             val buffer = java.io.ByteArrayOutputStream()
             while (buffer.size() <= 256) {
                 val value = input.read()
@@ -51,13 +60,16 @@ class AtomicAppearanceStore(private val file: File, private val defaults: Appear
     }
 
     override fun write(settings: AppearanceSettings) {
-        val output = atomic.startWrite()
+        if (backup.exists()) replace(backup)
+        file.parentFile?.let { Files.createDirectories(it.toPath()) }
         try {
-            output.write("MEMORA_SETTINGS_1\n${settings.language}\n${settings.theme}\n".toByteArray(Charsets.UTF_8))
-            output.fd.sync()
-            atomic.finishWrite(output)
+            FileOutputStream(pending).use { output ->
+                output.write("MEMORA_SETTINGS_1\n${settings.language}\n${settings.theme}\n".toByteArray(Charsets.UTF_8))
+                output.fd.sync()
+            }
+            replace(pending)
         } catch (e: Exception) {
-            atomic.failWrite(output)
+            pending.delete()
             throw e
         }
         if (read() != settings) throw IOException("Settings write could not be verified")

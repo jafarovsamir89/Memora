@@ -33,7 +33,7 @@ fun VoiceInput(language: String, draft: String, onDraft: (String) -> Unit, showT
     val session = remember(engine) {
         VoiceSession(engine, { state = it }, { text ->
             val combined = if (currentDraft.isBlank()) text else currentDraft.trimEnd() + "\n" + text
-            if (combined.length > 2000) tooLong = true
+            if (!ai.memora.app.domain.TextSourceRules.validDraft(combined)) tooLong = true
             else { currentOnDraft(combined); currentShowText() }
         })
     }
