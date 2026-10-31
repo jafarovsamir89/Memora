@@ -160,7 +160,6 @@ fun MemoraApp(initialRoute: String = "home", initialTheme: String = "system", ca
             Scaffold(
                 containerColor = colors.background,
                 topBar = {
-                    if (route != "home") {
                     Row(
                         Modifier.fillMaxWidth().statusBarsPadding().padding(horizontal = 20.dp, vertical = 10.dp),
                         horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = Alignment.CenterVertically,
@@ -179,10 +178,8 @@ fun MemoraApp(initialRoute: String = "home", initialTheme: String = "system", ca
                             Icon(Glyph.Settings, s(R.string.settings), tint = colors.muted, modifier = Modifier.size(22.dp))
                         }
                     }
-                    }
                 },
                 bottomBar = {
-                    if (route != "home") {
                     NavigationBar(containerColor = colors.card, tonalElevation = 0.dp) {
                         routes.forEachIndexed { index, destination ->
                             val isCapture = destination == "capture"
@@ -204,7 +201,6 @@ fun MemoraApp(initialRoute: String = "home", initialTheme: String = "system", ca
                             )
                         }
                     }
-                    }
                 },
                 snackbarHost = { SnackbarHost(snackbar) },
             ) { insets ->
@@ -212,7 +208,9 @@ fun MemoraApp(initialRoute: String = "home", initialTheme: String = "system", ca
                     Box(Modifier.widthIn(max = 720.dp).fillMaxSize()) {
                       screens.SaveableStateProvider(route) {
                         when (route) {
-                            "home" -> VoiceFirstScreen(onOpenMenu = { navigate("more") })
+                            "home" -> WorkingHomeScreen(language, captureState, navigate, openCapture, { detailId = it }) {
+                                VoiceFirstScreen()
+                            }
                             "memory" -> WorkingMemoryScreen(captureState, { detailId = it }, { openCapture(false) }, { navigate("inbox") })
                             "tasks" -> ScreenColumn { ScreenHeading(s(R.string.tasks_title), s(R.string.working_tasks_hint)); TaskPrototype(taskStore) }
                             "more" -> MoreScreen(navigate, { about = true })

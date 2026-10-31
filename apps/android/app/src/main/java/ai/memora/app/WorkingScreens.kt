@@ -19,7 +19,7 @@ import java.util.Locale
 
 @Composable
 fun WorkingHomeScreen(language: String, state: CaptureSessionState, navigate: (String) -> Unit,
-    capture: (Boolean) -> Unit, detail: (String) -> Unit) {
+    capture: (Boolean) -> Unit, detail: (String) -> Unit, voiceContent: @Composable () -> Unit) {
     ScreenColumn {
         Text(LocalDate.now().format(DateTimeFormatter.ofPattern("EEEE, d MMMM", Locale.forLanguageTag(language))),
             style = MaterialTheme.typography.labelSmall, color = colors.muted)
@@ -27,6 +27,7 @@ fun WorkingHomeScreen(language: String, state: CaptureSessionState, navigate: (S
         MemoraCard(tint = colors.hero) {
             Text(s(R.string.home_hero_title), style = MaterialTheme.typography.titleLarge)
             Text(s(R.string.working_capture_hint))
+            voiceContent()
             Button(onClick = { capture(true) }, modifier = Modifier.fillMaxWidth().testTag("capture_voice")) { Text(s(R.string.tell)) }
             OutlinedButton(onClick = { capture(false) }, modifier = Modifier.fillMaxWidth().testTag("capture_text")) { Text(s(R.string.write)) }
         }

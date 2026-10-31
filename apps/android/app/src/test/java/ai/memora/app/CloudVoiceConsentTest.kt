@@ -16,6 +16,7 @@ import ai.memora.app.voice.CloudVoiceInput
 import org.junit.Assert.assertEquals
 import org.junit.Rule
 import org.junit.Test
+import org.junit.Before
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.Shadows.shadowOf
@@ -28,6 +29,33 @@ import kotlinx.coroutines.CompletableDeferred
 @LooperMode(LooperMode.Mode.PAUSED)
 class CloudVoiceConsentTest {
     @get:Rule val compose = createComposeRule()
+    @Before fun clearSavedConsent() {
+        ApplicationProvider.getApplicationContext<android.app.Application>().getSharedPreferences("voice-first-consent", 0).edit().clear().commit()
+    }
+
+    @Test fun acceptedLiveConsentIsReused() {
+        val app = ApplicationProvider.getApplicationContext<android.app.Application>()
+        shadowOf(app).grantPermissions(Manifest.permission.RECORD_AUDIO)
+        app.getSharedPreferences("voice-first-consent", 0).edit().putBoolean("google-live-v1", true).commit()
+        var connections = 0
+        val gateway = object : CloudVoiceGateway {
+            override suspend fun connect(onTranscript: (String?, String?) -> Unit): CloudVoiceHandle {
+                connections++
+                return object : CloudVoiceHandle {
+                    override suspend fun begin() = Unit
+                    override fun stop() = Unit
+                    override suspend fun close() = Unit
+                    override fun isClosed() = false
+                }
+            }
+        }
+        compose.setContent { CompositionLocalProvider(LocalStrings provides LocalContext.current.resources) {
+            MemoraTheme("light") { CloudVoiceInput(gateway) }
+        } }
+        compose.onNodeWithTag("cloud_voice_start").performClick()
+        compose.waitUntil(10_000) { connections == 1 }
+        compose.onNodeWithTag("cloud_voice_confirm").assertDoesNotExist()
+    }
 
     @Test fun audioDoesNotStartBeforeConsentAndStopReleasesSession() {
         shadowOf(ApplicationProvider.getApplicationContext<Application>()).grantPermissions(Manifest.permission.RECORD_AUDIO)
@@ -108,7 +136,7 @@ class CloudVoiceConsentTest {
         compose.onNodeWithTag("cloud_voice_start").assertExists()
     }
 
-    @Test fun immediateConnectionFailureAllowsRetryWithNewConsent() {
+    @Test fun immediateConnectionFailureAllowsRetryWithoutRepeatingConsent() {
         shadowOf(ApplicationProvider.getApplicationContext<Application>()).grantPermissions(Manifest.permission.RECORD_AUDIO)
         var attempts = 0
         val gateway = object : CloudVoiceGateway {
@@ -121,9 +149,10 @@ class CloudVoiceConsentTest {
             val resources = LocalContext.current.resources
             CompositionLocalProvider(LocalStrings provides resources) { MemoraTheme("light") { CloudVoiceInput(gateway) } }
         }
-        repeat(2) {
+        repeat(2) { attempt ->
             compose.onNodeWithTag("cloud_voice_start").performClick()
-            compose.onNodeWithTag("cloud_voice_confirm").performClick()
+            if (attempt == 0) compose.onNodeWithTag("cloud_voice_confirm").performClick()
+            else compose.onNodeWithTag("cloud_voice_confirm").assertDoesNotExist()
             compose.waitForIdle()
             compose.onNodeWithTag("cloud_voice_start").assertExists()
         }
@@ -160,7 +189,7 @@ class CloudVoiceConsentTest {
         compose.onNodeWithTag("cloud_voice_input_transcript").assertTextContains("first test", substring = true)
         compose.onNodeWithText("late test", substring = true).assertDoesNotExist()
         compose.onNodeWithTag("cloud_voice_start").performClick()
-        compose.onNodeWithTag("cloud_voice_confirm").performClick()
+        compose.onNodeWithTag("cloud_voice_confirm").assertDoesNotExist()
         compose.runOnIdle { oldCallback?.invoke("late test", null) }
         compose.onNodeWithTag("cloud_voice_input_transcript").assertDoesNotExist()
         compose.onNodeWithTag("cloud_voice_stop").performClick()

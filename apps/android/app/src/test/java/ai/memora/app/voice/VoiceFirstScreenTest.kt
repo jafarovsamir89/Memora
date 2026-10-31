@@ -2,6 +2,10 @@
 
 import android.Manifest
 import android.content.Context
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.ui.Modifier
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.ui.test.*
 import androidx.compose.ui.test.junit4.createComposeRule
@@ -46,7 +50,7 @@ class VoiceFirstScreenTest {
         }
         val speech = object : SpeechOutput { override suspend fun speak(text: String) { answers++ } }
         compose.setContent { CompositionLocalProvider(LocalStrings provides context.resources) {
-            MemoraTheme("light") { VoiceFirstScreen(gateway, recorder, processor, speech) }
+            MemoraTheme("light") { Column(Modifier.verticalScroll(rememberScrollState())) { VoiceFirstScreen(gateway, recorder, processor, speech) } }
         } }
         compose.onNodeWithTag("voice_first_button").performClick()
         compose.onNodeWithTag("voice_first_consent").assertExists()
@@ -59,5 +63,11 @@ class VoiceFirstScreenTest {
         compose.waitUntil(5000) { answers == 1 }
         assertEquals(1, transmissions)
         compose.onNodeWithTag("voice_first_answer").assertTextContains("synthetic answer")
+        compose.onNodeWithTag("voice_first_button").performTouchInput { down(center) }
+        compose.waitUntil(5000) { recordings == 2 }
+        compose.onNodeWithTag("voice_first_consent").assertDoesNotExist()
+        assertEquals(1, transmissions)
+        compose.onNodeWithTag("voice_first_button").performTouchInput { up() }
+        compose.waitUntil(5000) { transmissions == 2 }
     }
 }

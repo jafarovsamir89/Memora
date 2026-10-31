@@ -5,23 +5,22 @@ import android.content.pm.PackageManager
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.gestures.waitForUpOrCancellation
-import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.Role
-import androidx.compose.ui.semantics.CustomAccessibilityAction
 import androidx.compose.ui.semantics.contentDescription
-import androidx.compose.ui.semantics.customActions
 import androidx.compose.ui.semantics.onClick
 import androidx.compose.ui.semantics.role
 import androidx.compose.ui.semantics.semantics
@@ -34,6 +33,7 @@ import ai.memora.app.R
 import ai.memora.app.data.VoiceMoneyKey
 import ai.memora.app.data.VoiceMoneyStore
 import ai.memora.app.ui.Glyph
+import ai.memora.app.ui.colors
 import ai.memora.app.ui.s
 import java.io.File
 import kotlinx.coroutines.*
@@ -41,7 +41,7 @@ import kotlinx.coroutines.*
 /** One hold-to-talk control. No microphone or cloud request begins before consent and permission. */
 @Composable
 fun VoiceFirstScreen(gatewayOverride: AudioNoteGateway? = null, recorderOverride: AudioNoteRecorder? = null,
-    processorOverride: VoiceTurnProcessor? = null, speechOverride: SpeechOutput? = null, onOpenMenu: () -> Unit = {}) {
+    processorOverride: VoiceTurnProcessor? = null, speechOverride: SpeechOutput? = null) {
     val context = LocalContext.current
     val lifecycle = (context as? LifecycleOwner)?.lifecycle
     val settings = remember(context) { context.getSharedPreferences("voice-first-consent", 0) }
@@ -137,16 +137,8 @@ fun VoiceFirstScreen(gatewayOverride: AudioNoteGateway? = null, recorderOverride
         dismissButton = { TextButton(onClick = { consentDialog = false }) { Text(s(R.string.task_cancel)) } })
 
     val label = s(R.string.voice_first_button)
-    val menuLabel = s(R.string.voice_first_menu_hint)
-    Column(Modifier.fillMaxSize().testTag("voice_first_home").pointerInput(onOpenMenu) {
-        var distance = 0f
-        detectHorizontalDragGestures(onDragStart = { distance = 0f }, onHorizontalDrag = { _, amount -> distance += amount },
-            onDragEnd = { if (distance < -120f) onOpenMenu() })
-    }.semantics { customActions = listOf(CustomAccessibilityAction(menuLabel) { onOpenMenu(); true }) }
-        .padding(horizontal = 28.dp).statusBarsPadding().navigationBarsPadding(),
-        verticalArrangement = Arrangement.Center, horizontalAlignment = Alignment.CenterHorizontally) {
-        Text(s(R.string.app_name), style = MaterialTheme.typography.headlineMedium)
-        Spacer(Modifier.height(20.dp))
+    Column(Modifier.fillMaxWidth().testTag("voice_first_home").padding(vertical = 12.dp),
+        horizontalAlignment = Alignment.CenterHorizontally) {
         Text(s(when (state) {
             "recording" -> R.string.voice_first_listening
             "release" -> R.string.voice_first_release
@@ -157,9 +149,10 @@ fun VoiceFirstScreen(gatewayOverride: AudioNoteGateway? = null, recorderOverride
             "sound_error" -> R.string.voice_first_sound_error
             else -> R.string.voice_first_hint
         }), textAlign = TextAlign.Center, style = MaterialTheme.typography.bodyLarge)
-        Spacer(Modifier.height(28.dp))
-        Text(menuLabel, textAlign = TextAlign.Center, style = MaterialTheme.typography.bodySmall)
-        Box(Modifier.size(220.dp).background(MaterialTheme.colorScheme.primary, CircleShape)
+        Spacer(Modifier.height(16.dp))
+        Box(Modifier.size(176.dp).background(colors.accent.copy(alpha = if (state == "recording") .19f else .08f), CircleShape)
+            .border(1.dp, colors.accent.copy(alpha = .18f), CircleShape), contentAlignment = Alignment.Center) {
+        Box(Modifier.size(144.dp).background(Brush.linearGradient(listOf(colors.accent, colors.accent.copy(alpha = .78f))), CircleShape)
             .testTag("voice_first_button")
             .semantics {
                 contentDescription = label; role = Role.Button
@@ -173,9 +166,10 @@ fun VoiceFirstScreen(gatewayOverride: AudioNoteGateway? = null, recorderOverride
                     if (started) { if (up == null) cancel() else { up.consume(); finish() } }
                 }
             }, contentAlignment = Alignment.Center) {
-            Icon(Glyph.Mic, contentDescription = null, tint = MaterialTheme.colorScheme.onPrimary, modifier = Modifier.size(76.dp))
+            Icon(Glyph.Mic, contentDescription = null, tint = MaterialTheme.colorScheme.onPrimary, modifier = Modifier.size(58.dp))
         }
-        Spacer(Modifier.height(28.dp))
+        }
+        Spacer(Modifier.height(16.dp))
         if (transcript.isNotBlank()) Text(transcript, modifier = Modifier.testTag("voice_first_transcript"), textAlign = TextAlign.Center)
         if (answer.isNotBlank()) {
             Spacer(Modifier.height(12.dp))

@@ -14,6 +14,7 @@ import kotlinx.coroutines.CompletableDeferred
 import org.junit.Assert.*
 import org.junit.Rule
 import org.junit.Test
+import org.junit.Before
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.Shadows.shadowOf
@@ -25,6 +26,27 @@ import org.robolectric.annotation.LooperMode
 @LooperMode(LooperMode.Mode.PAUSED)
 class AudioNoteConsentTest {
     @get:Rule val compose = createComposeRule()
+    @Before fun clearSavedConsent() {
+        ApplicationProvider.getApplicationContext<Application>().getSharedPreferences("voice-first-consent", 0).edit().clear().commit()
+    }
+
+    @Test fun previouslyAcceptedConsentDoesNotPromptForEachRecording() {
+        val app = ApplicationProvider.getApplicationContext<Application>()
+        shadowOf(app).grantPermissions(Manifest.permission.RECORD_AUDIO)
+        app.getSharedPreferences("voice-first-consent", 0).edit().putBoolean("google-note-v1", true).commit()
+        var recordings = 0
+        val recorder = object : AudioNoteRecorder {
+            override suspend fun record(): ByteArray { recordings++; return ByteArray(48) }
+            override fun stop() = Unit
+        }
+        val gateway = object : AudioNoteGateway { override suspend fun transcribe(wav: ByteArray) = "test" }
+        compose.setContent { CompositionLocalProvider(LocalStrings provides LocalContext.current.resources) {
+            MemoraTheme("light") { AudioNoteInput("", {}, {}, gateway, recorder) }
+        } }
+        compose.onNodeWithTag("audio_note_start").performClick()
+        compose.waitUntil(10_000) { recordings == 1 }
+        compose.onNodeWithTag("audio_note_confirm").assertDoesNotExist()
+    }
 
     @Test fun consentThenEditableReviewAndExplicitApplyPreserveExistingDraft() {
         shadowOf(ApplicationProvider.getApplicationContext<Application>()).grantPermissions(Manifest.permission.RECORD_AUDIO)
@@ -48,6 +70,7 @@ class AudioNoteConsentTest {
         compose.runOnIdle { assertEquals(0, records); assertEquals(0, calls) }
         compose.onNodeWithTag("audio_note_start").performClick()
         compose.onNodeWithTag("audio_note_confirm").performClick()
+        assertTrue(ApplicationProvider.getApplicationContext<Application>().getSharedPreferences("voice-first-consent", 0).getBoolean("google-note-v1", false))
         compose.onNodeWithTag("audio_note_finish").performClick()
         compose.waitUntil(10_000) { compose.onAllNodesWithTag("audio_note_review").fetchSemanticsNodes().isNotEmpty() }
         compose.runOnIdle { assertEquals("Əvvəlki qeyd", draft); assertEquals(1, calls) }

@@ -22,6 +22,7 @@ import kotlinx.coroutines.*
 fun CloudVoiceInput(gatewayOverride: CloudVoiceGateway? = null, onText: (() -> Unit)? = null,
     onRemember: ((String) -> Boolean)? = null, onBusyChange: (Boolean) -> Unit = {}) {
     val context = LocalContext.current
+    val consentSettings = remember(context) { context.getSharedPreferences("voice-first-consent", 0) }
     val lifecycle = (context as? LifecycleOwner)?.lifecycle
     val defaultGateway = remember(context) { FirebaseCloudVoiceGateway(context) }
     val gateway = gatewayOverride ?: defaultGateway
@@ -113,7 +114,8 @@ fun CloudVoiceInput(gatewayOverride: CloudVoiceGateway? = null, onText: (() -> U
         text = { Text(s(R.string.cloud_voice_consent_body)) },
         confirmButton = { TextButton(onClick = {
             confirmation = false
-            if (context.checkSelfPermission(Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED) start()
+            if (!consentSettings.edit().putBoolean("google-live-v1", true).commit()) state = "error"
+            else if (context.checkSelfPermission(Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED) start()
             else { permissionPending = true; launcher.launch(Manifest.permission.RECORD_AUDIO) }
         }, modifier = Modifier.testTag("cloud_voice_confirm")) { Text(s(R.string.cloud_voice_confirm)) } },
         dismissButton = { TextButton(onClick = { confirmation = false }, modifier = Modifier.testTag("cloud_voice_cancel")) { Text(s(R.string.task_cancel)) } },
@@ -141,7 +143,12 @@ fun CloudVoiceInput(gatewayOverride: CloudVoiceGateway? = null, onText: (() -> U
         if (state == "connecting" || state == "active" || state == "stopping") {
             OutlinedButton(onClick = { stop() }, Modifier.fillMaxWidth().heightIn(min = 52.dp).testTag("cloud_voice_stop"), enabled = state != "stopping") { Text(s(R.string.cloud_voice_stop)) }
         } else {
-            OutlinedButton(onClick = { confirmation = true }, Modifier.fillMaxWidth().heightIn(min = 52.dp).testTag("cloud_voice_start")) { Text(s(R.string.cloud_voice_start)) }
+            OutlinedButton(onClick = {
+                if (consentSettings.getBoolean("google-live-v1", false)) {
+                    if (context.checkSelfPermission(Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED) start()
+                    else { permissionPending = true; launcher.launch(Manifest.permission.RECORD_AUDIO) }
+                } else confirmation = true
+            }, Modifier.fillMaxWidth().heightIn(min = 52.dp).testTag("cloud_voice_start")) { Text(s(R.string.cloud_voice_start)) }
         }
     }
 }

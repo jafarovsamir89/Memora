@@ -40,6 +40,17 @@ class UiShellTest {
     private lateinit var appearanceStore: AppearanceStore
     private lateinit var taskStore: ai.memora.app.data.EncryptedTaskStore
 
+    @Test fun revokeClearsSavedVoiceConsents() {
+        val context = ApplicationProvider.getApplicationContext<Context>()
+        val prefs = context.getSharedPreferences("voice-first-consent", 0)
+        prefs.edit().putBoolean("google-note-v1", true).putBoolean("google-live-v1", true)
+            .putBoolean("google-audio-and-answer-v1", true).commit()
+        compose.setContent { MemoraApp(initialRoute = "settings", capturePersistenceOverride = captureStore, appearanceStoreOverride = appearanceStore) }
+        compose.onNodeWithTag("voice_revoke_consent").performScrollTo().performClick()
+        compose.runOnIdle { org.junit.Assert.assertTrue(prefs.all.isEmpty()) }
+        compose.onNodeWithTag("voice_revoke_consent").assertDoesNotExist()
+    }
+
     @Before fun setupCaptureStore() {
         val context = ApplicationProvider.getApplicationContext<Context>()
         appearanceStore = AtomicAppearanceStore(File(context.cacheDir, "ui-settings-${UUID.randomUUID()}"), AppearanceSettings("ru", "light"))
@@ -87,7 +98,11 @@ class UiShellTest {
         captureStore.submit("cmd", 1, "synthetic-source", "r1", "İlqar, yaddaş yoxlaması", now, "Asia/Baku")
         compose.setContent { MemoraApp(initialTheme = "light", capturePersistenceOverride = captureStore, appearanceStoreOverride = appearanceStore) }
         compose.onNodeWithTag("voice_first_button").assertIsDisplayed()
-        compose.onNodeWithTag("voice_first_home").performTouchInput { swipeLeft() }
+        compose.onNodeWithTag("nav_home").assertIsDisplayed()
+        compose.onNodeWithTag("nav_memory").assertIsDisplayed()
+        compose.onNodeWithTag("nav_tasks").assertIsDisplayed()
+        compose.onNodeWithTag("nav_more").assertIsDisplayed()
+        compose.onNodeWithTag("open_settings").assertIsDisplayed()
         screenshot("01-home-light")
         compose.onNodeWithTag("nav_memory").performClick()
         screenshot("02-memory-light")
@@ -100,7 +115,6 @@ class UiShellTest {
 
     @Test fun textDraftGoesToInboxWithoutAi() {
         compose.setContent { MemoraApp(initialTheme = "light", capturePersistenceOverride = captureStore, appearanceStoreOverride = appearanceStore) }
-        compose.onNodeWithTag("voice_first_home").performTouchInput { swipeLeft() }
         compose.onNodeWithTag("nav_memory").performClick()
         compose.onNodeWithTag("capture_text").performScrollTo().performClick()
         awaitCaptureReady()
@@ -198,7 +212,6 @@ class UiShellTest {
 
     @Test fun voiceInputRequiresAnExplicitStart() {
         compose.setContent { MemoraApp(initialTheme = "light", capturePersistenceOverride = captureStore, appearanceStoreOverride = appearanceStore) }
-        compose.onNodeWithTag("voice_first_home").performTouchInput { swipeLeft() }
         compose.onNodeWithTag("nav_capture").performClick()
         compose.onNodeWithTag("audio_note_start").assertExists()
         compose.onNodeWithTag("audio_note_review").assertDoesNotExist()
@@ -209,7 +222,6 @@ class UiShellTest {
     @Test fun draftSurvivesUiRecreation() {
         val restoration = StateRestorationTester(compose)
         restoration.setContent { MemoraApp(initialTheme = "light", capturePersistenceOverride = captureStore, appearanceStoreOverride = appearanceStore) }
-        compose.onNodeWithTag("voice_first_home").performTouchInput { swipeLeft() }
         compose.onNodeWithTag("nav_memory").performClick()
         compose.onNodeWithTag("capture_text").performScrollTo().performClick()
         awaitCaptureReady()
@@ -229,7 +241,6 @@ class UiShellTest {
                 MemoraApp(initialTheme = "light", capturePersistenceOverride = captureStore, appearanceStoreOverride = appearanceStore)
             }
         }
-        compose.onNodeWithTag("voice_first_home").performTouchInput { swipeLeft() }
         compose.onNodeWithTag("nav_memory").performClick()
         compose.onNodeWithTag("capture_text").assertExists().performScrollTo().performClick()
         compose.onNodeWithTag("capture_input").assertExists()
@@ -239,7 +250,6 @@ class UiShellTest {
     @Test @Config(qualifiers = "w960dp-h600dp-land-xhdpi")
     fun tabletLandscapeKeepsNavigationReachable() {
         compose.setContent { MemoraApp(initialTheme = "light", capturePersistenceOverride = captureStore, appearanceStoreOverride = appearanceStore) }
-        compose.onNodeWithTag("voice_first_home").performTouchInput { swipeLeft() }
         compose.onNodeWithTag("nav_memory").assertIsDisplayed().performClick()
         compose.onNodeWithTag("memory_search").assertIsDisplayed()
         screenshot("11-tablet-landscape")

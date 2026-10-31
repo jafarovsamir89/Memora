@@ -154,7 +154,7 @@
     <string name="cloud_voice_start">Buludda səsli söhbətə başla</string>
     <string name="cloud_voice_stop">Mikrofonu və söhbəti dayandır</string>
     <string name="cloud_voice_consent_title">Səs Google-a göndərilsin?</string>
-    <string name="cloud_voice_consent_body">Mikrofon dayandırılana və ya tətbiqdən çıxana qədər səs Google Gemini-yə ötürülür. Google ödənişsiz xidmət məlumatlarından məhsullarını yaxşılaşdırmaq üçün istifadə edə bilər. Yaddaş arxivi və tapşırıqlar göndərilmir. Sessiya bir dəqiqə ilə məhdudlaşır. Mətn yalnız ayrıca yoxlamadan sonra yaddaşa əlavə olunur.</string>
+    <string name="cloud_voice_consent_body">Mikrofon dayandırılana və ya tətbiqdən çıxana qədər səs Google Gemini-yə ötürülür. Google ödənişsiz xidmət məlumatlarından məhsullarını yaxşılaşdırmaq üçün istifadə edə bilər. Yaddaş arxivi və tapşırıqlar göndərilmir. Sessiya bir dəqiqə ilə məhdudlaşır. Mətn yalnız ayrıca yoxlamadan sonra yaddaşa əlavə olunur. Razılıq cihazda saxlanılır və ayarlardan ləğv edilə bilər.</string>
     <string name="cloud_voice_confirm">İcazə ver və başla</string>
     <string name="cloud_voice_connecting">Google-a qoşulur…</string>
     <string name="cloud_voice_stopping">Mikrofon və bağlantı dayandırılır…</string>
@@ -204,7 +204,7 @@
     <string name="audio_note_finish">Bitir və mətnə çevir</string>
     <string name="audio_note_apply">Yoxlanmış mətni qaralamaya əlavə et</string>
     <string name="audio_note_consent_title">Qeyd Google ilə mətnə çevrilsin?</string>
-    <string name="audio_note_consent_body">Razılıqdan sonra mikrofon açılacaq. 25 saniyəyədək bitmiş qeyd Google Gemini-yə göndəriləcək. Tanınmış mətnin yazı forması da Google ilə yoxlanacaq. Google ödənişsiz xidmət məlumatlarından məhsullarını yaxşılaşdırmaq üçün istifadə edə bilər. Səs faylı saxlanmır; mətn yoxlama üçün göstərilir. Yaddaş arxivi göndərilmir.</string>
+    <string name="audio_note_consent_body">Razılıqdan sonra mikrofon açılacaq. 25 saniyəyədək bitmiş qeyd Google Gemini-yə göndəriləcək. Tanınmış mətnin yazı forması da Google ilə yoxlanacaq. Google ödənişsiz xidmət məlumatlarından məhsullarını yaxşılaşdırmaq üçün istifadə edə bilər. Səs faylı saxlanmır; mətn yoxlama üçün göstərilir. Yaddaş arxivi göndərilmir. Razılıq cihazda saxlanılır və ayarlardan ləğv edilə bilər.</string>
     <string name="audio_note_original">İlkin tanınma</string>
     <string name="audio_note_use_original">İlkin mətni qaytar</string>
     <string name="audio_note_writing_failed">Yazı formasını yoxlamaq mümkün olmadı. İlkin tanınmanı diqqətlə yoxlayın.</string>

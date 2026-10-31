@@ -154,7 +154,7 @@
     <string name="cloud_voice_start">Start cloud voice conversation</string>
     <string name="cloud_voice_stop">Stop microphone and conversation</string>
     <string name="cloud_voice_consent_title">Send your voice to Google?</string>
-    <string name="cloud_voice_consent_body">The microphone sends audio to Google Gemini until stopped or the app leaves the foreground. Google may use free-service data to improve products. Your memory archive and tasks are not sent. Sessions are limited to one minute. Saving text requires a separate review.</string>
+    <string name="cloud_voice_consent_body">The microphone sends audio to Google Gemini until stopped or the app leaves the foreground. Google may use free-service data to improve products. Your memory archive and tasks are not sent. Sessions are limited to one minute. Saving text requires a separate review. Consent is saved on this device and can be revoked in settings.</string>
     <string name="cloud_voice_confirm">Allow and start</string>
     <string name="cloud_voice_connecting">Connecting to Google…</string>
     <string name="cloud_voice_stopping">Stopping the microphone and connection…</string>
@@ -204,7 +204,7 @@
     <string name="audio_note_finish">Finish and transcribe</string>
     <string name="audio_note_apply">Add reviewed text to draft</string>
     <string name="audio_note_consent_title">Transcribe a recording with Google?</string>
-    <string name="audio_note_consent_body">After consent, the microphone starts. The completed recording, up to 25 seconds, is sent to Google Gemini. Google also checks the writing system of the recognized text. Google may use free-service data to improve products. No audio file is saved; text is shown for review. Your memory archive is not sent.</string>
+    <string name="audio_note_consent_body">After consent, the microphone starts. The completed recording, up to 25 seconds, is sent to Google Gemini. Google also checks the writing system of the recognized text. Google may use free-service data to improve products. No audio file is saved; text is shown for review. Your memory archive is not sent. Consent is saved on this device and can be revoked in settings.</string>
     <string name="audio_note_original">Original recognition</string>
     <string name="audio_note_use_original">Restore original text</string>
     <string name="audio_note_writing_failed">Writing system check failed. Review the original recognition carefully.</string>

@@ -23,6 +23,7 @@ import kotlinx.coroutines.*
 fun AudioNoteInput(draft: String, onDraft: (String) -> Unit, showText: () -> Unit,
     gatewayOverride: AudioNoteGateway? = null, recorderOverride: AudioNoteRecorder? = null) {
     val context = LocalContext.current
+    val consentSettings = remember(context) { context.getSharedPreferences("voice-first-consent", 0) }
     val lifecycle = (context as? LifecycleOwner)?.lifecycle
     val gateway = gatewayOverride ?: remember(context) { FirebaseAudioNoteGateway(context) }
     val recorder = recorderOverride ?: remember { AndroidAudioNoteRecorder() }
@@ -88,7 +89,8 @@ fun AudioNoteInput(draft: String, onDraft: (String) -> Unit, showText: () -> Uni
         title = { Text(s(R.string.audio_note_consent_title)) }, text = { Text(s(R.string.audio_note_consent_body)) },
         confirmButton = { TextButton(onClick = {
             consent = false
-            if (context.checkSelfPermission(Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED) start()
+            if (!consentSettings.edit().putBoolean("google-note-v1", true).commit()) state = "error"
+            else if (context.checkSelfPermission(Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED) start()
             else { pendingPermission = true; permission.launch(Manifest.permission.RECORD_AUDIO) }
         }, modifier = Modifier.testTag("audio_note_confirm")) { Text(s(R.string.cloud_voice_confirm)) } },
         dismissButton = { TextButton(onClick = { consent = false }, modifier = Modifier.testTag("audio_note_decline")) { Text(s(R.string.task_cancel)) } })
@@ -100,7 +102,12 @@ fun AudioNoteInput(draft: String, onDraft: (String) -> Unit, showText: () -> Uni
         if (state == "processing") Text(s(R.string.voice_processing), modifier = Modifier.testTag("audio_note_processing"))
         if (state == "recording" || state == "processing") TextButton(onClick = { cancel() },
             modifier = Modifier.testTag("audio_note_cancel")) { Text(s(R.string.task_cancel)) }
-        else OutlinedButton(onClick = { consent = true }, modifier = Modifier.fillMaxWidth().testTag("audio_note_start"), enabled = job == null) {
+        else OutlinedButton(onClick = {
+            if (consentSettings.getBoolean("google-note-v1", false) || consentSettings.getBoolean("google-audio-and-answer-v1", false)) {
+                if (context.checkSelfPermission(Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED) start()
+                else { pendingPermission = true; permission.launch(Manifest.permission.RECORD_AUDIO) }
+            } else consent = true
+        }, modifier = Modifier.fillMaxWidth().testTag("audio_note_start"), enabled = job == null) {
             Text(s(R.string.audio_note_start))
         }
         if (state == "denied" || state == "error") Text(s(if (state == "denied") R.string.voice_denied else R.string.voice_error),

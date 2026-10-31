@@ -223,7 +223,7 @@ fun InboxScreen(drafts: List<CaptureEntry>, loading: Boolean, error: Boolean, ma
 fun SettingsScreen(theme: String, changeTheme: (String) -> Unit, language: String, changeLanguage: (String) -> Unit, ready: Boolean, error: Boolean, retry: () -> Unit, about: () -> Unit) {
     val context = androidx.compose.ui.platform.LocalContext.current
     val voiceConsent = remember(context) { context.getSharedPreferences("voice-first-consent", 0) }
-    var granted by remember { mutableStateOf(voiceConsent.getBoolean("google-audio-and-answer-v1", false)) }
+    var granted by remember { mutableStateOf(voiceConsent.all.values.any { it == true }) }
     ScreenColumn {
         ScreenHeading(s(R.string.settings), s(R.string.settings_subtitle))
         if (error) {
@@ -236,8 +236,8 @@ fun SettingsScreen(theme: String, changeTheme: (String) -> Unit, language: Strin
         Filters(listOf("ru" to "Русский", "az" to "Azərbaycan", "en" to "English"), language, changeLanguage, enabled = ready)
         DevicePermissionSettings()
         if (granted) OutlinedButton(onClick = {
-            if (voiceConsent.edit().remove("google-audio-and-answer-v1").commit()) granted = false
-        }) { Text(s(R.string.voice_revoke_consent)) }
+            if (voiceConsent.edit().clear().commit()) granted = false
+        }, modifier = Modifier.testTag("voice_revoke_consent")) { Text(s(R.string.voice_revoke_consent)) }
         MemoraCard { MenuRow(Glyph.Shield, s(R.string.privacy), s(R.string.privacy_hint), 1, about) }
         MemoraCard { MenuRow(Glyph.Spark, s(R.string.about), s(R.string.version), onClick = about) }
     }
