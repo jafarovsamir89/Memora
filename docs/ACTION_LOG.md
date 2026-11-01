@@ -1,5 +1,15 @@
 # Memora — лог действий
 
+## ACT-0073 · 2026-11-01 · force-stop между SQLCipher rekey и envelope promotion
+
+**Изменения:** добавлены отдельные opt-in `rotation-prepare` / `rotation-verify` режимы в `GeminiSyntheticProbe`. Первая фаза создаёт только `memora-agent-rotation-death-probe.db`, фиксирует синтетическую строку, durably записывает staged key, выполняет SQLCipher rekey и ждёт статический checkpoint; host останавливает приложение до promotion. Следующая instrumentation process вызывает ту же `AgentDatabase` startup reconciliation, проверяет строку и promotion, затем удаляет только named DB/envelopes/test alias.
+
+**Проверки:** `:app:testDebugUnitTest :app:assembleDebug :app:assembleDebugAndroidTest :app:lintDebug --no-daemon` — BUILD SUCCESSFUL; 199/199 unit tests, 0 failures/errors/skips. На физическом Redmi Android 13/API33 probe дважды выполнен через отдельные instrumentation process; host `am force-stop ai.memora.app` между фазами; `status=passed`, `rekey_recovered_after_process_force_stop=true`, `synthetic_marker_survived=true`, `staged_envelope_promoted=true`. Приложение после проверки заново запущено. Gemini, микрофон и данные пользователя не использовались.
+
+**Граница результата:** подтверждён Android process force-stop в одном точном окне между SQLCipher rekey и продвижением envelope. Это не симулирует hard hardware crash, потерю питания, disk-full/corruption во время файловой записи, backup restore или uninstall/reinstall. MEM-12.11/P1 и downstream agent runtime остаются открыты/выключены.
+
+**Git:** новый пакет локальный; перед передачей проверить diff/secret scan, сделать commit/push и подтвердить совпадение HEAD и чистое дерево.
+
 ## ACT-0072 · 2026-11-01 · staged key rotation and recovery slice
 
 **Изменения:** `DatabaseKeyProvider` умеет durable-stage, проверить и атомарно продвинуть зашифрованный конверт нового SQLCipher-ключа. `AgentDatabase.open()` при старте сначала проверяет текущий ключ; если он больше не открывает существующую БД, проверяет staged-ключ и при успехе продвигает его. Добавлен API ротации и отдельный синтетический instrumentation probe, который упражняет прерывание до `changePassword` и восстановление после rekey. Probe использует только собственную одноразовую БД и Keystore alias с тестовым именем.

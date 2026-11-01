@@ -211,6 +211,96 @@ object DatabaseStorageProbe {
         return result
     }
 
+    /** Host force-stops the app after SQLCipher rekey but before the new key envelope is promoted. */
+    fun prepareKeyRotationProcessDeathProbe(context: Context, permitted: Boolean): Bundle {
+        val result = Bundle()
+        if (!permitted || context.packageName != "ai.memora.app" ||
+            context.applicationInfo.flags and android.content.pm.ApplicationInfo.FLAG_DEBUGGABLE == 0) {
+            result.putString("status", "explicit_debug_synthetic_opt_in_required")
+            return result
+        }
+        val name = "memora-agent-rotation-death-probe.db"
+        val alias = "ai.memora.app.test.rotation-death-probe.v1"
+        val envelope = AtomicFile(File(context.noBackupFilesDir, "$name.envelope"))
+        val databaseFile = context.getDatabasePath(name)
+        val store = KeyStore.getInstance("AndroidKeyStore").apply { load(null) }
+        var database: AgentDatabase? = null
+        var oldKey: ByteArray? = null
+        var nextKey: ByteArray? = null
+        try {
+            System.loadLibrary("sqlcipher")
+            val provider = DatabaseKeyProvider(context, databaseFile, envelope, store, alias)
+            database = AgentDatabase.openForSyntheticProbe(context, provider, name)
+            oldKey = provider.loadOrCreate()
+            database!!.openHelper.writableDatabase.execSQL(
+                "INSERT INTO agent_command_journal (commandId, digest, status, targetVersionsJson) VALUES (?, ?, ?, ?)",
+                arrayOf("synthetic-rotation-force-stop-marker", "b".repeat(64), "COMMITTED", "[]"),
+            )
+            nextKey = ByteArray(32).also(java.security.SecureRandom()::nextBytes)
+            provider.stageRotation(nextKey!!)
+            val cipherDatabase = database!!.openHelper.writableDatabase as net.zetetic.database.sqlcipher.SQLiteDatabase
+            cipherDatabase.changePassword(nextKey!!)
+            oldKey!!.fill(0); oldKey = null
+            nextKey!!.fill(0); nextKey = null
+            result.putString("status", "prepared")
+            result.putBoolean("synthetic_rekey_complete_envelope_promotion_pending", true)
+            Log.i("MemoraStorageProbe", "P1_KEY_ROTATION_FORCE_STOP_READY")
+            while (true) Thread.sleep(1_000)
+        } catch (error: Exception) {
+            result.putString("status", "prepare_failed")
+            result.putString("error_type", error.javaClass.simpleName)
+            result.putString("failure_reason", "synthetic_key_rotation_fixture_not_prepared")
+            runCatching { database?.close() }
+            oldKey?.fill(0)
+            nextKey?.fill(0)
+        }
+        return result
+    }
+
+    /** Reopens through the production startup reconciliation after host force-stop and removes only this fixture. */
+    fun verifyKeyRotationProcessDeathProbe(context: Context, permitted: Boolean): Bundle {
+        val result = Bundle()
+        if (!permitted || context.packageName != "ai.memora.app" ||
+            context.applicationInfo.flags and android.content.pm.ApplicationInfo.FLAG_DEBUGGABLE == 0) {
+            result.putString("status", "explicit_debug_synthetic_opt_in_required")
+            return result
+        }
+        val name = "memora-agent-rotation-death-probe.db"
+        val alias = "ai.memora.app.test.rotation-death-probe.v1"
+        val databaseFile = context.getDatabasePath(name)
+        val envelope = AtomicFile(File(context.noBackupFilesDir, "$name.envelope"))
+        val store = KeyStore.getInstance("AndroidKeyStore").apply { load(null) }
+        var database: AgentDatabase? = null
+        try {
+            System.loadLibrary("sqlcipher")
+            val provider = DatabaseKeyProvider(context, databaseFile, envelope, store, alias)
+            database = AgentDatabase.openForSyntheticProbe(context, provider, name)
+            val markerSurvived = database!!.openHelper.readableDatabase.query(
+                "SELECT commandId FROM agent_command_journal WHERE commandId = 'synthetic-rotation-force-stop-marker'",
+            ).use { it.moveToFirst() }
+            check(markerSurvived && provider.loadStagedRotation() == null)
+            val currentKey = provider.loadOrCreate()
+            check(currentKey.size == 32)
+            currentKey.fill(0)
+            result.putString("status", "passed")
+            result.putBoolean("rekey_recovered_after_process_force_stop", true)
+            result.putBoolean("synthetic_marker_survived", true)
+            result.putBoolean("staged_envelope_promoted", true)
+        } catch (error: Exception) {
+            result.putString("status", "failed")
+            result.putString("error_type", error.javaClass.simpleName)
+            result.putString("failure_reason", "synthetic_key_rotation_process_death_recovery_not_verified")
+        } finally {
+            runCatching { database?.close() }
+            context.deleteDatabase(name)
+            listOf(envelope.baseFile, File(envelope.baseFile.path + ".bak"),
+                File(envelope.baseFile.path + ".rotation"), File(envelope.baseFile.path + ".rotation.bak"))
+                .forEach { it.delete() }
+            store.deleteEntry(alias)
+        }
+        return result
+    }
+
     /** Exercises Room transactions and idempotent migration on a separate synthetic SQLCipher DB. */
     fun runMigration(context: Context, permitted: Boolean): Bundle {
         val result = Bundle()

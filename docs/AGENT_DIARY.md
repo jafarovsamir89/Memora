@@ -441,3 +441,9 @@ ADR-001/ADR-002 исходят из локального нативного Andr
 **Открыто:** MEM-12.11/P1 остаётся незавершённым: нужны hard crash/power loss/disk fault, uninstall/restore, полный транзитивный license audit и корректно подписанная release-поставка. Пройденный rotation/recovery probe не покрывает эти сценарии. Подключение agent tools и миграция файловых workflows по-прежнему выключены. Следующий шаг — продолжать оставшиеся P1 gates; для signed release понадобится ключ/настройка владельца, для restore — отдельный согласованный синтетический или тестовый backup.
 
 **Git handoff ACT-0072:** code/test package в commit `9affec3704c70e651d6adab0605524f4c3cd1ecf` отправлен в `origin/main`; fetch, local HEAD и remote HEAD совпали, дерево было чистым. Проверенный rotation/recovery probe не закрывает оставшиеся P1 gates.
+
+### 2026-11-01 — ACT-0073: force-stop recovery в окне key re-encryption
+
+Добавлен host-driven двухфазный synthetic test, который останавливает процесс после SQLCipher `changePassword` и до promotion staged envelope. Между фазами `am force-stop ai.memora.app` завершил Android процесс; в следующей instrumentation process `AgentDatabase` открыл named test DB через production startup reconciliation, проверил сохранение synthetic marker и promotion staged envelope. Тест удалил только собственную БД/envelope/test Keystore alias. На физическом Redmi Android13/API33: `rekey_recovered_after_process_force_stop=true`, `synthetic_marker_survived=true`, `staged_envelope_promoted=true`; app после probe повторно запущен. Unit suite 199/199, debug/test APK assembly и lint прошли.
+
+Проверка покрывает process force-stop, но не hard hardware crash, потерю питания, disk-full во время записи, backup/restore или uninstall/reinstall; остальные MEM-12.11/P1 gates открыты. Gemini/API, microphone, real recordings и user DB не использовались. Это подготовка к следующим gates, не разрешение на agent-runtime cutover.

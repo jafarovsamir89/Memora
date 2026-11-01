@@ -53,7 +53,9 @@ class GeminiSyntheticProbe : Instrumentation() {
         orthographyOnly = arguments?.getString("orthographyOnly") == "true"
         intentOnly = arguments?.getString("intentOnly") == "true"
         functionCallingOnly = arguments?.getString("functionCallingOnly") == "true"
-        processDeathProbe = arguments?.getString("processDeathProbe")?.takeIf { it in setOf("prepare", "verify") }
+        processDeathProbe = arguments?.getString("processDeathProbe")?.takeIf {
+            it in setOf("prepare", "verify", "rotation-prepare", "rotation-verify")
+        }
         processDeathPermitted = arguments?.getString("allowSyntheticProcessDeathProbe") == "true"
         speechOnly = arguments?.getString("speechOnly") == "true"
         playbackOnly = arguments?.getString("playbackOnly") == "true"
@@ -77,10 +79,11 @@ class GeminiSyntheticProbe : Instrumentation() {
                 finish(Activity.RESULT_CANCELED, Bundle().apply { putString("status", "explicit_opt_in_required") })
                 return
             }
-            val crashResults = if (processDeathProbe == "prepare") {
-                DatabaseStorageProbe.prepareProcessDeathProbe(targetContext, permitted = true)
-            } else {
-                DatabaseStorageProbe.verifyProcessDeathProbe(targetContext, permitted = true)
+            val crashResults = when (processDeathProbe) {
+                "prepare" -> DatabaseStorageProbe.prepareProcessDeathProbe(targetContext, permitted = true)
+                "verify" -> DatabaseStorageProbe.verifyProcessDeathProbe(targetContext, permitted = true)
+                "rotation-prepare" -> DatabaseStorageProbe.prepareKeyRotationProcessDeathProbe(targetContext, permitted = true)
+                else -> DatabaseStorageProbe.verifyKeyRotationProcessDeathProbe(targetContext, permitted = true)
             }
             finish(if (crashResults.getString("status") == "passed" || crashResults.getString("status") == "prepared") Activity.RESULT_OK else Activity.RESULT_CANCELED, crashResults)
             return
