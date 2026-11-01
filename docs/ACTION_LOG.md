@@ -8,7 +8,7 @@
 
 **Граница результата:** подтверждён Android process force-stop в одном точном окне между SQLCipher rekey и продвижением envelope. Это не симулирует hard hardware crash, потерю питания, disk-full/corruption во время файловой записи, backup restore или uninstall/reinstall. MEM-12.11/P1 и downstream agent runtime остаются открыты/выключены.
 
-**Git:** новый пакет локальный; перед передачей проверить diff/secret scan, сделать commit/push и подтвердить совпадение HEAD и чистое дерево.
+**Git:** package сохранён коммитом `f80b6be1d989349fa515ade5aaa8009451262bc9` (`test(storage): force-stop during SQLCipher key rotation`) и отправлен в `origin/main`. После `git fetch origin main` локальный HEAD и `git ls-remote origin refs/heads/main` совпали; рабочее дерево было чистым `main...origin/main`.
 
 ## ACT-0072 · 2026-11-01 · staged key rotation and recovery slice
 
