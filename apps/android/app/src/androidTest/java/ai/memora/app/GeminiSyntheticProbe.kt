@@ -25,6 +25,8 @@ import java.nio.ByteOrder
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withTimeout
 import kotlinx.coroutines.flow.first
+import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonPrimitive
 
 /** Manual, opt-in API probe. No microphone, UI, app storage reads or generated test fixtures in memory. */
 class GeminiSyntheticProbe : Instrumentation() {
@@ -35,6 +37,7 @@ class GeminiSyntheticProbe : Instrumentation() {
     private var restoreOrthography = false
     private var orthographyOnly = false
     private var intentOnly = false
+    private var functionCallingOnly = false
     private var speechOnly = false
     private var playbackOnly = false
     private var onlyCase: String? = null
@@ -47,6 +50,7 @@ class GeminiSyntheticProbe : Instrumentation() {
         restoreOrthography = arguments?.getString("restoreOrthography") != "false"
         orthographyOnly = arguments?.getString("orthographyOnly") == "true"
         intentOnly = arguments?.getString("intentOnly") == "true"
+        functionCallingOnly = arguments?.getString("functionCallingOnly") == "true"
         speechOnly = arguments?.getString("speechOnly") == "true"
         playbackOnly = arguments?.getString("playbackOnly") == "true"
         onlyCase = arguments?.getString("case")?.takeIf { it in setOf("az", "ru", "mixed") }
@@ -68,6 +72,54 @@ class GeminiSyntheticProbe : Instrumentation() {
         val results = Bundle()
         FirebaseApp.initializeApp(targetContext)
         configureAppCheck(targetContext)
+        if (functionCallingOnly) {
+            val started = System.nanoTime()
+            val functionName = "lookup_synthetic_marker"
+            val declaration = FunctionDeclaration(
+                functionName,
+                "Return the fixed synthetic marker used by this test. This function reads no app data.",
+                emptyMap(),
+            )
+            try {
+                val model = Firebase.ai(backend = GenerativeBackend.googleAI()).generativeModel(
+                    "gemini-3.1-flash-lite",
+                    generationConfig = generationConfig { temperature = 0f; maxOutputTokens = 128 },
+                    tools = listOf(Tool.functionDeclarations(listOf(declaration))),
+                    systemInstruction = content { text("For every user request, call $functionName exactly once. Never claim a value that is not returned by that function.") },
+                )
+                runBlocking {
+                    val chat = model.startChat()
+                    val proposed = withTimeout(30_000) { chat.sendMessage("Mənə sintetik test nişanını göstər.") }
+                    val calls = proposed.functionCalls
+                    results.putInt("function_call_count", calls.size)
+                    check(calls.size == 1 && calls.single().name == functionName && calls.single().args.isEmpty())
+                    val response = FunctionResponsePart(functionName,
+                        JsonObject(mapOf("marker" to JsonPrimitive("SYNTHETIC-CARD-42"))))
+                    val answer = withTimeout(30_000) { chat.sendMessage(content("user") { part(response) }) }
+                    val finalText = answer.text.orEmpty()
+                    check(finalText.contains("SYNTHETIC-CARD-42"))
+                    results.putString("status", "synthetic_function_chain_passed")
+                    results.putBoolean("model_called_allowlisted_function", true)
+                    results.putBoolean("function_result_was_returned_to_model", true)
+                    results.putBoolean("final_answer_matches_function_result", true)
+                }
+            } catch (error: Exception) {
+                results.putString("status", "synthetic_function_chain_failed")
+                results.putString("error_type", error.javaClass.simpleName)
+                val safeCauseMessages = generateSequence(error as Throwable?) { it.cause }
+                    .mapNotNull { it.message }.joinToString(" ")
+                Regex("\\b([45][0-9]{2})\\b").find(safeCauseMessages)?.groupValues?.get(1)?.let {
+                    results.putString("provider_http_status", it)
+                }
+                results.putBoolean("app_check_rejection_hint", safeCauseMessages.contains("app check", ignoreCase = true))
+                results.putBoolean("model_called_allowlisted_function", false)
+                results.putBoolean("function_result_was_returned_to_model", false)
+                results.putBoolean("final_answer_matches_function_result", false)
+            }
+            results.putLong("function_chain_ms", (System.nanoTime() - started) / 1_000_000)
+            finish(if (results.getString("status") == "synthetic_function_chain_passed") Activity.RESULT_OK else Activity.RESULT_CANCELED, results)
+            return
+        }
         if (playbackOnly) {
             val started = System.nanoTime()
             try {

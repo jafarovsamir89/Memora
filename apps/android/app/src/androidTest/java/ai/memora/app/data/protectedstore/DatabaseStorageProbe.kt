@@ -52,6 +52,22 @@ object DatabaseStorageProbe {
                 arrayOf("synthetic-probe-command", "a".repeat(64), "COMMITTED", "[]"),
             )
             check(readCommandId(database) == "synthetic-probe-command")
+            val journalMode = database.openHelper.writableDatabase.query("PRAGMA journal_mode").use { cursor ->
+                check(cursor.moveToFirst())
+                cursor.getString(0)
+            }
+            val walFile = File(databaseFile.parentFile, databaseFile.name + "-wal")
+            val shmFile = File(databaseFile.parentFile, databaseFile.name + "-shm")
+            val walExists = walFile.isFile && walFile.length() > 0
+            val shmExists = shmFile.isFile && shmFile.length() > 0
+            val walHasPlaintext = walExists && walFile.readBytes().useBytes { it.containsAscii("synthetic-probe-command") }
+            val shmHasPlaintext = shmExists && shmFile.readBytes().useBytes { it.containsAscii("synthetic-probe-command") }
+            result.putString("journal_mode_observed", journalMode)
+            result.putBoolean("wal_file_present", walExists)
+            result.putBoolean("shm_file_present", shmExists)
+            result.putBoolean("wal_plaintext_marker_found", walHasPlaintext)
+            result.putBoolean("shm_plaintext_marker_found", shmHasPlaintext)
+            check(!journalMode.equals("wal", ignoreCase = true) && !walHasPlaintext && !shmHasPlaintext)
             database.close()
             database = null
             firstKey.fill(0)
@@ -66,6 +82,9 @@ object DatabaseStorageProbe {
             wrongKey.fill(0)
             check(wrongKeyRejected)
 
+            val keyLossRefused = verifyMissingWrappingKeyFailsClosed(context)
+            val missingEnvelopeRefused = verifyMissingEnvelopeFailsClosed(context)
+
             database = open(context, databaseName, secondKey)
             check(readCommandId(database) == "synthetic-probe-command")
             database.close()
@@ -78,7 +97,10 @@ object DatabaseStorageProbe {
             result.putString("status", "passed")
             result.putBoolean("reopen_with_correct_key", true)
             result.putBoolean("wrong_key_rejected_without_data_loss", true)
+            result.putBoolean("missing_wrapping_key_refused_without_data_loss", keyLossRefused)
+            result.putBoolean("missing_envelope_refused_without_data_loss", missingEnvelopeRefused)
             result.putBoolean("closed_database_has_no_plaintext_marker", true)
+            result.putBoolean("wal_remains_disabled_and_auxiliary_files_have_no_plaintext_marker", true)
         } catch (error: Exception) {
             result.putString("status", "failed")
             result.putString("error_type", error.javaClass.simpleName)
@@ -494,9 +516,81 @@ object DatabaseStorageProbe {
             cursor.getString(0)
         }
 
+    private fun verifyMissingWrappingKeyFailsClosed(context: Context): Boolean {
+        val name = "memora-agent-probe-lost-wrap-key.db"
+        val alias = "ai.memora.app.test.lost-wrap-key.v1"
+        val envelope = AtomicFile(File(context.noBackupFilesDir, "$name.envelope"))
+        val databaseFile = context.getDatabasePath(name)
+        val store = KeyStore.getInstance("AndroidKeyStore").apply { load(null) }
+        var database: ProtectedProbeDatabase? = null
+        try {
+            val key = DatabaseKeyProvider(context, databaseFile, envelope, store, alias).loadOrCreate()
+            database = open(context, name, key)
+            database.openHelper.writableDatabase.execSQL(
+                "INSERT INTO agent_command_journal (commandId, digest, status, targetVersionsJson) VALUES (?, ?, ?, ?)",
+                arrayOf("synthetic-key-loss-marker", "b".repeat(64), "COMMITTED", "[]"),
+            )
+            database.close(); database = null; key.fill(0)
+            val databaseBefore = databaseFile.readBytes()
+            val envelopeBefore = envelope.baseFile.readBytes()
+            store.deleteEntry(alias)
+            val rejected = runCatching {
+                DatabaseKeyProvider(context, databaseFile, envelope, store, alias).loadOrCreate()
+            }.exceptionOrNull() is DatabaseKeyUnavailableException
+            val unchanged = databaseFile.readBytes().contentEquals(databaseBefore) &&
+                envelope.baseFile.readBytes().contentEquals(envelopeBefore)
+            databaseBefore.fill(0); envelopeBefore.fill(0)
+            check(rejected && unchanged)
+            return true
+        } finally {
+            runCatching { database?.close() }
+            context.deleteDatabase(name)
+            envelope.baseFile.delete()
+            store.deleteEntry(alias)
+        }
+    }
+
+    private fun verifyMissingEnvelopeFailsClosed(context: Context): Boolean {
+        val name = "memora-agent-probe-lost-envelope.db"
+        val alias = "ai.memora.app.test.lost-envelope.v1"
+        val envelope = AtomicFile(File(context.noBackupFilesDir, "$name.envelope"))
+        val databaseFile = context.getDatabasePath(name)
+        val store = KeyStore.getInstance("AndroidKeyStore").apply { load(null) }
+        var database: ProtectedProbeDatabase? = null
+        try {
+            val key = DatabaseKeyProvider(context, databaseFile, envelope, store, alias).loadOrCreate()
+            database = open(context, name, key)
+            database.openHelper.writableDatabase.execSQL(
+                "INSERT INTO agent_command_journal (commandId, digest, status, targetVersionsJson) VALUES (?, ?, ?, ?)",
+                arrayOf("synthetic-envelope-loss-marker", "c".repeat(64), "COMMITTED", "[]"),
+            )
+            database.close(); database = null; key.fill(0)
+            val databaseBefore = databaseFile.readBytes()
+            envelope.baseFile.delete()
+            val rejected = runCatching {
+                DatabaseKeyProvider(context, databaseFile, envelope, store, alias).loadOrCreate()
+            }.exceptionOrNull() is DatabaseKeyUnavailableException
+            val unchanged = databaseFile.readBytes().contentEquals(databaseBefore) && !envelope.baseFile.exists()
+            databaseBefore.fill(0)
+            check(rejected && unchanged)
+            return true
+        } finally {
+            runCatching { database?.close() }
+            context.deleteDatabase(name)
+            envelope.baseFile.delete()
+            store.deleteEntry(alias)
+        }
+    }
+
     private fun ByteArray.containsAscii(value: String): Boolean {
         val needle = value.toByteArray(Charsets.UTF_8)
         return indices.any { start -> start + needle.size <= size && needle.indices.all { this[start + it] == needle[it] } }
+    }
+
+    private inline fun <T> ByteArray.useBytes(block: (ByteArray) -> T): T = try {
+        block(this)
+    } finally {
+        fill(0)
     }
 
     private fun ByteArray.contentStartsWith(prefix: ByteArray): Boolean =
