@@ -85,6 +85,7 @@ object DatabaseStorageProbe {
 
             val keyLossRefused = verifyMissingWrappingKeyFailsClosed(context)
             val missingEnvelopeRefused = verifyMissingEnvelopeFailsClosed(context)
+            val corruptEnvelopeRefused = verifyCorruptEnvelopeFailsClosed(context)
             val corruptionFailsClosed = verifyCorruptDatabaseFailsClosed(context)
 
             database = open(context, databaseName, secondKey)
@@ -101,6 +102,7 @@ object DatabaseStorageProbe {
             result.putBoolean("wrong_key_rejected_without_data_loss", true)
             result.putBoolean("missing_wrapping_key_refused_without_data_loss", keyLossRefused)
             result.putBoolean("missing_envelope_refused_without_data_loss", missingEnvelopeRefused)
+            result.putBoolean("corrupt_envelope_refused_without_database_loss", corruptEnvelopeRefused)
             result.putBoolean("database_corruption_refused_without_overwrite", corruptionFailsClosed)
             result.putBoolean("closed_database_has_no_plaintext_marker", true)
             result.putBoolean("wal_remains_disabled_and_auxiliary_files_have_no_plaintext_marker", true)
@@ -724,6 +726,57 @@ object DatabaseStorageProbe {
             original?.fill(0)
             corrupted?.fill(0)
             key?.fill(0)
+            context.deleteDatabase(name)
+            envelope.baseFile.delete()
+            store.deleteEntry(alias)
+        }
+    }
+
+    private fun verifyCorruptEnvelopeFailsClosed(context: Context): Boolean {
+        val name = "memora-agent-probe-corrupt-envelope.db"
+        val alias = "ai.memora.app.test.corrupt-envelope.v1"
+        val envelope = AtomicFile(File(context.noBackupFilesDir, "$name.envelope"))
+        val databaseFile = context.getDatabasePath(name)
+        val store = KeyStore.getInstance("AndroidKeyStore").apply { load(null) }
+        var database: ProtectedProbeDatabase? = null
+        var key: ByteArray? = null
+        var originalEnvelope: ByteArray? = null
+        var corruptedEnvelope: ByteArray? = null
+        var databaseBefore: ByteArray? = null
+        try {
+            key = DatabaseKeyProvider(context, databaseFile, envelope, store, alias).loadOrCreate()
+            database = open(context, name, key)
+            database.openHelper.writableDatabase.execSQL(
+                "INSERT INTO agent_command_journal (commandId, digest, status, targetVersionsJson) VALUES (?, ?, ?, ?)",
+                arrayOf("synthetic-envelope-corruption-marker", "a".repeat(64), "COMMITTED", "[]"),
+            )
+            database.close(); database = null; key!!.fill(0); key = null
+            databaseBefore = databaseFile.readBytes()
+            originalEnvelope = envelope.baseFile.readBytes()
+            corruptedEnvelope = originalEnvelope!!.copyOf().also { bytes ->
+                val offset = bytes.lastIndex
+                bytes[offset] = (bytes[offset].toInt() xor 0x5a).toByte()
+            }
+            envelope.baseFile.writeBytes(corruptedEnvelope!!)
+            val rejected = runCatching {
+                DatabaseKeyProvider(context, databaseFile, envelope, store, alias).loadOrCreate()
+            }.exceptionOrNull() is DatabaseKeyUnavailableException
+            val dbUnchanged = databaseFile.readBytes().useBytes { it.contentEquals(databaseBefore!!) }
+            val envelopeStillTampered = envelope.baseFile.readBytes().useBytes { it.contentEquals(corruptedEnvelope!!) }
+            check(rejected && dbUnchanged && envelopeStillTampered)
+
+            envelope.baseFile.writeBytes(originalEnvelope!!)
+            key = DatabaseKeyProvider(context, databaseFile, envelope, store, alias).loadOrCreate()
+            database = open(context, name, key)
+            val dataSurvived = hasCommand(database, "synthetic-envelope-corruption-marker")
+            check(dataSurvived)
+            return true
+        } finally {
+            runCatching { database?.close() }
+            key?.fill(0)
+            originalEnvelope?.fill(0)
+            corruptedEnvelope?.fill(0)
+            databaseBefore?.fill(0)
             context.deleteDatabase(name)
             envelope.baseFile.delete()
             store.deleteEntry(alias)

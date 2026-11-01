@@ -609,3 +609,11 @@ Python 3.11 venv с `tests/agent_contracts/requirements.txt`: **66/66**. Отд�
 **Git на момент записи:** код/docs ACT-0067/0068 ещё локальные; перед передачей выполнить secret scan, `git diff --check`, сверку локальных Markdown ссылок и TODO IDs, затем commit/push с проверкой обоих hashes.
 
 **Постскриптум Git ACT-0068:** коммит `d14fc540a4d608985b55e478f2463dd17f2f90e1` (`test: add synthetic crash and corruption recovery probes`) отправлен `git push origin main`. `git fetch origin main`, `git rev-parse HEAD` и `git ls-remote origin refs/heads/main` совпали на этом hash; дерево чистое `main...origin/main`.
+
+## ACT-0069 · 2026-11-01 · corrupted key-envelope fail-closed
+
+Добавлен synthetic test envelope-integrity: приложение создаёт отдельные test DB/envelope/Keystore alias и строку, сохраняет ciphertext, портит один byte envelope, вызывает `DatabaseKeyProvider.loadOrCreate`, проверяет `DatabaseKeyUnavailableException` и полную неизменность DB/corrupted-envelope, восстанавливает encrypted test envelope in-memory и подтверждает чтение исходной строки. Тест обнуляет encrypted byte arrays и удаляет только свои fixtures/alias.
+
+Проверки на физическом Redmi Android13 и API26 emulator: `corrupt_envelope_refused_without_database_loss=true`; полный opt-in `DatabaseStorageProbe` вернул `status=passed` на обоих. Сборка `:app:assembleDebugAndroidTest :app:lintDebug --no-daemon` — BUILD SUCCESSFUL. Это не реализация key rotation или user-data recovery. P1 остаётся открытым.
+
+**Git на момент записи:** ACT-0069 code/docs ещё не закоммичены; перед отправкой проверить diff, ссылки/ID и отсутствие секретов; записать commit/push только после фактического подтверждения.
