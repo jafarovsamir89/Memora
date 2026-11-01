@@ -667,3 +667,5 @@ Python 3.11 venv с `tests/agent_contracts/requirements.txt`: **66/66**. Отд�
 **Git на момент записи:** ACT-0069 code/docs ещё не закоммичены; перед отправкой проверить diff, ссылки/ID и отсутствие секретов; записать commit/push только после фактического подтверждения.
 
 **Постскриптум Git ACT-0069:** коммит `95552673346022544c7ed45c88a69d80d78e8454` (`test: verify key envelope corruption recovery`) отправлен в `origin/main`. После `git fetch origin main`, `git rev-parse HEAD` и `git ls-remote origin refs/heads/main` совпали на указанном hash; рабочее дерево чистое `main...origin/main`.
+
+**Git handoff ACT-0074/0075:** documentation and the complete 129-module dependency license map were committed as 15a5a955e9a57e04dddc8cb487e90214bf6c7e7 (docs: record APK install and runtime license map) and pushed to origin/main. git fetch, local HEAD, and git ls-remote confirmed matching local/remote hashes; working tree was clean main...origin/main.

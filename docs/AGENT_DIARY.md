@@ -457,3 +457,5 @@ ADR-001/ADR-002 исходят из локального нативного Andr
 ### 2026-11-01 — ACT-0075: debug APK установлена на Redmi
 
 По разрешению владельца установлена текущая debug-сборка командой adb install -r (Success) и запущен пакет ai.memora.app. Проверены versionCode 8 / versionName 0.6.2-debt-voice, Android 13/API33. Пользовательские данные не очищались. Это подтверждает доставку текущей тестовой сборки, не release signing и не P1 acceptance.
+
+**Git handoff ACT-0074/0075:** commit 15a5a955e9a57e04dddc8cb487e90214bf6c7e7 pushed to origin/main; fetch and git ls-remote matched local HEAD; working tree was clean. Remaining work is still P1 gate acceptance, not downstream runtime enablement.
