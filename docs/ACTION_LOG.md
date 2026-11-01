@@ -10,6 +10,8 @@
 
 **Git:** пакет локальный до фактического commit/push; перед передачей проверить diff, локальные ссылки/ID, secret scan, затем проверить локальный HEAD, remote SHA и чистоту дерева.
 
+**Git postscript:** commit `10da9c8f1cf431873a4bbbf778f83e1e3f36b302` (`feat(android): add SQLCipher open-source license screen`) создан и `git push origin main` прошёл успешно. После `git fetch origin main`, `git rev-parse HEAD` и `git ls-remote origin refs/heads/main` совпали; рабочее дерево чистое `main...origin/main`.
+
 ## ACT-0070 · 2026-11-01 · Синхронизация и изучение новых документов
 
 **Запрос:** синхронизировать Git и ознакомиться с новыми документами. Исходная локальная main на `880922e`, рабочее дерево чистое. `git fetch origin --prune` показал 12 входящих и 0 исходящих коммитов; `git merge --ff-only origin/main` успешно обновил ветку до `0199fc89638ee66be4a98925b2921daac803eda9`. После обновления `git rev-parse HEAD` и `git ls-remote origin refs/heads/main` совпали, статус был чистым.
