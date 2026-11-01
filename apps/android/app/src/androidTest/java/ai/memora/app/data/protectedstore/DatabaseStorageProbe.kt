@@ -87,6 +87,7 @@ object DatabaseStorageProbe {
             val missingEnvelopeRefused = verifyMissingEnvelopeFailsClosed(context)
             val corruptEnvelopeRefused = verifyCorruptEnvelopeFailsClosed(context)
             val corruptionFailsClosed = verifyCorruptDatabaseFailsClosed(context)
+            val keyRotationRecovered = verifySyntheticKeyRotationRecovery(context)
 
             database = open(context, databaseName, secondKey)
             check(readCommandId(database) == "synthetic-probe-command")
@@ -104,6 +105,7 @@ object DatabaseStorageProbe {
             result.putBoolean("missing_envelope_refused_without_data_loss", missingEnvelopeRefused)
             result.putBoolean("corrupt_envelope_refused_without_database_loss", corruptEnvelopeRefused)
             result.putBoolean("database_corruption_refused_without_overwrite", corruptionFailsClosed)
+            result.putBoolean("synthetic_key_rotation_recovered_and_verified", keyRotationRecovered)
             result.putBoolean("closed_database_has_no_plaintext_marker", true)
             result.putBoolean("wal_remains_disabled_and_auxiliary_files_have_no_plaintext_marker", true)
         } catch (error: Exception) {
@@ -641,6 +643,77 @@ object DatabaseStorageProbe {
             runCatching { database?.close() }
             context.deleteDatabase(name)
             envelope.baseFile.delete()
+            store.deleteEntry(alias)
+        }
+    }
+
+    /** Exercises staged-key crash recovery with a disposable synthetic DB, never the app's user DB. */
+    private fun verifySyntheticKeyRotationRecovery(context: Context): Boolean {
+        val name = "memora-agent-probe-key-rotation.db"
+        val alias = "ai.memora.app.test.key-rotation.v1"
+        val envelope = AtomicFile(File(context.noBackupFilesDir, "$name.envelope"))
+        val databaseFile = context.getDatabasePath(name)
+        val store = KeyStore.getInstance("AndroidKeyStore").apply { load(null) }
+        val provider = DatabaseKeyProvider(context, databaseFile, envelope, store, alias)
+        var database: AgentDatabase? = null
+        var currentKey: ByteArray? = null
+        var nextKey: ByteArray? = null
+        var refusedOldKey = false
+        try {
+            currentKey = provider.loadOrCreate()
+            database = AgentDatabase.openForSyntheticProbe(context, provider, name)
+            database!!.openHelper.writableDatabase.execSQL(
+                "INSERT INTO agent_command_journal (commandId, digest, status, targetVersionsJson) VALUES (?, ?, ?, ?)",
+                arrayOf("synthetic-key-rotation-marker", "d".repeat(64), "COMMITTED", "[]"),
+            )
+
+            // Simulate interruption after staging but before rekey: the exact app startup path keeps the old key.
+            val abandonedCandidate = ByteArray(32).also(java.security.SecureRandom()::nextBytes)
+            provider.stageRotation(abandonedCandidate)
+            database!!.close(); database = AgentDatabase.openForSyntheticProbe(context, provider, name)
+            check(provider.loadStagedRotation() == null)
+            val startupKey = provider.loadOrCreate()
+            val stillCurrent = startupKey.contentEquals(currentKey!!)
+            startupKey.fill(0)
+            abandonedCandidate.fill(0)
+            check(stillCurrent)
+            database!!.close(); database = null
+
+            nextKey = ByteArray(32).also(java.security.SecureRandom()::nextBytes)
+            database = AgentDatabase.openForSyntheticProbe(context, provider, name)
+            provider.stageRotation(nextKey!!)
+            val cipherDatabase = database!!.openHelper.writableDatabase as net.zetetic.database.sqlcipher.SQLiteDatabase
+            cipherDatabase.changePassword(nextKey!!)
+            database!!.close(); database = null
+
+            refusedOldKey = runCatching {
+                val oldDatabase = AgentDatabase.openWithKeyForSyntheticProbe(context, name, currentKey!!)
+                try { oldDatabase.openHelper.readableDatabase.query("SELECT commandId FROM agent_command_journal").use { it.moveToFirst() } }
+                finally { oldDatabase.close() }
+            }.isFailure
+            check(refusedOldKey)
+
+            // This is the app's actual startup reconciliation after rekey-before-envelope-promotion.
+            database = AgentDatabase.openForSyntheticProbe(context, provider, name)
+            val marker = database!!.openHelper.readableDatabase.query(
+                "SELECT commandId FROM agent_command_journal WHERE commandId = 'synthetic-key-rotation-marker'",
+            ).use { cursor -> check(cursor.moveToFirst()); cursor.getString(0) }
+            check(marker == "synthetic-key-rotation-marker")
+            database!!.close(); database = null
+
+            val promotedKey = provider.loadOrCreate()
+            val promotedMatches = promotedKey.contentEquals(nextKey!!)
+            promotedKey.fill(0)
+            check(promotedMatches && provider.loadStagedRotation() == null)
+            return true
+        } finally {
+            runCatching { database?.close() }
+            currentKey?.fill(0)
+            nextKey?.fill(0)
+            context.deleteDatabase(name)
+            envelope.baseFile.delete()
+            File(envelope.baseFile.path + ".bak").delete()
+            File(envelope.baseFile.path + ".rotation").delete()
             store.deleteEntry(alias)
         }
     }

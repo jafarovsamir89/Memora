@@ -246,21 +246,113 @@ internal abstract class AgentDatabase : RoomDatabase() {
         fun open(context: Context): AgentDatabase {
             instance?.let { return it }
             System.loadLibrary("sqlcipher")
-            val databaseKey = DatabaseKeyProvider(context).loadOrCreate()
-            return try {
-                // The helper retains the passphrase to reopen a closed connection; the singleton
-                // keeps one database instance per process rather than re-unwrapping per workflow.
-                Room.databaseBuilder(context.applicationContext, AgentDatabase::class.java, DatabaseKeyProvider.DATABASE_NAME)
+            return openUsingProvider(context, DatabaseKeyProvider(context), DatabaseKeyProvider.DATABASE_NAME)
+                .also { instance = it }
+        }
+
+        /** Isolated synthetic entry point so storage probes exercise the exact app startup recovery path. */
+        internal fun openForSyntheticProbe(
+            context: Context,
+            provider: DatabaseKeyProvider,
+            databaseName: String,
+        ): AgentDatabase {
+            require(context.applicationInfo.flags and android.content.pm.ApplicationInfo.FLAG_DEBUGGABLE != 0)
+            require(databaseName != DatabaseKeyProvider.DATABASE_NAME)
+            System.loadLibrary("sqlcipher")
+            return openUsingProvider(context, provider, databaseName)
+        }
+
+        internal fun openWithKeyForSyntheticProbe(context: Context, databaseName: String, key: ByteArray): AgentDatabase {
+            require(context.applicationInfo.flags and android.content.pm.ApplicationInfo.FLAG_DEBUGGABLE != 0)
+            require(databaseName != DatabaseKeyProvider.DATABASE_NAME)
+            System.loadLibrary("sqlcipher")
+            return openWithKey(context, key, databaseName)
+        }
+
+        private fun openUsingProvider(
+            context: Context,
+            provider: DatabaseKeyProvider,
+            databaseName: String,
+        ): AgentDatabase {
+            val primary = runCatching { provider.loadOrCreate() }
+            val stagedResult = if (provider.hasDatabaseFile()) runCatching { provider.loadStagedRotation() } else null
+            val staged = stagedResult?.getOrNull()
+
+            if (provider.hasDatabaseFile() && staged != null) {
+                val primaryDatabase = primary.getOrNull()?.let { key -> runCatching { openWithKey(context, key, databaseName) }.getOrNull() }
+                if (primaryDatabase != null) {
+                    staged.fill(0)
+                    runCatching { provider.discardStagedRotation() }
+                    return primaryDatabase
+                }
+                val recovered = runCatching { openWithKey(context, staged, databaseName) }.getOrElse { error ->
+                    staged.fill(0)
+                    throw DatabaseKeyUnavailableException("Neither current nor staged key can open the encrypted database", error)
+                }
+                try {
+                    provider.promoteStagedRotation()
+                } catch (error: Exception) {
+                    recovered.close()
+                    throw DatabaseKeyUnavailableException("Staged database key opened the database but could not be promoted", error)
+                }
+                return recovered
+            }
+
+            if (staged != null) staged.fill(0)
+            val key = primary.getOrElse { throw it }
+            return openWithKey(context, key, databaseName).also {
+                if (stagedResult?.isFailure == true) runCatching { provider.discardStagedRotation() }
+            }
+        }
+
+        /** Rotate SQLCipher's key only after a durable wrapped candidate exists. */
+        @Synchronized
+        fun rotateEncryptionKey(context: Context): AgentDatabase {
+            val database = open(context)
+            val provider = DatabaseKeyProvider(context)
+            val oldKey = provider.loadOrCreate()
+            val nextKey = ByteArray(32).also(java.security.SecureRandom()::nextBytes)
+            var replacement: AgentDatabase? = null
+            try {
+                provider.stageRotation(nextKey)
+                val cipherDatabase = database.openHelper.writableDatabase as? net.zetetic.database.sqlcipher.SQLiteDatabase
+                    ?: error("SQLCipher database adapter unavailable")
+                cipherDatabase.changePassword(nextKey)
+                database.close()
+                instance = null
+                replacement = openWithKey(context, nextKey, DatabaseKeyProvider.DATABASE_NAME)
+                instance = replacement
+                provider.promoteStagedRotation()
+                oldKey.fill(0)
+                return replacement
+            } catch (error: Exception) {
+                oldKey.fill(0)
+                if (replacement == null) {
+                    runCatching { database.close() }
+                    if (instance === database) instance = null
+                    nextKey.fill(0)
+                }
+                throw DatabaseKeyUnavailableException(
+                    if (replacement == null) "Database key rotation interrupted; startup will reconcile the staged key"
+                    else "Database key rotated; startup can reconcile the staged key envelope",
+                    error,
+                )
+            }
+        }
+
+        private fun openWithKey(context: Context, databaseKey: ByteArray, databaseName: String): AgentDatabase {
+            var database: AgentDatabase? = null
+            try {
+                database = Room.databaseBuilder(context.applicationContext, AgentDatabase::class.java, databaseName)
                     .addMigrations(AGENT_DB_1_TO_2, AGENT_DB_2_TO_3, AGENT_DB_3_TO_4, AGENT_DB_4_TO_5, AGENT_DB_5_TO_6)
                     .setJournalMode(RoomDatabase.JournalMode.TRUNCATE)
                     // WAL remains disabled until P1 WAL/SHM privacy and recovery gates pass.
                     .openHelperFactory(SupportOpenHelperFactory(databaseKey, null, false))
                     .build()
-                    .also { it.openHelper.writableDatabase }
-                    .also { instance = it }
+                database.openHelper.writableDatabase
+                return database
             } catch (error: Exception) {
-                // SQLCipher's Room 2 helper retains its passphrase to reopen the database.
-                // If opening failed, the helper is discarded and the temporary key can be cleared.
+                runCatching { database?.close() }
                 databaseKey.fill(0)
                 throw error
             }

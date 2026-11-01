@@ -1,5 +1,15 @@
 # Memora — лог действий
 
+## ACT-0072 · 2026-11-01 · staged key rotation and recovery slice
+
+**Изменения:** `DatabaseKeyProvider` умеет durable-stage, проверить и атомарно продвинуть зашифрованный конверт нового SQLCipher-ключа. `AgentDatabase.open()` при старте сначала проверяет текущий ключ; если он больше не открывает существующую БД, проверяет staged-ключ и при успехе продвигает его. Добавлен API ротации и отдельный синтетический instrumentation probe, который упражняет прерывание до `changePassword` и восстановление после rekey. Probe использует только собственную одноразовую БД и Keystore alias с тестовым именем.
+
+**Проверки:** итоговые `:app:testDebugUnitTest :app:assembleDebug :app:assembleDebugAndroidTest :app:lintDebug --no-daemon` — BUILD SUCCESSFUL; отчёты JUnit: **199/199**, 0 failures/errors/skips. Дополнительный `compileDebugAndroidTestKotlin :app:assembleDebugAndroidTest :app:lintDebug` после усиления startup probe также прошёл. На физическом Redmi Android 13/API33 установлен APK, приложение запущено. После замены только устаревшего instrumentation package `ai.memora.app.test` выполнен `allowSyntheticStorageProbe=true`: `status=passed`, `synthetic_key_rotation_recovered_and_verified=true`; тест проверяет оба startup recovery пути на одноразовой синтетической БД. Также прошли wrong/missing/corrupt key/envelope fail-closed, encrypted DB corruption refusal, отсутствие plaintext marker, `journal_mode=delete`, WAL/SHM отсутствуют. Приложение и данные не очищались; Gemini, microphone и пользовательские записи/БД не использовались.
+
+**Открыто:** hard crash/power-loss/disk fault, uninstall/restore, полный аудит транзитивных лицензий и signed release. Пройденный synthetic runtime probe не доказывает эти сценарии. MEM-12.11/P1 остаётся открытым; runtime agent и legacy cutover выключены.
+
+**Git:** пакет ещё локальный; перед передачей проверить diff/secret scan, сделать commit и push, затем подтвердить совпадение local/remote HEAD и чистое дерево.
+
 ## ACT-0071 · 2026-11-01 · SQLCipher Community attribution в приложении
 
 **Изменения:** в `Settings → About → Open-source licenses` добавлен доступный экран с полным SQLCipher Community copyright и BSD-style grant/conditions/disclaimer в `res/raw/sqlcipher_community_license.txt`; отображается также notice о LibTomCrypt/SQLite. Добавлены `az`, `ru`, `en` строки, маршрут, UI acceptance и ADR-011/TODO/руководство обновлены. Источники требования — официальные [Zetetic Community Edition guidelines](https://www.zetetic.net/sqlcipher/community/), [SQLCipher license](https://www.zetetic.net/sqlcipher/license/) и [полный лицензионный текст](https://www.zetetic.net/sqlcipher/license/SQLCIPHER_COMMUNITY_EDITION_LICENSE.txt). Это закрывает доступность именно SQLCipher notice, не полный аудит зависимостей.

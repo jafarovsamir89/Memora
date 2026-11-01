@@ -22,9 +22,12 @@ internal class DatabaseKeyProvider(
     private val envelopeFile: AtomicFile = AtomicFile(File(context.noBackupFilesDir, KEY_ENVELOPE_NAME)),
     private val keyStore: KeyStore = KeyStore.getInstance(ANDROID_KEYSTORE).apply { load(null) },
     private val wrappingKeyAlias: String = KEY_ALIAS,
+    private val stagedEnvelopeFile: AtomicFile = AtomicFile(
+        File(envelopeFile.baseFile.parentFile, "${envelopeFile.baseFile.name}.rotation"),
+    ),
 ) {
     fun loadOrCreate(): ByteArray = synchronized(PROCESS_LOCK) {
-        if (envelopeFile.baseFile.exists()) return@synchronized unwrapExistingEnvelope()
+        if (hasAtomicFileContents(envelopeFile)) return@synchronized unwrapExistingEnvelope()
         if (databaseFile.exists()) {
             throw DatabaseKeyUnavailableException("Encrypted database exists without its key envelope")
         }
@@ -48,9 +51,66 @@ internal class DatabaseKeyProvider(
     }
 
     private fun unwrapExistingEnvelope(): ByteArray {
+        return unwrapEnvelope(envelopeFile)
+    }
+
+    /** A staged key is durable before SQLCipher rekey and lets startup recover a rekeyed DB. */
+    fun stageRotation(databaseKey: ByteArray) = synchronized(PROCESS_LOCK) {
+        require(databaseKey.size == DATABASE_KEY_BYTES)
+        check(hasAtomicFileContents(envelopeFile)) { "Cannot rotate a database without a current key envelope" }
+        val encrypted = encrypt(getExistingWrappingKey(), databaseKey)
+        val output = stagedEnvelopeFile.startWrite()
+        try {
+            output.write(encrypted)
+            output.fd.sync()
+            stagedEnvelopeFile.finishWrite(output)
+        } catch (error: Exception) {
+            stagedEnvelopeFile.failWrite(output)
+            throw DatabaseKeyUnavailableException("Could not persist staged database key", error)
+        } finally {
+            encrypted.fill(0)
+        }
+    }
+
+    fun loadStagedRotation(): ByteArray? = synchronized(PROCESS_LOCK) {
+        if (!hasAtomicFileContents(stagedEnvelopeFile)) return@synchronized null
+        unwrapEnvelope(stagedEnvelopeFile)
+    }
+
+    /** Install a staged envelope atomically; keep the staged copy until AtomicFile has committed. */
+    fun promoteStagedRotation() = synchronized(PROCESS_LOCK) {
+        val key = loadStagedRotation() ?: throw DatabaseKeyUnavailableException("No staged database key")
+        key.fill(0)
+        val bytes = try {
+            stagedEnvelopeFile.openRead().use { it.readBytes() }
+        } catch (error: Exception) {
+            throw DatabaseKeyUnavailableException("Could not read staged database key envelope", error)
+        }
+        val output = envelopeFile.startWrite()
+        try {
+            output.write(bytes)
+            output.fd.sync()
+            envelopeFile.finishWrite(output)
+            stagedEnvelopeFile.delete()
+        } catch (error: Exception) {
+            envelopeFile.failWrite(output)
+            throw DatabaseKeyUnavailableException("Could not promote staged database key", error)
+        } finally {
+            bytes.fill(0)
+        }
+    }
+
+    fun discardStagedRotation() = synchronized(PROCESS_LOCK) { stagedEnvelopeFile.delete() }
+
+    fun hasDatabaseFile(): Boolean = databaseFile.exists()
+
+    private fun hasAtomicFileContents(file: AtomicFile): Boolean =
+        file.baseFile.exists() || File(file.baseFile.path + ".bak").exists()
+
+    private fun unwrapEnvelope(file: AtomicFile): ByteArray {
         val wrappingKey = getExistingWrappingKey()
         val bytes = try {
-            envelopeFile.openRead().use { it.readBytes() }
+            file.openRead().use { it.readBytes() }
         } catch (error: Exception) {
             throw DatabaseKeyUnavailableException("Could not read protected database key envelope", error)
         }
