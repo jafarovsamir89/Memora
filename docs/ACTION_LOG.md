@@ -697,4 +697,4 @@ At the owner's request, `:app:assembleDebug` completed with `BUILD SUCCESSFUL`; 
 
 **Открыто:** полевая проверка владельца; объединение финопераций с новым локальным ledger; поиск/чтение строк таблиц; edit/delete/restore/undo и связи; typed schemas/linked views; текстовый ввод; reminders/calendar; idempotency/fault acceptance; P1/P8/P9 и release signing. Следующий шаг — принять воспроизводимую проблему или удачный сценарий от владельца и развивать handlers до требуемого повседневного набора.
 
-**Git на момент записи:** проверяю diff, секреты и синхронизацию; commit/push пока не заявлены.
+**Git:** `git diff --check` прошёл; в новых runtime-файлах поиск ключевых форматов секретов совпадений не нашёл. Commit `eda9c57817093dff04504f9622d81bb9ea6c26ef` (`feat: connect Gemini tools to local Memora memory`) запушен в `origin/main`; локальный HEAD и `origin/main` совпали, рабочее дерево было чистым после push. Затем добавлена эта запись о Git-передаче; её отдельная синхронизация проверяется.
