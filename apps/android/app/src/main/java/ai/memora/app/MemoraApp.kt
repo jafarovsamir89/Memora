@@ -153,7 +153,7 @@ fun MemoraApp(initialRoute: String = "home", initialTheme: String = "system", ca
                 "memory" -> R.string.nav_memory; "tasks" -> R.string.nav_tasks; "more" -> R.string.nav_more
                 "inbox" -> R.string.inbox; "finance" -> R.string.finance; "people" -> R.string.people
                 "projects" -> R.string.projects; "settings" -> R.string.settings; "chat" -> R.string.chat
-                "voice_memory" -> R.string.voice_memory_title
+                "voice_memory" -> R.string.voice_memory_title; "tables" -> R.string.tables_title
                 "licenses" -> R.string.open_source_licenses
                 else -> R.string.app_name
             }
@@ -216,6 +216,7 @@ fun MemoraApp(initialRoute: String = "home", initialTheme: String = "system", ca
                             "tasks" -> ScreenColumn { ScreenHeading(s(R.string.tasks_title), s(R.string.working_tasks_hint)); TaskPrototype(taskStore) }
                             "more" -> MoreScreen(navigate, { about = true })
                             "voice_memory" -> VoiceMemoryScreen()
+                            "tables" -> TablesScreen()
                             "licenses" -> OpenSourceLicensesScreen()
                             "inbox" -> InboxScreen(captureState.captures, captureState.loading, captureState.error && !captureState.ready,
                                 captureState.managementError || captureExportError,
@@ -228,18 +229,11 @@ fun MemoraApp(initialRoute: String = "home", initialTheme: String = "system", ca
                                 { entries, archived -> captureModel.session.archive(entries, archived) },
                                 captureState.managementBusy, { request -> captureModel.session.revise(request) },
                                 { entry -> captureModel.session.delete(entry.source.id, entry.source.revisions.last().id) })
-                            "finance" -> UnavailableModuleScreen(s(R.string.finance))
+                            "finance" -> FinanceScreen()
                             "people" -> UnavailableModuleScreen(s(R.string.people))
                             "projects" -> UnavailableModuleScreen(s(R.string.projects))
                             "settings" -> SettingsScreen(theme, { appearanceModel.change(theme = it) }, language, { appearanceModel.change(language = it) }, appearance.ready && !appearance.busy, appearance.error, { appearanceModel.load() }, { about = true })
-                            "chat" -> ChatScreen(language, memories = captureState.captures, onSource = { detailId = it },
-                                memoriesReady = captureState.ready, onRecordNote = { voice = true; capture = true }, onRemember = { text ->
-                                if (captureState.ready && !captureState.submitting && !captureState.retrySubmission &&
-                                    !captureState.managementBusy && !captureState.dirty && !captureState.saving &&
-                                    captureState.draft.isBlank() && ai.memora.app.domain.TextSourceRules.validDraft(text)) {
-                                    captureModel.session.edit(text); openCapture(false); true
-                                } else false
-                            })
+                            "chat" -> AgentChatScreen(language)
                         }
                       }
                     }

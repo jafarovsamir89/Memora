@@ -73,9 +73,9 @@ internal class ProtectedMemoryRepository(private val db: AgentDatabase) {
             dao.putPeople(expectedPeople)
             val expectedMoneyEvents = (
                 bundle.money.receipts.map { MoneyEventRow(it.id, it.commandId, it.personId, "receipt", it.minorUnits,
-                    it.currency, it.source, it.recordedAt.toString(), it.occurredAt?.toString()) } +
+                    it.currency, it.source, it.recordedAt.toString(), it.occurredAt?.toString(), it.comment) } +
                     bundle.money.debts.map { MoneyEventRow(it.id, it.commandId, it.personId, "debt", it.minorUnits,
-                        it.currency, it.source, it.recordedAt.toString(), null) }
+                        it.currency, it.source, it.recordedAt.toString(), it.occurredAt?.toString(), it.comment) }
                 ).sortedBy { it.eventId }
             dao.putMoneyEvents(expectedMoneyEvents)
             dao.putMigrations(expected)

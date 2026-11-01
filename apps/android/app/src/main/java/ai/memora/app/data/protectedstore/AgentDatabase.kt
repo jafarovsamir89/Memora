@@ -54,6 +54,21 @@ internal val AGENT_DB_5_TO_6 = androidx.room.migration.Migration(5, 6) { db ->
     db.execSQL("CREATE INDEX IF NOT EXISTS index_money_adjustment_scopeId_obligationId ON money_adjustment(scopeId, obligationId)")
 }
 
+/** Durable, encrypted dialogue history for the shared voice/text secretary. */
+internal val AGENT_DB_6_TO_7 = androidx.room.migration.Migration(6, 7) { db ->
+    db.execSQL("CREATE TABLE IF NOT EXISTS agent_conversation_message (sequence INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, scopeId TEXT NOT NULL, turnId TEXT NOT NULL, role TEXT NOT NULL, message TEXT NOT NULL, createdAtMillis INTEGER NOT NULL)")
+    db.execSQL("CREATE UNIQUE INDEX IF NOT EXISTS index_agent_conversation_message_scopeId_turnId_role ON agent_conversation_message(scopeId, turnId, role)")
+    db.execSQL("CREATE INDEX IF NOT EXISTS index_agent_conversation_message_scopeId_sequence ON agent_conversation_message(scopeId, sequence)")
+}
+
+/** Finance rows move to the shared scoped ledger; old values receive safe local defaults. */
+internal val AGENT_DB_7_TO_8 = androidx.room.migration.Migration(7, 8) { db ->
+    db.execSQL("ALTER TABLE person ADD COLUMN scopeId TEXT NOT NULL DEFAULT 'local'")
+    db.execSQL("CREATE INDEX IF NOT EXISTS index_person_scopeId_displayName ON person(scopeId, displayName)")
+    db.execSQL("ALTER TABLE money_event ADD COLUMN comment TEXT")
+    db.execSQL("CREATE UNIQUE INDEX IF NOT EXISTS index_money_event_scopeId_commandId ON money_event(scopeId, commandId)")
+}
+
 /** Minimal command journal. Only identifiers, digest, status and recovery versions are retained. */
 @Entity(tableName = "agent_command_journal")
 internal data class AgentCommandJournalRow(
@@ -70,6 +85,19 @@ internal data class AgentTurnJournalRow(
     @PrimaryKey val turnId: String,
     val status: String,
     val updatedAtMillis: Long,
+)
+
+@Entity(tableName = "agent_conversation_message", indices = [
+    androidx.room.Index(value = ["scopeId", "turnId", "role"], unique = true),
+    androidx.room.Index(value = ["scopeId", "sequence"]),
+])
+internal data class AgentConversationMessageRow(
+    @PrimaryKey(autoGenerate = true) val sequence: Long = 0,
+    val scopeId: String,
+    val turnId: String,
+    val role: String,
+    val message: String,
+    val createdAtMillis: Long,
 )
 
 @Entity(tableName = "domain_object", indices = [androidx.room.Index(value = ["scopeId", "kind", "deletedAt"])])
@@ -139,13 +167,16 @@ internal data class TaskEventRow(
 @Entity(tableName = "deleted_task")
 internal data class DeletedTaskRow(@PrimaryKey val taskId: String)
 
-@Entity(tableName = "person")
-internal data class PersonRow(@PrimaryKey val personId: String, val displayName: String)
+@Entity(tableName = "person", indices = [androidx.room.Index(value = ["scopeId", "displayName"])])
+internal data class PersonRow(@PrimaryKey val personId: String, val displayName: String,
+    @androidx.room.ColumnInfo(defaultValue = "'local'") val scopeId: String = "local")
 
-@Entity(tableName = "money_event", indices = [androidx.room.Index(value = ["scopeId", "eventId"])])
+@Entity(tableName = "money_event", indices = [androidx.room.Index(value = ["scopeId", "eventId"]),
+    androidx.room.Index(value = ["scopeId", "commandId"], unique = true)])
 internal data class MoneyEventRow(
     @PrimaryKey val eventId: String, val commandId: String, val personId: String, val kind: String,
     val minorUnits: Long, val currency: String, val source: String, val recordedAt: String, val occurredAt: String?,
+    val comment: String? = null,
     @androidx.room.ColumnInfo(defaultValue = "'local'") val scopeId: String = "local",
 )
 
@@ -163,6 +194,17 @@ internal data class AgentOutboxRow(
 
 @androidx.room.Dao
 internal interface ProtectedStoreDao {
+    @androidx.room.Insert(onConflict = androidx.room.OnConflictStrategy.ABORT)
+    suspend fun putConversationMessages(rows: List<AgentConversationMessageRow>)
+    @androidx.room.Query("SELECT * FROM agent_conversation_message WHERE scopeId=:scope ORDER BY sequence DESC LIMIT :limit")
+    suspend fun recentConversationMessages(scope: String, limit: Int): List<AgentConversationMessageRow>
+    @androidx.room.Query("SELECT * FROM agent_conversation_message WHERE scopeId=:scope AND turnId=:turn ORDER BY sequence")
+    suspend fun conversationMessagesForTurn(scope: String, turn: String): List<AgentConversationMessageRow>
+    @androidx.room.Query("DELETE FROM agent_conversation_message WHERE scopeId=:scope AND sequence NOT IN (SELECT sequence FROM agent_conversation_message WHERE scopeId=:scope ORDER BY sequence DESC LIMIT :limit)")
+    suspend fun trimConversation(scope: String, limit: Int)
+    @androidx.room.Query("DELETE FROM agent_conversation_message WHERE scopeId=:scope")
+    suspend fun clearConversation(scope: String)
+
     @androidx.room.Query("SELECT * FROM memory_draft WHERE id = 1") suspend fun draft(): MemoryDraftRow?
     @androidx.room.Insert(onConflict = androidx.room.OnConflictStrategy.REPLACE) suspend fun putDraft(row: MemoryDraftRow)
     @androidx.room.Query("SELECT * FROM memory_source ORDER BY sourceId") suspend fun sources(): List<MemorySourceRow>
@@ -172,12 +214,24 @@ internal interface ProtectedStoreDao {
     @androidx.room.Insert(onConflict = androidx.room.OnConflictStrategy.ABORT) suspend fun putRevisions(rows: List<MemoryRevisionRow>)
     @androidx.room.Insert(onConflict = androidx.room.OnConflictStrategy.ABORT) suspend fun putTombstones(rows: List<MemoryTombstoneRow>)
     @androidx.room.Query("SELECT * FROM task_event ORDER BY sequence") suspend fun taskEvents(): List<TaskEventRow>
+    @androidx.room.Query("SELECT * FROM task_event WHERE taskId=:taskId AND scopeId=:scope ORDER BY sequence") suspend fun taskEvents(taskId: String, scope: String): List<TaskEventRow>
     @androidx.room.Insert(onConflict = androidx.room.OnConflictStrategy.ABORT) suspend fun putTaskEvents(rows: List<TaskEventRow>)
     @androidx.room.Query("SELECT * FROM task_event WHERE commandId=:id") suspend fun taskEventsForCommand(id: String): List<TaskEventRow>
     @androidx.room.Query("SELECT taskId FROM deleted_task ORDER BY taskId") suspend fun deletedTasks(): List<String>
     @androidx.room.Insert(onConflict = androidx.room.OnConflictStrategy.ABORT) suspend fun putDeletedTasks(rows: List<DeletedTaskRow>)
     @androidx.room.Query("SELECT * FROM person ORDER BY personId") suspend fun people(): List<PersonRow>
+    @androidx.room.Query("SELECT * FROM person WHERE scopeId=:scope ORDER BY displayName, personId") suspend fun people(scope: String): List<PersonRow>
     @androidx.room.Query("SELECT * FROM money_event ORDER BY eventId") suspend fun moneyEvents(): List<MoneyEventRow>
+    @androidx.room.Query("SELECT * FROM money_event WHERE scopeId=:scope ORDER BY recordedAt, eventId") suspend fun moneyEvents(scope: String): List<MoneyEventRow>
+    @androidx.room.Query("SELECT * FROM money_event WHERE scopeId=:scope AND personId=:person ORDER BY recordedAt, eventId") suspend fun moneyEventsForPerson(scope: String, person: String): List<MoneyEventRow>
+    @androidx.room.Query("SELECT * FROM money_event WHERE scopeId=:scope AND commandId=:command") suspend fun moneyEventForCommand(scope: String, command: String): MoneyEventRow?
+    @androidx.room.Query("SELECT * FROM money_event WHERE scopeId=:scope AND eventId=:id") suspend fun scopedMoneyEvent(scope: String, id: String): MoneyEventRow?
+    @androidx.room.Query("SELECT * FROM person WHERE scopeId=:scope AND personId=:id") suspend fun person(scope: String, id: String): PersonRow?
+    @androidx.room.Query("UPDATE person SET scopeId=:newScope WHERE personId=:id AND scopeId=:oldScope") suspend fun movePersonScope(id: String, oldScope: String, newScope: String): Int
+    @androidx.room.Query("UPDATE money_event SET scopeId=:newScope, occurredAt=:occurredAt, comment=:comment WHERE eventId=:id AND scopeId=:oldScope") suspend fun moveLegacyMoneyEvent(id: String, oldScope: String, newScope: String, occurredAt: String?, comment: String?): Int
+    @androidx.room.Query("SELECT * FROM legacy_migration WHERE storeName=:name") suspend fun migration(name: String): LegacyMigrationRow?
+    @androidx.room.Insert(onConflict = androidx.room.OnConflictStrategy.ABORT) suspend fun insertPerson(row: PersonRow)
+    @androidx.room.Insert(onConflict = androidx.room.OnConflictStrategy.ABORT) suspend fun insertMoneyEvent(row: MoneyEventRow)
     @androidx.room.Insert(onConflict = androidx.room.OnConflictStrategy.ABORT) suspend fun putPeople(rows: List<PersonRow>)
     @androidx.room.Insert(onConflict = androidx.room.OnConflictStrategy.ABORT) suspend fun putMoneyEvents(rows: List<MoneyEventRow>)
     @androidx.room.Query("SELECT * FROM legacy_migration ORDER BY storeName") suspend fun migrations(): List<LegacyMigrationRow>
@@ -222,11 +276,13 @@ internal interface ProtectedStoreDao {
     @androidx.room.Query("UPDATE user_table SET deletedAt=NULL, version=:next WHERE scopeId=:scope AND tableId=:id AND version=:expected AND deletedAt IS NOT NULL") suspend fun restoreUserTable(scope: String, id: String, expected: Long, next: Long): Int
     @androidx.room.Insert(onConflict = androidx.room.OnConflictStrategy.ABORT) suspend fun insertTableRows(rows: List<TableDataRow>)
     @androidx.room.Query("SELECT * FROM table_row WHERE tableId=:id AND scopeId=:scope AND deletedAt IS NULL ORDER BY rowId") suspend fun rows(id: String, scope: String): List<TableDataRow>
+    @androidx.room.Query("SELECT * FROM table_row WHERE tableId=:id AND scopeId=:scope AND deletedAt IS NOT NULL ORDER BY rowId") suspend fun deletedRows(id: String, scope: String): List<TableDataRow>
     @androidx.room.Query("SELECT * FROM table_row WHERE rowId=:id") suspend fun rowById(id: String): TableDataRow?
     @androidx.room.Query("UPDATE table_row SET valuesJson=:values, version=:next WHERE rowId=:row AND tableId=:table AND scopeId=:scope AND version=:expected AND deletedAt IS NULL") suspend fun updateTableRow(row: String, table: String, scope: String, expected: Long, next: Long, values: String): Int
     @androidx.room.Query("UPDATE table_row SET deletedAt=:at, version=:next WHERE rowId=:row AND tableId=:table AND scopeId=:scope AND version=:expected AND deletedAt IS NULL") suspend fun tombstoneTableRow(row: String, table: String, scope: String, expected: Long, next: Long, at: String): Int
     @androidx.room.Query("UPDATE table_row SET deletedAt=NULL, version=:next WHERE rowId=:row AND tableId=:table AND scopeId=:scope AND version=:expected AND deletedAt IS NOT NULL") suspend fun restoreTableRow(row: String, table: String, scope: String, expected: Long, next: Long): Int
     @androidx.room.Query("SELECT * FROM money_adjustment WHERE scopeId=:scope AND obligationId=:id ORDER BY eventId") suspend fun adjustments(scope: String, id: String): List<MoneyAdjustmentRow>
+    @androidx.room.Query("SELECT * FROM money_adjustment WHERE scopeId=:scope ORDER BY occurredAt, eventId") suspend fun adjustments(scope: String): List<MoneyAdjustmentRow>
     @androidx.room.Query("SELECT * FROM money_adjustment WHERE commandId=:id") suspend fun adjustmentForCommand(id: String): MoneyAdjustmentRow?
     @androidx.room.Insert(onConflict = androidx.room.OnConflictStrategy.ABORT) suspend fun insertAdjustment(row: MoneyAdjustmentRow)
     @androidx.room.Query("SELECT * FROM money_event WHERE scopeId=:scope AND eventId=:id") suspend fun moneyEvent(scope: String, id: String): MoneyEventRow?
@@ -240,9 +296,10 @@ internal interface ProtectedStoreDao {
 @Database(entities = [AgentCommandJournalRow::class, MemoryDraftRow::class, MemorySourceRow::class,
     MemoryRevisionRow::class, MemoryTombstoneRow::class, TaskEventRow::class, DeletedTaskRow::class,
     PersonRow::class, MoneyEventRow::class, LegacyMigrationRow::class, AgentOutboxRow::class, AgentTurnJournalRow::class,
+    AgentConversationMessageRow::class,
     DomainObjectRow::class, DomainRevisionRow::class, DomainLinkRow::class, UserTableRow::class, TableColumnRow::class,
     TableDataRow::class, MoneyAdjustmentRow::class, LocalCalendarEventRow::class, TableSchemaRevisionRow::class],
-    version = 6, exportSchema = true)
+    version = 8, exportSchema = true)
 internal abstract class AgentDatabase : RoomDatabase() {
     abstract fun protectedStoreDao(): ProtectedStoreDao
     companion object {
@@ -350,7 +407,7 @@ internal abstract class AgentDatabase : RoomDatabase() {
             var database: AgentDatabase? = null
             try {
                 database = Room.databaseBuilder(context.applicationContext, AgentDatabase::class.java, databaseName)
-                    .addMigrations(AGENT_DB_1_TO_2, AGENT_DB_2_TO_3, AGENT_DB_3_TO_4, AGENT_DB_4_TO_5, AGENT_DB_5_TO_6)
+                    .addMigrations(AGENT_DB_1_TO_2, AGENT_DB_2_TO_3, AGENT_DB_3_TO_4, AGENT_DB_4_TO_5, AGENT_DB_5_TO_6, AGENT_DB_6_TO_7, AGENT_DB_7_TO_8)
                     .setJournalMode(RoomDatabase.JournalMode.TRUNCATE)
                     // WAL remains disabled until P1 WAL/SHM privacy and recovery gates pass.
                     .openHelperFactory(SupportOpenHelperFactory(databaseKey, null, false))

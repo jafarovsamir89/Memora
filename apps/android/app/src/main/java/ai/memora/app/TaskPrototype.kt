@@ -24,6 +24,9 @@ import androidx.compose.ui.unit.dp
 import ai.memora.app.data.*
 import ai.memora.app.domain.*
 import ai.memora.app.reminders.TaskReminders
+import ai.memora.app.data.protectedstore.AgentDatabase
+import ai.memora.app.data.protectedstore.ProtectedMemoryRepository
+import ai.memora.app.voice.AgentVoiceTurnProcessor
 import ai.memora.app.ui.*
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -137,6 +140,7 @@ fun TaskPrototype(store: EncryptedTaskStore) {
     }
 
     Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+        AssistantTasksSummary()
         SectionHeading(s(R.string.prototype_tasks))
         Text(s(R.string.prototype_warning), style = MaterialTheme.typography.bodySmall, color = colors.muted)
         if (busy && tasks == null) Text(s(R.string.prototype_loading), color = colors.muted)
@@ -244,4 +248,53 @@ fun TaskPrototype(store: EncryptedTaskStore) {
         text = { Text(s(R.string.task_export_warning)) },
         confirmButton = { TextButton(onClick = { confirmExport = false; exportLauncher.launch("memora-tasks.json") }) { Text(s(R.string.task_export)) } },
         dismissButton = { TextButton(onClick = { confirmExport = false }) { Text(s(R.string.task_cancel)) } })
+}
+
+@Composable
+private fun AssistantTasksSummary() {
+    val context = LocalContext.current
+    val processor = remember(context) { AgentVoiceTurnProcessor(context) }
+    val scopeId = remember(processor) { processor.conversationScopeId() }
+    val database = remember(context) { AgentDatabase.open(context) }
+    val memory = remember(database) { ProtectedMemoryRepository(database) }
+    val coroutineScope = rememberCoroutineScope()
+    var tasks by remember { mutableStateOf<List<Task>?>(null) }
+    var error by remember { mutableStateOf(false) }
+    var busy by remember { mutableStateOf(false) }
+
+    LaunchedEffect(scopeId) {
+        try { tasks = memory.tasks().tasks.filter { it.scopeId == scopeId }; error = false }
+        catch (_: Exception) { error = true }
+    }
+    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        SectionHeading(s(R.string.assistant_tasks_title))
+        if (error) Text(s(R.string.prototype_error), color = MaterialTheme.colorScheme.error)
+        val current = tasks
+        if (current != null && current.isEmpty()) Text(s(R.string.working_no_data), color = colors.muted)
+        current.orEmpty().forEach { task ->
+            Surface(color = colors.card, shape = MaterialTheme.shapes.medium) {
+                Row(Modifier.fillMaxWidth().toggleable(value = task.completed, enabled = !busy, role = Role.Checkbox,
+                    onValueChange = { completed ->
+                        val decision = TaskRules.complete(task, task.version, scopeId, UUID.randomUUID().toString(), completed)
+                        val event = (decision as? TaskDecision.Changed)?.event ?: return@toggleable
+                        busy = true
+                        coroutineScope.launch {
+                            try {
+                                val saved = ai.memora.app.data.protectedstore.ProtectedDomainRepository(database).appendTaskEvent(event)
+                                TaskReminders.schedule(context, saved)
+                                tasks = memory.tasks().tasks.filter { it.scopeId == scopeId }
+                                error = false
+                            } catch (_: Exception) { error = true }
+                            busy = false
+                        }
+                    }).padding(10.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Checkbox(checked = task.completed, onCheckedChange = null)
+                    Column(Modifier.padding(start = 8.dp)) {
+                        Text(task.title, textDecoration = if (task.completed) TextDecoration.LineThrough else TextDecoration.None)
+                        task.dueLocal?.let { Text("$it · ${task.dueZone.orEmpty()}", style = MaterialTheme.typography.bodySmall, color = colors.muted) }
+                    }
+                }
+            }
+        }
+    }
 }

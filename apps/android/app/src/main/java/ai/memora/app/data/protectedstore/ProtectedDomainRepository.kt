@@ -13,6 +13,10 @@ import ai.memora.app.domain.TaskApply
 import ai.memora.app.domain.TaskDecision
 import ai.memora.app.domain.TaskEvent
 import ai.memora.app.domain.TaskRules
+import ai.memora.app.domain.VoiceMoneySnapshot
+import ai.memora.app.domain.VoiceMoneyRules
+import ai.memora.app.domain.VoiceDebt
+import ai.memora.app.domain.VoiceReceipt
 import org.json.JSONArray
 import org.json.JSONObject
 
@@ -26,14 +30,196 @@ internal data class DeletePreview(val objectId: String, val expectedVersion: Lon
 internal data class ImportPreview(val tableId: String, val schemaVersion: Long, val rows: List<Pair<String, Map<String, Any?>>>)
 internal data class TableSnapshot(val table: UserTableRow, val columns: List<TableColumnRow>, val rows: List<TableDataRow>)
 internal data class CalendarInput(val eventId: String, val scopeId: String, val title: String, val startLocal: String, val endLocal: String?, val zoneId: String, val precision: String)
+internal data class FinanceHistory(val person: PersonRow, val events: List<MoneyEventRow>, val remainingDebtMinorByEvent: Map<String, Long>,
+    val voidedEventIds: Set<String>)
 
 /** Protected local domain port. This remains disconnected from application workflows until P1 gates pass. */
 internal class ProtectedDomainRepository(private val db: AgentDatabase) {
     private val dao get() = db.protectedStoreDao()
 
+    suspend fun hasVerifiedLegacyFinance(scope: String): Boolean {
+        val marker = dao.migration("voice-money-to-ledger-v1") ?: return false
+        check(marker.verified && marker.schemaVersion in 1..2 && marker.itemCount >= 0) { "legacy_finance_manifest_invalid" }
+        check(dao.people(scope).size + dao.moneyEvents(scope).size >= marker.itemCount) { "legacy_finance_readback_mismatch" }
+        return true
+    }
+
+    /** Copy a validated legacy AES-GCM snapshot into SQLCipher without modifying the source file. */
+    suspend fun migrateLegacyFinance(scope: String, snapshot: VoiceMoneySnapshot, digest: String, sourceSchema: Int): MigrationResult {
+        require(scope.isNotBlank() && digest.matches(Regex("[0-9a-f]{64}")) && sourceSchema in 1..2)
+        val marker = LegacyMigrationRow("voice-money-to-ledger-v1", digest, sourceSchema,
+            snapshot.persons.size + snapshot.receipts.size + snapshot.debts.size, true)
+        val names = snapshot.persons.map { VoiceMoneyRules.key(it.name) }
+        require(names.none(String::isBlank) && snapshot.persons.all { it.id.isNotBlank() && it.name.isNotBlank() && it.name.length <= 100 })
+        require(snapshot.persons.map { it.id }.distinct().size == snapshot.persons.size)
+        val sourceEvents = snapshot.receipts.map { it.id to it.commandId } + snapshot.debts.map { it.id to it.commandId }
+        require(sourceEvents.map { it.first }.distinct().size == sourceEvents.size && sourceEvents.map { it.second }.distinct().size == sourceEvents.size)
+        require((snapshot.receipts.map { it.personId } + snapshot.debts.map { it.personId }).all { id -> snapshot.persons.any { it.id == id } })
+        return db.withTransaction {
+            val expectedPeople = snapshot.persons.map { PersonRow(it.id, it.name, scope) }
+            val expectedEvents = snapshot.receipts.map { it.toLedger(scope) } + snapshot.debts.map { it.toLedger(scope) }
+            val prior = dao.migration(marker.storeName)
+            if (prior != null) {
+                check(prior.verified && prior.schemaVersion in 1..2 && prior.itemCount >= 0) { "legacy_finance_manifest_invalid" }
+                if (prior.sourceDigest == digest && prior.schemaVersion == sourceSchema) {
+                    val currentPeople = dao.people(scope).associateBy { it.personId }
+                    val currentEvents = dao.moneyEvents(scope).associateBy { it.eventId }
+                    check(expectedPeople.all { currentPeople[it.personId] == it } && expectedEvents.all { currentEvents[it.eventId] == it }) {
+                        "legacy_finance_readback_mismatch"
+                    }
+                } else {
+                    // The legacy file is retired after cutover. Ignore later edits there; the ledger is authoritative.
+                    check(dao.people(scope).size + dao.moneyEvents(scope).size >= prior.itemCount) { "legacy_finance_readback_mismatch" }
+                }
+                return@withTransaction MigrationResult.AlreadyApplied
+            }
+
+            val allPeople = dao.people().associateBy { it.personId }
+            val allEvents = dao.moneyEvents().associateBy { it.eventId }
+            val existingCommands = allEvents.values.associateBy { it.scopeId to it.commandId }
+            expectedPeople.forEach { incoming ->
+                val existing = allPeople[incoming.personId]
+                if (existing == null) dao.insertPerson(incoming)
+                else if (existing != incoming) {
+                    check(existing.displayName == incoming.displayName && existing.scopeId == "local") { "legacy_finance_person_collision" }
+                    check(dao.movePersonScope(incoming.personId, "local", scope) == 1) { "legacy_finance_person_collision" }
+                }
+            }
+            expectedEvents.forEach { incoming ->
+                val byId = allEvents[incoming.eventId]
+                val byCommand = existingCommands.values.firstOrNull { it.commandId == incoming.commandId }
+                if (byCommand != null && byCommand.eventId != incoming.eventId) check(false) { "legacy_finance_command_collision" }
+                if (byId == null) dao.insertMoneyEvent(incoming)
+                else if (byId != incoming) {
+                    val sameSourceRecord = byId.scopeId == "local" && byId.commandId == incoming.commandId &&
+                        byId.personId == incoming.personId && byId.kind == incoming.kind && byId.minorUnits == incoming.minorUnits &&
+                        byId.currency == incoming.currency && byId.source == incoming.source && byId.recordedAt == incoming.recordedAt
+                    check(sameSourceRecord) { "legacy_finance_event_collision" }
+                    check(dao.moveLegacyMoneyEvent(incoming.eventId, "local", scope, incoming.occurredAt, incoming.comment) == 1) {
+                        "legacy_finance_event_collision"
+                    }
+                }
+            }
+            dao.putMigrations(listOf(marker))
+            val copiedPeople = dao.people(scope).associateBy { it.personId }
+            val copiedEvents = dao.moneyEvents(scope).associateBy { it.eventId }
+            check(expectedPeople.all { copiedPeople[it.personId] == it } && expectedEvents.all { copiedEvents[it.eventId] == it }) {
+                "legacy_finance_readback_mismatch"
+            }
+            MigrationResult.Applied(marker.itemCount)
+        }
+    }
+
+    suspend fun matchingFinancePeople(scope: String, name: String): List<PersonRow> {
+        require(name.isNotBlank() && name.length <= 100)
+        val key = VoiceMoneyRules.key(name)
+        return dao.people(scope).filter { VoiceMoneyRules.key(it.displayName) == key }
+    }
+
+    suspend fun financeHistory(scope: String, name: String): FinanceHistory? {
+        val matches = matchingFinancePeople(scope, name)
+        check(matches.size <= 1) { "person_name_ambiguous" }
+        val person = matches.singleOrNull() ?: return null
+        val events = dao.moneyEventsForPerson(scope, person.personId)
+        val remaining = events.filter { it.kind == "debt" }.associate { debt -> debt.eventId to outstandingDebtMinor(scope, debt.eventId) }
+        val voided = events.filter { isFinanceEventVoided(scope, it.eventId) }.map { it.eventId }.toSet()
+        return FinanceHistory(person, events, remaining, voided)
+    }
+
+    suspend fun moneyEvent(scope: String, eventId: String): MoneyEventRow? = dao.moneyEvent(scope, eventId)
+
+    suspend fun outstandingDebtMinor(scope: String, obligationId: String): Long {
+        val debt = dao.moneyEvent(scope, obligationId)?.takeIf { it.kind == "debt" } ?: error("obligation_not_found")
+        val adjustments = dao.adjustments(scope, obligationId)
+        if (isFinanceEventVoided(scope, obligationId)) return 0L
+        val settled = adjustments.fold(0L) { total, adjustment -> when (adjustment.kind) {
+            "settlement", "correction" -> Math.addExact(total, adjustment.minorUnits)
+            "reversal" -> Math.subtractExact(total, adjustment.minorUnits)
+            else -> error("invalid_ledger_event")
+        } }
+        return Math.subtractExact(debt.minorUnits, settled)
+    }
+
+    suspend fun isFinanceEventVoided(scope: String, eventId: String): Boolean =
+        dao.adjustments(scope, eventId).filter { it.kind in setOf("event_void", "event_restore") }
+            .sortedWith(compareBy<MoneyAdjustmentRow> { it.occurredAt.orEmpty() }.thenBy { it.eventId })
+            .fold(false) { state, item -> item.kind == "event_void" }
+
+    suspend fun canReverseFinanceEvent(scope: String, eventId: String): String? {
+        val event = dao.moneyEvent(scope, eventId) ?: return "event_not_found"
+        val adjustments = dao.adjustments(scope, eventId)
+        if (isFinanceEventVoided(scope, eventId)) return "event_already_reversed"
+        if (event.kind == "debt" && adjustments.any { it.kind in setOf("settlement", "correction", "reversal") })
+            return "event_has_settlements"
+        return null
+    }
+
+    suspend fun reverseFinanceEvent(scope: String, eventId: String, commandId: String, reason: String, occurredAt: String): MoneyEventRow = db.withTransaction {
+        val event = dao.moneyEvent(scope, eventId) ?: error("event_not_found")
+        require(reason.isNotBlank() && reason.length <= 500)
+        java.time.Instant.parse(occurredAt)
+        dao.adjustmentForCommand(commandId)?.let { existing ->
+            check(existing.scopeId == scope && existing.obligationId == eventId && existing.kind == "event_void" &&
+                existing.reversesEventId == eventId && existing.reason == reason) { "idempotency_conflict" }
+            return@withTransaction event
+        }
+        check(!isFinanceEventVoided(scope, eventId)) { "event_already_reversed" }
+        if (event.kind == "debt") check(dao.adjustments(scope, eventId).none { it.kind in setOf("settlement", "correction", "reversal") }) {
+            "event_has_settlements"
+        }
+        dao.insertAdjustment(MoneyAdjustmentRow(commandId, commandId, eventId, "event_void", event.minorUnits,
+            event.currency, occurredAt, eventId, reason, scope))
+        event
+    }
+
+    suspend fun allFinanceEvents(scope: String): List<MoneyEventRow> = dao.moneyEvents(scope)
+    suspend fun financePeople(scope: String): List<PersonRow> = dao.people(scope)
+    suspend fun financeAdjustments(scope: String): List<MoneyAdjustmentRow> = dao.adjustments(scope)
+
+    suspend fun recordFinanceEvent(scope: String, personName: String, kind: String, minorUnits: Long, currency: String,
+        source: String, comment: String?, personId: String, eventId: String, commandId: String,
+        recordedAt: String, occurredAt: String): MoneyEventRow = db.withTransaction {
+        require(scope.isNotBlank() && personName.length <= 100 && (kind == "expense" || personName.isNotBlank()))
+        require(kind in setOf("receipt", "debt", "expense") && minorUnits > 0 && currency == "AZN")
+        require(source.isNotBlank() && source.length <= 20_000 && (comment?.length ?: 0) <= 1000)
+        require(eventId.isNotBlank() && eventId.length <= 100 && commandId.isNotBlank() && commandId.length <= 100 && personId.length <= 100)
+        java.time.Instant.parse(recordedAt); java.time.Instant.parse(occurredAt)
+
+        val existingCommand = dao.moneyEventForCommand(scope, commandId)
+        if (existingCommand != null) {
+            val oldPerson = dao.person(scope, existingCommand.personId)
+            val personMatches = if (personName.isBlank()) existingCommand.personId.isBlank()
+                else oldPerson != null && VoiceMoneyRules.key(oldPerson.displayName) == VoiceMoneyRules.key(personName)
+            check(personMatches &&
+                existingCommand.kind == kind && existingCommand.minorUnits == minorUnits && existingCommand.currency == currency &&
+                existingCommand.source == source && existingCommand.comment == comment?.trim()?.ifEmpty { null } &&
+                existingCommand.occurredAt == occurredAt) { "idempotency_conflict" }
+            return@withTransaction existingCommand
+        }
+        val matches = if (personName.isBlank()) emptyList() else dao.people(scope)
+            .filter { VoiceMoneyRules.key(it.displayName) == VoiceMoneyRules.key(personName) }
+        check(matches.size <= 1) { "person_name_ambiguous" }
+        val existingPerson = matches.singleOrNull()
+        val person = existingPerson ?: personName.takeIf { it.isNotBlank() }?.let { PersonRow(personId, it.trim(), scope) }
+        val resolvedPersonId = person?.personId.orEmpty()
+        val incoming = MoneyEventRow(eventId, commandId, resolvedPersonId, kind, minorUnits, currency, source,
+            recordedAt, occurredAt, comment?.trim()?.ifEmpty { null }, scope)
+        val idCollision = dao.moneyEvents().firstOrNull { it.eventId == eventId }
+        check(idCollision == null) { "money_event_id_conflict" }
+        if (person != null) {
+            val existingId = dao.people().firstOrNull { it.personId == person.personId }
+            check(existingId == null || existingId == person) { "money_person_id_conflict" }
+            if (existingPerson == null) dao.insertPerson(person)
+        }
+        dao.insertMoneyEvent(incoming)
+        requireNotNull(dao.scopedMoneyEvent(scope, eventId))
+    }
+
     suspend fun tables(scope: String): List<TableSnapshot> = dao.activeUserTables(scope).map { table ->
         TableSnapshot(table, dao.columns(table.tableId), dao.rows(table.tableId, scope))
     }
+
+    suspend fun deletedRows(scope: String, tableId: String): List<TableDataRow> = dao.deletedRows(tableId, scope)
 
     suspend fun table(scope: String, id: String): UserTableRow? = dao.userTable(scope, id)
     suspend fun tableRow(scope: String, tableId: String, rowId: String): TableDataRow? =
@@ -216,17 +402,25 @@ internal class ProtectedDomainRepository(private val db: AgentDatabase) {
     }
 
     /** Append-only task command path; duplicate app command IDs are rejected atomically. */
-    suspend fun appendTaskEvent(event: TaskEvent): Task = db.withTransaction {
-        require(event.taskId.isNotBlank() && event.scopeId.isNotBlank() && event.actorId.isNotBlank() && event.commandId.isNotBlank())
-        check(dao.taskEventsForCommand(event.commandId).isEmpty()) { "idempotency_conflict" }
-        val current = dao.taskEvents().asSequence().filter { it.taskId == event.taskId && it.scopeId == event.scopeId }
+    suspend fun appendTaskEvent(event: TaskEvent): Task = appendTaskEvents(listOf(event))
+
+    suspend fun appendTaskEvents(events: List<TaskEvent>): Task = db.withTransaction {
+        require(events.isNotEmpty() && events.size <= 10)
+        val first = events.first()
+        require(first.taskId.isNotBlank() && first.scopeId.isNotBlank() && first.actorId.isNotBlank())
+        require(events.all { it.taskId == first.taskId && it.scopeId == first.scopeId && it.actorId == first.actorId && it.commandId.isNotBlank() })
+        require(events.map { it.commandId }.distinct().size == events.size)
+        check(events.none { dao.taskEventsForCommand(it.commandId).isNotEmpty() }) { "idempotency_conflict" }
+        val current = dao.taskEvents(first.taskId, first.scopeId).asSequence()
             .fold<TaskEventRow, Task?>(null) { task, row ->
                 val applied = TaskRules.apply(task, fromTaskRow(row)) as? TaskApply.Applied ?: error("task_history_invalid")
                 applied.task
             }
-        val applied = TaskRules.apply(current, event) as? TaskApply.Applied ?: error("task_conflict_or_invalid")
-        dao.putTaskEvents(listOf(toTaskRow(event)))
-        applied.task
+        val result = events.fold<TaskEvent, Task?>(current) { task, event ->
+            (TaskRules.apply(task, event) as? TaskApply.Applied ?: error("task_conflict_or_invalid")).task
+        }
+        dao.putTaskEvents(events.map(::toTaskRow))
+        requireNotNull(result)
     }
 
     suspend fun exportTable(scope: String, tableId: String): String {
@@ -264,17 +458,35 @@ internal class ProtectedDomainRepository(private val db: AgentDatabase) {
     suspend fun search(scope: String, query: String, kinds: Set<DomainKind> = DomainKind.entries.toSet(), limit: Int = 20): List<DomainHit> {
         require(limit in 1..100 && query.length <= 500)
         val needle = fold(query.trim()); if (needle.isEmpty()) return emptyList()
+        val terms = TOKEN_REGEX.findAll(needle).map { it.value }.filter { it.length > 1 && it !in STOP_WORDS }.distinct().take(20).toList()
+        if (terms.isEmpty()) return emptyList()
         val allowedKinds = kinds.map(DomainKind::name).toSet()
-        val hits = mutableListOf<DomainHit>()
+        val hits = mutableListOf<Pair<Int, DomainHit>>()
         for (row in dao.activeObjects(scope).filter { it.kind in allowedKinds }) {
             val rev = dao.domainRevisions(row.objectId).lastOrNull() ?: continue
             val p = JSONObject(rev.payloadJson); val title = p.optString("title", row.title); val body = p.optString("body").takeIf { it.isNotEmpty() }
             val text = listOfNotNull(title, body).joinToString(" ")
-            val start = text.indexOf(query.trim(), ignoreCase = true)
-            if (start >= 0) hits += DomainHit(row.objectId, DomainKind.valueOf(row.kind), title, row.version,
-                rev.sourceRevisionId, "${row.objectId}:${rev.version}", start, start + query.trim().length, text.take(1000))
+            val tokenMatches = TOKEN_REGEX.findAll(fold(text)).filter { token ->
+                terms.any { term -> token.value == term || (minOf(term.length, token.value.length) >= 4 &&
+                    (term.startsWith(token.value) || token.value.startsWith(term))) }
+            }.toList()
+            if (tokenMatches.isEmpty()) continue
+            val score = tokenMatches.map { it.value }.distinct().size * 100 / terms.size +
+                if (fold(title).contains(needle)) 100 else 0
+            val originalToken = TOKEN_REGEX.findAll(text).firstOrNull { token ->
+                terms.any { term -> fold(token.value) == term || (minOf(term.length, token.value.length) >= 4 &&
+                    (term.startsWith(fold(token.value)) || fold(token.value).startsWith(term))) }
+            } ?: continue
+            val start = originalToken.range.first
+            val snippetStart = (start - 300).coerceAtLeast(0)
+            val snippetEnd = (snippetStart + 1000).coerceAtMost(text.length)
+            val snippet = text.substring(snippetStart, snippetEnd)
+            hits += score to DomainHit(row.objectId, DomainKind.valueOf(row.kind), title, row.version,
+                rev.sourceRevisionId, "${row.objectId}:${rev.version}", start - snippetStart,
+                originalToken.range.last + 1 - snippetStart, snippet)
         }
-        return hits.sortedBy { it.title.lowercase() }.take(limit)
+        return hits.sortedWith(compareByDescending<Pair<Int, DomainHit>> { it.first }.thenBy { it.second.title.lowercase() })
+            .take(limit).map { it.second }
     }
 
     suspend fun context(scope: String, query: String, maxChars: Int = 6000): List<DomainHit> {
@@ -299,6 +511,7 @@ internal class ProtectedDomainRepository(private val db: AgentDatabase) {
             return@withTransaction Math.subtractExact(obligation.minorUnits, settled)
         }
         val obligation = dao.moneyEvent(scope, obligationId)?.takeIf { it.kind == "debt" } ?: error("obligation_not_found")
+        check(!isFinanceEventVoided(scope, obligationId)) { "obligation_voided" }
         require(currency == obligation.currency && isCurrency(currency)) { "currency_mismatch" }
         val prior = dao.adjustments(scope, obligationId)
         val net = prior.fold(0L) { total, item -> when (item.kind) {
@@ -402,6 +615,8 @@ internal class ProtectedDomainRepository(private val db: AgentDatabase) {
         .put("title", title).put("body", body ?: JSONObject.NULL).put("status", status)
         .put("deletedAt", deletedAt ?: JSONObject.NULL).toString()
     private fun fold(value: String) = Normalizer.normalize(value, Normalizer.Form.NFC).lowercase(Locale.ROOT)
+    private val TOKEN_REGEX = Regex("[\\p{L}\\p{N}]+")
+    private val STOP_WORDS = setOf("the", "and", "for", "with", "from", "about", "this", "that", "что", "это", "мне", "меня", "мои", "мой", "моя", "у", "и", "в", "на", "для", "ne", "nə", "mene", "mənə", "mənim", "və", "bir", "bu", "da", "də")
     private fun jsonValue(value: Any?): Any? = when (value) {
         null, JSONObject.NULL -> null
         is JSONObject -> value.keys().asSequence().associateWith { key -> jsonValue(value.get(key)) }
@@ -428,3 +643,11 @@ internal class ProtectedDomainRepository(private val db: AgentDatabase) {
         else -> error("Unknown task event type")
     }
 }
+
+private fun VoiceReceipt.toLedger(scope: String) = MoneyEventRow(eventId = id, commandId = commandId, personId = personId,
+    kind = "receipt", minorUnits = minorUnits, currency = currency, source = source, recordedAt = recordedAt.toString(),
+    occurredAt = occurredAt?.toString(), comment = comment, scopeId = scope)
+
+private fun VoiceDebt.toLedger(scope: String) = MoneyEventRow(eventId = id, commandId = commandId, personId = personId,
+    kind = "debt", minorUnits = minorUnits, currency = currency, source = source, recordedAt = recordedAt.toString(),
+    occurredAt = occurredAt?.toString(), comment = comment, scopeId = scope)

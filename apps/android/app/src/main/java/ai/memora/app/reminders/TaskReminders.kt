@@ -16,20 +16,24 @@ import ai.memora.app.R
 import ai.memora.app.data.EncryptedTaskStore
 import ai.memora.app.data.StoreRead
 import ai.memora.app.data.TaskStoreKey
+import ai.memora.app.data.protectedstore.AgentDatabase
+import ai.memora.app.data.protectedstore.ProtectedMemoryRepository
 import ai.memora.app.domain.Task
 import java.io.File
 import java.time.LocalDateTime
 import java.time.ZoneId
+import kotlinx.coroutines.runBlocking
 
 enum class ReminderStatus { None, Scheduled, Past, Denied, Invalid }
 
 object TaskReminders {
     const val CHANNEL = "task-reminders"
     private const val MAX_LATE_MS = 60 * 60 * 1000L
-    private fun pending(context: Context, id: String, due: Long = 0): PendingIntent {
+    private fun pending(context: Context, id: String, due: Long = 0, scopeId: String? = null): PendingIntent {
         val intent = Intent(context, TaskReminderReceiver::class.java)
             .setData(Uri.Builder().scheme("memora").authority("task").appendPath(id).build())
             .putExtra("due", due)
+        if (scopeId != null) intent.putExtra("scope", scopeId)
         return PendingIntent.getBroadcast(context, 0, intent, PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
     }
 
@@ -59,7 +63,7 @@ object TaskReminders {
         val due = dueAt(task) ?: return ReminderStatus.Invalid
         if (due <= now) return ReminderStatus.Past
         if (!permitted) return ReminderStatus.Denied
-        context.getSystemService(AlarmManager::class.java).setAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, due, pending(context, task.id, due))
+        context.getSystemService(AlarmManager::class.java).setAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, due, pending(context, task.id, due, task.scopeId))
         return ReminderStatus.Scheduled
     }
 
@@ -85,11 +89,17 @@ class TaskReminderReceiver : BroadcastReceiver() {
     override fun onReceive(context: Context, intent: Intent) {
         val id = intent.data?.lastPathSegment ?: return
         val due = intent.getLongExtra("due", 0)
+        val scopeId = intent.getStringExtra("scope")
         val pending = goAsync()
         Thread {
             try {
-                val store = EncryptedTaskStore(File(context.filesDir, "tasks-prototype.bin"), TaskStoreKey::get)
-                val task = (store.load() as? StoreRead.Ready)?.tasks?.find { it.id == id }
+                val task = scopeId?.let { scope ->
+                    runCatching { runBlocking { ProtectedMemoryRepository(AgentDatabase.open(context)).tasks().tasks }
+                        .firstOrNull { it.id == id && it.scopeId == scope } }.getOrNull()
+                } ?: run {
+                    val store = EncryptedTaskStore(File(context.filesDir, "tasks-prototype.bin"), TaskStoreKey::get)
+                    (store.load() as? StoreRead.Ready)?.tasks?.find { it.id == id }
+                }
                 if (task != null) TaskReminders.deliver(context, task, due)
             } catch (_: Exception) { /* Unavailable storage or revoked permission: no notification. */ }
             finally { pending.finish() }
@@ -104,8 +114,12 @@ class TaskRescheduleReceiver : BroadcastReceiver() {
         Thread {
             try {
                 val store = EncryptedTaskStore(File(context.filesDir, "tasks-prototype.bin"), TaskStoreKey::get)
-                val tasks = (store.load() as? StoreRead.Ready)?.tasks ?: return@Thread
-                TaskReminders.reschedule(context, tasks)
+                val legacyTasks = (store.load() as? StoreRead.Ready)?.tasks.orEmpty()
+                val scopeId = context.getSharedPreferences("voice-first-consent", Context.MODE_PRIVATE).getString("scope-id", null)
+                val agentTasks = scopeId?.let { scope ->
+                    runCatching { runBlocking { ProtectedMemoryRepository(AgentDatabase.open(context)).tasks().tasks.filter { it.scopeId == scope } } }.getOrDefault(emptyList())
+                }.orEmpty()
+                TaskReminders.reschedule(context, (legacyTasks + agentTasks).distinctBy { it.id })
             } catch (_: Exception) { /* Retry when the application is opened. */ }
             finally { pending.finish() }
         }.start()

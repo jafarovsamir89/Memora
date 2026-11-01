@@ -14,6 +14,13 @@ import kotlinx.coroutines.withTimeout
 import kotlinx.coroutines.withTimeoutOrNull
 
 /** Ephemeral user input. Never written to AgentRunJournal. */
+enum class AgentInputChannel { VOICE, TEXT }
+
+/** A bounded excerpt of completed dialogue, loaded only when persisted-memory consent is active. */
+data class AgentDialogueMessage(val role: String, val text: String) {
+    init { require(role in setOf("user", "model") && text.isNotBlank() && text.length <= 4_000) }
+}
+
 data class AgentTurnRequest(
     val turnId: String,
     val scopeId: String,
@@ -21,6 +28,8 @@ data class AgentTurnRequest(
     val sourceRevisionId: String?,
     val locale: String,
     val text: String,
+    val channel: AgentInputChannel = AgentInputChannel.VOICE,
+    val conversationHistory: List<AgentDialogueMessage> = emptyList(),
 )
 
 enum class AgentTurnStatus {
@@ -67,6 +76,7 @@ data class AgentModelRequest(
     val userText: String,
     val previousToolResults: List<AgentToolObservation>,
     val tools: List<AgentToolDescriptor>,
+    val conversationHistory: List<AgentDialogueMessage> = emptyList(),
 )
 
 sealed interface AgentModelReply {
@@ -206,7 +216,7 @@ class AgentOrchestrator(
         journal.beginTurn(turn.turnId)
         val observations = ArrayList<AgentToolObservation>()
         val seenCallIds = hashSetOf<String>()
-        var includesStoredMemory = false
+        var includesStoredMemory = turn.conversationHistory.isNotEmpty()
         var failedTools = false
         var uncertainEffect = false
         var terminal = AgentTurnStatus.FAILED
@@ -225,6 +235,7 @@ class AgentOrchestrator(
                     userText = turn.text,
                     previousToolResults = observations.toList(),
                     tools = registry.enabledTools(),
+                    conversationHistory = turn.conversationHistory,
                 )) } ?: return@withTimeout finish(turn, AgentTurnStatus.FAILED,
                     code = "model_timeout", observations = observations)
                 when (reply) {

@@ -134,13 +134,13 @@ fun VoiceFirstScreen(gatewayOverride: AudioNoteGateway? = null, recorderOverride
         dismissButton = { TextButton(onClick = { consentDialog = false }) { Text(s(R.string.task_cancel)) } })
 
     if (memoryConsentDialog) AlertDialog(onDismissRequest = { memoryConsentDialog = false },
-        title = { Text("Gemini yaddaş icazəsi") },
-        text = { Text("Memora yaddaşda axtarış, qeyd, tapşırıq və cədvəl əməliyyatları üçün yalnız seçilmiş qeydləri və alət nəticələrini Google Gemini-yə göndərə bilər. Məlumatlar bu cihazda şifrəli saxlanır. İcazəni verməsəniz, bu funksiyalar işləməyəcək. Bu icazəni istənilən vaxt aşağıdakı düymə ilə söndürə bilərsiniz.") },
+        title = { Text(s(R.string.agent_memory_consent_title)) },
+        text = { Text(s(R.string.agent_memory_consent_body)) },
         confirmButton = { TextButton(onClick = {
             memoryConsentDialog = false
             if (settings.edit().putBoolean("gemini-persisted-memory-v1", true).commit()) memoryConsent = true
             else state = "error"
-        }) { Text("İcazə ver") } },
+        }) { Text(s(R.string.agent_memory_allow)) } },
         dismissButton = { TextButton(onClick = { memoryConsentDialog = false }) { Text(s(R.string.task_cancel)) } })
 
     val label = s(R.string.voice_first_button)
@@ -188,6 +188,6 @@ fun VoiceFirstScreen(gatewayOverride: AudioNoteGateway? = null, recorderOverride
                 settings.edit().putBoolean("gemini-persisted-memory-v1", false).apply()
                 memoryConsent = false
             } else memoryConsentDialog = true
-        }) { Text(if (memoryConsent) "Gemini yaddaş icazəsini söndür" else "Yaddaş və cədvəl alətlərini aktivləşdir") }
+        }) { Text(if (memoryConsent) s(R.string.agent_memory_revoke) else s(R.string.agent_memory_allow)) }
     }
 }
