@@ -59,3 +59,7 @@ A second opt-in test leaves an isolated synthetic database rekeyed while its old
 ## ACT-0074/0075 · current license inventory and owner APK delivery
 
 The resolved release runtime scope contains 132 artifacts / 129 modules. Exact POM/source metadata is mapped for all 129: 126 direct license fields, Guava ListenableFuture via its parent POM, and two SLF4J modules via the upstream MIT page. The full inventory and per-coordinate evidence are in [ANDROID_DEPENDENCY_LICENSE_AUDIT.md](../ANDROID_DEPENDENCY_LICENSE_AUDIT.md). This does not close P1: required copyright/NOTICE texts still need reconciliation against the packaged APK/AAB, Google vendor terms need review, and the release artifact is unsigned. The owner-authorized debug APK 0.6.2-debt-voice (versionCode 8) was installed/launched on Redmi Android 13/API33; no user data was cleared. See ACT-0074/0075.
+
+## ACT-0076 · generated OSS notices
+
+The existing localized license screen now links to Google's OSS Licenses activity; the existing SQLCipher full license remains visible. The current release runtime is 176 artifacts / 169 modules, with exact POM/source mappings in the linked CSV. Debug/release license generation tasks and APK resource checks pass. Manual notice/vendor review, release signing and the non-license P1 fault/recovery gates remain open; this does not authorize user-data cutover.

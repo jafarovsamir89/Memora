@@ -196,6 +196,7 @@
     <string name="working_about">Notes and revisions are stored on this device. Sending to Google starts after your consent. Open Inbox for corrections and export.</string>
     <string name="open_source_licenses">Open-source licenses</string>
     <string name="open_source_licenses_hint">Copyright and license terms for open-source components used by this application.</string>
+    <string name="all_open_source_licenses">All open-source licenses</string>
     <string name="open_source_sqlcipher_components">SQLCipher Community Edition uses LibTomCrypt; SQLite and LibTomCrypt are in the public domain. Other component licenses must be included with distribution materials.</string>
     <string name="working_search_memory">Search my on-device memory</string>
     <string name="working_review_memory">Review and save to memory</string>

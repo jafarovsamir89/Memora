@@ -5,6 +5,7 @@ import android.security.keystore.KeyGenParameterSpec
 import android.security.keystore.KeyProperties
 import android.util.AtomicFile
 import java.io.File
+import java.io.FileOutputStream
 import java.nio.ByteBuffer
 import java.security.KeyStore
 import javax.crypto.Cipher
@@ -35,15 +36,11 @@ internal class DatabaseKeyProvider(
         val wrappingKey = getOrCreateWrappingKey()
         val databaseKey = ByteArray(DATABASE_KEY_BYTES).also(java.security.SecureRandom()::nextBytes)
         val encrypted = encrypt(wrappingKey, databaseKey)
-        val output = envelopeFile.startWrite()
         try {
-            output.write(encrypted)
-            output.fd.sync()
-            envelopeFile.finishWrite(output)
+            writeEnvelope(envelopeFile, encrypted, "Could not persist protected database key")
         } catch (error: Exception) {
-            envelopeFile.failWrite(output)
             databaseKey.fill(0)
-            throw DatabaseKeyUnavailableException("Could not persist protected database key", error)
+            throw error
         } finally {
             encrypted.fill(0)
         }
@@ -59,14 +56,8 @@ internal class DatabaseKeyProvider(
         require(databaseKey.size == DATABASE_KEY_BYTES)
         check(hasAtomicFileContents(envelopeFile)) { "Cannot rotate a database without a current key envelope" }
         val encrypted = encrypt(getExistingWrappingKey(), databaseKey)
-        val output = stagedEnvelopeFile.startWrite()
         try {
-            output.write(encrypted)
-            output.fd.sync()
-            stagedEnvelopeFile.finishWrite(output)
-        } catch (error: Exception) {
-            stagedEnvelopeFile.failWrite(output)
-            throw DatabaseKeyUnavailableException("Could not persist staged database key", error)
+            writeEnvelope(stagedEnvelopeFile, encrypted, "Could not persist staged database key")
         } finally {
             encrypted.fill(0)
         }
@@ -86,17 +77,26 @@ internal class DatabaseKeyProvider(
         } catch (error: Exception) {
             throw DatabaseKeyUnavailableException("Could not read staged database key envelope", error)
         }
-        val output = envelopeFile.startWrite()
         try {
-            output.write(bytes)
-            output.fd.sync()
-            envelopeFile.finishWrite(output)
+            writeEnvelope(envelopeFile, bytes, "Could not promote staged database key")
             stagedEnvelopeFile.delete()
-        } catch (error: Exception) {
-            envelopeFile.failWrite(output)
-            throw DatabaseKeyUnavailableException("Could not promote staged database key", error)
         } finally {
             bytes.fill(0)
+        }
+    }
+
+    /** Treat startWrite, short writes, fsync, and finishWrite failures as one fail-closed operation. */
+    private fun writeEnvelope(file: AtomicFile, bytes: ByteArray, failureMessage: String) {
+        var output: FileOutputStream? = null
+        try {
+            output = file.startWrite()
+            output.write(bytes)
+            output.fd.sync()
+            file.finishWrite(output)
+            output = null
+        } catch (error: Exception) {
+            output?.let { stream -> runCatching { file.failWrite(stream) } }
+            throw DatabaseKeyUnavailableException(failureMessage, error)
         }
     }
 

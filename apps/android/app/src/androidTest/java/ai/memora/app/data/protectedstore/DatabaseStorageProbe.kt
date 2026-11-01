@@ -21,10 +21,117 @@ import kotlinx.coroutines.runBlocking
 import org.json.JSONArray
 import org.json.JSONObject
 import java.io.File
+import java.io.FileOutputStream
+import java.io.IOException
 import java.security.KeyStore
 
 /** Manual, local-only probe. Requires explicit opt-in and writes a synthetic test-named database. */
 object DatabaseStorageProbe {
+    private class StartWriteFailingAtomicFile(baseFile: File) : AtomicFile(baseFile) {
+        override fun startWrite(): FileOutputStream = throw IOException("synthetic ENOSPC")
+    }
+
+    /** Injects no-space-at-startWrite failures before rekey and during staged-key promotion. */
+    fun runEnvelopeWriteFailureProbe(context: Context, permitted: Boolean): Bundle {
+        val result = Bundle()
+        if (!permitted || context.packageName != "ai.memora.app" ||
+            context.applicationInfo.flags and android.content.pm.ApplicationInfo.FLAG_DEBUGGABLE == 0) {
+            result.putString("status", "explicit_debug_synthetic_opt_in_required")
+            return result
+        }
+        val name = "memora-agent-envelope-write-failure-probe.db"
+        val alias = "ai.memora.app.test.envelope-write-failure-probe.v1"
+        val databaseFile = context.getDatabasePath(name)
+        val envelope = AtomicFile(File(context.noBackupFilesDir, "$name.envelope"))
+        val stagedEnvelope = AtomicFile(File(envelope.baseFile.parentFile, "${envelope.baseFile.name}.rotation"))
+        val keyStore = KeyStore.getInstance("AndroidKeyStore").apply { load(null) }
+        var database: AgentDatabase? = null
+        var oldKey: ByteArray? = null
+        var nextKey: ByteArray? = null
+        var stage = "open_initial_database"
+        try {
+            System.loadLibrary("sqlcipher")
+            val provider = DatabaseKeyProvider(context, databaseFile, envelope, keyStore, alias, stagedEnvelope)
+            database = AgentDatabase.openForSyntheticProbe(context, provider, name)
+            stage = "write_synthetic_marker"
+            oldKey = provider.loadOrCreate()
+            database!!.openHelper.writableDatabase.execSQL(
+                "INSERT INTO agent_command_journal (commandId, digest, status, targetVersionsJson) VALUES (?, ?, ?, ?)",
+                arrayOf("synthetic-envelope-write-failure-marker", "c".repeat(64), "COMMITTED", "[]"),
+            )
+            nextKey = ByteArray(32).also(java.security.SecureRandom()::nextBytes)
+
+            stage = "inject_stage_write_failure"
+            val stagedFailureProvider = DatabaseKeyProvider(
+                context, databaseFile, envelope, keyStore, alias,
+                StartWriteFailingAtomicFile(stagedEnvelope.baseFile),
+            )
+            val stageWriteFailedClosed = runCatching { stagedFailureProvider.stageRotation(nextKey!!) }
+                .exceptionOrNull() is DatabaseKeyUnavailableException
+            val oldKeyStillReadsDatabase = provider.loadOrCreate().contentEquals(oldKey) &&
+                database!!.openHelper.readableDatabase.query(
+                    "SELECT commandId FROM agent_command_journal WHERE commandId = 'synthetic-envelope-write-failure-marker'",
+                ).use { it.moveToFirst() }
+            result.putBoolean("stage_envelope_write_failure_refused_before_rekey", stageWriteFailedClosed)
+            result.putBoolean("old_key_and_synthetic_database_survived_stage_failure", oldKeyStillReadsDatabase)
+            result.putBoolean("failed_stage_envelope_was_not_created", !stagedEnvelope.baseFile.exists())
+            check(stageWriteFailedClosed && oldKeyStillReadsDatabase && !stagedEnvelope.baseFile.exists())
+
+            stage = "perform_sqlcipher_rekey"
+            provider.stageRotation(nextKey!!)
+            (database!!.openHelper.writableDatabase as net.zetetic.database.sqlcipher.SQLiteDatabase)
+                .changePassword(nextKey!!)
+            database!!.close()
+            database = null
+            oldKey!!.fill(0)
+            oldKey = null
+
+            stage = "inject_promotion_write_failure"
+            val failedPromotionProvider = DatabaseKeyProvider(
+                context, databaseFile, StartWriteFailingAtomicFile(envelope.baseFile), keyStore, alias, stagedEnvelope,
+            )
+            val promotionFailure = runCatching {
+                AgentDatabase.openForSyntheticProbe(context, failedPromotionProvider, name)
+            }.exceptionOrNull()
+            val stagedKeySurvivedPromotionFailure = promotionFailure is DatabaseKeyUnavailableException &&
+                stagedEnvelope.baseFile.exists()
+            result.putBoolean("promotion_write_failure_preserved_staged_recovery_key", stagedKeySurvivedPromotionFailure)
+
+            stage = "startup_recovery_after_promotion_failure"
+            database = AgentDatabase.openForSyntheticProbe(context, provider, name)
+            val markerSurvived = database!!.openHelper.readableDatabase.query(
+                "SELECT commandId FROM agent_command_journal WHERE commandId = 'synthetic-envelope-write-failure-marker'",
+            ).use { it.moveToFirst() }
+            val recoveredKey = provider.loadOrCreate()
+            val recoveryCompleted = recoveredKey.contentEquals(nextKey) && provider.loadStagedRotation() == null
+            recoveredKey.fill(0)
+            result.putBoolean("startup_recovered_after_promotion_write_failure", recoveryCompleted)
+            result.putBoolean("synthetic_marker_survived", markerSurvived)
+            check(stageWriteFailedClosed && oldKeyStillReadsDatabase && stagedKeySurvivedPromotionFailure &&
+                markerSurvived && recoveryCompleted)
+            result.putString("status", "passed")
+            result.putBoolean("stage_envelope_write_failure_refused_before_rekey", true)
+            result.putBoolean("old_key_and_synthetic_database_survived_stage_failure", true)
+            result.putBoolean("promotion_write_failure_preserved_staged_recovery_key", true)
+            result.putBoolean("startup_recovered_after_promotion_write_failure", true)
+            result.putBoolean("synthetic_marker_survived", true)
+        } catch (error: Exception) {
+            result.putString("status", "failed")
+            result.putString("error_type", error.javaClass.simpleName)
+            result.putString("failure_stage", stage)
+            result.putString("failure_reason", "synthetic_atomic_file_write_failure_recovery_not_verified")
+        } finally {
+            runCatching { database?.close() }
+            oldKey?.fill(0)
+            nextKey?.fill(0)
+            context.deleteDatabase(name)
+            listOf(envelope.baseFile, File(envelope.baseFile.path + ".bak"), stagedEnvelope.baseFile,
+                File(stagedEnvelope.baseFile.path + ".bak")) .forEach { it.delete() }
+            keyStore.deleteEntry(alias)
+        }
+        return result
+    }
+
     fun run(context: Context, permitted: Boolean): Bundle {
         val result = Bundle()
         if (!permitted ||

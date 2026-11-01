@@ -196,6 +196,7 @@
     <string name="working_about">Qeydlər və versiyaları cihazda saxlanır. Google-a ötürmə razılığınızdan sonra başlayır. Düzəliş və ixrac üçün Gələnlər bölməsini açın.</string>
     <string name="open_source_licenses">Açıq mənbə lisenziyaları</string>
     <string name="open_source_licenses_hint">Bu tətbiqdə istifadə edilən açıq mənbə komponentlərinin müəllif hüquqları və lisenziya şərtləri.</string>
+    <string name="all_open_source_licenses">Bütün açıq mənbə lisenziyaları</string>
     <string name="open_source_sqlcipher_components">SQLCipher Community Edition LibTomCrypt-dən istifadə edir; SQLite və LibTomCrypt ictimai domenə buraxılıb. Digər komponentlərin lisenziyaları paylama materiallarında göstərilməlidir.</string>
     <string name="working_search_memory">Cihazdakı yaddaşımda axtar</string>
     <string name="working_review_memory">Yoxla və yaddaşa əlavə et</string>

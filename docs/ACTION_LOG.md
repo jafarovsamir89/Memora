@@ -1,5 +1,14 @@
 # Memora — лог действий
 
+## ACT-0076 · 2026-11-01 · generated OSS notices in the existing license screen
+
+**Изменения:** подключены официальный Google OSS Licenses Gradle plugin 0.13.0 и SDK 17.5.1. Текущий экран лицензий сохраняет полный SQLCipher Community текст и показывает локализованную AZ/RU/EN кнопку для полного списка зависимостей. `UiShellTest` проходит путь из About → Open-source licenses и нажимает новую кнопку.
+
+**Проверки:** `:app:testDebugUnitTest :app:assembleDebug :app:assembleDebugAndroidTest :app:lintDebug :app:assembleRelease --no-daemon --max-workers=2` — BUILD SUCCESSFUL; JUnit XML 199/199 без failures/errors/skips. Повторный полный unit suite после изменения UI-теста также прошёл 199/199. Gradle debug/release OSS-license tasks успешны; `aapt2 dump resources` подтвердил `raw/third_party_license_metadata` и `raw/third_party_licenses` в debug и unsigned release APK. Release runtime сейчас 176 artifact files /169 modules; CSV содержит map всех 169: 166 direct POM declarations, один Guava parent inheritance, two upstream SLF4J mappings и SQLCipher generic-label mapping. Debug APK 29,898,293 bytes установлена на Redmi Android 13/API33 через `adb install -r`, приложение запущено. Прямой adb-запуск not-exported SDK activity ожидаемо отклонён Android; UI path проверен Robolectric, физический tap на телефоне отдельно не подтверждён. Gemini, микрофон и пользовательские данные не использовались.
+
+**Открыто:** P1 остаётся открытым: ручная сверка copyright/NOTICE и vendor terms для релизного пакета, release signing, power-loss/disk-fault/uninstall/restore. Generated resources и POM mapping не доказывают полную лицензионную приёмку.
+
+
 ## ACT-0074 · 2026-11-01 · release dependency license inventory
 
 **Проверка:** создан inventory из фактического Gradle resolved artifact set `:app:releaseRuntimeClasspath`: 132 артефакта, 129 уникальных runtime modules. В локальном Gradle cache изначально найдено 84 POM; точные POM остальных 45 модулей получены с Google Maven/Maven Central. Теперь все 129 координат имеют POM; 126 объявляют лицензию непосредственно, три не имеют собственного license field. Для `com.google.guava:listenablefuture:1.0` проверена Apache 2.0 декларация parent POM; для двух SLF4J модулей сверена upstream MIT license page. Обнаружены Apache/MIT-0/BSD-3-Clause notices и Google Android SDK / Play Core / Play Integrity terms. SQLCipher generic POM label сопоставлен с уже опубликованной Community notice screen.
@@ -668,4 +677,9 @@ Python 3.11 venv с `tests/agent_contracts/requirements.txt`: **66/66**. Отд�
 
 **Постскриптум Git ACT-0069:** коммит `95552673346022544c7ed45c88a69d80d78e8454` (`test: verify key envelope corruption recovery`) отправлен в `origin/main`. После `git fetch origin main`, `git rev-parse HEAD` и `git ls-remote origin refs/heads/main` совпали на указанном hash; рабочее дерево чистое `main...origin/main`.
 
-**Git handoff ACT-0074/0075:** documentation and the complete 129-module dependency license map were committed as 15a5a955e9a57e04dddc8cb487e90214bf6c7e7 (docs: record APK install and runtime license map) and pushed to origin/main. git fetch, local HEAD, and git ls-remote confirmed matching local/remote hashes; working tree was clean main...origin/main.
+**Git handoff ACT-0074/0075:** documentation and the complete 129-module dependency license map were committed as b15a5a955e9a57e04dddc8cb487e90214bf6c7e7 (docs: record APK install and runtime license map) and pushed to origin/main. git fetch, local HEAD, and git ls-remote confirmed matching local/remote hashes; working tree was clean main...origin/main.
+
+
+### 2026-11-01 - ACT-0077: debug APK installed on Redmi
+
+At the owner's request, `:app:assembleDebug` completed with `BUILD SUCCESSFUL`; the fresh APK installed via `adb install -r` (`Success`). On the connected Redmi running Android 13, package details report `versionCode=8`, `versionName=0.6.2-debt-voice`; `ai.memora.app/.MainActivity` is resumed. The app package was updated without clearing user data. Synthetic Redmi instrumentation `allowSyntheticEnvelopeWriteFailureProbe=true` also passed: staged write failure refused before rekey, old key/database preserved; primary-envelope promotion write failure kept the staged recovery key; subsequent startup recovered the synthetic marker (`status=passed`). No Gemini or owner data was used. These results verify only APK delivery/launch and this named synthetic recovery path; they do not pass the remaining P1/P7-P9 gates or confirm manual on-device acceptance of the license screen.

@@ -1,7 +1,9 @@
 package ai.memora.app
 
+import android.content.Intent
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
@@ -15,16 +17,27 @@ import ai.memora.app.ui.ScreenColumn
 import ai.memora.app.ui.ScreenHeading
 import ai.memora.app.ui.colors
 import ai.memora.app.ui.s
+import com.google.android.gms.oss.licenses.v2.OssLicensesMenuActivity
 
 @Composable
 internal fun OpenSourceLicensesScreen() {
     val context = LocalContext.current
+    val allLicensesTitle = s(R.string.all_open_source_licenses)
     val license = remember(context) {
         context.resources.openRawResource(R.raw.sqlcipher_community_license)
             .bufferedReader(Charsets.UTF_8).use { it.readText() }
     }
     ScreenColumn {
         ScreenHeading(s(R.string.open_source_licenses), s(R.string.open_source_licenses_hint))
+        OutlinedButton(
+            onClick = {
+                OssLicensesMenuActivity.setActivityTitle(allLicensesTitle)
+                context.startActivity(Intent(context, OssLicensesMenuActivity::class.java))
+            },
+            modifier = Modifier.padding(bottom = 24.dp).testTag("all_open_source_licenses"),
+        ) {
+            Text(allLicensesTitle)
+        }
         Text(
             text = "SQLCipher Community Edition — Copyright (c) 2008-2026, ZETETIC, LLC",
             style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.SemiBold),

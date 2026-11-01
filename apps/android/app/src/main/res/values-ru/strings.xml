@@ -196,6 +196,7 @@
     <string name="working_about">Записи и их версии хранятся на устройстве. Передача Google начинается после вашего согласия. Для исправления и экспорта откройте Входящие.</string>
     <string name="open_source_licenses">Лицензии открытых компонентов</string>
     <string name="open_source_licenses_hint">Авторские права и условия лицензий компонентов с открытым исходным кодом, используемых приложением.</string>
+    <string name="all_open_source_licenses">Все лицензии открытых компонентов</string>
     <string name="open_source_sqlcipher_components">SQLCipher Community Edition использует LibTomCrypt; SQLite и LibTomCrypt находятся в общественном достоянии. Лицензии остальных компонентов должны быть указаны в материалах поставки.</string>
     <string name="working_search_memory">Найти в моей памяти на устройстве</string>
     <string name="working_review_memory">Проверить и сохранить в память</string>

@@ -458,4 +458,12 @@ ADR-001/ADR-002 исходят из локального нативного Andr
 
 По разрешению владельца установлена текущая debug-сборка командой adb install -r (Success) и запущен пакет ai.memora.app. Проверены versionCode 8 / versionName 0.6.2-debt-voice, Android 13/API33. Пользовательские данные не очищались. Это подтверждает доставку текущей тестовой сборки, не release signing и не P1 acceptance.
 
-**Git handoff ACT-0074/0075:** commit 15a5a955e9a57e04dddc8cb487e90214bf6c7e7 pushed to origin/main; fetch and git ls-remote matched local HEAD; working tree was clean. Remaining work is still P1 gate acceptance, not downstream runtime enablement.
+**Git handoff ACT-0074/0075:** commit b15a5a955e9a57e04dddc8cb487e90214bf6c7e7 pushed to origin/main; fetch and git ls-remote matched local HEAD; working tree was clean. Remaining work is still P1 gate acceptance, not downstream runtime enablement.
+
+### 2026-11-01 — ACT-0076: in-app OSS license viewer
+
+Подключены Google OSS Licenses plugin/SDK; прежний экран AZ/RU/EN теперь даёт переход на полный generated license list и сохраняет SQLCipher Community license. Debug/release Gradle license tasks успешны, `aapt2 dump resources` нашёл metadata и license payload в обеих APK. Полный unit suite — 199/199; UI test кликает новый путь. На Redmi обновлён debug APK 0.6.2-debt-voice и запущен. Текущий release runtime — 176 artifacts / 169 modules; CSV map обновлена целиком. Прямой adb-запуск activity запрещён, поскольку SDK экран не exported; реальный on-device tap не подтверждён. P1 остаётся открытым по manual notice/vendor review, release signing и storage fault/recovery gates.
+
+### ACT-0077 - device APK update
+
+The owner authorized installing the new build after removing the old APK. The connected Redmi (Android 13) received the freshly built debug APK through `adb install -r`, without clearing user data. Version 0.6.2-debt-voice/versionCode 8 was confirmed and `MainActivity` launched. Continue P1 with manual reconciliation of copyright/NOTICE texts and Google vendor terms, plus the remaining disk-failure and backup/restore checks; after P1 acceptance proceed through P3-P9. The same package also passed `allowSyntheticEnvelopeWriteFailureProbe=true` on Redmi: staged-envelope write failure refused before rekey with old key/DB intact; promotion write failure preserved the staged key; next startup recovered the synthetic marker. No Gemini, microphone, or user data was used. This install/test does not constitute overall acceptance or close P1.

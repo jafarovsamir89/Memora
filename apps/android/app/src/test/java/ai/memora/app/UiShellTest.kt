@@ -58,6 +58,7 @@ class UiShellTest {
         compose.onNodeWithTag("sqlcipher_license_text").assertExists()
         compose.onNodeWithText("SQLCipher Community Edition — Copyright (c) 2008-2026, ZETETIC, LLC").assertExists()
         compose.onNodeWithText("Redistribution and use in source and binary forms", substring = true).assertExists()
+        compose.onNodeWithTag("all_open_source_licenses").assertIsDisplayed().performClick()
     }
 
     @Before fun setupCaptureStore() {
