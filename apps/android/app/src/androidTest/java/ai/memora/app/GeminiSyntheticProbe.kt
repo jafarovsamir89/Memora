@@ -38,6 +38,8 @@ class GeminiSyntheticProbe : Instrumentation() {
     private var orthographyOnly = false
     private var intentOnly = false
     private var functionCallingOnly = false
+    private var processDeathProbe: String? = null
+    private var processDeathPermitted = false
     private var speechOnly = false
     private var playbackOnly = false
     private var onlyCase: String? = null
@@ -51,6 +53,8 @@ class GeminiSyntheticProbe : Instrumentation() {
         orthographyOnly = arguments?.getString("orthographyOnly") == "true"
         intentOnly = arguments?.getString("intentOnly") == "true"
         functionCallingOnly = arguments?.getString("functionCallingOnly") == "true"
+        processDeathProbe = arguments?.getString("processDeathProbe")?.takeIf { it in setOf("prepare", "verify") }
+        processDeathPermitted = arguments?.getString("allowSyntheticProcessDeathProbe") == "true"
         speechOnly = arguments?.getString("speechOnly") == "true"
         playbackOnly = arguments?.getString("playbackOnly") == "true"
         onlyCase = arguments?.getString("case")?.takeIf { it in setOf("az", "ru", "mixed") }
@@ -66,6 +70,19 @@ class GeminiSyntheticProbe : Instrumentation() {
         if (migrationProbe) {
             val migrationResults = DatabaseStorageProbe.runMigration(targetContext, permitted = true)
             finish(if (migrationResults.getString("status") == "passed") Activity.RESULT_OK else Activity.RESULT_CANCELED, migrationResults)
+            return
+        }
+        if (processDeathProbe != null) {
+            if (!processDeathPermitted) {
+                finish(Activity.RESULT_CANCELED, Bundle().apply { putString("status", "explicit_opt_in_required") })
+                return
+            }
+            val crashResults = if (processDeathProbe == "prepare") {
+                DatabaseStorageProbe.prepareProcessDeathProbe(targetContext, permitted = true)
+            } else {
+                DatabaseStorageProbe.verifyProcessDeathProbe(targetContext, permitted = true)
+            }
+            finish(if (crashResults.getString("status") == "passed" || crashResults.getString("status") == "prepared") Activity.RESULT_OK else Activity.RESULT_CANCELED, crashResults)
             return
         }
         if (!permitted) { finish(Activity.RESULT_CANCELED, Bundle().apply { putString("status", "explicit_opt_in_required") }); return }

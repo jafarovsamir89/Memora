@@ -589,3 +589,21 @@ Python 3.11 venv с `tests/agent_contracts/requirements.txt`: **66/66**. Отд�
 **Статус:** P1 остаётся открытым: process kill/crash/disk-fault recovery, key rotation/recovery/uninstall/restore, operational backup/restore, license review и signed release package. P3–P6 всё ещё не имеют общего UI/agent handler path и закрытой acceptance. P7 live function call и общий voice/text path не подтверждены. P8 fault/recovery/consent matrix и P9 независимый holdout + 7-дневная приёмка владельца не выполнены. Никакие пользовательские workflows/данные не переключены/не мигрировали; реальные финансы, архив, аудио/транскрипты не передавались облачному API.
 
 **Git:** пакет записан коммитом `ee87b6a3c993313c16bb52bf7a613977204e1d40` и отправлен в `origin/main`. Перед записью прошли `git diff --check`, secret-pattern scan (0 совпадений), сверка 169 ссылок в изменённых Markdown (0 отсутствующих) и проверка 251 уникального TODO ID. После push `git fetch origin main`, локальный HEAD и `git ls-remote` совпали; дерево было чистым `main...origin/main`.
+
+## ACT-0067 · 2026-11-01 · synthetic process-death recovery на API 26 и Redmi
+
+**Изменение:** добавлен отдельный opt-in instrumentation host-driven probe. Он создаёт только named synthetic protected DB/envelope/Keystore alias, фиксирует committed row, открывает транзакцию со второй uncommitted row, оставляет процесс живым до host force-stop; при отдельном запуске следующего процесса проверяет сохранение committed row, rollback uncommitted row, encrypted bytes и удаляет только свои synthetic files/key. Ни UI, ни legacy workflows, ни пользовательские записи не затрагиваются.
+
+**Проверка:** API26 emulator и физический Redmi Android13 прошли `committed_transaction_survived_process_death=true`, `uncommitted_transaction_rolled_back=true`, `reopened_database_has_no_plaintext_marker=true`; process был принудительно остановлен во время открытой транзакции и проверка запущена вторым instrumentation process. Redmi app заново запущен после проверки (`Status: ok`). Полный Android Gradle пакет после изменения — BUILD SUCCESSFUL; unit XML 198/198 без failures/errors/skips; lint/debug APK/instrumentation APK прошли.
+
+**Граница результата:** тест доказывает указанную SQLite/SQLCipher транзакционную recovery после Android force-stop на двух окружениях. Он не доказывает hard hardware crash, отключение питания, disk-full/corruption, WAL durability, restore/uninstall или key rotation; WAL остаётся disabled. Эти P1 gates остаются открытыми, как и P3–P9.
+
+**Git на момент записи:** code/docs ещё не закоммичены; после review/secret scan и `git diff --check` синхронизировать coherent package и затем сверить local/remote HEAD.
+
+## ACT-0068 · 2026-11-01 · corrupted SQLCipher database fail-closed
+
+`DatabaseStorageProbe` теперь создаёт отдельную test DB с synthetic row, сохраняет encrypted fixture bytes в памяти, меняет один байт после закрытия соединения, пытается открыть/прочитать испорченную БД и сверяет, что повреждённый файл не был перезаписан. Затем исходный ciphertext восстанавливается только для подтверждения строки; все byte arrays обнуляются, временная DB/envelope/test Keystore alias удаляются в `finally`.
+
+На Redmi Android13 и API26 emulator probe прошёл: `database_corruption_refused_without_overwrite=true`; вместе с этим в том же прогоне прошли wrong/missing key/envelope fail-closed, disabled WAL, no plaintext, correct-key reopen. `:app:assembleDebugAndroidTest :app:lintDebug --no-daemon` — BUILD SUCCESSFUL. Это не закрывает hard crash/power loss/disk-full и key rotation/recovery/restore gates. Пользовательские файлы/данные не затрагивались.
+
+**Git на момент записи:** код/docs ACT-0067/0068 ещё локальные; перед передачей выполнить secret scan, `git diff --check`, сверку локальных Markdown ссылок и TODO IDs, затем commit/push с проверкой обоих hashes.

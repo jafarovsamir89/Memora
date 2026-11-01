@@ -3,6 +3,7 @@ package ai.memora.app.data.protectedstore
 import android.content.Context
 import android.os.Bundle
 import android.util.AtomicFile
+import android.util.Log
 import androidx.room.Room
 import net.zetetic.database.sqlcipher.SupportOpenHelperFactory
 import ai.memora.app.data.EncryptedCaptureStore
@@ -84,6 +85,7 @@ object DatabaseStorageProbe {
 
             val keyLossRefused = verifyMissingWrappingKeyFailsClosed(context)
             val missingEnvelopeRefused = verifyMissingEnvelopeFailsClosed(context)
+            val corruptionFailsClosed = verifyCorruptDatabaseFailsClosed(context)
 
             database = open(context, databaseName, secondKey)
             check(readCommandId(database) == "synthetic-probe-command")
@@ -99,6 +101,7 @@ object DatabaseStorageProbe {
             result.putBoolean("wrong_key_rejected_without_data_loss", true)
             result.putBoolean("missing_wrapping_key_refused_without_data_loss", keyLossRefused)
             result.putBoolean("missing_envelope_refused_without_data_loss", missingEnvelopeRefused)
+            result.putBoolean("database_corruption_refused_without_overwrite", corruptionFailsClosed)
             result.putBoolean("closed_database_has_no_plaintext_marker", true)
             result.putBoolean("wal_remains_disabled_and_auxiliary_files_have_no_plaintext_marker", true)
         } catch (error: Exception) {
@@ -116,6 +119,90 @@ object DatabaseStorageProbe {
             context.deleteDatabase(databaseName)
             envelope.baseFile.delete()
             keyStore.deleteEntry(wrappingAlias)
+        }
+        return result
+    }
+
+    /** Host-driven synthetic process-death probe; leave DB open with an uncommitted transaction until force-stop. */
+    fun prepareProcessDeathProbe(context: Context, permitted: Boolean): Bundle {
+        val result = Bundle()
+        if (!permitted || context.packageName != "ai.memora.app" ||
+            context.applicationInfo.flags and android.content.pm.ApplicationInfo.FLAG_DEBUGGABLE == 0) {
+            result.putString("status", "explicit_debug_synthetic_opt_in_required")
+            return result
+        }
+        val name = "memora-agent-process-death-probe.db"
+        val alias = "ai.memora.app.test.process-death-probe.v1"
+        val envelope = AtomicFile(File(context.noBackupFilesDir, "$name.envelope"))
+        var database: ProtectedProbeDatabase? = null
+        try {
+            System.loadLibrary("sqlcipher")
+            val store = KeyStore.getInstance("AndroidKeyStore").apply { load(null) }
+            val key = DatabaseKeyProvider(context, context.getDatabasePath(name), envelope, store, alias).loadOrCreate()
+            database = open(context, name, key)
+            val sql = database.openHelper.writableDatabase
+            sql.execSQL(
+                "INSERT INTO agent_command_journal (commandId, digest, status, targetVersionsJson) VALUES (?, ?, ?, ?)",
+                arrayOf("synthetic-process-death-committed", "d".repeat(64), "COMMITTED", "[]"),
+            )
+            sql.beginTransaction()
+            sql.execSQL(
+                "INSERT INTO agent_command_journal (commandId, digest, status, targetVersionsJson) VALUES (?, ?, ?, ?)",
+                arrayOf("synthetic-process-death-uncommitted", "e".repeat(64), "PREPARED", "[]"),
+            )
+            result.putString("status", "prepared")
+            result.putBoolean("committed_synthetic_row_written", true)
+            result.putBoolean("uncommitted_synthetic_row_open", true)
+            Log.i("MemoraStorageProbe", "P1_PROCESS_DEATH_PROBE_READY")
+            while (true) Thread.sleep(1_000)
+        } catch (error: Exception) {
+            result.putString("status", "prepare_failed")
+            result.putString("error_type", error.javaClass.simpleName)
+            result.putString("failure_reason", "synthetic_process_death_fixture_not_prepared")
+            runCatching { database?.close() }
+        }
+        return result
+    }
+
+    /** Reopen the process-death fixture, prove transaction rollback/durability, then remove only named test files. */
+    fun verifyProcessDeathProbe(context: Context, permitted: Boolean): Bundle {
+        val result = Bundle()
+        if (!permitted || context.packageName != "ai.memora.app" ||
+            context.applicationInfo.flags and android.content.pm.ApplicationInfo.FLAG_DEBUGGABLE == 0) {
+            result.putString("status", "explicit_debug_synthetic_opt_in_required")
+            return result
+        }
+        val name = "memora-agent-process-death-probe.db"
+        val alias = "ai.memora.app.test.process-death-probe.v1"
+        val databaseFile = context.getDatabasePath(name)
+        val envelope = AtomicFile(File(context.noBackupFilesDir, "$name.envelope"))
+        val store = KeyStore.getInstance("AndroidKeyStore").apply { load(null) }
+        var database: ProtectedProbeDatabase? = null
+        try {
+            System.loadLibrary("sqlcipher")
+            val key = DatabaseKeyProvider(context, databaseFile, envelope, store, alias).loadOrCreate()
+            database = open(context, name, key)
+            val committedSurvived = hasCommand(database, "synthetic-process-death-committed")
+            val uncommittedRolledBack = !hasCommand(database, "synthetic-process-death-uncommitted")
+            database.close(); database = null; key.fill(0)
+            val bytes = databaseFile.readBytes()
+            val noPlaintextMarker = !bytes.containsAscii("synthetic-process-death-committed") &&
+                !bytes.containsAscii("synthetic-process-death-uncommitted")
+            bytes.fill(0)
+            check(committedSurvived && uncommittedRolledBack && noPlaintextMarker)
+            result.putString("status", "passed")
+            result.putBoolean("committed_transaction_survived_process_death", true)
+            result.putBoolean("uncommitted_transaction_rolled_back", true)
+            result.putBoolean("reopened_database_has_no_plaintext_marker", true)
+        } catch (error: Exception) {
+            result.putString("status", "failed")
+            result.putString("error_type", error.javaClass.simpleName)
+            result.putString("failure_reason", "synthetic_process_death_recovery_not_verified")
+        } finally {
+            runCatching { database?.close() }
+            context.deleteDatabase(name)
+            envelope.baseFile.delete()
+            store.deleteEntry(alias)
         }
         return result
     }
@@ -516,6 +603,12 @@ object DatabaseStorageProbe {
             cursor.getString(0)
         }
 
+    private fun hasCommand(database: ProtectedProbeDatabase, commandId: String): Boolean =
+        database.openHelper.readableDatabase.query(
+            "SELECT commandId FROM agent_command_journal WHERE commandId = ?",
+            arrayOf(commandId),
+        ).use { it.moveToFirst() }
+
     private fun verifyMissingWrappingKeyFailsClosed(context: Context): Boolean {
         val name = "memora-agent-probe-lost-wrap-key.db"
         val alias = "ai.memora.app.test.lost-wrap-key.v1"
@@ -576,6 +669,61 @@ object DatabaseStorageProbe {
             return true
         } finally {
             runCatching { database?.close() }
+            context.deleteDatabase(name)
+            envelope.baseFile.delete()
+            store.deleteEntry(alias)
+        }
+    }
+
+    private fun verifyCorruptDatabaseFailsClosed(context: Context): Boolean {
+        val name = "memora-agent-probe-corrupt-db.db"
+        val alias = "ai.memora.app.test.corrupt-db.v1"
+        val envelope = AtomicFile(File(context.noBackupFilesDir, "$name.envelope"))
+        val databaseFile = context.getDatabasePath(name)
+        val store = KeyStore.getInstance("AndroidKeyStore").apply { load(null) }
+        var database: ProtectedProbeDatabase? = null
+        var key: ByteArray? = null
+        var original: ByteArray? = null
+        var corrupted: ByteArray? = null
+        try {
+            key = DatabaseKeyProvider(context, databaseFile, envelope, store, alias).loadOrCreate()
+            database = open(context, name, key)
+            database.openHelper.writableDatabase.execSQL(
+                "INSERT INTO agent_command_journal (commandId, digest, status, targetVersionsJson) VALUES (?, ?, ?, ?)",
+                arrayOf("synthetic-corruption-marker", "f".repeat(64), "COMMITTED", "[]"),
+            )
+            database.close(); database = null
+            original = databaseFile.readBytes()
+            corrupted = original!!.copyOf().also { bytes ->
+                check(bytes.size > 512)
+                val offset = bytes.size / 2
+                bytes[offset] = (bytes[offset].toInt() xor 0x5a).toByte()
+            }
+            databaseFile.writeBytes(corrupted!!)
+            val openAttempt = runCatching {
+                val corruptDatabase = open(context, name, key!!)
+                try {
+                    check(hasCommand(corruptDatabase, "synthetic-corruption-marker"))
+                } finally {
+                    corruptDatabase.close()
+                }
+            }
+            val corruptionWasRejected = openAttempt.isFailure
+            val corruptedBytesStayedUnchanged = databaseFile.readBytes().useBytes { it.contentEquals(corrupted!!) }
+            check(corruptionWasRejected && corruptedBytesStayedUnchanged)
+
+            databaseFile.writeBytes(original!!)
+            database = open(context, name, key!!)
+            val originalDataSurvived = database.openHelper.readableDatabase.query(
+                "SELECT commandId FROM agent_command_journal WHERE commandId = 'synthetic-corruption-marker'",
+            ).use { it.moveToFirst() }
+            check(originalDataSurvived)
+            return true
+        } finally {
+            runCatching { database?.close() }
+            original?.fill(0)
+            corrupted?.fill(0)
+            key?.fill(0)
             context.deleteDatabase(name)
             envelope.baseFile.delete()
             store.deleteEntry(alias)
