@@ -154,6 +154,7 @@ fun MemoraApp(initialRoute: String = "home", initialTheme: String = "system", ca
                 "inbox" -> R.string.inbox; "finance" -> R.string.finance; "people" -> R.string.people
                 "projects" -> R.string.projects; "settings" -> R.string.settings; "chat" -> R.string.chat
                 "voice_memory" -> R.string.voice_memory_title
+                "licenses" -> R.string.open_source_licenses
                 else -> R.string.app_name
             }
 
@@ -215,6 +216,7 @@ fun MemoraApp(initialRoute: String = "home", initialTheme: String = "system", ca
                             "tasks" -> ScreenColumn { ScreenHeading(s(R.string.tasks_title), s(R.string.working_tasks_hint)); TaskPrototype(taskStore) }
                             "more" -> MoreScreen(navigate, { about = true })
                             "voice_memory" -> VoiceMemoryScreen()
+                            "licenses" -> OpenSourceLicensesScreen()
                             "inbox" -> InboxScreen(captureState.captures, captureState.loading, captureState.error && !captureState.ready,
                                 captureState.managementError || captureExportError,
                                 captureState.ready && (!captureState.error || captureState.limitReached) && !captureState.dirty && !captureState.saving &&
@@ -292,6 +294,9 @@ fun MemoraApp(initialRoute: String = "home", initialTheme: String = "system", ca
                     BrandMark()
                     Text(s(R.string.about), style = MaterialTheme.typography.headlineMedium, color = colors.ink)
                     Text(s(R.string.working_about), style = MaterialTheme.typography.bodyLarge, color = colors.muted)
+                    OutlinedButton({ about = false; navigate("licenses") }, Modifier.fillMaxWidth().heightIn(min = 52.dp).testTag("open_source_licenses")) {
+                        Text(s(R.string.open_source_licenses))
+                    }
                     Button({ about = false }, Modifier.fillMaxWidth().heightIn(min = 52.dp)) { Text(s(R.string.close)) }
                     Spacer(Modifier.height(16.dp))
                 }

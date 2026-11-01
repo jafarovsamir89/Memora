@@ -51,6 +51,15 @@ class UiShellTest {
         compose.onNodeWithTag("voice_revoke_consent").assertDoesNotExist()
     }
 
+    @Test fun sqlcipherCommunityLicenseIsReachableFromAbout() {
+        compose.setContent { MemoraApp(initialRoute = "home", initialLanguage = "az", capturePersistenceOverride = captureStore, appearanceStoreOverride = appearanceStore) }
+        compose.onNodeWithTag("app_info").performClick()
+        compose.onNodeWithTag("open_source_licenses").performClick()
+        compose.onNodeWithTag("sqlcipher_license_text").assertExists()
+        compose.onNodeWithText("SQLCipher Community Edition — Copyright (c) 2008-2026, ZETETIC, LLC").assertExists()
+        compose.onNodeWithText("Redistribution and use in source and binary forms", substring = true).assertExists()
+    }
+
     @Before fun setupCaptureStore() {
         val context = ApplicationProvider.getApplicationContext<Context>()
         appearanceStore = AtomicAppearanceStore(File(context.cacheDir, "ui-settings-${UUID.randomUUID()}"), AppearanceSettings("ru", "light"))

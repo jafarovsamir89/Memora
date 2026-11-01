@@ -1,5 +1,15 @@
 # Memora — лог действий
 
+## ACT-0071 · 2026-11-01 · SQLCipher Community attribution в приложении
+
+**Изменения:** в `Settings → About → Open-source licenses` добавлен доступный экран с полным SQLCipher Community copyright и BSD-style grant/conditions/disclaimer в `res/raw/sqlcipher_community_license.txt`; отображается также notice о LibTomCrypt/SQLite. Добавлены `az`, `ru`, `en` строки, маршрут, UI acceptance и ADR-011/TODO/руководство обновлены. Источники требования — официальные [Zetetic Community Edition guidelines](https://www.zetetic.net/sqlcipher/community/), [SQLCipher license](https://www.zetetic.net/sqlcipher/license/) и [полный лицензионный текст](https://www.zetetic.net/sqlcipher/license/SQLCIPHER_COMMUNITY_EDITION_LICENSE.txt). Это закрывает доступность именно SQLCipher notice, не полный аудит зависимостей.
+
+**Проверки:** базовая Android suite перед изменением экрана: 198/198, 0 failure/error/skipped; `assembleDebug` и `lintDebug` прошли. После реализации — `UiShellTest.sqlcipherCommunityLicenseIsReachableFromAbout`: 1/1; `assembleDebug` прошёл. Первый lint нашёл три отсутствующих AZ переводa; добавлен `values-az`, итоговый `lintDebug` прошёл. Установленный APK не меняли; устройство, личные записи и облачные API не использовались. Python contracts и instrumentation runner не менялись и повторно не запускались.
+
+**Статус P1:** key rotation/recovery/uninstall, operational backup restore, hard-crash/power-loss/disk-fault, signed release и аудит остальных прямых/транзитивных зависимостей остаются открытыми; приложение к защищённой Room DB и runtime инструментам не переключалось.
+
+**Git:** пакет локальный до фактического commit/push; перед передачей проверить diff, локальные ссылки/ID, secret scan, затем проверить локальный HEAD, remote SHA и чистоту дерева.
+
 ## ACT-0070 · 2026-11-01 · Синхронизация и изучение новых документов
 
 **Запрос:** синхронизировать Git и ознакомиться с новыми документами. Исходная локальная main на `880922e`, рабочее дерево чистое. `git fetch origin --prune` показал 12 входящих и 0 исходящих коммитов; `git merge --ff-only origin/main` успешно обновил ветку до `0199fc89638ee66be4a98925b2921daac803eda9`. После обновления `git rev-parse HEAD` и `git ls-remote origin refs/heads/main` совпали, статус был чистым.
