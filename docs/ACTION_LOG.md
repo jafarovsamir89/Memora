@@ -617,3 +617,5 @@ Python 3.11 venv с `tests/agent_contracts/requirements.txt`: **66/66**. Отд�
 Проверки на физическом Redmi Android13 и API26 emulator: `corrupt_envelope_refused_without_database_loss=true`; полный opt-in `DatabaseStorageProbe` вернул `status=passed` на обоих. Сборка `:app:assembleDebugAndroidTest :app:lintDebug --no-daemon` — BUILD SUCCESSFUL. Это не реализация key rotation или user-data recovery. P1 остаётся открытым.
 
 **Git на момент записи:** ACT-0069 code/docs ещё не закоммичены; перед отправкой проверить diff, ссылки/ID и отсутствие секретов; записать commit/push только после фактического подтверждения.
+
+**Постскриптум Git ACT-0069:** коммит `95552673346022544c7ed45c88a69d80d78e8454` (`test: verify key envelope corruption recovery`) отправлен в `origin/main`. После `git fetch origin main`, `git rev-parse HEAD` и `git ls-remote origin refs/heads/main` совпали на указанном hash; рабочее дерево чистое `main...origin/main`.
