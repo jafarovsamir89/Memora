@@ -8,7 +8,7 @@
 
 **Открыто:** hard crash/power-loss/disk fault, uninstall/restore, полный аудит транзитивных лицензий и signed release. Пройденный synthetic runtime probe не доказывает эти сценарии. MEM-12.11/P1 остаётся открытым; runtime agent и legacy cutover выключены.
 
-**Git:** пакет ещё локальный; перед передачей проверить diff/secret scan, сделать commit и push, затем подтвердить совпадение local/remote HEAD и чистое дерево.
+**Git:** code/test package сохранён коммитом `9affec3704c70e651d6adab0605524f4c3cd1ecf` (`feat(storage): recover staged SQLCipher key rotation`) и отправлен в `origin/main`. `git fetch origin main`, локальный HEAD и `git ls-remote origin refs/heads/main` совпали; дерево чистое `main...origin/main` на момент проверки. Это закрывает только данную часть MEM-12.11/P1, не оставшиеся crash/restore/license/signed-release gates.
 
 ## ACT-0071 · 2026-11-01 · SQLCipher Community attribution в приложении
 
