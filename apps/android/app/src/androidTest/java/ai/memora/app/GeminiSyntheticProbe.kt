@@ -5,6 +5,7 @@ package ai.memora.app
 import android.app.Activity
 import android.app.Instrumentation
 import android.os.Bundle
+import ai.memora.app.data.protectedstore.DatabaseStorageProbe
 import ai.memora.app.ai.configureAppCheck
 import ai.memora.app.voice.FirebaseAudioNoteGateway
 import ai.memora.app.voice.TranscriptOrthography
@@ -28,6 +29,8 @@ import kotlinx.coroutines.flow.first
 /** Manual, opt-in API probe. No microphone, UI, app storage reads or generated test fixtures in memory. */
 class GeminiSyntheticProbe : Instrumentation() {
     private var permitted = false
+    private var storageProbe = false
+    private var migrationProbe = false
     private var useTranscribeLive = false
     private var restoreOrthography = false
     private var orthographyOnly = false
@@ -38,6 +41,8 @@ class GeminiSyntheticProbe : Instrumentation() {
     override fun onCreate(arguments: Bundle?) {
         super.onCreate(arguments)
         permitted = arguments?.getString("allowSyntheticGemini") == "true"
+        storageProbe = arguments?.getString("allowSyntheticStorageProbe") == "true"
+        migrationProbe = arguments?.getString("allowSyntheticMigrationProbe") == "true"
         useTranscribeLive = arguments?.getString("transcribeLive") == "true"
         restoreOrthography = arguments?.getString("restoreOrthography") != "false"
         orthographyOnly = arguments?.getString("orthographyOnly") == "true"
@@ -49,6 +54,16 @@ class GeminiSyntheticProbe : Instrumentation() {
     }
 
     override fun onStart() {
+        if (storageProbe) {
+            val results = DatabaseStorageProbe.run(targetContext, permitted = true)
+            finish(if (results.getString("status") == "passed") Activity.RESULT_OK else Activity.RESULT_CANCELED, results)
+            return
+        }
+        if (migrationProbe) {
+            val migrationResults = DatabaseStorageProbe.runMigration(targetContext, permitted = true)
+            finish(if (migrationResults.getString("status") == "passed") Activity.RESULT_OK else Activity.RESULT_CANCELED, migrationResults)
+            return
+        }
         if (!permitted) { finish(Activity.RESULT_CANCELED, Bundle().apply { putString("status", "explicit_opt_in_required") }); return }
         val results = Bundle()
         FirebaseApp.initializeApp(targetContext)

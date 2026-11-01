@@ -30,7 +30,7 @@ sealed interface StoreExport {
 
 /** Synthetic-data prototype. Key provider must not generate a key when create is false. */
 class EncryptedTaskStore(private val path: File, private val keyProvider: (create: Boolean) -> SecretKey?) {
-    private data class State(val events: List<TaskEvent>, val tasks: Map<String, Task>, val deleted: Set<String>)
+    private data class State(val events: List<TaskEvent>, val tasks: Map<String, Task>, val deleted: Set<String>, val sourceSchema: Int)
 
     companion object {
         private val lock = Any() // Covers this app process only.
@@ -42,6 +42,12 @@ class EncryptedTaskStore(private val path: File, private val keyProvider: (creat
     fun load(): StoreRead = synchronized(lock) {
         try { StoreRead.Ready(readState().tasks.values.toList()) }
         catch (_: Exception) { StoreRead.Unavailable }
+    }
+
+    /** Validated migration view includes deletion markers that the public task list omits. */
+    internal fun migrationSnapshot(): ai.memora.app.data.protectedstore.LegacyTaskSnapshot = synchronized(lock) {
+        val state = readState()
+        ai.memora.app.data.protectedstore.LegacyTaskSnapshot(state.events.toList(), state.deleted.toSet(), state.sourceSchema)
     }
 
     fun append(event: TaskEvent): StoreWrite = synchronized(lock) {
@@ -103,7 +109,7 @@ class EncryptedTaskStore(private val path: File, private val keyProvider: (creat
     }
 
     private fun readState(): State {
-        if (!path.exists()) return State(emptyList(), emptyMap(), emptySet())
+        if (!path.exists()) return State(emptyList(), emptyMap(), emptySet(), 2)
         if (path.length() > MAX_BYTES) error("limit")
         val data = path.readBytes()
         require(data.size in (header.size + 12 + 16)..MAX_BYTES && data.copyOfRange(0, header.size).contentEquals(header))
@@ -113,7 +119,8 @@ class EncryptedTaskStore(private val path: File, private val keyProvider: (creat
         cipher.updateAAD(header)
         val text = cipher.doFinal(data.copyOfRange(header.size + 12, data.size)).toString(Charsets.UTF_8)
         val deleted = hashSetOf<String>()
-        val array = if (text.trimStart().startsWith("[")) JSONArray(text) else {
+        val isHistoricalArray = text.trimStart().startsWith("[")
+        val array = if (isHistoricalArray) JSONArray(text) else {
             val obj = JSONObject(text)
             require(obj.getInt("schema") == 2)
             val removed = obj.getJSONArray("deleted")
@@ -133,7 +140,7 @@ class EncryptedTaskStore(private val path: File, private val keyProvider: (creat
             tasks[event.taskId] = applied.task
             events.add(event)
         }
-        return State(events, tasks, deleted)
+        return State(events, tasks, deleted, if (isHistoricalArray) 1 else 2)
     }
 
     private fun encode(e: TaskEvent): JSONObject = JSONObject().apply {

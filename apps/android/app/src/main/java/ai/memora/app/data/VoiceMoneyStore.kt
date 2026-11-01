@@ -16,6 +16,7 @@ sealed interface VoiceStoreRead {
     data class Ready(val snapshot: VoiceMoneySnapshot) : VoiceStoreRead
     data object Unavailable : VoiceStoreRead
 }
+internal data class VoiceMoneyMigrationSnapshot(val snapshot: VoiceMoneySnapshot, val sourceSchema: Int)
 sealed interface VoiceStoreWrite {
     data object Saved : VoiceStoreWrite
     data object Duplicate : VoiceStoreWrite
@@ -37,6 +38,9 @@ class VoiceMoneyStore(private val path: File, private val keyProvider: (Boolean)
     fun load(): VoiceStoreRead = synchronized(lock) {
         try { VoiceStoreRead.Ready(read()) } catch (_: Exception) { VoiceStoreRead.Unavailable }
     }
+
+    /** Exposes the validated decoded schema only to migration; never returns raw ciphertext/plaintext. */
+    internal fun migrationSnapshot(): VoiceMoneyMigrationSnapshot = synchronized(lock) { readDetailed() }
 
     /** Export is plaintext and must only be called after an explicit user action. */
     fun exportJson(): String? = synchronized(lock) {
@@ -114,8 +118,10 @@ class VoiceMoneyStore(private val path: File, private val keyProvider: (Boolean)
         } catch (_: Exception) { false }
     }
 
-    private fun read(): VoiceMoneySnapshot {
-        if (!path.exists()) return VoiceMoneySnapshot()
+    private fun read(): VoiceMoneySnapshot = readDetailed().snapshot
+
+    private fun readDetailed(): VoiceMoneyMigrationSnapshot {
+        if (!path.exists()) return VoiceMoneyMigrationSnapshot(VoiceMoneySnapshot(), 2)
         require(path.length() in (header.size + 28L)..MAX_BYTES.toLong())
         val data = path.readBytes()
         require(data.copyOfRange(0, header.size).contentEquals(header))
@@ -153,7 +159,7 @@ class VoiceMoneyStore(private val path: File, private val keyProvider: (Boolean)
             it.minorUnits > 0 && it.currency == "AZN" && it.source.isNotBlank() && it.source.length <= 20_000 })
         require((receipts.map { it.id } + debts.map { it.id }).distinct().size == receipts.size + debts.size)
         require((receipts.map { it.commandId } + debts.map { it.commandId }).distinct().size == receipts.size + debts.size)
-        return VoiceMoneySnapshot(persons, receipts, debts)
+        return VoiceMoneyMigrationSnapshot(VoiceMoneySnapshot(persons, receipts, debts), schema)
     }
 
     private fun write(snapshot: VoiceMoneySnapshot) {

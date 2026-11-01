@@ -2,6 +2,8 @@ plugins {
     id("com.android.application")
     id("org.jetbrains.kotlin.android")
     id("org.jetbrains.kotlin.plugin.compose")
+    id("org.jetbrains.kotlin.kapt")
+    id("androidx.room")
 }
 
 // A local Firebase configuration is optional; the application remains usable without it.
@@ -43,6 +45,13 @@ dependencies {
     implementation("com.google.firebase:firebase-ai")
     // Match the Firebase AI transport dependency; expose language hints missing from SDK 18.1.0.
     implementation("com.squareup.okhttp3:okhttp:4.12.0")
+    implementation("androidx.room:room-runtime:2.8.5")
+    implementation("androidx.room:room-ktx:2.8.5")
+    kapt("androidx.room:room-compiler:2.8.5")
+    kaptTest("androidx.room:room-compiler:2.8.5")
+    kaptAndroidTest("androidx.room:room-compiler:2.8.5")
+    implementation("net.zetetic:sqlcipher-android:4.20.0@aar")
+    implementation("androidx.sqlite:sqlite:2.7.0")
     debugImplementation("com.google.firebase:firebase-appcheck-debug")
     releaseImplementation("com.google.firebase:firebase-appcheck-playintegrity")
     debugImplementation("androidx.compose.ui:ui-tooling")
@@ -53,6 +62,8 @@ dependencies {
     testImplementation("androidx.compose.ui:ui-test-junit4")
     debugImplementation("androidx.compose.ui:ui-test-manifest")
 }
+
+room { schemaDirectory("$projectDir/schemas") }
 
 tasks.withType<Test>().configureEach {
     maxHeapSize = "2g"

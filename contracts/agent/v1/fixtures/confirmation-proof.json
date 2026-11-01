@@ -1,0 +1,8 @@
+{
+  "id": "00000000-0000-4000-8000-000000000001",
+  "scopeId": "00000000-0000-4000-8000-000000000002",
+  "actorId": "00000000-0000-4000-8000-000000000003",
+  "actionDigest": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+  "targetVersions": [{"id": "00000000-0000-4000-8000-000000000004", "version": 5}],
+  "permissionVersion": 7, "issuedAt": "2026-01-01T00:00:00Z", "expiresAt": "2026-01-01T00:10:00Z", "state": "ACTIVE"
+}

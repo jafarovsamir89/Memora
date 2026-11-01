@@ -1,0 +1,17 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://memora.invalid/contracts/agent/v1/consent-record.schema.json",
+  "title": "Trusted agent consent record — P0 design only",
+  "type": "object", "additionalProperties": false,
+  "required": ["id", "scopeId", "provider", "category", "policyVersion", "revision", "status"],
+  "properties": {
+    "id": {"$ref": "#/$defs/uuid"}, "scopeId": {"$ref": "#/$defs/uuid"},
+    "provider": {"const": "GEMINI"}, "category": {"enum": ["VOICE_OR_TEXT_TURN", "PERSISTED_MEMORY"]},
+    "policyVersion": {"$ref": "#/$defs/version"}, "revision": {"$ref": "#/$defs/version"},
+    "status": {"enum": ["GRANTED", "REVOKED"]}
+  },
+  "$defs": {
+    "uuid": {"type": "string", "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"},
+    "version": {"type": "integer", "minimum": 0, "maximum": 9223372036854775807}
+  }
+}

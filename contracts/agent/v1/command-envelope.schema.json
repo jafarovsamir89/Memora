@@ -1,0 +1,1729 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://memora.invalid/contracts/agent/v1/command-envelope.schema.json",
+  "title": "Application-authored command envelope — initial P0 slice",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "protocolVersion",
+    "commandId",
+    "turnId",
+    "stepId",
+    "scopeId",
+    "actorId",
+    "toolName",
+    "toolVersion",
+    "arguments",
+    "expectedVersions",
+    "sourceRevisionId",
+    "evidenceRefs",
+    "payloadDigest",
+    "permissionSnapshotVersion",
+    "confirmationId"
+  ],
+  "properties": {
+    "protocolVersion": {
+      "const": 1
+    },
+    "commandId": {
+      "$ref": "#/$defs/uuid"
+    },
+    "turnId": {
+      "$ref": "#/$defs/uuid"
+    },
+    "stepId": {
+      "$ref": "#/$defs/uuid"
+    },
+    "scopeId": {
+      "$ref": "#/$defs/uuid"
+    },
+    "actorId": {
+      "$ref": "#/$defs/uuid"
+    },
+    "toolName": {
+      "enum": [
+        "create_note",
+        "update_note",
+        "create_person",
+        "update_person",
+        "create_project",
+        "update_project",
+        "link_records",
+        "unlink_records",
+        "commit_delete",
+        "create_task",
+        "update_task",
+        "record_receipt",
+        "record_obligation",
+        "record_settlement",
+        "correct_money_event",
+        "create_table",
+        "add_table_rows",
+        "update_table_rows",
+        "change_table_schema",
+        "restore_records",
+        "undo_change",
+        "create_calendar_event",
+        "update_calendar_event"
+      ]
+    },
+    "toolVersion": {
+      "const": 1
+    },
+    "arguments": {
+      "type": "object"
+    },
+    "expectedVersions": {
+      "type": "array",
+      "maxItems": 100,
+      "uniqueItems": true,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "id",
+          "version"
+        ],
+        "properties": {
+          "id": {
+            "$ref": "#/$defs/uuid"
+          },
+          "version": {
+            "$ref": "#/$defs/version"
+          }
+        }
+      }
+    },
+    "sourceRevisionId": {
+      "$ref": "#/$defs/uuid"
+    },
+    "evidenceRefs": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 50,
+      "uniqueItems": true,
+      "items": {
+        "$ref": "#/$defs/uuid"
+      }
+    },
+    "payloadDigest": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "permissionSnapshotVersion": {
+      "$ref": "#/$defs/version"
+    },
+    "confirmationId": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/uuid"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    }
+  },
+  "$defs": {
+    "uuid": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+    },
+    "version": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 9223372036854775807
+    },
+    "createNoteArguments": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "noteId",
+        "title",
+        "body",
+        "links",
+        "noteRevisionId"
+      ],
+      "properties": {
+        "noteId": {
+          "$ref": "#/$defs/uuid"
+        },
+        "title": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 200
+        },
+        "body": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 20000
+        },
+        "links": {
+          "type": "array",
+          "maxItems": 50,
+          "uniqueItems": true,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "type",
+              "id"
+            ],
+            "properties": {
+              "type": {
+                "enum": [
+                  "person",
+                  "project"
+                ]
+              },
+              "id": {
+                "$ref": "#/$defs/uuid"
+              }
+            }
+          }
+        },
+        "noteRevisionId": {
+          "$ref": "#/$defs/uuid"
+        }
+      }
+    },
+    "updateNoteArguments": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "noteId",
+        "newRevisionId",
+        "patch"
+      ],
+      "properties": {
+        "noteId": {
+          "$ref": "#/$defs/uuid"
+        },
+        "newRevisionId": {
+          "$ref": "#/$defs/uuid"
+        },
+        "patch": {
+          "type": "object",
+          "additionalProperties": false,
+          "minProperties": 1,
+          "properties": {
+            "title": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 200
+            },
+            "body": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 20000
+            }
+          }
+        }
+      }
+    },
+    "createPersonArguments": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "personId",
+        "name",
+        "aliases"
+      ],
+      "properties": {
+        "personId": {
+          "$ref": "#/$defs/uuid"
+        },
+        "name": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 200
+        },
+        "aliases": {
+          "type": "array",
+          "maxItems": 20,
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 200
+          }
+        }
+      }
+    },
+    "updatePersonArguments": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "personId",
+        "patch"
+      ],
+      "properties": {
+        "personId": {
+          "$ref": "#/$defs/uuid"
+        },
+        "patch": {
+          "type": "object",
+          "additionalProperties": false,
+          "minProperties": 1,
+          "properties": {
+            "name": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 200
+            }
+          }
+        }
+      }
+    },
+    "createProjectArguments": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "projectId",
+        "title",
+        "status"
+      ],
+      "properties": {
+        "projectId": {
+          "$ref": "#/$defs/uuid"
+        },
+        "title": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 200
+        },
+        "status": {
+          "const": "ACTIVE"
+        }
+      }
+    },
+    "updateProjectArguments": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "projectId",
+        "patch"
+      ],
+      "properties": {
+        "projectId": {
+          "$ref": "#/$defs/uuid"
+        },
+        "patch": {
+          "type": "object",
+          "additionalProperties": false,
+          "minProperties": 1,
+          "properties": {
+            "title": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 200
+            },
+            "status": {
+              "enum": [
+                "ACTIVE",
+                "ON_HOLD",
+                "COMPLETED"
+              ]
+            }
+          }
+        }
+      }
+    },
+    "linkRecordsArguments": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "from",
+        "to",
+        "relationType",
+        "linkId"
+      ],
+      "properties": {
+        "from": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "type",
+            "id"
+          ],
+          "properties": {
+            "type": {
+              "enum": [
+                "note",
+                "person",
+                "project",
+                "task"
+              ]
+            },
+            "id": {
+              "$ref": "#/$defs/uuid"
+            }
+          }
+        },
+        "to": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "type",
+            "id"
+          ],
+          "properties": {
+            "type": {
+              "enum": [
+                "note",
+                "person",
+                "project",
+                "task"
+              ]
+            },
+            "id": {
+              "$ref": "#/$defs/uuid"
+            }
+          }
+        },
+        "relationType": {
+          "enum": [
+            "RELATED_TO",
+            "PART_OF",
+            "ASSOCIATED_WITH"
+          ]
+        },
+        "linkId": {
+          "$ref": "#/$defs/uuid"
+        }
+      }
+    },
+    "unlinkRecordsArguments": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "linkId"
+      ],
+      "properties": {
+        "linkId": {
+          "$ref": "#/$defs/uuid"
+        }
+      }
+    },
+    "commitDeleteArguments": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "previewId",
+        "planDigest"
+      ],
+      "properties": {
+        "previewId": {
+          "$ref": "#/$defs/uuid"
+        },
+        "planDigest": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        }
+      }
+    },
+    "createTaskArguments": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "taskId",
+        "title",
+        "due",
+        "remind",
+        "links"
+      ],
+      "properties": {
+        "taskId": {
+          "$ref": "#/$defs/uuid"
+        },
+        "title": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 200
+        },
+        "due": {
+          "oneOf": [
+            {
+              "type": "null"
+            },
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "precision",
+                "date"
+              ],
+              "properties": {
+                "precision": {
+                  "const": "date"
+                },
+                "date": {
+                  "type": "string",
+                  "format": "date"
+                }
+              }
+            },
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "precision",
+                "localDateTime",
+                "zoneId"
+              ],
+              "properties": {
+                "precision": {
+                  "const": "minute"
+                },
+                "localDateTime": {
+                  "type": "string",
+                  "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}$"
+                },
+                "zoneId": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 100
+                }
+              }
+            }
+          ]
+        },
+        "remind": {
+          "type": "boolean"
+        },
+        "links": {
+          "type": "array",
+          "maxItems": 50,
+          "uniqueItems": true,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "type",
+              "id"
+            ],
+            "properties": {
+              "type": {
+                "enum": [
+                  "person",
+                  "project",
+                  "note"
+                ]
+              },
+              "id": {
+                "$ref": "#/$defs/uuid"
+              }
+            }
+          }
+        }
+      }
+    },
+    "updateTaskArguments": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "taskId",
+        "patch"
+      ],
+      "properties": {
+        "taskId": {
+          "$ref": "#/$defs/uuid"
+        },
+        "patch": {
+          "type": "object",
+          "additionalProperties": false,
+          "minProperties": 1,
+          "properties": {
+            "title": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 200
+            },
+            "status": {
+              "enum": [
+                "OPEN",
+                "DONE"
+              ]
+            },
+            "due": {
+              "oneOf": [
+                {
+                  "type": "null"
+                },
+                {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "precision",
+                    "date"
+                  ],
+                  "properties": {
+                    "precision": {
+                      "const": "date"
+                    },
+                    "date": {
+                      "type": "string",
+                      "format": "date"
+                    }
+                  }
+                },
+                {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "precision",
+                    "localDateTime",
+                    "zoneId"
+                  ],
+                  "properties": {
+                    "precision": {
+                      "const": "minute"
+                    },
+                    "localDateTime": {
+                      "type": "string",
+                      "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}$"
+                    },
+                    "zoneId": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 100
+                    }
+                  }
+                }
+              ]
+            },
+            "remind": {
+              "type": "boolean"
+            }
+          }
+        }
+      }
+    },
+    "RecordReceiptArguments": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "personId",
+        "amountMinorUnits",
+        "direction",
+        "currency",
+        "currencyScaleVersion",
+        "occurredAt",
+        "eventId"
+      ],
+      "properties": {
+        "personId": {
+          "$ref": "#/$defs/uuid"
+        },
+        "amountMinorUnits": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 9223372036854775807
+        },
+        "direction": {
+          "enum": [
+            "IN",
+            "OUT"
+          ]
+        },
+        "currency": {
+          "type": "string",
+          "pattern": "^[A-Z]{3}$"
+        },
+        "currencyScaleVersion": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 2147483647
+        },
+        "occurredAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "sourceRef": {
+          "$ref": "#/$defs/uuid"
+        },
+        "eventId": {
+          "$ref": "#/$defs/uuid"
+        }
+      }
+    },
+    "RecordObligationArguments": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "personId",
+        "amountMinorUnits",
+        "direction",
+        "currency",
+        "currencyScaleVersion",
+        "occurredAt",
+        "obligationId"
+      ],
+      "properties": {
+        "personId": {
+          "$ref": "#/$defs/uuid"
+        },
+        "amountMinorUnits": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 9223372036854775807
+        },
+        "direction": {
+          "enum": [
+            "PERSON_OWES_USER",
+            "USER_OWES_PERSON"
+          ]
+        },
+        "currency": {
+          "type": "string",
+          "pattern": "^[A-Z]{3}$"
+        },
+        "currencyScaleVersion": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 2147483647
+        },
+        "occurredAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "sourceRef": {
+          "$ref": "#/$defs/uuid"
+        },
+        "obligationId": {
+          "$ref": "#/$defs/uuid"
+        }
+      }
+    },
+    "RecordSettlementArguments": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "obligationId",
+        "amountMinorUnits",
+        "currency",
+        "currencyScaleVersion",
+        "occurredAt",
+        "settlementId",
+        "expectedRemainingMinorUnits"
+      ],
+      "properties": {
+        "obligationId": {
+          "$ref": "#/$defs/uuid"
+        },
+        "amountMinorUnits": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 9223372036854775807
+        },
+        "currency": {
+          "type": "string",
+          "pattern": "^[A-Z]{3}$"
+        },
+        "currencyScaleVersion": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 2147483647
+        },
+        "occurredAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "sourceRef": {
+          "$ref": "#/$defs/uuid"
+        },
+        "settlementId": {
+          "$ref": "#/$defs/uuid"
+        },
+        "expectedRemainingMinorUnits": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9223372036854775807
+        }
+      }
+    },
+    "CorrectMoneyEventArguments": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "targetEventId",
+        "reason",
+        "replacementMinorUnits",
+        "correctionEventId"
+      ],
+      "properties": {
+        "targetEventId": {
+          "$ref": "#/$defs/uuid"
+        },
+        "reason": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 500
+        },
+        "replacementMinorUnits": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "minimum": 1,
+          "maximum": 9223372036854775807
+        },
+        "correctionEventId": {
+          "$ref": "#/$defs/uuid"
+        }
+      }
+    },
+    "CreateTableArguments": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "title",
+        "mode",
+        "columns",
+        "tableId"
+      ],
+      "properties": {
+        "title": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 200
+        },
+        "mode": {
+          "enum": [
+            "editable",
+            "linked_view"
+          ]
+        },
+        "columns": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 50,
+          "items": {
+            "allOf": [
+              {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "columnId",
+                  "name",
+                  "type",
+                  "required",
+                  "position"
+                ],
+                "properties": {
+                  "columnId": {
+                    "$ref": "#/$defs/uuid"
+                  },
+                  "name": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 100
+                  },
+                  "type": {
+                    "enum": [
+                      "text",
+                      "integer",
+                      "decimal",
+                      "money",
+                      "boolean",
+                      "localDate",
+                      "zonedDateTime",
+                      "enum",
+                      "reference"
+                    ]
+                  },
+                  "required": {
+                    "type": "boolean"
+                  },
+                  "position": {
+                    "type": "integer",
+                    "minimum": 0,
+                    "maximum": 49
+                  },
+                  "enumValues": {
+                    "type": "array",
+                    "maxItems": 100,
+                    "uniqueItems": true,
+                    "items": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 100
+                    }
+                  },
+                  "referenceType": {
+                    "enum": [
+                      "person",
+                      "project",
+                      "note",
+                      "task"
+                    ]
+                  }
+                }
+              },
+              {
+                "required": [
+                  "columnId"
+                ]
+              }
+            ]
+          }
+        },
+        "viewSpec": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "sourceType",
+            "projection"
+          ],
+          "properties": {
+            "sourceType": {
+              "enum": [
+                "note",
+                "task",
+                "money_event",
+                "person"
+              ]
+            },
+            "projection": {
+              "type": "array",
+              "minItems": 1,
+              "maxItems": 50,
+              "uniqueItems": true,
+              "items": {
+                "$ref": "#/$defs/uuid"
+              }
+            },
+            "filters": {
+              "type": "array",
+              "maxItems": 50,
+              "items": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "columnId",
+                  "operator",
+                  "value"
+                ],
+                "properties": {
+                  "columnId": {
+                    "$ref": "#/$defs/uuid"
+                  },
+                  "operator": {
+                    "enum": [
+                      "EQ",
+                      "NE",
+                      "LT",
+                      "LTE",
+                      "GT",
+                      "GTE",
+                      "CONTAINS"
+                    ]
+                  },
+                  "value": {
+                    "oneOf": [
+                      {
+                        "type": "string"
+                      },
+                      {
+                        "type": "integer",
+                        "minimum": -9223372036854775808,
+                        "maximum": 9223372036854775807
+                      },
+                      {
+                        "type": "boolean"
+                      },
+                      {
+                        "type": "null"
+                      },
+                      {
+                        "type": "object",
+                        "additionalProperties": false,
+                        "required": [
+                          "minorUnits",
+                          "currency",
+                          "currencyScaleVersion"
+                        ],
+                        "properties": {
+                          "minorUnits": {
+                            "type": "integer",
+                            "minimum": -9223372036854775808,
+                            "maximum": 9223372036854775807
+                          },
+                          "currency": {
+                            "type": "string",
+                            "pattern": "^[A-Z]{3}$"
+                          },
+                          "currencyScaleVersion": {
+                            "type": "integer",
+                            "minimum": 1
+                          }
+                        }
+                      },
+                      {
+                        "type": "object",
+                        "additionalProperties": false,
+                        "required": [
+                          "localDateTime",
+                          "zoneId"
+                        ],
+                        "properties": {
+                          "localDateTime": {
+                            "type": "string",
+                            "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}$"
+                          },
+                          "zoneId": {
+                            "type": "string",
+                            "minLength": 1,
+                            "maxLength": 100
+                          }
+                        }
+                      }
+                    ]
+                  }
+                }
+              }
+            }
+          }
+        },
+        "tableId": {
+          "$ref": "#/$defs/uuid"
+        }
+      }
+    },
+    "AddTableRowsArguments": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "tableId",
+        "expectedSchemaVersion",
+        "rows",
+        "rowIds"
+      ],
+      "properties": {
+        "tableId": {
+          "$ref": "#/$defs/uuid"
+        },
+        "expectedSchemaVersion": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "rows": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 100,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "cells"
+            ],
+            "properties": {
+              "cells": {
+                "type": "array",
+                "minItems": 1,
+                "maxItems": 50,
+                "items": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "columnId",
+                    "value"
+                  ],
+                  "properties": {
+                    "columnId": {
+                      "$ref": "#/$defs/uuid"
+                    },
+                    "value": {
+                      "oneOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "integer",
+                          "minimum": -9223372036854775808,
+                          "maximum": 9223372036854775807
+                        },
+                        {
+                          "type": "boolean"
+                        },
+                        {
+                          "type": "null"
+                        },
+                        {
+                          "type": "object",
+                          "additionalProperties": false,
+                          "required": [
+                            "minorUnits",
+                            "currency",
+                            "currencyScaleVersion"
+                          ],
+                          "properties": {
+                            "minorUnits": {
+                              "type": "integer",
+                              "minimum": -9223372036854775808,
+                              "maximum": 9223372036854775807
+                            },
+                            "currency": {
+                              "type": "string",
+                              "pattern": "^[A-Z]{3}$"
+                            },
+                            "currencyScaleVersion": {
+                              "type": "integer",
+                              "minimum": 1
+                            }
+                          }
+                        },
+                        {
+                          "type": "object",
+                          "additionalProperties": false,
+                          "required": [
+                            "localDateTime",
+                            "zoneId"
+                          ],
+                          "properties": {
+                            "localDateTime": {
+                              "type": "string",
+                              "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}$"
+                            },
+                            "zoneId": {
+                              "type": "string",
+                              "minLength": 1,
+                              "maxLength": 100
+                            }
+                          }
+                        }
+                      ]
+                    }
+                  }
+                }
+              },
+              "evidenceRefs": {
+                "type": "array",
+                "maxItems": 50,
+                "uniqueItems": true,
+                "items": {
+                  "$ref": "#/$defs/uuid"
+                }
+              }
+            }
+          }
+        },
+        "rowIds": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 100,
+          "uniqueItems": true,
+          "items": {
+            "$ref": "#/$defs/uuid"
+          }
+        }
+      }
+    },
+    "UpdateTableRowsArguments": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "tableId",
+        "expectedSchemaVersion",
+        "rows"
+      ],
+      "properties": {
+        "tableId": {
+          "$ref": "#/$defs/uuid"
+        },
+        "expectedSchemaVersion": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "rows": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 100,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "rowId",
+              "expectedVersion",
+              "patch"
+            ],
+            "properties": {
+              "rowId": {
+                "$ref": "#/$defs/uuid"
+              },
+              "expectedVersion": {
+                "type": "integer",
+                "minimum": 1
+              },
+              "patch": {
+                "type": "array",
+                "minItems": 1,
+                "maxItems": 50,
+                "items": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "columnId",
+                    "value"
+                  ],
+                  "properties": {
+                    "columnId": {
+                      "$ref": "#/$defs/uuid"
+                    },
+                    "value": {
+                      "oneOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "integer",
+                          "minimum": -9223372036854775808,
+                          "maximum": 9223372036854775807
+                        },
+                        {
+                          "type": "boolean"
+                        },
+                        {
+                          "type": "null"
+                        },
+                        {
+                          "type": "object",
+                          "additionalProperties": false,
+                          "required": [
+                            "minorUnits",
+                            "currency",
+                            "currencyScaleVersion"
+                          ],
+                          "properties": {
+                            "minorUnits": {
+                              "type": "integer",
+                              "minimum": -9223372036854775808,
+                              "maximum": 9223372036854775807
+                            },
+                            "currency": {
+                              "type": "string",
+                              "pattern": "^[A-Z]{3}$"
+                            },
+                            "currencyScaleVersion": {
+                              "type": "integer",
+                              "minimum": 1
+                            }
+                          }
+                        },
+                        {
+                          "type": "object",
+                          "additionalProperties": false,
+                          "required": [
+                            "localDateTime",
+                            "zoneId"
+                          ],
+                          "properties": {
+                            "localDateTime": {
+                              "type": "string",
+                              "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}$"
+                            },
+                            "zoneId": {
+                              "type": "string",
+                              "minLength": 1,
+                              "maxLength": 100
+                            }
+                          }
+                        }
+                      ]
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "ChangeTableSchemaArguments": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "tableId",
+        "expectedSchemaVersion",
+        "patch"
+      ],
+      "properties": {
+        "tableId": {
+          "$ref": "#/$defs/uuid"
+        },
+        "expectedSchemaVersion": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "patch": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 50,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "columnId",
+              "operation"
+            ],
+            "properties": {
+              "columnId": {
+                "$ref": "#/$defs/uuid"
+              },
+              "operation": {
+                "enum": [
+                  "rename",
+                  "reorder",
+                  "changeType",
+                  "add",
+                  "remove"
+                ]
+              },
+              "name": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 100
+              },
+              "type": {
+                "enum": [
+                  "text",
+                  "integer",
+                  "decimal",
+                  "money",
+                  "boolean",
+                  "localDate",
+                  "zonedDateTime",
+                  "enum",
+                  "reference"
+                ]
+              },
+              "position": {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 49
+              }
+            }
+          }
+        }
+      }
+    },
+    "RestoreRecordsArguments": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "records"
+      ],
+      "properties": {
+        "records": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 100,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "recordId",
+              "expectedTrashVersion"
+            ],
+            "properties": {
+              "recordId": {
+                "$ref": "#/$defs/uuid"
+              },
+              "expectedTrashVersion": {
+                "type": "integer",
+                "minimum": 1
+              }
+            }
+          }
+        }
+      }
+    },
+    "UndoChangeArguments": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "changeSetId",
+        "reason"
+      ],
+      "properties": {
+        "changeSetId": {
+          "$ref": "#/$defs/uuid"
+        },
+        "reason": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 300
+        }
+      }
+    },
+    "CreateCalendarEventArguments": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "title",
+        "start",
+        "end",
+        "eventId"
+      ],
+      "properties": {
+        "title": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 200
+        },
+        "start": {
+          "$ref": "#/$defs/eventTime"
+        },
+        "end": {
+          "$ref": "#/$defs/eventTime"
+        },
+        "personId": {
+          "$ref": "#/$defs/uuid"
+        },
+        "projectId": {
+          "$ref": "#/$defs/uuid"
+        },
+        "noteId": {
+          "$ref": "#/$defs/uuid"
+        },
+        "eventId": {
+          "$ref": "#/$defs/uuid"
+        }
+      }
+    },
+    "UpdateCalendarEventArguments": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "eventId",
+        "patch"
+      ],
+      "properties": {
+        "eventId": {
+          "$ref": "#/$defs/uuid"
+        },
+        "patch": {
+          "type": "object",
+          "minProperties": 1,
+          "additionalProperties": false,
+          "properties": {
+            "title": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 200
+            },
+            "start": {
+              "$ref": "#/$defs/eventTime"
+            },
+            "end": {
+              "$ref": "#/$defs/eventTime"
+            }
+          }
+        }
+      }
+    },
+    "eventTime": {
+      "oneOf": [
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "precision",
+            "date"
+          ],
+          "properties": {
+            "precision": {
+              "const": "date"
+            },
+            "date": {
+              "type": "string",
+              "format": "date"
+            }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "precision",
+            "localDateTime",
+            "zoneId"
+          ],
+          "properties": {
+            "precision": {
+              "const": "minute"
+            },
+            "localDateTime": {
+              "type": "string",
+              "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}$"
+            },
+            "zoneId": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 100
+            }
+          }
+        }
+      ]
+    }
+  },
+  "oneOf": [
+    {
+      "properties": {
+        "toolName": {
+          "const": "create_note"
+        },
+        "arguments": {
+          "$ref": "#/$defs/createNoteArguments"
+        }
+      }
+    },
+    {
+      "properties": {
+        "toolName": {
+          "const": "update_note"
+        },
+        "arguments": {
+          "$ref": "#/$defs/updateNoteArguments"
+        }
+      }
+    },
+    {
+      "properties": {
+        "toolName": {
+          "const": "create_person"
+        },
+        "arguments": {
+          "$ref": "#/$defs/createPersonArguments"
+        }
+      }
+    },
+    {
+      "properties": {
+        "toolName": {
+          "const": "update_person"
+        },
+        "arguments": {
+          "$ref": "#/$defs/updatePersonArguments"
+        }
+      }
+    },
+    {
+      "properties": {
+        "toolName": {
+          "const": "create_project"
+        },
+        "arguments": {
+          "$ref": "#/$defs/createProjectArguments"
+        }
+      }
+    },
+    {
+      "properties": {
+        "toolName": {
+          "const": "update_project"
+        },
+        "arguments": {
+          "$ref": "#/$defs/updateProjectArguments"
+        }
+      }
+    },
+    {
+      "properties": {
+        "toolName": {
+          "const": "link_records"
+        },
+        "arguments": {
+          "$ref": "#/$defs/linkRecordsArguments"
+        }
+      }
+    },
+    {
+      "properties": {
+        "toolName": {
+          "const": "unlink_records"
+        },
+        "arguments": {
+          "$ref": "#/$defs/unlinkRecordsArguments"
+        }
+      }
+    },
+    {
+      "properties": {
+        "toolName": {
+          "const": "commit_delete"
+        },
+        "arguments": {
+          "$ref": "#/$defs/commitDeleteArguments"
+        },
+        "confirmationId": {
+          "$ref": "#/$defs/uuid"
+        },
+        "expectedVersions": {
+          "minItems": 1
+        }
+      }
+    },
+    {
+      "properties": {
+        "toolName": {
+          "const": "create_task"
+        },
+        "arguments": {
+          "$ref": "#/$defs/createTaskArguments"
+        }
+      }
+    },
+    {
+      "properties": {
+        "toolName": {
+          "const": "update_task"
+        },
+        "arguments": {
+          "$ref": "#/$defs/updateTaskArguments"
+        }
+      }
+    },
+    {
+      "properties": {
+        "toolName": {
+          "const": "record_receipt"
+        },
+        "arguments": {
+          "$ref": "#/$defs/RecordReceiptArguments"
+        }
+      }
+    },
+    {
+      "properties": {
+        "toolName": {
+          "const": "record_obligation"
+        },
+        "arguments": {
+          "$ref": "#/$defs/RecordObligationArguments"
+        }
+      }
+    },
+    {
+      "properties": {
+        "toolName": {
+          "const": "record_settlement"
+        },
+        "arguments": {
+          "$ref": "#/$defs/RecordSettlementArguments"
+        },
+        "confirmationId": {
+          "$ref": "#/$defs/uuid"
+        },
+        "expectedVersions": {
+          "minItems": 1,
+          "maxItems": 1
+        }
+      }
+    },
+    {
+      "properties": {
+        "toolName": {
+          "const": "correct_money_event"
+        },
+        "arguments": {
+          "$ref": "#/$defs/CorrectMoneyEventArguments"
+        },
+        "confirmationId": {
+          "$ref": "#/$defs/uuid"
+        },
+        "expectedVersions": {
+          "minItems": 1,
+          "maxItems": 1
+        }
+      }
+    },
+    {
+      "properties": {
+        "toolName": {
+          "const": "create_table"
+        },
+        "arguments": {
+          "$ref": "#/$defs/CreateTableArguments"
+        }
+      }
+    },
+    {
+      "properties": {
+        "toolName": {
+          "const": "add_table_rows"
+        },
+        "arguments": {
+          "$ref": "#/$defs/AddTableRowsArguments"
+        }
+      }
+    },
+    {
+      "properties": {
+        "toolName": {
+          "const": "update_table_rows"
+        },
+        "arguments": {
+          "$ref": "#/$defs/UpdateTableRowsArguments"
+        }
+      }
+    },
+    {
+      "properties": {
+        "toolName": {
+          "const": "change_table_schema"
+        },
+        "arguments": {
+          "$ref": "#/$defs/ChangeTableSchemaArguments"
+        },
+        "confirmationId": {
+          "$ref": "#/$defs/uuid"
+        },
+        "expectedVersions": {
+          "minItems": 1,
+          "maxItems": 1
+        }
+      }
+    },
+    {
+      "properties": {
+        "toolName": {
+          "const": "restore_records"
+        },
+        "arguments": {
+          "$ref": "#/$defs/RestoreRecordsArguments"
+        }
+      }
+    },
+    {
+      "properties": {
+        "toolName": {
+          "const": "undo_change"
+        },
+        "arguments": {
+          "$ref": "#/$defs/UndoChangeArguments"
+        }
+      }
+    },
+    {
+      "properties": {
+        "toolName": {
+          "const": "create_calendar_event"
+        },
+        "arguments": {
+          "$ref": "#/$defs/CreateCalendarEventArguments"
+        }
+      }
+    },
+    {
+      "properties": {
+        "toolName": {
+          "const": "update_calendar_event"
+        },
+        "arguments": {
+          "$ref": "#/$defs/UpdateCalendarEventArguments"
+        }
+      }
+    }
+  ]
+}

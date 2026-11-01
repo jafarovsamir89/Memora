@@ -1,0 +1,249 @@
+[
+  {
+    "call": {
+      "toolName": "create_person",
+      "schemaVersion": 1,
+      "providerCallId": "synthetic-create_person",
+      "arguments": {
+        "name": "Samir",
+        "aliases": []
+      }
+    },
+    "command": {
+      "protocolVersion": 1,
+      "commandId": "00000000-0000-4000-8000-000000000001",
+      "turnId": "00000000-0000-4000-8000-000000000002",
+      "stepId": "00000000-0000-4000-8000-000000000003",
+      "scopeId": "00000000-0000-4000-8000-000000000004",
+      "actorId": "00000000-0000-4000-8000-000000000005",
+      "toolName": "create_person",
+      "toolVersion": 1,
+      "arguments": {
+        "personId": "00000000-0000-4000-8000-000000000021",
+        "name": "Samir",
+        "aliases": []
+      },
+      "expectedVersions": [],
+      "sourceRevisionId": "00000000-0000-4000-8000-000000000007",
+      "evidenceRefs": [
+        "00000000-0000-4000-8000-000000000008"
+      ],
+      "payloadDigest": "03d0ded7012176bf1879351c5a65c2640c302a2ee6c1ea10b71c674d45a56d6d",
+      "permissionSnapshotVersion": 1,
+      "confirmationId": null
+    },
+    "result": {
+      "protocolVersion": 1,
+      "callId": "synthetic-create_person",
+      "commandId": "00000000-0000-4000-8000-000000000001",
+      "status": "committed",
+      "data": {
+        "kind": "person",
+        "id": "00000000-0000-4000-8000-000000000021",
+        "version": 1
+      },
+      "affected": [
+        {
+          "id": "00000000-0000-4000-8000-000000000021",
+          "version": 1
+        }
+      ],
+      "evidenceRefs": [
+        "00000000-0000-4000-8000-000000000008"
+      ],
+      "completeness": "complete",
+      "errorCode": null,
+      "retryable": false,
+      "nextCursor": null
+    }
+  },
+  {
+    "call": {
+      "toolName": "update_person",
+      "schemaVersion": 1,
+      "providerCallId": "synthetic-update_person",
+      "arguments": {
+        "personId": "00000000-0000-4000-8000-000000000021",
+        "patch": {
+          "name": "Samir A."
+        }
+      }
+    },
+    "command": {
+      "protocolVersion": 1,
+      "commandId": "00000000-0000-4000-8000-000000000001",
+      "turnId": "00000000-0000-4000-8000-000000000002",
+      "stepId": "00000000-0000-4000-8000-000000000003",
+      "scopeId": "00000000-0000-4000-8000-000000000004",
+      "actorId": "00000000-0000-4000-8000-000000000005",
+      "toolName": "update_person",
+      "toolVersion": 1,
+      "arguments": {
+        "personId": "00000000-0000-4000-8000-000000000021",
+        "patch": {
+          "name": "Samir A."
+        }
+      },
+      "expectedVersions": [
+        {
+          "id": "00000000-0000-4000-8000-000000000021",
+          "version": 1
+        }
+      ],
+      "sourceRevisionId": "00000000-0000-4000-8000-000000000007",
+      "evidenceRefs": [
+        "00000000-0000-4000-8000-000000000008"
+      ],
+      "payloadDigest": "58cef40ebfd8a98d3f62915cca18b8a7c0133250447e71908e715b3440238d72",
+      "permissionSnapshotVersion": 1,
+      "confirmationId": null
+    },
+    "result": {
+      "protocolVersion": 1,
+      "callId": "synthetic-update_person",
+      "commandId": "00000000-0000-4000-8000-000000000001",
+      "status": "committed",
+      "data": {
+        "kind": "person",
+        "id": "00000000-0000-4000-8000-000000000021",
+        "version": 2
+      },
+      "affected": [
+        {
+          "id": "00000000-0000-4000-8000-000000000021",
+          "version": 2
+        }
+      ],
+      "evidenceRefs": [
+        "00000000-0000-4000-8000-000000000008"
+      ],
+      "completeness": "complete",
+      "errorCode": null,
+      "retryable": false,
+      "nextCursor": null
+    }
+  },
+  {
+    "call": {
+      "toolName": "create_project",
+      "schemaVersion": 1,
+      "providerCallId": "synthetic-create_project",
+      "arguments": {
+        "title": "Servis"
+      }
+    },
+    "command": {
+      "protocolVersion": 1,
+      "commandId": "00000000-0000-4000-8000-000000000001",
+      "turnId": "00000000-0000-4000-8000-000000000002",
+      "stepId": "00000000-0000-4000-8000-000000000003",
+      "scopeId": "00000000-0000-4000-8000-000000000004",
+      "actorId": "00000000-0000-4000-8000-000000000005",
+      "toolName": "create_project",
+      "toolVersion": 1,
+      "arguments": {
+        "projectId": "00000000-0000-4000-8000-000000000022",
+        "title": "Servis",
+        "status": "ACTIVE"
+      },
+      "expectedVersions": [],
+      "sourceRevisionId": "00000000-0000-4000-8000-000000000007",
+      "evidenceRefs": [
+        "00000000-0000-4000-8000-000000000008"
+      ],
+      "payloadDigest": "fdfbbf04ab6aade24d46fe7ea2fafc53464785709a5f37bb569c3aae204c90cc",
+      "permissionSnapshotVersion": 1,
+      "confirmationId": null
+    },
+    "result": {
+      "protocolVersion": 1,
+      "callId": "synthetic-create_project",
+      "commandId": "00000000-0000-4000-8000-000000000001",
+      "status": "committed",
+      "data": {
+        "kind": "project",
+        "id": "00000000-0000-4000-8000-000000000022",
+        "version": 1
+      },
+      "affected": [
+        {
+          "id": "00000000-0000-4000-8000-000000000022",
+          "version": 1
+        }
+      ],
+      "evidenceRefs": [
+        "00000000-0000-4000-8000-000000000008"
+      ],
+      "completeness": "complete",
+      "errorCode": null,
+      "retryable": false,
+      "nextCursor": null
+    }
+  },
+  {
+    "call": {
+      "toolName": "update_project",
+      "schemaVersion": 1,
+      "providerCallId": "synthetic-update_project",
+      "arguments": {
+        "projectId": "00000000-0000-4000-8000-000000000022",
+        "patch": {
+          "status": "ON_HOLD"
+        }
+      }
+    },
+    "command": {
+      "protocolVersion": 1,
+      "commandId": "00000000-0000-4000-8000-000000000001",
+      "turnId": "00000000-0000-4000-8000-000000000002",
+      "stepId": "00000000-0000-4000-8000-000000000003",
+      "scopeId": "00000000-0000-4000-8000-000000000004",
+      "actorId": "00000000-0000-4000-8000-000000000005",
+      "toolName": "update_project",
+      "toolVersion": 1,
+      "arguments": {
+        "projectId": "00000000-0000-4000-8000-000000000022",
+        "patch": {
+          "status": "ON_HOLD"
+        }
+      },
+      "expectedVersions": [
+        {
+          "id": "00000000-0000-4000-8000-000000000022",
+          "version": 1
+        }
+      ],
+      "sourceRevisionId": "00000000-0000-4000-8000-000000000007",
+      "evidenceRefs": [
+        "00000000-0000-4000-8000-000000000008"
+      ],
+      "payloadDigest": "6d0ce2cc5a9ba2b724d257d482caa2ab5230d872108637c0dc962c45c93f43c7",
+      "permissionSnapshotVersion": 1,
+      "confirmationId": null
+    },
+    "result": {
+      "protocolVersion": 1,
+      "callId": "synthetic-update_project",
+      "commandId": "00000000-0000-4000-8000-000000000001",
+      "status": "committed",
+      "data": {
+        "kind": "project",
+        "id": "00000000-0000-4000-8000-000000000022",
+        "version": 2
+      },
+      "affected": [
+        {
+          "id": "00000000-0000-4000-8000-000000000022",
+          "version": 2
+        }
+      ],
+      "evidenceRefs": [
+        "00000000-0000-4000-8000-000000000008"
+      ],
+      "completeness": "complete",
+      "errorCode": null,
+      "retryable": false,
+      "nextCursor": null
+    }
+  }
+]

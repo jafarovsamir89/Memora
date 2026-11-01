@@ -1,0 +1,61 @@
+{
+  "manifestVersion": 1,
+  "suiteId": "memora-agent-contracts-v1",
+  "status": "synthetic-contract-acceptance-only",
+  "dataset": {
+    "id": "memora-agent-synthetic-golden-v1",
+    "version": 1,
+    "classification": "synthetic",
+    "containsPersonalData": false,
+    "fixturePath": "fixtures/all-proposals.json",
+    "generation": "hand-authored deterministic values; no owner records, audio, model responses, credentials, or device identifiers"
+  },
+  "protocol": {
+    "proposalSchema": "model-tool-call.schema.json",
+    "commandSchema": "command-envelope.schema.json",
+    "resultSchema": "tool-result.schema.json",
+    "policyMatrix": "policy-matrix.json",
+    "allToolsRequireDenyByDefault": true,
+    "allToolsRuntimeDisabled": true
+  },
+  "coverage": {
+    "proposalToolCount": 32,
+    "commandToolCount": 23,
+    "proposalTools": [
+      "search_memory", "read_records", "resolve_person", "query_finance", "query_table", "aggregate_table",
+      "create_person", "update_person", "create_project", "update_project", "create_note", "update_note",
+      "link_records", "unlink_records", "create_task", "update_task", "create_calendar_event", "update_calendar_event",
+      "create_table", "add_table_rows", "update_table_rows", "record_receipt", "record_obligation", "record_settlement",
+      "correct_money_event", "preview_delete", "commit_delete", "change_table_schema", "restore_records", "undo_change",
+      "request_clarification", "prepare_changes"
+    ]
+  },
+  "acceptanceSuites": [
+    {
+      "id": "schema-catalog",
+      "test": "tests/agent_contracts/test_schema_catalog_completeness.py",
+      "checks": ["all internal schema refs resolve", "all proposal tools have exactly one strict schema branch", "all 23 mutating tools have command forms", "typed result mapping covers all tools", "policy remains deny by default"]
+    },
+    {
+      "id": "golden-vectors",
+      "test": "tests/agent_contracts/test_contracts.py",
+      "checks": ["all 32 synthetic proposals validate", "all 23 app-authored mutation envelopes validate", "result identity/evidence/target binding rejects tampering"]
+    },
+    {
+      "id": "domain-invariants",
+      "tests": ["tests/agent_contracts/test_money_commands.py", "tests/agent_contracts/test_table_value_types.py", "tests/agent_contracts/test_calendar_contract.py", "tests/agent_contracts/test_confirmation.py", "tests/agent_contracts/test_consent.py", "tests/agent_contracts/test_restore_and_plan.py"],
+      "checks": ["exact minor-unit arithmetic and overpayment rejection", "table cells conform to declared column types", "local dates and DST ambiguity are explicit", "confirmation/consent/version mismatch has no accepted effect", "restore and prepared plans are structurally bounded"]
+    }
+  ],
+  "execution": {
+    "command": "/tmp/memora-contract-venv/bin/python -m unittest discover -s tests/agent_contracts -q",
+    "latestResult": "65 tests passed on 2026-10-31",
+    "evidenceScope": "local deterministic schema and reference-validator tests only; no live model quality, handler, database, Android device, or production claim"
+  },
+  "futureEvaluation": {
+    "status": "not-run",
+    "requiredSlices": ["az-AZ", "ru-RU", "en", "az-RU mixed", "negation", "names", "exact money", "dates and time zones", "ambiguity and abstention", "prompt injection", "source-grounded answers"],
+    "holdoutMustBeDisjoint": true,
+    "requiresOwnerApprovedDataAndSeparatelyDefinedThresholds": true
+  }
+}

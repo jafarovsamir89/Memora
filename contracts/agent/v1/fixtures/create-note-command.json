@@ -1,0 +1,25 @@
+{
+  "protocolVersion": 1,
+  "commandId": "00000000-0000-4000-8000-000000000001",
+  "turnId": "00000000-0000-4000-8000-000000000002",
+  "stepId": "00000000-0000-4000-8000-000000000003",
+  "scopeId": "00000000-0000-4000-8000-000000000004",
+  "actorId": "00000000-0000-4000-8000-000000000005",
+  "toolName": "create_note",
+  "toolVersion": 1,
+  "arguments": {
+    "noteId": "00000000-0000-4000-8000-000000000006",
+    "title": "Sınaq qeydi",
+    "body": "Filtri yoxla",
+    "links": [],
+    "noteRevisionId": "00000000-0000-4000-8000-000000000013"
+  },
+  "expectedVersions": [],
+  "sourceRevisionId": "00000000-0000-4000-8000-000000000007",
+  "evidenceRefs": [
+    "00000000-0000-4000-8000-000000000008"
+  ],
+  "payloadDigest": "69657e6421bfe8cd44f32fe6827079efa296aff9df0427edb6f7c46ace3688c0",
+  "permissionSnapshotVersion": 1,
+  "confirmationId": null
+}

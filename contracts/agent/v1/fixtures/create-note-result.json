@@ -1,0 +1,25 @@
+{
+  "protocolVersion": 1,
+  "callId": "synthetic-call-1",
+  "commandId": "00000000-0000-4000-8000-000000000001",
+  "status": "committed",
+  "data": {
+    "kind": "note",
+    "noteId": "00000000-0000-4000-8000-000000000006",
+    "version": 1,
+    "revisionId": "00000000-0000-4000-8000-000000000013"
+  },
+  "affected": [
+    {
+      "id": "00000000-0000-4000-8000-000000000006",
+      "version": 1
+    }
+  ],
+  "evidenceRefs": [
+    "00000000-0000-4000-8000-000000000008"
+  ],
+  "completeness": "complete",
+  "errorCode": null,
+  "retryable": false,
+  "nextCursor": null
+}

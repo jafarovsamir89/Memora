@@ -1,0 +1,8 @@
+{
+  "scopeId": "00000000-0000-4000-8000-000000000001", "provider": "GEMINI", "kind": "MEMORY_EXCERPT",
+  "payloadDigest": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", "sessionGeneration": 1, "policyVersion": 1,
+  "records": [
+    {"id": "00000000-0000-4000-8000-000000000002", "category": "VOICE_OR_TEXT_TURN", "revision": 1},
+    {"id": "00000000-0000-4000-8000-000000000003", "category": "PERSISTED_MEMORY", "revision": 3}
+  ]
+}

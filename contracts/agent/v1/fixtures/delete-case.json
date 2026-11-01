@@ -1,0 +1,118 @@
+{
+  "call": {
+    "toolName": "preview_delete",
+    "schemaVersion": 1,
+    "providerCallId": "preview-1",
+    "arguments": {
+      "targets": [
+        {
+          "type": "note",
+          "id": "00000000-0000-4000-8000-000000000006"
+        }
+      ]
+    }
+  },
+  "preview": {
+    "protocolVersion": 1,
+    "callId": "preview-1",
+    "commandId": null,
+    "status": "prepared",
+    "data": {
+      "kind": "delete_preview",
+      "previewId": "00000000-0000-4000-8000-000000000030",
+      "planDigest": "86db9e682c43bfd5b7974a00981aa6523a32c7ccecd9665a3a8c4130c357c23a",
+      "scopeId": "00000000-0000-4000-8000-000000000004",
+      "sourceRevisionId": "00000000-0000-4000-8000-000000000007",
+      "mode": "TRASH",
+      "targets": [
+        {
+          "type": "note",
+          "id": "00000000-0000-4000-8000-000000000006",
+          "version": 2
+        }
+      ],
+      "dependentLinks": [
+        {
+          "id": "00000000-0000-4000-8000-000000000023",
+          "version": 5
+        }
+      ]
+    },
+    "affected": [],
+    "evidenceRefs": [],
+    "completeness": null,
+    "errorCode": null,
+    "retryable": false,
+    "nextCursor": null
+  },
+  "command": {
+    "protocolVersion": 1,
+    "commandId": "00000000-0000-4000-8000-000000000001",
+    "turnId": "00000000-0000-4000-8000-000000000002",
+    "stepId": "00000000-0000-4000-8000-000000000003",
+    "scopeId": "00000000-0000-4000-8000-000000000004",
+    "actorId": "00000000-0000-4000-8000-000000000005",
+    "toolName": "commit_delete",
+    "toolVersion": 1,
+    "arguments": {
+      "previewId": "00000000-0000-4000-8000-000000000030",
+      "planDigest": "86db9e682c43bfd5b7974a00981aa6523a32c7ccecd9665a3a8c4130c357c23a"
+    },
+    "expectedVersions": [
+      {
+        "id": "00000000-0000-4000-8000-000000000006",
+        "version": 2
+      },
+      {
+        "id": "00000000-0000-4000-8000-000000000023",
+        "version": 5
+      }
+    ],
+    "sourceRevisionId": "00000000-0000-4000-8000-000000000007",
+    "evidenceRefs": [
+      "00000000-0000-4000-8000-000000000008"
+    ],
+    "payloadDigest": "dd5795849708277eccd771fb4435571d7d3561133a45c22cf3963e26849bd3f0",
+    "permissionSnapshotVersion": 1,
+    "confirmationId": "00000000-0000-4000-8000-000000000031"
+  },
+  "result": {
+    "protocolVersion": 1,
+    "callId": "synthetic-call-1",
+    "commandId": "00000000-0000-4000-8000-000000000001",
+    "status": "committed",
+    "data": {
+      "kind": "deletion",
+      "mode": "TRASH",
+      "targets": [
+        {
+          "id": "00000000-0000-4000-8000-000000000006",
+          "version": 3
+        }
+      ],
+      "deactivatedLinks": [
+        {
+          "id": "00000000-0000-4000-8000-000000000023",
+          "version": 6
+        }
+      ]
+    },
+    "affected": [
+      {
+        "id": "00000000-0000-4000-8000-000000000006",
+        "version": 3
+      },
+      {
+        "id": "00000000-0000-4000-8000-000000000023",
+        "version": 6
+      }
+    ],
+    "evidenceRefs": [
+      "00000000-0000-4000-8000-000000000008"
+    ],
+    "completeness": "complete",
+    "errorCode": null,
+    "retryable": false,
+    "nextCursor": null
+  }
+}

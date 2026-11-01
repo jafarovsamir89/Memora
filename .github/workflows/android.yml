@@ -22,9 +22,14 @@ jobs:
         with:
           distribution: temurin
           java-version: '17'
+      - name: Validate P0 agent contract fixtures
+        run: |
+          python3 -m venv "$RUNNER_TEMP/memora-contract-venv"
+          "$RUNNER_TEMP/memora-contract-venv/bin/python" -m pip install -r tests/agent_contracts/requirements.txt
+          "$RUNNER_TEMP/memora-contract-venv/bin/python" -m unittest discover -s tests/agent_contracts -v
       - name: Build, test and lint without Firebase credentials
         working-directory: apps/android
-        run: ./gradlew testDebugUnitTest assembleDebug lintDebug --no-daemon
+        run: ./gradlew testDebugUnitTest assembleDebug assembleDebugAndroidTest lintDebug --no-daemon
       - name: Upload synthetic-data debug build
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:

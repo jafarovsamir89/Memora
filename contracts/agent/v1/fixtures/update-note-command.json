@@ -1,0 +1,30 @@
+{
+  "protocolVersion": 1,
+  "commandId": "00000000-0000-4000-8000-000000000011",
+  "turnId": "00000000-0000-4000-8000-000000000002",
+  "stepId": "00000000-0000-4000-8000-000000000003",
+  "scopeId": "00000000-0000-4000-8000-000000000004",
+  "actorId": "00000000-0000-4000-8000-000000000005",
+  "toolName": "update_note",
+  "toolVersion": 1,
+  "arguments": {
+    "noteId": "00000000-0000-4000-8000-000000000006",
+    "newRevisionId": "00000000-0000-4000-8000-000000000012",
+    "patch": {
+      "body": "Filtri dəyiş"
+    }
+  },
+  "expectedVersions": [
+    {
+      "id": "00000000-0000-4000-8000-000000000006",
+      "version": 1
+    }
+  ],
+  "sourceRevisionId": "00000000-0000-4000-8000-000000000007",
+  "evidenceRefs": [
+    "00000000-0000-4000-8000-000000000008"
+  ],
+  "payloadDigest": "b07a13fbe230114fb8ed25661e267e175c91abd55f9c5bc07a1e622698ec0537",
+  "permissionSnapshotVersion": 1,
+  "confirmationId": null
+}

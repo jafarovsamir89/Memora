@@ -1,0 +1,415 @@
+[
+  {
+    "toolName": "search_memory",
+    "schemaVersion": 1,
+    "providerCallId": "golden-search_memory",
+    "arguments": {
+      "query": "meeting",
+      "types": [
+        "note"
+      ],
+      "limit": 5
+    }
+  },
+  {
+    "toolName": "create_note",
+    "schemaVersion": 1,
+    "providerCallId": "golden-create_note",
+    "arguments": {
+      "title": "Qeyd",
+      "body": "Yoxla",
+      "links": []
+    }
+  },
+  {
+    "toolName": "update_note",
+    "schemaVersion": 1,
+    "providerCallId": "golden-update_note",
+    "arguments": {
+      "noteId": "00000000-0000-4000-8000-000000000001",
+      "patch": {
+        "body": "Yenilə"
+      }
+    }
+  },
+  {
+    "toolName": "read_records",
+    "schemaVersion": 1,
+    "providerCallId": "golden-read_records",
+    "arguments": {
+      "records": [
+        {
+          "type": "note",
+          "id": "00000000-0000-4000-8000-000000000001"
+        }
+      ],
+      "fields": [
+        "title"
+      ]
+    }
+  },
+  {
+    "toolName": "resolve_person",
+    "schemaVersion": 1,
+    "providerCallId": "golden-resolve_person",
+    "arguments": {
+      "name": "Elçin"
+    }
+  },
+  {
+    "toolName": "create_person",
+    "schemaVersion": 1,
+    "providerCallId": "golden-create_person",
+    "arguments": {
+      "name": "Elçin"
+    }
+  },
+  {
+    "toolName": "update_person",
+    "schemaVersion": 1,
+    "providerCallId": "golden-update_person",
+    "arguments": {
+      "personId": "00000000-0000-4000-8000-000000000002",
+      "patch": {
+        "name": "Elçin Əliyev"
+      }
+    }
+  },
+  {
+    "toolName": "create_project",
+    "schemaVersion": 1,
+    "providerCallId": "golden-create_project",
+    "arguments": {
+      "title": "Layihə"
+    }
+  },
+  {
+    "toolName": "update_project",
+    "schemaVersion": 1,
+    "providerCallId": "golden-update_project",
+    "arguments": {
+      "projectId": "00000000-0000-4000-8000-000000000003",
+      "patch": {
+        "title": "Layihə 2"
+      }
+    }
+  },
+  {
+    "toolName": "link_records",
+    "schemaVersion": 1,
+    "providerCallId": "golden-link_records",
+    "arguments": {
+      "from": {
+        "type": "person",
+        "id": "00000000-0000-4000-8000-000000000002"
+      },
+      "to": {
+        "type": "project",
+        "id": "00000000-0000-4000-8000-000000000003"
+      },
+      "relationType": "ASSOCIATED_WITH"
+    }
+  },
+  {
+    "toolName": "unlink_records",
+    "schemaVersion": 1,
+    "providerCallId": "golden-unlink_records",
+    "arguments": {
+      "linkId": "00000000-0000-4000-8000-000000000004"
+    }
+  },
+  {
+    "toolName": "preview_delete",
+    "schemaVersion": 1,
+    "providerCallId": "golden-preview_delete",
+    "arguments": {
+      "targets": [
+        {
+          "type": "note",
+          "id": "00000000-0000-4000-8000-000000000001"
+        }
+      ]
+    }
+  },
+  {
+    "toolName": "commit_delete",
+    "schemaVersion": 1,
+    "providerCallId": "golden-commit_delete",
+    "arguments": {
+      "previewId": "00000000-0000-4000-8000-000000000005"
+    }
+  },
+  {
+    "toolName": "create_task",
+    "schemaVersion": 1,
+    "providerCallId": "golden-create_task",
+    "arguments": {
+      "title": "Yoxla"
+    }
+  },
+  {
+    "toolName": "update_task",
+    "schemaVersion": 1,
+    "providerCallId": "golden-update_task",
+    "arguments": {
+      "taskId": "00000000-0000-4000-8000-000000000006",
+      "patch": {
+        "title": "Yoxla 2"
+      }
+    }
+  },
+  {
+    "toolName": "query_finance",
+    "schemaVersion": 1,
+    "providerCallId": "golden-query_finance",
+    "arguments": {
+      "operationTypes": [
+        "RECEIPT"
+      ],
+      "currency": "AZN",
+      "asOf": "2026-11-01T00:00:00Z"
+    }
+  },
+  {
+    "toolName": "query_table",
+    "schemaVersion": 1,
+    "providerCallId": "golden-query_table",
+    "arguments": {
+      "tableId": "00000000-0000-4000-8000-000000000007",
+      "expectedSchemaVersion": 1,
+      "projection": [
+        "00000000-0000-4000-8000-000000000008"
+      ]
+    }
+  },
+  {
+    "toolName": "aggregate_table",
+    "schemaVersion": 1,
+    "providerCallId": "golden-aggregate_table",
+    "arguments": {
+      "tableId": "00000000-0000-4000-8000-000000000007",
+      "expectedSchemaVersion": 1,
+      "operation": "COUNT_ROWS",
+      "columnId": "00000000-0000-4000-8000-000000000008"
+    }
+  },
+  {
+    "toolName": "request_clarification",
+    "schemaVersion": 1,
+    "providerCallId": "golden-request_clarification",
+    "arguments": {
+      "reasonCode": "AMBIGUOUS_AMOUNT",
+      "fields": [
+        "amount"
+      ],
+      "options": [
+        {
+          "optionId": "a",
+          "label": "1 AZN"
+        },
+        {
+          "optionId": "b",
+          "label": "2 AZN"
+        }
+      ]
+    }
+  },
+  {
+    "toolName": "create_calendar_event",
+    "schemaVersion": 1,
+    "providerCallId": "golden-create_calendar_event",
+    "arguments": {
+      "title": "Görüş",
+      "start": {
+        "precision": "date",
+        "date": "2026-11-10"
+      },
+      "end": {
+        "precision": "date",
+        "date": "2026-11-11"
+      }
+    }
+  },
+  {
+    "toolName": "update_calendar_event",
+    "schemaVersion": 1,
+    "providerCallId": "golden-update_calendar_event",
+    "arguments": {
+      "eventId": "00000000-0000-4000-8000-000000000009",
+      "patch": {
+        "title": "Görüş yenilə"
+      }
+    }
+  },
+  {
+    "toolName": "record_receipt",
+    "schemaVersion": 1,
+    "providerCallId": "golden-record_receipt",
+    "arguments": {
+      "personId": "00000000-0000-4000-8000-000000000002",
+      "amountMinorUnits": 100,
+      "direction": "IN",
+      "currency": "AZN",
+      "currencyScaleVersion": 1,
+      "occurredAt": "2026-11-01T00:00:00Z"
+    }
+  },
+  {
+    "toolName": "record_obligation",
+    "schemaVersion": 1,
+    "providerCallId": "golden-record_obligation",
+    "arguments": {
+      "personId": "00000000-0000-4000-8000-000000000002",
+      "amountMinorUnits": 100,
+      "direction": "PERSON_OWES_USER",
+      "currency": "AZN",
+      "currencyScaleVersion": 1,
+      "occurredAt": "2026-11-01T00:00:00Z"
+    }
+  },
+  {
+    "toolName": "record_settlement",
+    "schemaVersion": 1,
+    "providerCallId": "golden-record_settlement",
+    "arguments": {
+      "obligationId": "00000000-0000-4000-8000-000000000010",
+      "amountMinorUnits": 50,
+      "currency": "AZN",
+      "currencyScaleVersion": 1,
+      "occurredAt": "2026-11-01T00:00:00Z"
+    }
+  },
+  {
+    "toolName": "correct_money_event",
+    "schemaVersion": 1,
+    "providerCallId": "golden-correct_money_event",
+    "arguments": {
+      "targetEventId": "00000000-0000-4000-8000-000000000011",
+      "reason": "Correct amount",
+      "replacementMinorUnits": null
+    }
+  },
+  {
+    "toolName": "create_table",
+    "schemaVersion": 1,
+    "providerCallId": "golden-create_table",
+    "arguments": {
+      "title": "Xərclər",
+      "mode": "editable",
+      "columns": [
+        {
+          "name": "Məbləğ",
+          "type": "money",
+          "required": true,
+          "position": 0
+        }
+      ]
+    }
+  },
+  {
+    "toolName": "add_table_rows",
+    "schemaVersion": 1,
+    "providerCallId": "golden-add_table_rows",
+    "arguments": {
+      "tableId": "00000000-0000-4000-8000-000000000007",
+      "expectedSchemaVersion": 1,
+      "rows": [
+        {
+          "cells": [
+            {
+              "columnId": "00000000-0000-4000-8000-000000000008",
+              "value": {
+                "minorUnits": 100,
+                "currency": "AZN",
+                "currencyScaleVersion": 1
+              }
+            }
+          ]
+        }
+      ]
+    }
+  },
+  {
+    "toolName": "update_table_rows",
+    "schemaVersion": 1,
+    "providerCallId": "golden-update_table_rows",
+    "arguments": {
+      "tableId": "00000000-0000-4000-8000-000000000007",
+      "expectedSchemaVersion": 1,
+      "rows": [
+        {
+          "rowId": "00000000-0000-4000-8000-000000000012",
+          "expectedVersion": 1,
+          "patch": [
+            {
+              "columnId": "00000000-0000-4000-8000-000000000008",
+              "value": 100
+            }
+          ]
+        }
+      ]
+    }
+  },
+  {
+    "toolName": "change_table_schema",
+    "schemaVersion": 1,
+    "providerCallId": "golden-change_table_schema",
+    "arguments": {
+      "tableId": "00000000-0000-4000-8000-000000000007",
+      "expectedSchemaVersion": 1,
+      "patch": [
+        {
+          "columnId": "00000000-0000-4000-8000-000000000008",
+          "operation": "rename",
+          "name": "Məbləğ"
+        }
+      ]
+    }
+  },
+  {
+    "toolName": "restore_records",
+    "schemaVersion": 1,
+    "providerCallId": "golden-restore_records",
+    "arguments": {
+      "records": [
+        {
+          "recordId": "00000000-0000-4000-8000-000000000013",
+          "expectedTrashVersion": 2
+        }
+      ]
+    }
+  },
+  {
+    "toolName": "undo_change",
+    "schemaVersion": 1,
+    "providerCallId": "golden-undo_change",
+    "arguments": {
+      "changeSetId": "00000000-0000-4000-8000-000000000014",
+      "reason": "Undo last change"
+    }
+  },
+  {
+    "toolName": "prepare_changes",
+    "schemaVersion": 1,
+    "providerCallId": "golden-prepare_changes",
+    "arguments": {
+      "operations": [
+        {
+          "operationId": "create-note",
+          "toolName": "create_note",
+          "arguments": {
+            "title": "Qeyd",
+            "body": "Test",
+            "links": []
+          },
+          "dependsOn": []
+        }
+      ],
+      "atomicGroups": [
+        [
+          "create-note"
+        ]
+      ]
+    }
+  }
+]

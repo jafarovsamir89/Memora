@@ -1,0 +1,136 @@
+[
+  {
+    "call": {
+      "toolName": "create_task",
+      "schemaVersion": 1,
+      "providerCallId": "synthetic-create_task",
+      "arguments": {
+        "title": "Zəng et",
+        "due": {
+          "precision": "date",
+          "date": "2026-11-02"
+        }
+      }
+    },
+    "command": {
+      "protocolVersion": 1,
+      "commandId": "00000000-0000-4000-8000-000000000001",
+      "turnId": "00000000-0000-4000-8000-000000000002",
+      "stepId": "00000000-0000-4000-8000-000000000003",
+      "scopeId": "00000000-0000-4000-8000-000000000004",
+      "actorId": "00000000-0000-4000-8000-000000000005",
+      "toolName": "create_task",
+      "toolVersion": 1,
+      "arguments": {
+        "taskId": "00000000-0000-4000-8000-000000000040",
+        "title": "Zəng et",
+        "due": {
+          "precision": "date",
+          "date": "2026-11-02"
+        },
+        "remind": false,
+        "links": []
+      },
+      "expectedVersions": [],
+      "sourceRevisionId": "00000000-0000-4000-8000-000000000007",
+      "evidenceRefs": [
+        "00000000-0000-4000-8000-000000000008"
+      ],
+      "payloadDigest": "2f40cfe3d0097c70b2f24e9599cbc154d425083d63b66f206040ef7a2fd41647",
+      "permissionSnapshotVersion": 1,
+      "confirmationId": null
+    },
+    "result": {
+      "protocolVersion": 1,
+      "callId": "synthetic-create_task",
+      "commandId": "00000000-0000-4000-8000-000000000001",
+      "status": "committed",
+      "data": {
+        "kind": "task",
+        "id": "00000000-0000-4000-8000-000000000040",
+        "version": 1,
+        "reminderStatus": "NONE"
+      },
+      "affected": [
+        {
+          "id": "00000000-0000-4000-8000-000000000040",
+          "version": 1
+        }
+      ],
+      "evidenceRefs": [
+        "00000000-0000-4000-8000-000000000008"
+      ],
+      "completeness": "complete",
+      "errorCode": null,
+      "retryable": false,
+      "nextCursor": null
+    }
+  },
+  {
+    "call": {
+      "toolName": "update_task",
+      "schemaVersion": 1,
+      "providerCallId": "synthetic-update_task",
+      "arguments": {
+        "taskId": "00000000-0000-4000-8000-000000000040",
+        "patch": {
+          "status": "DONE"
+        }
+      }
+    },
+    "command": {
+      "protocolVersion": 1,
+      "commandId": "00000000-0000-4000-8000-000000000001",
+      "turnId": "00000000-0000-4000-8000-000000000002",
+      "stepId": "00000000-0000-4000-8000-000000000003",
+      "scopeId": "00000000-0000-4000-8000-000000000004",
+      "actorId": "00000000-0000-4000-8000-000000000005",
+      "toolName": "update_task",
+      "toolVersion": 1,
+      "arguments": {
+        "taskId": "00000000-0000-4000-8000-000000000040",
+        "patch": {
+          "status": "DONE"
+        }
+      },
+      "expectedVersions": [
+        {
+          "id": "00000000-0000-4000-8000-000000000040",
+          "version": 1
+        }
+      ],
+      "sourceRevisionId": "00000000-0000-4000-8000-000000000007",
+      "evidenceRefs": [
+        "00000000-0000-4000-8000-000000000008"
+      ],
+      "payloadDigest": "a9fc3356ec8dca01bda88f75e39cb902345377096409e7044546ff222ddd188e",
+      "permissionSnapshotVersion": 1,
+      "confirmationId": null
+    },
+    "result": {
+      "protocolVersion": 1,
+      "callId": "synthetic-update_task",
+      "commandId": "00000000-0000-4000-8000-000000000001",
+      "status": "committed",
+      "data": {
+        "kind": "task",
+        "id": "00000000-0000-4000-8000-000000000040",
+        "version": 2,
+        "reminderStatus": "NONE"
+      },
+      "affected": [
+        {
+          "id": "00000000-0000-4000-8000-000000000040",
+          "version": 2
+        }
+      ],
+      "evidenceRefs": [
+        "00000000-0000-4000-8000-000000000008"
+      ],
+      "completeness": "complete",
+      "errorCode": null,
+      "retryable": false,
+      "nextCursor": null
+    }
+  }
+]

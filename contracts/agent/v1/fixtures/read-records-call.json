@@ -1,0 +1,1 @@
+{"toolName":"read_records","schemaVersion":1,"providerCallId":"synthetic-read-1","arguments":{"records":[{"type":"note","id":"00000000-0000-4000-8000-000000000006"}],"fields":["title","revision"]}}

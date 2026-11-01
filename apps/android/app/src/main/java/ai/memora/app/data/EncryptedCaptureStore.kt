@@ -29,7 +29,7 @@ data class CaptureArchiveSelection(val sourceId: String, val revisionId: String,
 data class CaptureTombstone(val commandId: String, val sourceId: String, val revisionId: String,
     val priorRevisionIds: List<String> = emptyList())
 data class CaptureSnapshot(val draft: String, val draftVersion: Long, val captures: List<CaptureEntry>,
-    val tombstones: List<CaptureTombstone> = emptyList())
+    val tombstones: List<CaptureTombstone> = emptyList(), val sourceSchema: Int = 5)
 
 sealed interface CaptureExport {
     data class Ready(val json: String) : CaptureExport
@@ -501,6 +501,6 @@ class EncryptedCaptureStore(private val path: File, private val keyProvider: (Bo
             }
             CaptureTombstone(cmd, source, revision, previous)
         }
-        return CaptureSnapshot(draft, version, captures, tombstones)
+        return CaptureSnapshot(draft, version, captures, tombstones, schema)
     }
 }

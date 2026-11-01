@@ -1,0 +1,5 @@
+{
+  "protocolVersion": 1, "callId": "synthetic-call-2", "commandId": null, "status": "empty",
+  "data": {"kind": "search", "hits": []}, "affected": [], "evidenceRefs": [], "completeness": "complete",
+  "errorCode": null, "retryable": false, "nextCursor": null
+}

@@ -1,0 +1,145 @@
+[
+  {
+    "call": {
+      "toolName": "link_records",
+      "schemaVersion": 1,
+      "providerCallId": "synthetic-link_records",
+      "arguments": {
+        "from": {
+          "type": "person",
+          "id": "00000000-0000-4000-8000-000000000021"
+        },
+        "to": {
+          "type": "project",
+          "id": "00000000-0000-4000-8000-000000000022"
+        },
+        "relationType": "ASSOCIATED_WITH"
+      }
+    },
+    "command": {
+      "protocolVersion": 1,
+      "commandId": "00000000-0000-4000-8000-000000000001",
+      "turnId": "00000000-0000-4000-8000-000000000002",
+      "stepId": "00000000-0000-4000-8000-000000000003",
+      "scopeId": "00000000-0000-4000-8000-000000000004",
+      "actorId": "00000000-0000-4000-8000-000000000005",
+      "toolName": "link_records",
+      "toolVersion": 1,
+      "arguments": {
+        "from": {
+          "type": "person",
+          "id": "00000000-0000-4000-8000-000000000021"
+        },
+        "to": {
+          "type": "project",
+          "id": "00000000-0000-4000-8000-000000000022"
+        },
+        "relationType": "ASSOCIATED_WITH",
+        "linkId": "00000000-0000-4000-8000-000000000023"
+      },
+      "expectedVersions": [
+        {
+          "id": "00000000-0000-4000-8000-000000000021",
+          "version": 1
+        },
+        {
+          "id": "00000000-0000-4000-8000-000000000022",
+          "version": 2
+        }
+      ],
+      "sourceRevisionId": "00000000-0000-4000-8000-000000000007",
+      "evidenceRefs": [
+        "00000000-0000-4000-8000-000000000008"
+      ],
+      "payloadDigest": "2f96783989dbbc82bb600a753ad12cfd4b3679a39e41a1545c77219b6eab671a",
+      "permissionSnapshotVersion": 1,
+      "confirmationId": null
+    },
+    "result": {
+      "protocolVersion": 1,
+      "callId": "synthetic-link_records",
+      "commandId": "00000000-0000-4000-8000-000000000001",
+      "status": "committed",
+      "data": {
+        "kind": "link",
+        "id": "00000000-0000-4000-8000-000000000023",
+        "version": 1,
+        "active": true
+      },
+      "affected": [
+        {
+          "id": "00000000-0000-4000-8000-000000000023",
+          "version": 1
+        }
+      ],
+      "evidenceRefs": [
+        "00000000-0000-4000-8000-000000000008"
+      ],
+      "completeness": "complete",
+      "errorCode": null,
+      "retryable": false,
+      "nextCursor": null
+    }
+  },
+  {
+    "call": {
+      "toolName": "unlink_records",
+      "schemaVersion": 1,
+      "providerCallId": "synthetic-unlink_records",
+      "arguments": {
+        "linkId": "00000000-0000-4000-8000-000000000023"
+      }
+    },
+    "command": {
+      "protocolVersion": 1,
+      "commandId": "00000000-0000-4000-8000-000000000001",
+      "turnId": "00000000-0000-4000-8000-000000000002",
+      "stepId": "00000000-0000-4000-8000-000000000003",
+      "scopeId": "00000000-0000-4000-8000-000000000004",
+      "actorId": "00000000-0000-4000-8000-000000000005",
+      "toolName": "unlink_records",
+      "toolVersion": 1,
+      "arguments": {
+        "linkId": "00000000-0000-4000-8000-000000000023"
+      },
+      "expectedVersions": [
+        {
+          "id": "00000000-0000-4000-8000-000000000023",
+          "version": 1
+        }
+      ],
+      "sourceRevisionId": "00000000-0000-4000-8000-000000000007",
+      "evidenceRefs": [
+        "00000000-0000-4000-8000-000000000008"
+      ],
+      "payloadDigest": "a008571e977913a9cc70e35044e25b539d9a239a7c3a784981e958a49e6bd11d",
+      "permissionSnapshotVersion": 1,
+      "confirmationId": null
+    },
+    "result": {
+      "protocolVersion": 1,
+      "callId": "synthetic-unlink_records",
+      "commandId": "00000000-0000-4000-8000-000000000001",
+      "status": "committed",
+      "data": {
+        "kind": "link",
+        "id": "00000000-0000-4000-8000-000000000023",
+        "version": 2,
+        "active": false
+      },
+      "affected": [
+        {
+          "id": "00000000-0000-4000-8000-000000000023",
+          "version": 2
+        }
+      ],
+      "evidenceRefs": [
+        "00000000-0000-4000-8000-000000000008"
+      ],
+      "completeness": "complete",
+      "errorCode": null,
+      "retryable": false,
+      "nextCursor": null
+    }
+  }
+]

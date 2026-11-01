@@ -1,0 +1,4 @@
+{
+  "toolName": "search_memory", "schemaVersion": 1, "providerCallId": "synthetic-call-2",
+  "arguments": {"query": "filtr", "types": ["note"], "limit": 20}
+}

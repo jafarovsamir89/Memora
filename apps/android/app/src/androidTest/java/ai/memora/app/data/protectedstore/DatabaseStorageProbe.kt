@@ -1,0 +1,507 @@
+package ai.memora.app.data.protectedstore
+
+import android.content.Context
+import android.os.Bundle
+import android.util.AtomicFile
+import androidx.room.Room
+import net.zetetic.database.sqlcipher.SupportOpenHelperFactory
+import ai.memora.app.data.EncryptedCaptureStore
+import ai.memora.app.data.EncryptedTaskStore
+import ai.memora.app.data.VoiceMoneyStore
+import ai.memora.app.agent.AgentCommandJournalEntry
+import ai.memora.app.agent.AgentTurnStatus
+import ai.memora.app.data.CaptureRead
+import ai.memora.app.data.StoreRead
+import ai.memora.app.data.VoiceStoreRead
+import javax.crypto.Cipher
+import javax.crypto.spec.GCMParameterSpec
+import javax.crypto.spec.SecretKeySpec
+import kotlinx.coroutines.runBlocking
+import org.json.JSONArray
+import org.json.JSONObject
+import java.io.File
+import java.security.KeyStore
+
+/** Manual, local-only probe. Requires explicit opt-in and writes a synthetic test-named database. */
+object DatabaseStorageProbe {
+    fun run(context: Context, permitted: Boolean): Bundle {
+        val result = Bundle()
+        if (!permitted ||
+            context.packageName != "ai.memora.app" ||
+            context.applicationInfo.flags and android.content.pm.ApplicationInfo.FLAG_DEBUGGABLE == 0
+        ) {
+            result.putString("status", "explicit_debug_synthetic_opt_in_required")
+            return result
+        }
+
+        val databaseName = "memora-agent-storage-probe.db"
+        val envelopeName = "memora-agent-storage-probe-key.v1"
+        val wrappingAlias = "ai.memora.app.test.storage-probe.v1"
+        val databaseFile = context.getDatabasePath(databaseName)
+        val envelope = AtomicFile(File(context.noBackupFilesDir, envelopeName))
+        val keyStore = KeyStore.getInstance("AndroidKeyStore").apply { load(null) }
+        var database: ProtectedProbeDatabase? = null
+        var wrongKeyDatabase: ProtectedProbeDatabase? = null
+        try {
+            System.loadLibrary("sqlcipher")
+            val provider = DatabaseKeyProvider(context, databaseFile, envelope, keyStore, wrappingAlias)
+            val firstKey = provider.loadOrCreate()
+            database = open(context, databaseName, firstKey)
+            database.openHelper.writableDatabase.execSQL(
+                "INSERT INTO agent_command_journal (commandId, digest, status, targetVersionsJson) VALUES (?, ?, ?, ?)",
+                arrayOf("synthetic-probe-command", "a".repeat(64), "COMMITTED", "[]"),
+            )
+            check(readCommandId(database) == "synthetic-probe-command")
+            database.close()
+            database = null
+            firstKey.fill(0)
+
+            val secondKey = provider.loadOrCreate()
+            check(secondKey.size == 32)
+            val wrongKey = ByteArray(32) { (it + 1).toByte() }
+            wrongKeyDatabase = open(context, databaseName, wrongKey)
+            val wrongKeyRejected = runCatching { wrongKeyDatabase!!.openHelper.writableDatabase }.isFailure
+            wrongKeyDatabase!!.close()
+            wrongKeyDatabase = null
+            wrongKey.fill(0)
+            check(wrongKeyRejected)
+
+            database = open(context, databaseName, secondKey)
+            check(readCommandId(database) == "synthetic-probe-command")
+            database.close()
+            database = null
+            val encryptedBytes = databaseFile.readBytes()
+            check(!encryptedBytes.containsAscii("synthetic-probe-command"))
+            check(!encryptedBytes.contentStartsWith("SQLite format 3\u0000".toByteArray()))
+            encryptedBytes.fill(0)
+            secondKey.fill(0)
+            result.putString("status", "passed")
+            result.putBoolean("reopen_with_correct_key", true)
+            result.putBoolean("wrong_key_rejected_without_data_loss", true)
+            result.putBoolean("closed_database_has_no_plaintext_marker", true)
+        } catch (error: Exception) {
+            result.putString("status", "failed")
+            result.putString("error_type", error.javaClass.simpleName)
+            error.message?.filter { it.isLetter() || it == '_' || it == ' ' }?.take(100)?.let { result.putString("failure_reason", it) }
+            if (error is SyntheticProbeFailure) {
+                result.putString("failure_stage", error.stage)
+                error.reason?.let { result.putString("failure_reason", it) }
+                error.diagnostic?.let { result.putString("synthetic_import_row_ids", it) }
+            }
+        } finally {
+            runCatching { database?.close() }
+            runCatching { wrongKeyDatabase?.close() }
+            context.deleteDatabase(databaseName)
+            envelope.baseFile.delete()
+            keyStore.deleteEntry(wrappingAlias)
+        }
+        return result
+    }
+
+    /** Exercises Room transactions and idempotent migration on a separate synthetic SQLCipher DB. */
+    fun runMigration(context: Context, permitted: Boolean): Bundle {
+        val result = Bundle()
+        if (!permitted || context.packageName != "ai.memora.app" ||
+            context.applicationInfo.flags and android.content.pm.ApplicationInfo.FLAG_DEBUGGABLE == 0) {
+            result.putString("status", "explicit_debug_synthetic_opt_in_required")
+            return result
+        }
+        val dbName = "memora-agent-migration-probe.db"
+        val alias = "ai.memora.app.test.migration-probe.v1"
+        val envelope = AtomicFile(File(context.noBackupFilesDir, "memora-agent-migration-probe-key.v1"))
+        val databaseFile = context.getDatabasePath(dbName)
+        val store = KeyStore.getInstance("AndroidKeyStore").apply { load(null) }
+        var db: AgentDatabase? = null
+        var sourceFixtureDirectory: File? = null
+        try {
+            System.loadLibrary("sqlcipher")
+            verifyLegacyStoreReaders(context)
+            verifyRoomSchemaUpgrade(context, store)
+            val key = DatabaseKeyProvider(context, databaseFile, envelope, store, alias).loadOrCreate()
+            db = Room.databaseBuilder(context, AgentDatabase::class.java, dbName)
+                .addMigrations(AGENT_DB_1_TO_2, AGENT_DB_2_TO_3, AGENT_DB_3_TO_4, AGENT_DB_4_TO_5, AGENT_DB_5_TO_6)
+                .setJournalMode(androidx.room.RoomDatabase.JournalMode.TRUNCATE)
+                .openHelperFactory(SupportOpenHelperFactory(key, null, false))
+                .build()
+            db.openHelper.writableDatabase
+
+            val repository = ProtectedMemoryRepository(db)
+            val (coordinator, fixtureDirectory) = createMigrationCoordinator(context, repository)
+            sourceFixtureDirectory = fixtureDirectory
+            val first = runBlocking { coordinator.migrate() }
+            check(first is MigrationResult.Applied)
+            val retry = runBlocking { coordinator.migrate() }
+            check(retry == MigrationResult.AlreadyApplied)
+            runBlocking {
+                check(runCatching {
+                    repository.recordPendingCommand("synthetic-invalid-version", "0".repeat(64),
+                        "[{\"entityId\":\"synthetic-task\",\"version\":2.0}]")
+                }.isFailure)
+                repository.recordPendingCommand("synthetic-pending-command", "d".repeat(64),
+                    "[{\"entityId\":\"synthetic-task\",\"version\":2}]")
+                repository.recordPendingCommand("synthetic-pending-command", "d".repeat(64),
+                    "[{\"entityId\":\"synthetic-task\",\"version\":2}]")
+                check(runCatching {
+                    repository.recordPendingCommand("synthetic-pending-command", "e".repeat(64), "[]")
+                }.isFailure)
+                repository.enqueue("synthetic-operation", "synthetic-pending-command", "f".repeat(64),
+                    "[{\"entityId\":\"synthetic-task\",\"version\":2}]")
+                repository.updateOutbox("synthetic-operation", "retry")
+                check(db!!.protectedStoreDao().outbox("synthetic-operation")?.status == "retry")
+                repository.removeOutbox("synthetic-operation")
+                repository.forgetResolvedCommand("synthetic-pending-command")
+            }
+            val runtimeJournal = RoomAgentRunJournal(db)
+            val recoveryTurnId = "00000000-0000-4000-8000-000000000041"
+            runBlocking {
+                runtimeJournal.beginTurn(recoveryTurnId)
+                runtimeJournal.setTurnStatus(recoveryTurnId, AgentTurnStatus.EXECUTING)
+                val commandId = "00000000-0000-4000-8000-000000000042"
+                runtimeJournal.recordCommand(AgentCommandJournalEntry(commandId, "9".repeat(64), "prepared",
+                    mapOf("00000000-0000-4000-8000-000000000043" to 7L)))
+                runtimeJournal.setCommandStatus(commandId, "prepared", "applying")
+                runtimeJournal.setCommandStatus(commandId, "applying", "reconciling")
+                check(runtimeJournal.command(commandId)?.targetVersions?.get("00000000-0000-4000-8000-000000000043") == 7L)
+                check(runtimeJournal.unresolvedCommands().single().status == "reconciling")
+            }
+            val replayed = runBlocking { repository.tasks() }
+            check(replayed.tasks.single().title == "Call dentist" && replayed.tasks.single().version == 2L)
+            check(replayed.deletedIds == setOf("deleted-task-marker"))
+            verifyP3P6Domain(db!!)
+            db.close(); db = null
+            val reopenedKey = DatabaseKeyProvider(context, databaseFile, envelope, store, alias).loadOrCreate()
+            db = Room.databaseBuilder(context, AgentDatabase::class.java, dbName)
+                .addMigrations(AGENT_DB_1_TO_2, AGENT_DB_2_TO_3, AGENT_DB_3_TO_4, AGENT_DB_4_TO_5, AGENT_DB_5_TO_6)
+                .setJournalMode(androidx.room.RoomDatabase.JournalMode.TRUNCATE)
+                .openHelperFactory(SupportOpenHelperFactory(reopenedKey, null, false)).build()
+            db.openHelper.writableDatabase
+            runBlocking {
+                val journal = RoomAgentRunJournal(db!!)
+                val interrupted = journal.interruptedTurns()
+                check(interrupted.single().turnId == "00000000-0000-4000-8000-000000000041")
+                check(interrupted.single().status == AgentTurnStatus.EXECUTING)
+                journal.setTurnStatus(interrupted.single().turnId, AgentTurnStatus.RECOVERY_REQUIRED)
+                check(journal.interruptedTurns().isEmpty())
+                check(db!!.protectedStoreDao().turn("00000000-0000-4000-8000-000000000041")?.status == "RECOVERY_REQUIRED")
+                check(journal.command("00000000-0000-4000-8000-000000000042")?.status == "reconciling")
+                journal.finishTurn("00000000-0000-4000-8000-000000000041", AgentTurnStatus.COMPLETED)
+                check(db!!.protectedStoreDao().turn("00000000-0000-4000-8000-000000000041") == null)
+                val domain = ProtectedDomainRepository(db!!)
+                check(domain.search("synthetic-scope", "FILTER").single().version == 4L)
+                check(db!!.protectedStoreDao().rows("synthetic-table-p4", "synthetic-scope").size == 2)
+                check(domain.aggregateMoney("synthetic-scope", "synthetic-table-p4", "amount") == mapOf("AZN" to 1250L, "USD" to 75L))
+                check(domain.calendarBetween("synthetic-scope", "2026-01-05", "2026-01-07").size == 2)
+                check(domain.recordSettlement("synthetic-scope", "synthetic-settlement-p6", "synthetic-settle-command", "synthetic-obligation-p6", 2500L, "AZN", null, "synthetic partial payment") == 7500L)
+                check(ProtectedMemoryRepository(db!!).tasks().tasks.single { it.id == "synthetic-task-p6" }.title == "Call Elchin")
+            }
+            runBlocking {
+                check(db!!.protectedStoreDao().moneyEvents().single { it.eventId == "synthetic-receipt" }.minorUnits == 10205L)
+                check(db!!.protectedStoreDao().migrations().size == 3)
+            }
+            db.close(); db = null
+            val bytes = databaseFile.readBytes()
+            check(!bytes.containsAscii("synthetic migration marker"))
+            check(!bytes.contentStartsWith("SQLite format 3\u0000".toByteArray()))
+            bytes.fill(0); key.fill(0)
+            result.putString("status", "passed")
+            result.putBoolean("all_three_stores_migrated_atomically", true)
+            result.putBoolean("retry_is_idempotent", true)
+            result.putBoolean("task_history_replayed", true)
+            result.putBoolean("exact_minor_units_preserved", true)
+            result.putBoolean("journal_and_outbox_idempotent", true)
+            result.putBoolean("all_legacy_schema_readers_validated", true)
+            result.putBoolean("encrypted_legacy_files_read_end_to_end", true)
+            result.putBoolean("room_1_to_6_upgrade_preserves_journal", true)
+            result.putBoolean("p3_objects_links_delete_restore_and_scoped_search", true)
+            result.putBoolean("p4_typed_table_exact_money_export_import", true)
+            result.putBoolean("p5_bounded_evidence_search", true)
+            result.putBoolean("p6_exact_settlement_task_event_and_calendar_validation", true)
+            result.putBoolean("p3_p6_data_survives_database_reopen", true)
+            result.putBoolean("room_2_to_3_recovery_journal_survives_reopen", true)
+            result.putBoolean("resolved_turn_status_is_removed", true)
+            result.putBoolean("closed_database_has_no_plaintext_marker", true)
+        } catch (error: Exception) {
+            result.putString("status", "failed")
+            result.putString("error_type", error.javaClass.simpleName)
+            error.message?.filter { it.isLetter() || it == '_' || it == ' ' }?.take(100)?.let { result.putString("failure_reason", it) }
+            if (error is SyntheticProbeFailure) {
+                result.putString("failure_stage", error.stage)
+                error.reason?.let { result.putString("failure_reason", it) }
+                error.diagnostic?.let { result.putString("synthetic_import_row_ids", it) }
+            }
+        } finally {
+            runCatching { db?.close() }
+            context.deleteDatabase(dbName)
+            envelope.baseFile.delete()
+            store.deleteEntry(alias)
+            sourceFixtureDirectory?.deleteRecursively()
+        }
+        return result
+    }
+
+    private class SyntheticProbeFailure(val stage: String, val reason: String?, val diagnostic: String?) : RuntimeException()
+
+    private fun verifyP3P6Domain(db: AgentDatabase) = runBlocking {
+        var stage = "p3-create-objects"
+        var diagnostic: String? = null
+        try {
+        val domain = ProtectedDomainRepository(db)
+        domain.createObject("synthetic-scope", "synthetic-person-p3", DomainKind.PERSON, "Nigar", null, null, "2026-01-01T00:00:00Z")
+        domain.createObject("synthetic-scope", "synthetic-project-p3", DomainKind.PROJECT, "Repair", null, null, "2026-01-01T00:00:00Z")
+        domain.createObject("synthetic-scope", "synthetic-note-p3", DomainKind.NOTE, "Filter service", "Change the filter", "synthetic-source-revision", "2026-01-01T00:00:00Z")
+        domain.link("synthetic-scope", "synthetic-link-p3", "synthetic-note-p3", "synthetic-project-p3", "about")
+        val updated = domain.updateObject("synthetic-scope", "synthetic-note-p3", 1, "Filter service", "Change the filter tomorrow", "active", "synthetic-source-revision-2", "2026-01-02T00:00:00Z")
+        check(updated.version == 2L && db.protectedStoreDao().domainRevisions("synthetic-note-p3").size == 2)
+        val searchHit = domain.search("synthetic-scope", "FILTER").single()
+        check(searchHit.sourceRevisionId == "synthetic-source-revision-2" && searchHit.evidenceRevisionId == "synthetic-note-p3:2")
+        check(searchHit.evidenceEndUtf16 - searchHit.evidenceStartUtf16 == 6)
+        check(domain.context("synthetic-scope", "FILTER", 100).single().evidenceText.length <= 100)
+        check(domain.search("another-scope", "FILTER").isEmpty())
+        val deletion = domain.previewDelete("synthetic-scope", "synthetic-note-p3", 2)
+        check(deletion.linkedIds == listOf("synthetic-project-p3"))
+        domain.delete("synthetic-scope", deletion, "2026-01-03T00:00:00Z")
+        check(domain.search("synthetic-scope", "FILTER").isEmpty())
+        check(db.protectedStoreDao().activeLinks("synthetic-scope").isEmpty())
+        check(domain.restore("synthetic-scope", "synthetic-note-p3", 3, "2026-01-04T00:00:00Z").version == 4L)
+        check(db.protectedStoreDao().activeLinks("synthetic-scope").size == 1)
+
+        stage = "p4-typed-tables"
+        stage = "p4-create-table"
+        val columns = listOf(ColumnSpec("day", "Day", ColumnType.DATE, true), ColumnSpec("person", "Person", ColumnType.PERSON_REF),
+            ColumnSpec("amount", "Amount", ColumnType.MONEY, true), ColumnSpec("memo", "Memo", ColumnType.TEXT))
+        domain.createTable("synthetic-scope", "synthetic-table-p4", "Expenses", "editable", columns)
+        stage = "p4-add-rows"
+        domain.addRows("synthetic-scope", "synthetic-table-p4", 1, listOf(
+            "synthetic-row-1" to mapOf("day" to "2026-01-03", "person" to "synthetic-person-p3", "amount" to mapOf("minorUnits" to 1250L, "currency" to "AZN"), "memo" to "filter"),
+            "synthetic-row-2" to mapOf("day" to "2026-01-04", "person" to "synthetic-person-p3", "amount" to mapOf("minorUnits" to 75L, "currency" to "USD"), "memo" to "part")
+        ))
+        stage = "p4-exact-aggregate"
+        check(domain.aggregateMoney("synthetic-scope", "synthetic-table-p4", "amount") == mapOf("AZN" to 1250L, "USD" to 75L))
+        stage = "p4-export"
+        val export = JSONObject(domain.exportTable("synthetic-scope", "synthetic-table-p4"))
+        export.put("tableId", "synthetic-table-p4-copy")
+        stage = "p4-create-copy"
+        domain.createTable("synthetic-scope", "synthetic-table-p4-copy", "Expenses copy", "editable", columns)
+        stage = "p4-import-preview"
+        val preview = domain.previewImport("synthetic-scope", "synthetic-table-p4-copy", export.toString())
+        diagnostic = preview.rows.joinToString(",") { it.first }
+        check(preview.rows.size == 2)
+        stage = "p4-import-preview-ids"
+        check(preview.rows.map { it.first }.distinct().size == 2)
+        stage = "p4-import-first"
+        check(domain.importRows("synthetic-scope", preview).size == 2)
+        check(db.protectedStoreDao().rows("synthetic-table-p4-copy", "synthetic-scope").size == 2)
+        stage = "p4-import-retry"
+        check(domain.importRows("synthetic-scope", preview).size == 2)
+        stage = "p4-schema-change"
+        check(domain.changeTableSchema("synthetic-scope", "synthetic-table-p4-copy", 1, columns + ColumnSpec("tag", "Tag", ColumnType.TEXT), "2026-01-05T00:00:00Z") == 2L)
+        check(db.protectedStoreDao().schemaRevisions("synthetic-table-p4-copy").map { it.version } == listOf(1L, 2L))
+        check(runCatching { domain.addRows("synthetic-scope", "synthetic-table-p4-copy", 1, listOf("stale" to mapOf("day" to "2026-01-05"))) }.isFailure)
+
+        stage = "p6-finance"
+        // Finance events are synthetic fixtures; a settlement cannot exceed the exact outstanding balance.
+        db.protectedStoreDao().putMoneyEvents(listOf(MoneyEventRow("synthetic-obligation-p6", "synthetic-debt-command", "synthetic-person-p3", "debt", 10_000L, "AZN", "synthetic", "2026-01-01T00:00:00Z", null, "synthetic-scope")))
+        check(domain.recordSettlement("synthetic-scope", "synthetic-settlement-p6", "synthetic-settle-command", "synthetic-obligation-p6", 2_500L, "AZN", null, "synthetic partial payment") == 7_500L)
+        check(domain.recordSettlement("synthetic-scope", "synthetic-settlement-p6", "synthetic-settle-command", "synthetic-obligation-p6", 2_500L, "AZN", null, "synthetic partial payment") == 7_500L)
+        check(runCatching { domain.recordSettlement("other-scope", "synthetic-cross-scope-p6", "synthetic-cross-scope-command", "synthetic-obligation-p6", 1L, "AZN", null, "wrong scope") }.isFailure)
+        check(runCatching { domain.recordSettlement("synthetic-scope", "synthetic-overpay-p6", "synthetic-overpay-command", "synthetic-obligation-p6", 8_000L, "AZN", null, "synthetic excess") }.isFailure)
+
+        stage = "p6-task-calendar"
+        val task = domain.appendTaskEvent(ai.memora.app.domain.TaskEvent.Created("synthetic-task-p6", "synthetic-scope", "synthetic-owner", "synthetic-task-create-p6", "Call Samir"))
+        check(task.version == 1L && task.title == "Call Samir")
+        check(runCatching { domain.appendTaskEvent(ai.memora.app.domain.TaskEvent.Created("synthetic-task-p6", "synthetic-scope", "synthetic-owner", "synthetic-task-create-p6", "Duplicate")) }.isFailure)
+        val renamedTask = domain.appendTaskEvent(ai.memora.app.domain.TaskEvent.Renamed("synthetic-task-p6", "synthetic-scope", "synthetic-owner", "synthetic-task-rename-p6", 1, "Call Elchin"))
+        check(renamedTask.version == 2L && renamedTask.title == "Call Elchin")
+
+        val calendar = domain.createCalendarEvent(CalendarInput("synthetic-calendar-p6", "synthetic-scope", "Doctor", "2026-01-05T10:00", "2026-01-05T10:30", "Asia/Baku", "minute"))
+        check(calendar.version == 1L)
+        check(domain.updateCalendarEvent("synthetic-scope", CalendarInput("synthetic-calendar-p6", "synthetic-scope", "Doctor visit", "2026-01-05T11:00", "2026-01-05T11:30", "Asia/Baku", "minute"), 1).version == 2L)
+        check(domain.calendarBetween("synthetic-scope", "2026-01-05T00:00", "2026-01-06T00:00").single().title == "Doctor visit")
+        domain.createCalendarEvent(CalendarInput("synthetic-all-day-p6", "synthetic-scope", "Holiday", "2026-01-06", null, "Asia/Baku", "date"))
+        check(domain.calendarBetween("synthetic-scope", "2026-01-06", "2026-01-07").single().timePrecision == "date")
+        check(runCatching { domain.createCalendarEvent(CalendarInput("synthetic-dst-gap-p6", "synthetic-scope", "DST gap", "2026-03-29T02:30", null, "Europe/Berlin", "minute")) }.isFailure)
+        } catch (error: Exception) {
+            val safeReason = error.message?.filter { it.isLetter() || it == '_' || it == ' ' }?.take(80)
+            throw SyntheticProbeFailure(stage, safeReason, diagnostic)
+        }
+    }
+
+    private fun createMigrationCoordinator(
+        context: Context,
+        repository: ProtectedMemoryRepository,
+    ): Pair<LegacyStoreMigrationCoordinator, File> {
+        val directory = File(context.cacheDir, "memora-synthetic-migration-inputs")
+        directory.deleteRecursively(); check(directory.mkdirs())
+        val captureKey = SecretKeySpec(ByteArray(32) { (it + 3).toByte() }, "AES")
+        val taskKey = SecretKeySpec(ByteArray(32) { (it + 11).toByte() }, "AES")
+        val moneyKey = SecretKeySpec(ByteArray(32) { (it + 19).toByte() }, "AES")
+        val date = "2026-01-02T03:04:05Z"
+
+        val captureFile = File(directory, "captures.bin")
+        val capture = JSONObject().put("schema", 5).put("draft", "synthetic draft").put("draftVersion", 2)
+            .put("captures", JSONArray().put(JSONObject().put("command", "capture-command").put("draftVersion", 1)
+                .put("zone", "Asia/Baku").put("source", "synthetic-source").put("origin", "LOCAL")
+                .put("archived", false).put("organizationVersion", 0)
+                .put("revisions", JSONArray().put(JSONObject().put("id", "synthetic-revision").put("number", 1)
+                    .put("text", "synthetic migration marker v1").put("recordedAt", date))
+                    .put(JSONObject().put("id", "synthetic-revision-2").put("number", 2)
+                        .put("text", "synthetic migration marker v2").put("recordedAt", date)))))
+            .put("deleted", JSONArray().put(JSONObject().put("command", "deleted-command")
+                .put("source", "deleted-source").put("revision", "deleted-revision")
+                .put("priorRevisions", JSONArray().put("deleted-prior-revision"))))
+        captureFile.writeBytes(encryptLegacy(byteArrayOf(0x4d, 0x43, 0x01), capture.toString(), captureKey))
+
+        val taskFile = File(directory, "tasks.bin")
+        val events = JSONArray()
+            .put(JSONObject().put("id", "synthetic-task").put("scope", "local").put("actor", "owner")
+                .put("command", "synthetic-command-1").put("type", "created").put("title", "Call the dentist"))
+            .put(JSONObject().put("id", "synthetic-task").put("scope", "local").put("actor", "owner")
+                .put("command", "synthetic-command-2").put("type", "renamed").put("version", 1).put("title", "Call dentist"))
+        taskFile.writeBytes(encryptLegacy(byteArrayOf(0x4d, 0x54, 0x01), JSONObject().put("schema", 2)
+            .put("events", events).put("deleted", JSONArray().put("deleted-task-marker")).toString(), taskKey))
+
+        val moneyFile = File(directory, "voice-money.bin")
+        val money = JSONObject().put("schema", 2)
+            .put("people", JSONArray().put(JSONObject().put("id", "synthetic-person").put("name", "Nigar")))
+            .put("receipts", JSONArray().put(JSONObject().put("id", "synthetic-receipt").put("command", "synthetic-command-3")
+                .put("person", "synthetic-person").put("minor", 10205).put("currency", "AZN")
+                .put("source", "synthetic spoken source").put("recorded", date).put("occurred", JSONObject.NULL)))
+            .put("debts", JSONArray())
+        moneyFile.writeBytes(encryptLegacy(byteArrayOf(0x4d, 0x56, 0x01), money.toString(), moneyKey))
+
+        return LegacyStoreMigrationCoordinator(
+            captureStore = EncryptedCaptureStore(captureFile) { captureKey },
+            taskStore = EncryptedTaskStore(taskFile) { taskKey },
+            voiceMoneyStore = VoiceMoneyStore(moneyFile) { moneyKey },
+            encryptedFiles = mapOf("captures" to captureFile, "tasks" to taskFile, "voice-money" to moneyFile),
+            destination = repository,
+        ) to directory
+    }
+
+    private fun verifyRoomSchemaUpgrade(context: Context, keyStore: KeyStore) {
+        val dbName = "memora-agent-schema-upgrade-probe.db"
+        val alias = "ai.memora.app.test.schema-upgrade-probe.v1"
+        val envelope = AtomicFile(File(context.noBackupFilesDir, "memora-agent-schema-upgrade-probe-key.v1"))
+        val file = context.getDatabasePath(dbName)
+        try {
+            val oldKey = DatabaseKeyProvider(context, file, envelope, keyStore, alias).loadOrCreate()
+            val v1 = Room.databaseBuilder(context, ProtectedProbeDatabase::class.java, dbName)
+                .setJournalMode(androidx.room.RoomDatabase.JournalMode.TRUNCATE)
+                .openHelperFactory(SupportOpenHelperFactory(oldKey, null, false)).build()
+            v1.openHelper.writableDatabase.execSQL(
+                "INSERT INTO agent_command_journal (commandId, digest, status, targetVersionsJson) VALUES (?, ?, ?, ?)",
+                arrayOf("synthetic-v1-command", "1".repeat(64), "pending", "[]"),
+            )
+            v1.close(); oldKey.fill(0)
+
+            val upgradedKey = DatabaseKeyProvider(context, file, envelope, keyStore, alias).loadOrCreate()
+            val upgraded = Room.databaseBuilder(context, AgentDatabase::class.java, dbName)
+                .addMigrations(AGENT_DB_1_TO_2, AGENT_DB_2_TO_3, AGENT_DB_3_TO_4, AGENT_DB_4_TO_5, AGENT_DB_5_TO_6)
+                .setJournalMode(androidx.room.RoomDatabase.JournalMode.TRUNCATE)
+                .openHelperFactory(SupportOpenHelperFactory(upgradedKey, null, false)).build()
+            upgraded.openHelper.writableDatabase
+            runBlocking {
+                check(upgraded.protectedStoreDao().command("synthetic-v1-command")?.status == "pending")
+                check(upgraded.protectedStoreDao().migrations().isEmpty())
+                check(upgraded.openHelper.readableDatabase.query("SELECT name FROM sqlite_master WHERE type='table' AND name='agent_turn_journal'").use { it.moveToFirst() })
+            }
+            upgraded.close(); upgradedKey.fill(0)
+        } finally {
+            context.deleteDatabase(dbName)
+            envelope.baseFile.delete()
+            keyStore.deleteEntry(alias)
+        }
+    }
+
+    private fun verifyLegacyStoreReaders(context: Context) {
+        val directory = File(context.cacheDir, "memora-synthetic-legacy-fixtures")
+        directory.deleteRecursively(); check(directory.mkdirs())
+        val testKey = SecretKeySpec(ByteArray(32) { (it + 7).toByte() }, "AES")
+        try {
+            for (schema in 1..5) {
+                val capture = JSONObject().put("schema", schema).put("draft", "synthetic draft")
+                    .put("draftVersion", 2)
+                val captureItem = JSONObject().put("command", "capture-command-$schema").put("draftVersion", 1)
+                    .put("zone", "Asia/Baku").put("source", "capture-source-$schema")
+                if (schema < 5) captureItem.put("revision", "capture-revision-$schema")
+                    .put("text", "legacy source $schema").put("recordedAt", "2026-01-02T03:04:05Z")
+                else captureItem.put("revisions", JSONArray().put(JSONObject().put("id", "capture-revision-$schema")
+                    .put("number", 1).put("text", "legacy source $schema").put("recordedAt", "2026-01-02T03:04:05Z")))
+                if (schema >= 3) captureItem.put("origin", "LOCAL")
+                if (schema >= 4) captureItem.put("archived", false).put("organizationVersion", 0)
+                capture.put("captures", JSONArray().put(captureItem))
+                if (schema >= 2) capture.put("deleted", JSONArray().put(JSONObject()
+                    .put("command", "deleted-command-$schema").put("source", "deleted-source-$schema")
+                    .put("revision", "deleted-revision-$schema").put("priorRevisions", JSONArray())))
+                val captureFile = File(directory, "captures-$schema.bin")
+                captureFile.writeBytes(encryptLegacy(byteArrayOf(0x4d, 0x43, 0x01), capture.toString(), testKey))
+                val captureStore = EncryptedCaptureStore(captureFile) { testKey }
+                check((captureStore.load() as? CaptureRead.Ready)?.snapshot?.captures?.single()?.source?.id == "capture-source-$schema")
+
+                if (schema <= 2) {
+                    val event = JSONObject().put("id", "task-$schema").put("scope", "local").put("actor", "owner")
+                        .put("command", "task-command-$schema").put("type", "created").put("title", "Synthetic task")
+                    val taskDocument = if (schema == 1) JSONArray().put(event).toString() else JSONObject().put("schema", 2)
+                        .put("events", JSONArray().put(event)).put("deleted", JSONArray().put("deleted-task-$schema")).toString()
+                    val taskFile = File(directory, "tasks-$schema.bin")
+                    taskFile.writeBytes(encryptLegacy(byteArrayOf(0x4d, 0x54, 0x01), taskDocument, testKey))
+                    val taskStore = EncryptedTaskStore(taskFile) { testKey }
+                    check((taskStore.load() as? StoreRead.Ready)?.tasks?.singleOrNull()?.id == "task-$schema")
+                    if (schema == 2) check(taskStore.migrationSnapshot().deletedIds == setOf("deleted-task-$schema"))
+                }
+            }
+
+            for (schema in 1..2) {
+                val people = JSONArray().put(JSONObject().put("id", "person-$schema").put("name", "Aysel"))
+                val receipts = JSONArray().put(JSONObject().put("id", "receipt-$schema").put("command", "receipt-command-$schema")
+                    .put("person", "person-$schema").put("minor", 8250).put("currency", "AZN")
+                    .put("source", "synthetic receipt source").put("recorded", "2026-01-02T03:04:05Z").put("occurred", JSONObject.NULL))
+                val voice = JSONObject().put("schema", schema).put("people", people).put("receipts", receipts)
+                if (schema == 2) voice.put("debts", JSONArray().put(JSONObject().put("id", "debt-$schema")
+                    .put("command", "debt-command-$schema").put("person", "person-$schema").put("minor", 1200)
+                    .put("currency", "AZN").put("source", "synthetic debt source").put("recorded", "2026-01-02T03:04:05Z")))
+                val voiceFile = File(directory, "voice-$schema.bin")
+                voiceFile.writeBytes(encryptLegacy(byteArrayOf(0x4d, 0x56, 0x01), voice.toString(), testKey))
+                val voiceStore = VoiceMoneyStore(voiceFile) { testKey }
+                val snapshot = (voiceStore.load() as? VoiceStoreRead.Ready)?.snapshot ?: error("Voice schema $schema rejected")
+                check(snapshot.receipts.single().minorUnits == 8250L)
+                check(snapshot.debts.size == if (schema == 1) 0 else 1)
+            }
+        } finally {
+            directory.deleteRecursively()
+            testKey.encoded.fill(0)
+        }
+    }
+
+    private fun encryptLegacy(header: ByteArray, json: String, key: SecretKeySpec): ByteArray {
+        val cipher = Cipher.getInstance("AES/GCM/NoPadding")
+        cipher.init(Cipher.ENCRYPT_MODE, key)
+        cipher.updateAAD(header)
+        return header + cipher.iv + cipher.doFinal(json.toByteArray(Charsets.UTF_8))
+    }
+
+    private fun open(context: Context, name: String, key: ByteArray): ProtectedProbeDatabase =
+        Room.databaseBuilder(context, ProtectedProbeDatabase::class.java, name)
+            .setJournalMode(androidx.room.RoomDatabase.JournalMode.TRUNCATE)
+            .openHelperFactory(SupportOpenHelperFactory(key, null, false))
+            .build()
+
+    private fun readCommandId(database: ProtectedProbeDatabase): String =
+        database.openHelper.readableDatabase.query(
+            "SELECT commandId FROM agent_command_journal WHERE commandId = 'synthetic-probe-command'",
+        ).use { cursor ->
+            check(cursor.moveToFirst())
+            cursor.getString(0)
+        }
+
+    private fun ByteArray.containsAscii(value: String): Boolean {
+        val needle = value.toByteArray(Charsets.UTF_8)
+        return indices.any { start -> start + needle.size <= size && needle.indices.all { this[start + it] == needle[it] } }
+    }
+
+    private fun ByteArray.contentStartsWith(prefix: ByteArray): Boolean =
+        size >= prefix.size && prefix.indices.all { this[it] == prefix[it] }
+
+    @androidx.room.Database(entities = [AgentCommandJournalRow::class], version = 1, exportSchema = false)
+    abstract class ProtectedProbeDatabase : androidx.room.RoomDatabase()
+}

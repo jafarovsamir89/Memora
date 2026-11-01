@@ -1,0 +1,21 @@
+{
+  "manifestVersion": 1,
+  "status": "planned_not_executed",
+  "dataPolicy": "synthetic_only",
+  "providerScope": "gemini_only",
+  "splits": {"developmentAndHoldoutDisjointByParaphraseGroup": true, "holdoutFrozenBeforeTuning": true},
+  "minimumHoldoutText": {"az": 100, "ru": 60, "mixed": 80},
+  "minimumNegativeOrAmbiguousPercentEachTextSlice": 20,
+  "minimumHoldoutSyntheticAudio": {"az": 30, "ru": 15, "mixed": 15},
+  "minimumMultiTurnChains": 20,
+  "minDeterministicPassPercent": 100,
+  "minUnambiguousTextSuccessPercentEachSlice": 95,
+  "minMultiTurnSuccessPercent": 90,
+  "minAppropriateAmbiguousHandlingPercent": 95,
+  "minSyntheticAudioEndToEndPercentEachSlice": 90,
+  "maxUnauthorizedActions": 0,
+  "maxRetryLossOrDuplicateEffects": 0,
+  "maxFinancialArithmeticErrors": 0,
+  "maxFalseSuccessClaims": 0,
+  "limitations": ["synthetic audio does not validate human speech", "no metric is an observed result", "owner device acceptance is separate"]
+}

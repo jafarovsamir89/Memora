@@ -1,0 +1,221 @@
+{
+  "version": 1,
+  "status": "design_not_authorization",
+  "default": "deny",
+  "allToolsRequireImplementedHandlerAndPolicy": true,
+  "cloudMemoryRequiresSeparateConsent": true,
+  "tools": [
+    {
+      "tool": "search_memory",
+      "targetPolicy": "read_in_scope",
+      "schemaAvailable": true,
+      "runtimeEnabled": false
+    },
+    {
+      "tool": "read_records",
+      "targetPolicy": "read_in_scope",
+      "schemaAvailable": true,
+      "runtimeEnabled": false
+    },
+    {
+      "tool": "resolve_person",
+      "targetPolicy": "read_in_scope",
+      "schemaAvailable": true,
+      "runtimeEnabled": false
+    },
+    {
+      "tool": "query_finance",
+      "targetPolicy": "read_in_scope",
+      "schemaAvailable": true,
+      "runtimeEnabled": false
+    },
+    {
+      "tool": "query_table",
+      "targetPolicy": "read_in_scope",
+      "schemaAvailable": true,
+      "runtimeEnabled": false
+    },
+    {
+      "tool": "aggregate_table",
+      "targetPolicy": "read_in_scope",
+      "schemaAvailable": true,
+      "runtimeEnabled": false
+    },
+    {
+      "tool": "create_person",
+      "targetPolicy": "auto_if_unambiguous",
+      "schemaAvailable": true,
+      "runtimeEnabled": false
+    },
+    {
+      "tool": "update_person",
+      "targetPolicy": "auto_if_unambiguous",
+      "schemaAvailable": true,
+      "runtimeEnabled": false
+    },
+    {
+      "tool": "create_project",
+      "targetPolicy": "auto_if_unambiguous",
+      "schemaAvailable": true,
+      "runtimeEnabled": false
+    },
+    {
+      "tool": "update_project",
+      "targetPolicy": "auto_if_unambiguous",
+      "schemaAvailable": true,
+      "runtimeEnabled": false
+    },
+    {
+      "tool": "create_note",
+      "targetPolicy": "auto_if_unambiguous",
+      "schemaAvailable": true,
+      "runtimeEnabled": false
+    },
+    {
+      "tool": "update_note",
+      "targetPolicy": "auto_if_unambiguous",
+      "schemaAvailable": true,
+      "runtimeEnabled": false
+    },
+    {
+      "tool": "link_records",
+      "targetPolicy": "auto_if_unambiguous",
+      "schemaAvailable": true,
+      "runtimeEnabled": false
+    },
+    {
+      "tool": "unlink_records",
+      "targetPolicy": "auto_if_unambiguous",
+      "schemaAvailable": true,
+      "runtimeEnabled": false
+    },
+    {
+      "tool": "create_task",
+      "targetPolicy": "auto_if_unambiguous",
+      "schemaAvailable": true,
+      "runtimeEnabled": false
+    },
+    {
+      "tool": "update_task",
+      "targetPolicy": "auto_if_unambiguous",
+      "schemaAvailable": true,
+      "runtimeEnabled": false
+    },
+    {
+      "tool": "create_calendar_event",
+      "targetPolicy": "auto_if_unambiguous",
+      "schemaAvailable": true,
+      "runtimeEnabled": false
+    },
+    {
+      "tool": "update_calendar_event",
+      "targetPolicy": "auto_if_unambiguous",
+      "schemaAvailable": true,
+      "runtimeEnabled": false
+    },
+    {
+      "tool": "create_table",
+      "targetPolicy": "auto_if_unambiguous",
+      "schemaAvailable": true,
+      "runtimeEnabled": false
+    },
+    {
+      "tool": "add_table_rows",
+      "targetPolicy": "auto_if_unambiguous",
+      "schemaAvailable": true,
+      "runtimeEnabled": false
+    },
+    {
+      "tool": "update_table_rows",
+      "targetPolicy": "auto_if_unambiguous",
+      "schemaAvailable": true,
+      "runtimeEnabled": false
+    },
+    {
+      "tool": "record_receipt",
+      "targetPolicy": "auto_if_critical_fields_verified",
+      "schemaAvailable": true,
+      "runtimeEnabled": false
+    },
+    {
+      "tool": "record_obligation",
+      "targetPolicy": "auto_if_critical_fields_verified",
+      "schemaAvailable": true,
+      "runtimeEnabled": false
+    },
+    {
+      "tool": "record_settlement",
+      "targetPolicy": "preview_and_confirm",
+      "schemaAvailable": true,
+      "runtimeEnabled": false
+    },
+    {
+      "tool": "correct_money_event",
+      "targetPolicy": "preview_and_confirm",
+      "schemaAvailable": true,
+      "runtimeEnabled": false
+    },
+    {
+      "tool": "commit_delete",
+      "targetPolicy": "preview_and_confirm",
+      "schemaAvailable": true,
+      "runtimeEnabled": false
+    },
+    {
+      "tool": "change_table_schema",
+      "targetPolicy": "preview_and_confirm",
+      "schemaAvailable": true,
+      "runtimeEnabled": false
+    },
+    {
+      "tool": "restore_records",
+      "targetPolicy": "auto_if_no_dependency_conflict",
+      "schemaAvailable": true,
+      "runtimeEnabled": false
+    },
+    {
+      "tool": "undo_change",
+      "targetPolicy": "auto_if_no_dependency_conflict",
+      "schemaAvailable": true,
+      "runtimeEnabled": false
+    },
+    {
+      "tool": "preview_delete",
+      "targetPolicy": "preview_only",
+      "schemaAvailable": true,
+      "runtimeEnabled": false
+    },
+    {
+      "tool": "request_clarification",
+      "targetPolicy": "clarification_only",
+      "schemaAvailable": true,
+      "runtimeEnabled": false
+    },
+    {
+      "tool": "prepare_changes",
+      "targetPolicy": "plan_only_inherit_highest_risk",
+      "schemaAvailable": true,
+      "runtimeEnabled": false
+    }
+  ],
+  "forbiddenAutomaticExternalEffects": [
+    "send_message",
+    "external_payment",
+    "publish",
+    "invite",
+    "arbitrary_export",
+    "permanent_purge"
+  ],
+  "globalConditions": {
+    "directUserRequestRequiredForMutation": true,
+    "mustCheckScopeAtReadAndCommit": true,
+    "mustCheckSourceAndTargetVersions": true,
+    "mustRecordEvidenceAndHistory": true,
+    "undoRequiredForAutomaticChanges": true,
+    "massEditRequiresPreviewAboveExistingObjectCount": 20,
+    "confirmationExpiresAfterSeconds": 600,
+    "preparedIsNeverCommitted": true,
+    "confirmationsMustBindExactDigestAndVersions": true,
+    "planInheritsStrictestEmbeddedPolicy": true
+  }
+}
