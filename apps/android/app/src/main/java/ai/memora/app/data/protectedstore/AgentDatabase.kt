@@ -209,6 +209,7 @@ internal interface ProtectedStoreDao {
     @androidx.room.Query("SELECT l.* FROM domain_link l INNER JOIN domain_object f ON f.objectId=l.fromId AND f.scopeId=l.scopeId INNER JOIN domain_object t ON t.objectId=l.toId AND t.scopeId=l.scopeId WHERE l.scopeId=:scope AND l.deletedAt IS NULL AND f.deletedAt IS NULL AND t.deletedAt IS NULL ORDER BY l.linkId") suspend fun activeLinks(scope: String): List<DomainLinkRow>
     @androidx.room.Insert(onConflict = androidx.room.OnConflictStrategy.ABORT) suspend fun insertDomainLink(row: DomainLinkRow)
     @androidx.room.Query("SELECT * FROM user_table WHERE scopeId=:scope AND tableId=:id") suspend fun userTable(scope: String, id: String): UserTableRow?
+    @androidx.room.Query("SELECT * FROM user_table WHERE scopeId=:scope AND deletedAt IS NULL ORDER BY title, tableId") suspend fun activeUserTables(scope: String): List<UserTableRow>
     @androidx.room.Insert(onConflict = androidx.room.OnConflictStrategy.ABORT) suspend fun insertUserTable(row: UserTableRow)
     @androidx.room.Query("SELECT * FROM table_column WHERE tableId=:id ORDER BY position") suspend fun columns(id: String): List<TableColumnRow>
     @androidx.room.Insert(onConflict = androidx.room.OnConflictStrategy.ABORT) suspend fun insertColumns(rows: List<TableColumnRow>)

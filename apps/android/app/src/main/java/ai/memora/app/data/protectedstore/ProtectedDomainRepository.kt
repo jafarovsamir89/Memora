@@ -24,11 +24,16 @@ internal data class DomainHit(val objectId: String, val kind: DomainKind, val ti
     val evidenceEndUtf16: Int, val evidenceText: String)
 internal data class DeletePreview(val objectId: String, val expectedVersion: Long, val linkedIds: List<String>)
 internal data class ImportPreview(val tableId: String, val schemaVersion: Long, val rows: List<Pair<String, Map<String, Any?>>>)
+internal data class TableSnapshot(val table: UserTableRow, val columns: List<TableColumnRow>, val rows: List<TableDataRow>)
 internal data class CalendarInput(val eventId: String, val scopeId: String, val title: String, val startLocal: String, val endLocal: String?, val zoneId: String, val precision: String)
 
 /** Protected local domain port. This remains disconnected from application workflows until P1 gates pass. */
 internal class ProtectedDomainRepository(private val db: AgentDatabase) {
     private val dao get() = db.protectedStoreDao()
+
+    suspend fun tables(scope: String): List<TableSnapshot> = dao.activeUserTables(scope).map { table ->
+        TableSnapshot(table, dao.columns(table.tableId), dao.rows(table.tableId, scope))
+    }
 
     suspend fun createObject(scope: String, id: String, kind: DomainKind, title: String, body: String?,
         sourceRevisionId: String?, now: String): DomainObjectRow = db.withTransaction {

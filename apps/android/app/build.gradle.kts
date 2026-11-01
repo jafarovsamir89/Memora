@@ -44,6 +44,7 @@ dependencies {
     implementation("androidx.compose.ui:ui-tooling-preview")
     implementation(platform("com.google.firebase:firebase-bom:35.1.0"))
     implementation("com.google.firebase:firebase-ai")
+    implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.8.1")
     implementation("com.google.android.gms:play-services-oss-licenses:17.5.1")
     // Match the Firebase AI transport dependency; expose language hints missing from SDK 18.1.0.
     implementation("com.squareup.okhttp3:okhttp:4.12.0")

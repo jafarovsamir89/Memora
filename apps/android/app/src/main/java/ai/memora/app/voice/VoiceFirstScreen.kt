@@ -30,12 +30,9 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.LifecycleOwner
 import ai.memora.app.R
-import ai.memora.app.data.VoiceMoneyKey
-import ai.memora.app.data.VoiceMoneyStore
 import ai.memora.app.ui.Glyph
 import ai.memora.app.ui.colors
 import ai.memora.app.ui.s
-import java.io.File
 import kotlinx.coroutines.*
 
 /** One hold-to-talk control. No microphone or cloud request begins before consent and permission. */
@@ -47,13 +44,13 @@ fun VoiceFirstScreen(gatewayOverride: AudioNoteGateway? = null, recorderOverride
     val settings = remember(context) { context.getSharedPreferences("voice-first-consent", 0) }
     val recorder = recorderOverride ?: remember { AndroidAudioNoteRecorder() }
     val gateway = gatewayOverride ?: remember(context) { FirebaseAudioNoteGateway(context) }
-    val processor = processorOverride ?: remember(context) {
-        VoiceFirstAssistant(VoiceMoneyStore(File(context.filesDir, "voice-memory.bin"), VoiceMoneyKey::get), GeminiSpokenIntentParser())
-    }
+    val processor = processorOverride ?: remember(context) { MemoraVoiceTurnProcessor(context) }
     val speech = speechOverride ?: remember { GeminiSpeechOutput() }
     val scope = rememberCoroutineScope()
     var consent by remember { mutableStateOf(settings.getBoolean("google-audio-and-answer-v1", false)) }
     var consentDialog by remember { mutableStateOf(false) }
+    var memoryConsent by remember { mutableStateOf(settings.getBoolean("gemini-persisted-memory-v1", false)) }
+    var memoryConsentDialog by remember { mutableStateOf(false) }
     var state by remember { mutableStateOf("idle") }
     var transcript by remember { mutableStateOf("") }
     var answer by remember { mutableStateOf("") }
@@ -136,6 +133,16 @@ fun VoiceFirstScreen(gatewayOverride: AudioNoteGateway? = null, recorderOverride
         }, modifier = Modifier.testTag("voice_first_consent")) { Text(s(R.string.cloud_voice_confirm)) } },
         dismissButton = { TextButton(onClick = { consentDialog = false }) { Text(s(R.string.task_cancel)) } })
 
+    if (memoryConsentDialog) AlertDialog(onDismissRequest = { memoryConsentDialog = false },
+        title = { Text("Gemini yaddaş icazəsi") },
+        text = { Text("Memora yaddaşda axtarış, qeyd, tapşırıq və cədvəl əməliyyatları üçün yalnız seçilmiş qeydləri və alət nəticələrini Google Gemini-yə göndərə bilər. Məlumatlar bu cihazda şifrəli saxlanır. İcazəni verməsəniz, bu funksiyalar işləməyəcək. Bu icazəni istənilən vaxt aşağıdakı düymə ilə söndürə bilərsiniz.") },
+        confirmButton = { TextButton(onClick = {
+            memoryConsentDialog = false
+            if (settings.edit().putBoolean("gemini-persisted-memory-v1", true).commit()) memoryConsent = true
+            else state = "error"
+        }) { Text("İcazə ver") } },
+        dismissButton = { TextButton(onClick = { memoryConsentDialog = false }) { Text(s(R.string.task_cancel)) } })
+
     val label = s(R.string.voice_first_button)
     Column(Modifier.fillMaxWidth().testTag("voice_first_home").padding(vertical = 12.dp),
         horizontalAlignment = Alignment.CenterHorizontally) {
@@ -176,5 +183,11 @@ fun VoiceFirstScreen(gatewayOverride: AudioNoteGateway? = null, recorderOverride
             Text(answer, modifier = Modifier.testTag("voice_first_answer"), textAlign = TextAlign.Center,
                 style = MaterialTheme.typography.titleMedium)
         }
+        TextButton(onClick = {
+            if (memoryConsent) {
+                settings.edit().putBoolean("gemini-persisted-memory-v1", false).apply()
+                memoryConsent = false
+            } else memoryConsentDialog = true
+        }) { Text(if (memoryConsent) "Gemini yaddaş icazəsini söndür" else "Yaddaş və cədvəl alətlərini aktivləşdir") }
     }
 }

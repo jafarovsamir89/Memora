@@ -686,3 +686,15 @@ At the owner's request, `:app:assembleDebug` completed with `BUILD SUCCESSFUL`; 
 
 
 **Git handoff ACT-0077:** commit `ca9420c1d8e46385e38a0068ec1f8bcbf9505ddc` (`feat(android): add OSS notices and key write recovery probe`) was pushed to `origin/main`. `git fetch`, local HEAD, and remote HEAD matched; the working tree was clean. The license map validation confirmed 169 rows and 169 unique coordinates.
+
+## ACT-0079 · 2026-11-01 · field implementation: Gemini tools on the voice path
+
+**Решение владельца:** implementation-first; дневные проверки выполняет владелец в реальном приложении; необязательные тестовые этапы не задерживают сборку рабочего функционала. P1/P8/P9 release and reliability acceptance остаются открытыми и не объявляются пройденными.
+
+**Изменения:** добавлен Firebase AI Logic Gemini function-calling gateway и подключён к существующему удержанию кнопки. В локальный tool registry включены bounded literal search, создание note/person/project, list/create простых editable text tables и add row, list/create tasks. Инструменты используют SQLCipher-backed Room domain storage, app-generated IDs, текущий orchestrator и command journal. Сохранённый контекст передаётся модели только после отдельного согласия; на голосовом экране есть кнопка отзыва. Существующие receipt/debt voice команды оставлены на прежнем локальном маршруте. Legacy migration и пользовательские записи не затрагивались.
+
+**Проверка/поставка:** `:app:compileDebugKotlin` и `:app:assembleDebug --no-daemon` — BUILD SUCCESSFUL. Последний `adb install -r` — `Success`; запуск через `monkey -p ai.memora.app 1` завершился, `pidof ai.memora.app` вернул работающий PID. Установлен versionCode 8 / versionName `0.6.2-debt-voice`; данные приложения не очищались. Юнит-, instrumentation- и live Gemini checks в этой сессии не запускались. Function-response chain на устройстве не подтверждена; прежний isolated synthetic probe получил App Check HTTP 403 rejection hint. Debug APK: `apps/android/app/build/outputs/apk/debug/app-debug.apk`.
+
+**Открыто:** полевая проверка владельца; объединение финопераций с новым локальным ledger; поиск/чтение строк таблиц; edit/delete/restore/undo и связи; typed schemas/linked views; текстовый ввод; reminders/calendar; idempotency/fault acceptance; P1/P8/P9 и release signing. Следующий шаг — принять воспроизводимую проблему или удачный сценарий от владельца и развивать handlers до требуемого повседневного набора.
+
+**Git на момент записи:** проверяю diff, секреты и синхронизацию; commit/push пока не заявлены.
