@@ -217,10 +217,15 @@ internal interface ProtectedStoreDao {
     @androidx.room.Query("SELECT * FROM table_schema_revision WHERE tableId=:id ORDER BY version") suspend fun schemaRevisions(id: String): List<TableSchemaRevisionRow>
     @androidx.room.Update suspend fun updateColumns(rows: List<TableColumnRow>)
     @androidx.room.Query("UPDATE user_table SET schemaVersion=:next, version=:next WHERE scopeId=:scope AND tableId=:id AND schemaVersion=:expected AND deletedAt IS NULL") suspend fun updateTableSchemaVersion(scope: String, id: String, expected: Long, next: Long): Int
+    @androidx.room.Query("UPDATE user_table SET title=:title, version=:next WHERE scopeId=:scope AND tableId=:id AND version=:expected AND deletedAt IS NULL") suspend fun renameUserTable(scope: String, id: String, expected: Long, next: Long, title: String): Int
+    @androidx.room.Query("UPDATE user_table SET deletedAt=:at, version=:next WHERE scopeId=:scope AND tableId=:id AND version=:expected AND deletedAt IS NULL") suspend fun tombstoneUserTable(scope: String, id: String, expected: Long, next: Long, at: String): Int
+    @androidx.room.Query("UPDATE user_table SET deletedAt=NULL, version=:next WHERE scopeId=:scope AND tableId=:id AND version=:expected AND deletedAt IS NOT NULL") suspend fun restoreUserTable(scope: String, id: String, expected: Long, next: Long): Int
     @androidx.room.Insert(onConflict = androidx.room.OnConflictStrategy.ABORT) suspend fun insertTableRows(rows: List<TableDataRow>)
     @androidx.room.Query("SELECT * FROM table_row WHERE tableId=:id AND scopeId=:scope AND deletedAt IS NULL ORDER BY rowId") suspend fun rows(id: String, scope: String): List<TableDataRow>
     @androidx.room.Query("SELECT * FROM table_row WHERE rowId=:id") suspend fun rowById(id: String): TableDataRow?
     @androidx.room.Query("UPDATE table_row SET valuesJson=:values, version=:next WHERE rowId=:row AND tableId=:table AND scopeId=:scope AND version=:expected AND deletedAt IS NULL") suspend fun updateTableRow(row: String, table: String, scope: String, expected: Long, next: Long, values: String): Int
+    @androidx.room.Query("UPDATE table_row SET deletedAt=:at, version=:next WHERE rowId=:row AND tableId=:table AND scopeId=:scope AND version=:expected AND deletedAt IS NULL") suspend fun tombstoneTableRow(row: String, table: String, scope: String, expected: Long, next: Long, at: String): Int
+    @androidx.room.Query("UPDATE table_row SET deletedAt=NULL, version=:next WHERE rowId=:row AND tableId=:table AND scopeId=:scope AND version=:expected AND deletedAt IS NOT NULL") suspend fun restoreTableRow(row: String, table: String, scope: String, expected: Long, next: Long): Int
     @androidx.room.Query("SELECT * FROM money_adjustment WHERE scopeId=:scope AND obligationId=:id ORDER BY eventId") suspend fun adjustments(scope: String, id: String): List<MoneyAdjustmentRow>
     @androidx.room.Query("SELECT * FROM money_adjustment WHERE commandId=:id") suspend fun adjustmentForCommand(id: String): MoneyAdjustmentRow?
     @androidx.room.Insert(onConflict = androidx.room.OnConflictStrategy.ABORT) suspend fun insertAdjustment(row: MoneyAdjustmentRow)

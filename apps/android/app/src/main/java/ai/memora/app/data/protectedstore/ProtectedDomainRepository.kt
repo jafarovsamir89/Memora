@@ -35,6 +35,11 @@ internal class ProtectedDomainRepository(private val db: AgentDatabase) {
         TableSnapshot(table, dao.columns(table.tableId), dao.rows(table.tableId, scope))
     }
 
+    suspend fun table(scope: String, id: String): UserTableRow? = dao.userTable(scope, id)
+    suspend fun tableRow(scope: String, tableId: String, rowId: String): TableDataRow? =
+        dao.rowById(rowId)?.takeIf { it.scopeId == scope && it.tableId == tableId }
+    suspend fun domainObject(scope: String, id: String): DomainObjectRow? = dao.domainObject(scope, id)
+
     suspend fun createObject(scope: String, id: String, kind: DomainKind, title: String, body: String?,
         sourceRevisionId: String?, now: String): DomainObjectRow = db.withTransaction {
         require(scope.isNotBlank() && id.isNotBlank()); requireTitle(title)
@@ -124,6 +129,26 @@ internal class ProtectedDomainRepository(private val db: AgentDatabase) {
         expectedSchemaVersion + 1
     }
 
+    suspend fun renameTable(scope: String, tableId: String, expectedVersion: Long, title: String): UserTableRow = db.withTransaction {
+        requireTitle(title)
+        val current = dao.userTable(scope, tableId) ?: error("not_found")
+        check(current.deletedAt == null && current.version == expectedVersion && expectedVersion < Long.MAX_VALUE) { "version_conflict" }
+        check(dao.renameUserTable(scope, tableId, expectedVersion, expectedVersion + 1, title.trim()) == 1) { "version_conflict" }
+        requireNotNull(dao.userTable(scope, tableId))
+    }
+
+    suspend fun deleteTable(scope: String, tableId: String, expectedVersion: Long, now: String) = db.withTransaction {
+        val current = dao.userTable(scope, tableId) ?: error("not_found")
+        check(current.deletedAt == null && current.version == expectedVersion && expectedVersion < Long.MAX_VALUE) { "version_conflict" }
+        check(dao.tombstoneUserTable(scope, tableId, expectedVersion, expectedVersion + 1, now) == 1) { "version_conflict" }
+    }
+
+    suspend fun restoreTable(scope: String, tableId: String, expectedVersion: Long) = db.withTransaction {
+        val current = dao.userTable(scope, tableId) ?: error("not_found")
+        check(current.deletedAt != null && current.version == expectedVersion && expectedVersion < Long.MAX_VALUE) { "version_conflict" }
+        check(dao.restoreUserTable(scope, tableId, expectedVersion, expectedVersion + 1) == 1) { "version_conflict" }
+    }
+
     suspend fun addRows(scope: String, tableId: String, expectedSchemaVersion: Long, rowValues: List<Pair<String, Map<String, Any?>>>) = db.withTransaction {
         require(rowValues.size in 1..100)
         val table = dao.userTable(scope, tableId) ?: error("not_found")
@@ -156,6 +181,22 @@ internal class ProtectedDomainRepository(private val db: AgentDatabase) {
         val encoded = encodeValues(values)
         check(dao.updateTableRow(rowId, tableId, scope, expectedVersion, expectedVersion + 1, encoded) == 1)
         existing.copy(version = expectedVersion + 1, valuesJson = encoded)
+    }
+
+    suspend fun deleteRow(scope: String, tableId: String, rowId: String, expectedVersion: Long, now: String) = db.withTransaction {
+        val table = dao.userTable(scope, tableId) ?: error("not_found")
+        check(table.deletedAt == null && table.mode == "editable") { "table_not_editable" }
+        val row = dao.rows(tableId, scope).firstOrNull { it.rowId == rowId } ?: error("not_found")
+        check(row.version == expectedVersion && expectedVersion < Long.MAX_VALUE) { "version_conflict" }
+        check(dao.tombstoneTableRow(rowId, tableId, scope, expectedVersion, expectedVersion + 1, now) == 1) { "version_conflict" }
+    }
+
+    suspend fun restoreRow(scope: String, tableId: String, rowId: String, expectedVersion: Long) = db.withTransaction {
+        val table = dao.userTable(scope, tableId) ?: error("not_found")
+        check(table.deletedAt == null && table.mode == "editable") { "table_not_editable" }
+        val row = dao.rowById(rowId)?.takeIf { it.tableId == tableId && it.scopeId == scope } ?: error("not_found")
+        check(row.deletedAt != null && row.version == expectedVersion && expectedVersion < Long.MAX_VALUE) { "version_conflict" }
+        check(dao.restoreTableRow(rowId, tableId, scope, expectedVersion, expectedVersion + 1) == 1) { "version_conflict" }
     }
 
     /** Exact money aggregate; results stay partitioned by currency and never use floating point. */

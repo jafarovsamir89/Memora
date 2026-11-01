@@ -10,9 +10,11 @@ data class VoicePerson(val id: String, val name: String)
 data class VoiceReceipt(
     val id: String, val commandId: String, val personId: String, val minorUnits: Long,
     val currency: String, val source: String, val recordedAt: Instant, val occurredAt: Instant? = null,
+    val comment: String? = null,
 )
 data class VoiceDebt(val id: String, val commandId: String, val personId: String, val minorUnits: Long,
-    val currency: String, val source: String, val recordedAt: Instant)
+    val currency: String, val source: String, val recordedAt: Instant, val occurredAt: Instant? = null,
+    val comment: String? = null)
 data class VoiceMoneySnapshot(val persons: List<VoicePerson> = emptyList(), val receipts: List<VoiceReceipt> = emptyList(),
     val debts: List<VoiceDebt> = emptyList())
 data class VoiceReceiptCommand(

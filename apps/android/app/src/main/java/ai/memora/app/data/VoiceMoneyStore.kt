@@ -51,7 +51,8 @@ class VoiceMoneyStore(private val path: File, private val keyProvider: (Boolean)
                 .put("receipts", JSONArray().apply { snapshot.receipts.forEach { put(JSONObject()
                     .put("id", it.id).put("command", it.commandId).put("person", it.personId)
                     .put("minor", it.minorUnits).put("currency", it.currency).put("source", it.source)
-                    .put("recorded", it.recordedAt.toString()).put("occurred", it.occurredAt?.toString() ?: JSONObject.NULL)) } })
+                    .put("recorded", it.recordedAt.toString()).put("occurred", it.occurredAt?.toString() ?: JSONObject.NULL)
+                    .put("comment", it.comment ?: JSONObject.NULL)) } })
                 .put("debts", JSONArray().apply { snapshot.debts.forEach { put(debtJson(it)) } })
                 .toString()
         } catch (_: Exception) { null }
@@ -76,6 +77,58 @@ class VoiceMoneyStore(private val path: File, private val keyProvider: (Boolean)
             VoiceStoreWrite.Saved
         } catch (_: Exception) { VoiceStoreWrite.Unavailable }
     }
+
+    /** Stores semantic Gemini output after validating fields, without reparsing the user's wording. */
+    fun recordReceipt(personName: String, amount: String, currency: String, source: String, comment: String?,
+        personId: String, receiptId: String, commandId: String, recordedAt: Instant, occurredAt: Instant): VoiceStoreWrite = synchronized(lock) {
+        try {
+            val minor = VoiceMoneyRules.parseMinor(amount) ?: return@synchronized VoiceStoreWrite.Invalid
+            if (!validAgentEvent(personName, currency, source, comment, personId, receiptId, commandId)) return@synchronized VoiceStoreWrite.Invalid
+            val current = read()
+            val matches = current.persons.filter { VoiceMoneyRules.key(it.name) == VoiceMoneyRules.key(personName) }
+            if (matches.size > 1) return@synchronized VoiceStoreWrite.Ambiguous
+            val existing = matches.singleOrNull()
+            val person = existing ?: VoicePerson(personId, personName.trim())
+            val receipt = VoiceReceipt(receiptId, commandId, person.id, minor, currency, source.trim(), recordedAt, occurredAt, comment?.trim()?.ifEmpty { null })
+            current.receipts.firstOrNull { it.commandId == commandId }?.let {
+                return@synchronized if (it == receipt) VoiceStoreWrite.Duplicate else VoiceStoreWrite.Conflict
+            }
+            if (current.receipts.any { it.id == receiptId } || current.debts.any { it.id == receiptId || it.commandId == commandId } ||
+                (existing == null && current.persons.any { it.id == personId })) return@synchronized VoiceStoreWrite.Conflict
+            if (current.receipts.size >= MAX_RECORDS || (existing == null && current.persons.size >= MAX_RECORDS)) return@synchronized VoiceStoreWrite.Unavailable
+            write(current.copy(persons = if (existing == null) current.persons + person else current.persons, receipts = current.receipts + receipt))
+            VoiceStoreWrite.Saved
+        } catch (_: Exception) { VoiceStoreWrite.Unavailable }
+    }
+
+    /** Stores a debt proposed by Gemini; direction is part of the model's structured intent. */
+    fun recordDebt(personName: String, amount: String, currency: String, source: String, comment: String?,
+        personId: String, debtId: String, commandId: String, recordedAt: Instant, occurredAt: Instant): VoiceStoreWrite = synchronized(lock) {
+        try {
+            val minor = VoiceMoneyRules.parseMinor(amount) ?: return@synchronized VoiceStoreWrite.Invalid
+            if (!validAgentEvent(personName, currency, source, comment, personId, debtId, commandId)) return@synchronized VoiceStoreWrite.Invalid
+            val current = read()
+            val matches = current.persons.filter { VoiceMoneyRules.key(it.name) == VoiceMoneyRules.key(personName) }
+            if (matches.size > 1) return@synchronized VoiceStoreWrite.Ambiguous
+            val existing = matches.singleOrNull()
+            val person = existing ?: VoicePerson(personId, personName.trim())
+            val debt = VoiceDebt(debtId, commandId, person.id, minor, currency, source.trim(), recordedAt, occurredAt,
+                comment?.trim()?.ifEmpty { null })
+            current.debts.firstOrNull { it.commandId == commandId }?.let {
+                return@synchronized if (it == debt) VoiceStoreWrite.Duplicate else VoiceStoreWrite.Conflict
+            }
+            if (current.debts.any { it.id == debtId } || current.receipts.any { it.id == debtId || it.commandId == commandId } ||
+                (existing == null && current.persons.any { it.id == personId })) return@synchronized VoiceStoreWrite.Conflict
+            if (current.debts.size >= MAX_RECORDS || (existing == null && current.persons.size >= MAX_RECORDS)) return@synchronized VoiceStoreWrite.Unavailable
+            write(current.copy(persons = if (existing == null) current.persons + person else current.persons, debts = current.debts + debt))
+            VoiceStoreWrite.Saved
+        } catch (_: Exception) { VoiceStoreWrite.Unavailable }
+    }
+
+    private fun validAgentEvent(personName: String, currency: String, source: String, comment: String?,
+        personId: String, eventId: String, commandId: String): Boolean =
+        personName.isNotBlank() && personName.length <= 100 && currency == "AZN" && source.isNotBlank() && source.length <= 20_000 &&
+            (comment?.length ?: 0) <= 1000 && listOf(personId, eventId, commandId).all { it.isNotBlank() && it.length <= 100 }
 
     fun save(command: VoiceReceiptCommand): VoiceStoreWrite = synchronized(lock) {
         try {
@@ -144,12 +197,15 @@ class VoiceMoneyStore(private val path: File, private val keyProvider: (Boolean)
             val item = events.getJSONObject(index)
             VoiceReceipt(item.getString("id"), item.getString("command"), item.getString("person"),
                 item.getLong("minor"), item.getString("currency"), item.getString("source"),
-                Instant.parse(item.getString("recorded")), if (item.isNull("occurred")) null else Instant.parse(item.getString("occurred")))
+                Instant.parse(item.getString("recorded")), if (item.isNull("occurred")) null else Instant.parse(item.getString("occurred")),
+                item.optString("comment").takeIf { value -> value.isNotEmpty() && value != "null" })
         }
         val debts = (0 until debtEvents.length()).map { index ->
             val item = debtEvents.getJSONObject(index)
             VoiceDebt(item.getString("id"), item.getString("command"), item.getString("person"), item.getLong("minor"),
-                item.getString("currency"), item.getString("source"), Instant.parse(item.getString("recorded")))
+                item.getString("currency"), item.getString("source"), Instant.parse(item.getString("recorded")),
+                if (item.has("occurred") && !item.isNull("occurred")) Instant.parse(item.getString("occurred")) else null,
+                item.optString("comment").takeIf { value -> value.isNotEmpty() && value != "null" })
         }
         require(persons.all { it.id.isNotBlank() && it.name.isNotBlank() } && persons.map { it.id }.toSet().size == persons.size)
         require(receipts.map { it.id }.toSet().size == receipts.size && receipts.map { it.commandId }.toSet().size == receipts.size)
@@ -167,7 +223,8 @@ class VoiceMoneyStore(private val path: File, private val keyProvider: (Boolean)
         val receipts = JSONArray().apply { snapshot.receipts.forEach { receipt -> put(JSONObject()
             .put("id", receipt.id).put("command", receipt.commandId).put("person", receipt.personId)
             .put("minor", receipt.minorUnits).put("currency", receipt.currency).put("source", receipt.source)
-            .put("recorded", receipt.recordedAt.toString()).put("occurred", receipt.occurredAt?.toString() ?: JSONObject.NULL)) } }
+            .put("recorded", receipt.recordedAt.toString()).put("occurred", receipt.occurredAt?.toString() ?: JSONObject.NULL)
+            .put("comment", receipt.comment ?: JSONObject.NULL)) } }
         val text = JSONObject().put("schema", 2).put("people", people).put("receipts", receipts)
             .put("debts", JSONArray().apply { snapshot.debts.forEach { put(debtJson(it)) } }).toString()
         val key = keyProvider(!path.exists()) ?: error("key unavailable")
@@ -186,4 +243,5 @@ class VoiceMoneyStore(private val path: File, private val keyProvider: (Boolean)
     private fun debtJson(it: VoiceDebt) = JSONObject().put("id", it.id).put("command", it.commandId)
         .put("person", it.personId).put("minor", it.minorUnits).put("currency", it.currency)
         .put("source", it.source).put("recorded", it.recordedAt.toString())
+        .put("occurred", it.occurredAt?.toString() ?: JSONObject.NULL).put("comment", it.comment ?: JSONObject.NULL)
 }

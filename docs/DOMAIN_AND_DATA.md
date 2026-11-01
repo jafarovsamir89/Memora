@@ -57,3 +57,8 @@ Original audio retention user-configurable, transcript retention separately conf
 Зафиксировать различие владельца, автора и области доступа (`tenant`/личная запись/общее пространство), правила переноса и отзыва прав. Общая принадлежность к tenant не даёт доступа ко всем его личным записям.
 
 Для удаления и исправлений нужен учёт зависимостей: какие факты, индексы и отчёты стали устаревшими, какие пересчитываются и какие требуют решения пользователя. Восстановление резервной копии должно повторно применять актуальные ограничения доступа и сведения об удалении до открытия восстановленных данных пользователям.
+
+
+## Runtime implementation note — ACT-0082
+
+The target finance semantics above remain authoritative. The current field agent uses structured Gemini function arguments to write to the existing encrypted VoiceMoneyStore; it does not re-parse the original sentence with VoiceDebtRules on the agent path. Receipts and person-owes-user obligations retain exact minor units, currency AZN, normalized counterparty identity, original speech, optional separate comment, recorded timestamp, and event date. When an event date is unstated, the tool records the current local date in Asia/Baku. This is a partial field implementation: correction/reversal/settlement and common SQLCipher-ledger migration remain open; do not treat the separate store as the target canonical ledger.

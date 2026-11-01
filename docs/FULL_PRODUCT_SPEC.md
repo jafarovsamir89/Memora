@@ -132,3 +132,8 @@
 Порядок E0–E7 и дополнения P01–P14 находятся в [ENGINEERING_PLAN.md](ENGINEERING_PLAN.md). Они уточняют полное видение: начальная память и остатки; отдельные результаты действий; очередь уточнений; последствия исправлений; сверка источников; персональный словарь; время; полнота учёта; удаление и восстановление; обратная связь на обзоры; онбординг; видимость состояния; переносимость; работа при отказах. Подробные правила согласуются с [DOMAIN_AND_DATA.md](DOMAIN_AND_DATA.md), [MEMORY_AND_TRUST.md](MEMORY_AND_TRUST.md), [USER_EXPERIENCE.md](USER_EXPERIENCE.md), [PROACTIVE_ASSISTANT.md](PROACTIVE_ASSISTANT.md) и сценариями S25–S37 в [SCENARIOS.md](SCENARIOS.md).
 
 Решения владельца: первая рабочая сборка Android, сначала его повседневные задачи, затем похожие пользователи; основная команда — владелец и AI-инженер. Ценовые вопросы полностью отложены. Остальные платформы и модули остаются в полном объёме. Требования и инженерные предложения не означают принятия всех ADR или наличия реализации; фактический этап ведётся в [AGENT_DIARY.md](AGENT_DIARY.md).
+
+
+## Implementation status — ACT-0082
+
+The full product vision above remains the target. A partial Gemini function-calling runtime is now connected to the Android voice screen and local note, person, project, table, task, calendar, and financial handlers. The field APK is 0.7.0-ai-secretary/versionCode 9. It is not full product or release acceptance: table UI and typed schemas, semantic evidence search, persistent multi-turn diary summaries, corrections, reminders, text input, remaining reliability gates, and release signing remain open. See the latest ACT-0082 entries in the diary, action log, and TODO.

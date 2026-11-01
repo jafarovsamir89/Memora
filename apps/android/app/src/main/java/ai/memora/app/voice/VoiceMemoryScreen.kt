@@ -11,6 +11,7 @@ import ai.memora.app.R
 import ai.memora.app.data.*
 import ai.memora.app.ui.*
 import java.io.File
+import java.time.ZoneId
 
 /** Shows the evidence behind saved transfers; the owner can remove an incorrect entry. */
 @Composable
@@ -46,6 +47,8 @@ fun VoiceMemoryScreen() {
                         Text(name, style = MaterialTheme.typography.titleMedium)
                         Text(s(R.string.voice_debt_label))
                         Text("${debt.minorUnits / 100},${(debt.minorUnits % 100).toString().padStart(2, '0')} AZN")
+                        debt.occurredAt?.let { Text(it.atZone(ZoneId.of("Asia/Baku")).toLocalDate().toString()) }
+                        debt.comment?.let { Text(it) }
                         Text(debt.source)
                         TextButton(onClick = { pendingDebt = true; pending = debt.id }) { Text(s(R.string.task_delete)) }
                     }
@@ -55,6 +58,8 @@ fun VoiceMemoryScreen() {
                     MemoraCard {
                         Text(name, style = MaterialTheme.typography.titleMedium)
                         Text("${receipt.minorUnits / 100},${(receipt.minorUnits % 100).toString().padStart(2, '0')} AZN")
+                        receipt.occurredAt?.let { Text(it.atZone(ZoneId.of("Asia/Baku")).toLocalDate().toString()) }
+                        receipt.comment?.let { Text(it) }
                         Text(receipt.source)
                         TextButton(onClick = { pendingDebt = false; pending = receipt.id }) { Text(s(R.string.task_delete)) }
                     }

@@ -528,3 +528,14 @@ Still open for P3–P6 acceptance: safe dependent-link restore/undo and permanen
 - [SQLCipher for Android](https://github.com/sqlcipher/sqlcipher-android) — Android/Room-интеграция и требования выбранного адаптера; версии перепроверяются перед подключением.
 
 Цены, тарифы и платные подключения не выбирались. Точные версии новых библиотек, совместимость с текущим проектом и практические показатели ещё должны быть проверены в P0/P1.
+
+
+## 23. ACT-0082 field implementation status
+
+This latest status supersedes the older ACT-0079 implementation checkpoint and the pre-runtime statements below where they conflict. The owner chose rapid field use and declined additional automated test suites for this update. The app voice entry now sends every utterance through Firebase AI Logic Gemini function calling. The model identifies intent and structured arguments; local handlers validate bounds, access, exact amounts, names, revisions, and commit outcomes without requiring a phrase-shaped match against the full utterance. Persisted-memory tools remain subject to the separate in-app memory consent.
+
+Current local tools include scoped memory search; create/edit/link/soft-delete/restore for notes, people, and projects; table list/create/read/filter/add/update/rename/soft-delete/restore; task list/create/complete; calendar list/create; and financial search plus structured receipt/debt recording. Financial writes preserve the original speech and optional comment, reuse a normalized existing person or create one, and default an omitted event date to the current Asia/Baku date. The encrypted financial store remains separate from the Room SQLCipher domain store and supports AZN only. The finance screen displays the stored date/comment.
+
+The debug APK versionCode 9 / versionName 0.7.0-ai-secretary was compiled, assembled, installed over the existing app without clearing data, and launched on the connected Redmi. No automated tests, lint, or Gemini request were run for ACT-0082; the earlier ACT-0081 synthetic Gemini function roundtrip does not accept this changed semantic/tool path. Owner field acceptance remains pending.
+
+Still open: visible table UI, typed/linked table schemas, semantic retrieval and evidence claims, durable multi-turn diary summaries, transaction correction/settlement, task/calendar editing and deletion, reminder delivery, text entry, complete confirmation UX, P1/P8/P9, release signing, and broad multilingual field acceptance. Do not infer production readiness or close MEM-12.13–17 from compile/install alone. The owner-directed next step is live use on the installed debug APK and targeted fixes from concrete observations.

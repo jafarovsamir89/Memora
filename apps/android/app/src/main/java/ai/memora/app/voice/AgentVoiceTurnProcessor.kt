@@ -9,7 +9,7 @@ import ai.memora.app.data.protectedstore.RoomAgentRunJournal
 import java.util.UUID
 
 /** Routes one recognized utterance through Gemini function calling and the encrypted local domain store. */
-internal class AgentVoiceTurnProcessor(context: Context) : VoiceTurnProcessor {
+internal class AgentVoiceTurnProcessor(context: Context, private val financeStore: ai.memora.app.data.VoiceMoneyStore? = null) : VoiceTurnProcessor {
     private val appContext = context.applicationContext
     private val preferences = appContext.getSharedPreferences("voice-first-consent", Context.MODE_PRIVATE)
     private val database by lazy { AgentDatabase.open(appContext) }
@@ -34,14 +34,18 @@ internal class AgentVoiceTurnProcessor(context: Context) : VoiceTurnProcessor {
             val actor = stableId("actor-id")
             val repo = ProtectedDomainRepository(database)
             val handlers = if (preferences.getBoolean("gemini-persisted-memory-v1", false))
-                LocalMemoryTools(repo, ProtectedMemoryRepository(database)).handlers() else emptyList()
+                LocalMemoryTools(repo, ProtectedMemoryRepository(database), financeStore).handlers() else emptyList()
             val orchestrator = AgentOrchestrator(GeminiAgentModelGateway(), DefaultAgentToolRegistry(handlers), policy,
                 RoomAgentRunJournal(database))
             val result = orchestrator.run(AgentTurnRequest(UUID.randomUUID().toString(), scope, actor, null,
                 locale = "az-AZ", text = transcript))
             when (result.status) {
                 AgentRunResultStatus.COMPLETED, AgentRunResultStatus.PARTIAL -> result.answer?.let {
-                    VoiceFirstResult.Ready(it, result.toolResults.any { tool -> tool.status == ToolObservationStatus.APPLIED && tool.name == "save_note" })
+                    VoiceFirstResult.Ready(it, result.toolResults.any { tool -> tool.status == ToolObservationStatus.APPLIED &&
+                        tool.name in setOf("save_note", "record_money_event", "create_table", "add_table_row", "update_table_row",
+                            "delete_table_row", "restore_table_row", "rename_table", "delete_table", "restore_table",
+                            "create_task", "set_task_completion", "create_calendar_event", "link_objects", "edit_memory_object",
+                            "delete_memory_object", "restore_memory_object") })
                 } ?: VoiceFirstResult.Unavailable
                 AgentRunResultStatus.AWAITING_CLARIFICATION -> VoiceFirstResult.Ready(result.answer ?: "Zəhmət olmasa, istəyinizi dəqiqləşdirin.", false)
                 AgentRunResultStatus.AWAITING_CONFIRMATION -> VoiceFirstResult.Ready("Bu əməliyyat üçün təsdiq lazımdır.", false)
