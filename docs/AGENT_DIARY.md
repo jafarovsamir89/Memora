@@ -449,3 +449,11 @@ ADR-001/ADR-002 исходят из локального нативного Andr
 Проверка покрывает process force-stop, но не hard hardware crash, потерю питания, disk-full во время записи, backup/restore или uninstall/reinstall; остальные MEM-12.11/P1 gates открыты. Gemini/API, microphone, real recordings и user DB не использовались. Это подготовка к следующим gates, не разрешение на agent-runtime cutover.
 
 **Git handoff ACT-0073:** commit `f80b6be1d989349fa515ade5aaa8009451262bc9` отправлен в `origin/main`; fetch, local HEAD и remote HEAD совпали, дерево было чистым. Следующий независимый P1-пункт — полный release runtime dependency license inventory; hardware power-loss и владелец-зависимые restore/signing checks остаются отдельно открыты.
+
+### 2026-11-01 — ACT-0074: release dependency license inventory
+
+Разрешённый `releaseRuntimeClasspath` сверён через Gradle actual artifact API: 132 artifact files / 129 unique runtime modules. 84 POM были в кеше; POM остальных 45 координат получены из Google Maven/Maven Central. Все 129 координат теперь сопоставлены с exact POM/source: 126 direct declarations, один Guava parent inheritance, два SLF4J MIT mappings. Обнаружен отдельный BSD-3-Clause для DataStore external protobuf. Это закрывает inventory/source mapping, но не проверку обязательных copyright/NOTICE текстов в APK/AAB и не vendor terms review; P1 открыт. См. [inventory report](ANDROID_DEPENDENCY_LICENSE_AUDIT.md) и [per-module CSV map](ANDROID_DEPENDENCY_LICENSE_MAP.csv).
+
+### 2026-11-01 — ACT-0075: debug APK установлена на Redmi
+
+По разрешению владельца установлена текущая debug-сборка командой adb install -r (Success) и запущен пакет ai.memora.app. Проверены versionCode 8 / versionName 0.6.2-debt-voice, Android 13/API33. Пользовательские данные не очищались. Это подтверждает доставку текущей тестовой сборки, не release signing и не P1 acceptance.

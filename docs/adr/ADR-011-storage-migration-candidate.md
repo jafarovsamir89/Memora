@@ -54,3 +54,8 @@ The app and Android-test Kotlin sources compile; debug APK, Android-test APK, li
 ## ACT-0073 · host-forced process death in the rekey window
 
 A second opt-in test leaves an isolated synthetic database rekeyed while its old envelope remains primary and its new envelope remains staged. The host observes a static readiness marker and force-stops the Android app process. A fresh instrumentation process then opens through the same production startup path, verifies the committed marker and promoted envelope, and removes only the probe DB/files/test alias. On Redmi Android 13/API33 this passed with `rekey_recovered_after_process_force_stop=true`, `synthetic_marker_survived=true`, and `staged_envelope_promoted=true`. The app restarted afterward. This verifies process force-stop in this precise window; it does not simulate power loss, hardware crash, disk-full, backup/restore, or uninstall/reinstall.
+
+
+## ACT-0074/0075 · current license inventory and owner APK delivery
+
+The resolved release runtime scope contains 132 artifacts / 129 modules. Exact POM/source metadata is mapped for all 129: 126 direct license fields, Guava ListenableFuture via its parent POM, and two SLF4J modules via the upstream MIT page. The full inventory and per-coordinate evidence are in [ANDROID_DEPENDENCY_LICENSE_AUDIT.md](../ANDROID_DEPENDENCY_LICENSE_AUDIT.md). This does not close P1: required copyright/NOTICE texts still need reconciliation against the packaged APK/AAB, Google vendor terms need review, and the release artifact is unsigned. The owner-authorized debug APK 0.6.2-debt-voice (versionCode 8) was installed/launched on Redmi Android 13/API33; no user data was cleared. See ACT-0074/0075.

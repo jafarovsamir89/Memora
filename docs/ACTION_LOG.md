@@ -1,5 +1,13 @@
 # Memora — лог действий
 
+## ACT-0074 · 2026-11-01 · release dependency license inventory
+
+**Проверка:** создан inventory из фактического Gradle resolved artifact set `:app:releaseRuntimeClasspath`: 132 артефакта, 129 уникальных runtime modules. В локальном Gradle cache изначально найдено 84 POM; точные POM остальных 45 модулей получены с Google Maven/Maven Central. Теперь все 129 координат имеют POM; 126 объявляют лицензию непосредственно, три не имеют собственного license field. Для `com.google.guava:listenablefuture:1.0` проверена Apache 2.0 декларация parent POM; для двух SLF4J модулей сверена upstream MIT license page. Обнаружены Apache/MIT-0/BSD-3-Clause notices и Google Android SDK / Play Core / Play Integrity terms. SQLCipher generic POM label сопоставлен с уже опубликованной Community notice screen.
+
+**Артефакт:** [Android dependency license audit](ANDROID_DEPENDENCY_LICENSE_AUDIT.md) и [полная карта 129 модулей](ANDROID_DEPENDENCY_LICENSE_MAP.csv) содержат exact POM/license mappings и source URLs. Скрипт dependency graph был временным в `%TEMP%`; в репозиторий он не добавлен. P1 license gate не закрыт, пока не сверены все copyright/NOTICE texts, Google vendor terms и notices в конечном APK/AAB.
+
+**Вывод:** P1 license gate остаётся открытым; не удалять/не менять существующие зависимости на основании неполной метаинформации.
+
 ## ACT-0073 · 2026-11-01 · force-stop между SQLCipher rekey и envelope promotion
 
 **Изменения:** добавлены отдельные opt-in `rotation-prepare` / `rotation-verify` режимы в `GeminiSyntheticProbe`. Первая фаза создаёт только `memora-agent-rotation-death-probe.db`, фиксирует синтетическую строку, durably записывает staged key, выполняет SQLCipher rekey и ждёт статический checkpoint; host останавливает приложение до promotion. Следующая instrumentation process вызывает ту же `AgentDatabase` startup reconciliation, проверяет строку и promotion, затем удаляет только named DB/envelopes/test alias.
