@@ -467,3 +467,6 @@ ADR-001/ADR-002 исходят из локального нативного Andr
 ### ACT-0077 - device APK update
 
 The owner authorized installing the new build after removing the old APK. The connected Redmi (Android 13) received the freshly built debug APK through `adb install -r`, without clearing user data. Version 0.6.2-debt-voice/versionCode 8 was confirmed and `MainActivity` launched. Continue P1 with manual reconciliation of copyright/NOTICE texts and Google vendor terms, plus the remaining disk-failure and backup/restore checks; after P1 acceptance proceed through P3-P9. The same package also passed `allowSyntheticEnvelopeWriteFailureProbe=true` on Redmi: staged-envelope write failure refused before rekey with old key/DB intact; promotion write failure preserved the staged key; next startup recovered the synthetic marker. No Gemini, microphone, or user data was used. This install/test does not constitute overall acceptance or close P1.
+
+
+**Git handoff ACT-0077:** commit `ca9420c1d8e46385e38a0068ec1f8bcbf9505ddc` (`feat(android): add OSS notices and key write recovery probe`) was pushed to `origin/main`. `git fetch`, local HEAD, and remote HEAD matched; the working tree was clean. The license map validation confirmed 169 rows and 169 unique coordinates.

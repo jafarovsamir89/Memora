@@ -683,3 +683,6 @@ Python 3.11 venv с `tests/agent_contracts/requirements.txt`: **66/66**. Отд�
 ### 2026-11-01 - ACT-0077: debug APK installed on Redmi
 
 At the owner's request, `:app:assembleDebug` completed with `BUILD SUCCESSFUL`; the fresh APK installed via `adb install -r` (`Success`). On the connected Redmi running Android 13, package details report `versionCode=8`, `versionName=0.6.2-debt-voice`; `ai.memora.app/.MainActivity` is resumed. The app package was updated without clearing user data. Synthetic Redmi instrumentation `allowSyntheticEnvelopeWriteFailureProbe=true` also passed: staged write failure refused before rekey, old key/database preserved; primary-envelope promotion write failure kept the staged recovery key; subsequent startup recovered the synthetic marker (`status=passed`). No Gemini or owner data was used. These results verify only APK delivery/launch and this named synthetic recovery path; they do not pass the remaining P1/P7-P9 gates or confirm manual on-device acceptance of the license screen.
+
+
+**Git handoff ACT-0077:** commit `ca9420c1d8e46385e38a0068ec1f8bcbf9505ddc` (`feat(android): add OSS notices and key write recovery probe`) was pushed to `origin/main`. `git fetch`, local HEAD, and remote HEAD matched; the working tree was clean. The license map validation confirmed 169 rows and 169 unique coordinates.
