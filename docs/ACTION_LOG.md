@@ -607,3 +607,5 @@ Python 3.11 venv с `tests/agent_contracts/requirements.txt`: **66/66**. Отд�
 На Redmi Android13 и API26 emulator probe прошёл: `database_corruption_refused_without_overwrite=true`; вместе с этим в том же прогоне прошли wrong/missing key/envelope fail-closed, disabled WAL, no plaintext, correct-key reopen. `:app:assembleDebugAndroidTest :app:lintDebug --no-daemon` — BUILD SUCCESSFUL. Это не закрывает hard crash/power loss/disk-full и key rotation/recovery/restore gates. Пользовательские файлы/данные не затрагивались.
 
 **Git на момент записи:** код/docs ACT-0067/0068 ещё локальные; перед передачей выполнить secret scan, `git diff --check`, сверку локальных Markdown ссылок и TODO IDs, затем commit/push с проверкой обоих hashes.
+
+**Постскриптум Git ACT-0068:** коммит `d14fc540a4d608985b55e478f2463dd17f2f90e1` (`test: add synthetic crash and corruption recovery probes`) отправлен `git push origin main`. `git fetch origin main`, `git rev-parse HEAD` и `git ls-remote origin refs/heads/main` совпали на этом hash; дерево чистое `main...origin/main`.
