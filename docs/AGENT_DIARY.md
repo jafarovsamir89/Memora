@@ -20,7 +20,7 @@
 
 **Что не закрыто:** P1 — process kill/crash/disk-fault recovery, key rotation/recovery/uninstall/restore, operational backup/restore, license review и release signing. P3–P6 остаются не подключены к UI/shared agent handlers и имеют функциональные gaps в TODO. P7 function call не прошёл и общий voice/text path отсутствует. P8 end-to-end fault/recovery/consent matrix не выполнена. P9 независимый holdout и 7-дневная daily owner acceptance не выполнялись. Ни одна из этих фаз галочкой не закрыта; пользовательские данные, реальные финансы и голос в облачный тест не передавались.
 
-**Git:** implementation changes остаются локальными и незакоммиченными на момент этой записи; push не выполнен. До передачи требуется `git diff --check`, secret scan и проверка exact final HEAD/remote/worktree. Следующий пакет — P1 crash/key lifecycle при сохранении WAL disabled; затем UI/runtime vertical slices P3–P6, повторная P7→P8→P9 приёмка.
+**Git:** код и документация сохранены commit `ee87b6a3c993313c16bb52bf7a613977204e1d40` (`test: verify storage gates on Android 13 and API 26`) и отправлены `git push origin main`. `git fetch origin main`, `git rev-parse HEAD`, `git ls-remote origin refs/heads/main` совпали на `ee87b6a3c993313c16bb52bf7a613977204e1d40`; рабочее дерево чистое `main...origin/main`. Следующий пакет — P1 crash/key lifecycle при сохранении WAL disabled; затем UI/runtime vertical slices P3–P6, повторная P7→P8→P9 приёмка.
 
 ### 2026-11-01 — ACT-0065: P9 privacy-minimal evaluation scaffold
 
