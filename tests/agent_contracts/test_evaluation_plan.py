@@ -19,6 +19,8 @@ class EvaluationPlanTest(unittest.TestCase):
         self.assertEqual(0, m["maxFinancialArithmeticErrors"])
         self.assertEqual(0, m["maxFalseSuccessClaims"])
         self.assertEqual(100, m["minDeterministicPassPercent"])
+        self.assertEqual("implemented_not_run_on_model_or_holdout", m["metricsImplementation"]["status"])
+        self.assertIn("no utterance text", m["metricsImplementation"]["outputPolicy"])
 
 
 if __name__ == "__main__":

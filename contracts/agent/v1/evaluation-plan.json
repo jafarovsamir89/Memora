@@ -3,6 +3,11 @@
   "status": "planned_not_executed",
   "dataPolicy": "synthetic_only",
   "providerScope": "gemini_only",
+  "metricsImplementation": {
+    "path": "evaluation_metrics.py",
+    "status": "implemented_not_run_on_model_or_holdout",
+    "outputPolicy": "aggregate counts, percentages and latency only; no utterance text, transcript, provider payload, or device identifier"
+  },
   "splits": {"developmentAndHoldoutDisjointByParaphraseGroup": true, "holdoutFrozenBeforeTuning": true},
   "minimumHoldoutText": {"az": 100, "ru": 60, "mixed": 80},
   "minimumNegativeOrAmbiguousPercentEachTextSlice": 20,
