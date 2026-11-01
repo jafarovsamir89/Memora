@@ -14,6 +14,8 @@
 
 Проверки: Python contracts 71/71; Android unit 198/198; `assembleDebug`, `assembleDebugAndroidTest`, `lintDebug`, `git diff --check` успешны. Device/instrumentation запуск не выполнен, `adb devices -l` пуст. Это scaffold, а не фактический holdout или acceptance: P1 physical gates и P3–P8 зависимости открыты; P7/P8/P9 остаются незакрытыми. Следующий шаг — P1 physical/recovery matrix, затем сквозная реализация по зависимостям P3–P8.
 
+Git: код и обновлённые документы отправлены коммитом `aaf7ba8adb5cc75aa37fc33ba77fee95ae8e6580` (`feat: add privacy-minimal agent eval metrics`). `git fetch origin main`, локальный `HEAD` и `git ls-remote origin refs/heads/main` подтвердили один hash; рабочее дерево чистое. Это подтверждает передачу evaluation scaffold, не закрытие P7–P9.
+
 ### 2026-10-31 — ACT-0064: P3–P6 foundation и Git handoff
 
 Синтетическая domain основа для P3–P6 добавлена в защищённую Room schema v6 и проверена без подключения UI/runtime, Gemini или пользовательских данных. Android 198/198, сборки и lint прошли; Python contracts 66/66; offline API 34 arm64 migration/domain probe прошёл и повторно прочитал доменные данные после переоткрытия БД. P3–P6 остаются открытыми до UI/agent adapter и полного списка acceptance в TODO. P1 physical/API26/key/backup/crash/WAL/ABI gates открыты.
