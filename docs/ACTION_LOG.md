@@ -1,5 +1,9 @@
 # Memora — лог действий
 
+### 2026-11-03 — Memora 2.0: продуктовая спецификация и автономный план
+
+По прямому запросу владельца сохранены два новых документа: docs/MEMORA_2_0_PRODUCT_SPEC.md и docs/MEMORA_2_0_AGENT_MASTER_PROMPT.md; обновлены entrypoints README.md и AGENTS.md. Зафиксированы person/case/timeline, премиальный home/assistant/memory UX, отчёты/история, clean first install vs non-destructive update, локальный onboarding и будущая server registration, Gemini as test-only provider with provider-independent tools. Изменения только документальные; исходники Android, пользовательская БД, APK, тесты/платные API не затрагивались. Статус: целевое ТЗ сохранено; реализация M20-00..09 не начата. Пожалуйста, не заявлять готовность Memora 2.0 на основании этих файлов.
+
 ## ACT-0076 · 2026-11-01 · generated OSS notices in the existing license screen
 
 **Изменения:** подключены официальный Google OSS Licenses Gradle plugin 0.13.0 и SDK 17.5.1. Текущий экран лицензий сохраняет полный SQLCipher Community текст и показывает локализованную AZ/RU/EN кнопку для полного списка зависимостей. `UiShellTest` проходит путь из About → Open-source licenses и нажимает новую кнопку.
