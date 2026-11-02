@@ -1,5 +1,11 @@
 # Memora — лог действий
 
+## ACT-0097 · 2026-11-03 · M20-00 baseline audit и APK backup
+
+Исполнен M20-00 по мастер-документу. Повторно сверены утверждённая Memora 2.0 спецификация, обязательные документы проекта, legacy product/data/security/UX/engineering contracts, ADR-010/011, Android routes, runtime/provider/tool chain, Room/SQLCipher schema v8, отдельные store paths, Android backup/key lifecycle и имеющийся synthetic test report. Полная clause→source→gap→target→acceptance matrix добавлена в [MEMORA_2_0_AUDIT.md](MEMORA_2_0_AUDIT.md). Устаревший верхний ACT-0038 checkpoint в TODO заменён на M20-00..09.
+
+Заархивирован рабочий APK v26 / `1.1.4-field-secretary` вне Git: `C:\memora-backups\Memora-v26-1.1.4-field-secretary-2026-11-03.apk`, 29,160,644 bytes, SHA-256 `587cd8f5141696aed845cb4fee5e3b56ed8b59e4b565c6dfb27fe1fda15d1536` (совпадает с исходником на время копирования). Baseline evidence для того же code commit `fc2e21bd55e5f209f604a191d72f6c769305ec92` взята из `GEMINI_TOOL_E2E_2026-11-03.md`: unit 219/219, debug/AndroidTest APK build, lint 0 errors, synthetic Gemini/SQLCipher and restart readback; повторный прогон в doc-only пакете не выполнялся. ADB device list пуст, телефон/пользовательские данные не тронуты. M20-00 закрыт для baseline; M20-01..09 и release/native acceptance остаются открыты. Git commit/push будут указаны только после фактической проверки.
+
 ### 2026-11-03 — Memora 2.0: продуктовая спецификация и автономный план
 
 По прямому запросу владельца сохранены два новых документа: docs/MEMORA_2_0_PRODUCT_SPEC.md и docs/MEMORA_2_0_AGENT_MASTER_PROMPT.md; обновлены entrypoints README.md и AGENTS.md. Зафиксированы person/case/timeline, премиальный home/assistant/memory UX, отчёты/история, clean first install vs non-destructive update, локальный onboarding и будущая server registration, Gemini as test-only provider with provider-independent tools. Изменения только документальные; исходники Android, пользовательская БД, APK, тесты/платные API не затрагивались. Статус: целевое ТЗ сохранено; реализация M20-00..09 не начата. Пожалуйста, не заявлять готовность Memora 2.0 на основании этих файлов.
