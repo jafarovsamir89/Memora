@@ -35,7 +35,8 @@ import org.junit.Before
 @GraphicsMode(GraphicsMode.Mode.NATIVE)
 @LooperMode(LooperMode.Mode.PAUSED)
 class UiShellTest {
-    @get:Rule val compose = createComposeRule()
+    @get:Rule(order = 0) val agentDatabase = UiAgentDatabaseRule()
+    @get:Rule(order = 1) val compose = createComposeRule()
     private lateinit var captureStore: CapturePersistence
     private lateinit var appearanceStore: AppearanceStore
     private lateinit var taskStore: ai.memora.app.data.EncryptedTaskStore
@@ -139,7 +140,11 @@ class UiShellTest {
 
     @Test fun completingTaskChangesDoneFilter() {
         taskStore.append(ai.memora.app.domain.TaskEvent.Created("synthetic-task", "local", "owner", "command", "Synthetic task"))
-        compose.setContent { MemoraApp(initialRoute = "tasks", initialTheme = "light", capturePersistenceOverride = captureStore, appearanceStoreOverride = appearanceStore, taskStoreOverride = taskStore) }
+        compose.setContent {
+            CompositionLocalProvider(LocalAgentDatabaseOverride provides agentDatabase.database) {
+                MemoraApp(initialRoute = "tasks", initialTheme = "light", capturePersistenceOverride = captureStore, appearanceStoreOverride = appearanceStore, taskStoreOverride = taskStore)
+            }
+        }
         compose.waitUntil(10_000) { compose.onAllNodesWithText("Synthetic task").fetchSemanticsNodes().isNotEmpty() }
         screenshot("05-tasks-light")
         compose.onNodeWithText("Synthetic task").performScrollTo().performClick()
@@ -213,7 +218,11 @@ class UiShellTest {
     }
 
     @Test fun financeShowsEmptyStateWithoutInventedAmounts() {
-        compose.setContent { MemoraApp(initialRoute = "finance", initialTheme = "light", capturePersistenceOverride = captureStore, appearanceStoreOverride = appearanceStore) }
+        compose.setContent {
+            CompositionLocalProvider(LocalAgentDatabaseOverride provides agentDatabase.database) {
+                MemoraApp(initialRoute = "finance", initialTheme = "light", capturePersistenceOverride = captureStore, appearanceStoreOverride = appearanceStore)
+            }
+        }
         compose.onNodeWithText("Данных пока нет").assertExists()
         compose.onNodeWithText("230 ₼").assertDoesNotExist()
         screenshot("08-finance-light")

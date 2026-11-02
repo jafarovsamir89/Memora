@@ -1,6 +1,6 @@
 # Memora AI — Your Second Memory
 
-**Текущий этап ACT-0093:** synthetic Gemini mutate цепочки AZ/RU и локальный SQLCipher readback после перезапуска прошли на APK v23; AZ restart search прошёл, RU restart search остановился на подтверждённой квоте Gemini. APK v24 (`1.1.2-field-secretary`) собран и установлен поверх данных на Redmi Android 13, но полный Gemini mutate на v24 после quota response не повторялся. 31 целевой unit test, lint и migration probe прошли. MEM-12.16/17 и release readiness остаются открытыми; полный статус — [дневник](docs/AGENT_DIARY.md) и [TODO](TODO.md).
+**Текущий этап ACT-0095:** APK v26 / 1.1.4 установлен без очистки данных. Реальные synthetic Gemini AZ/RU: запись, уточнение, связанный возврат, correction, точный баланс и поиск после force-stop прошли. SQLCipher migration probe, полный unit suite 219/219, lintDebug и сборки успешны. Протокол — [GEMINI_TOOL_E2E_2026-11-03.md](docs/GEMINI_TOOL_E2E_2026-11-03.md). MEM-12.16/17, полевая приёмка и release readiness остаются открыты.
 
 **Предыдущий этап ACT-0089:** пункты «Люди» и «Проекты» подключены к защищённой локальной БД; доступны поиск и просмотр записей без demo content. APK versionCode 20 был установлен на Android 13.
 

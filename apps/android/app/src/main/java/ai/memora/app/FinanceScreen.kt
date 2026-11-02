@@ -7,7 +7,6 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.platform.LocalContext
-import ai.memora.app.data.protectedstore.AgentDatabase
 import ai.memora.app.data.protectedstore.MoneyEventRow
 import ai.memora.app.data.protectedstore.MoneyAdjustmentRow
 import ai.memora.app.data.protectedstore.ProtectedDomainRepository
@@ -23,9 +22,10 @@ import java.time.ZoneId
 @Composable
 fun FinanceScreen() {
     val context = LocalContext.current
-    val processor = remember(context) { AgentVoiceTurnProcessor(context) }
+    val database = rememberUiAgentDatabase()
+    val processor = remember(context, database) { AgentVoiceTurnProcessor(context, database) }
     val scopeId = remember(processor) { processor.conversationScopeId() }
-    val repository = remember(context) { ProtectedDomainRepository(AgentDatabase.open(context)) }
+    val repository = remember(database) { ProtectedDomainRepository(database) }
     var events by remember { mutableStateOf<List<MoneyEventRow>?>(null) }
     var settlements by remember { mutableStateOf<List<Pair<MoneyAdjustmentRow, String>>>(emptyList()) }
     var voidedEventIds by remember { mutableStateOf<Set<String>>(emptySet()) }

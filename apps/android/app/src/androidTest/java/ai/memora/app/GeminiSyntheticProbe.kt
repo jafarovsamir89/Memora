@@ -36,7 +36,6 @@ import kotlinx.coroutines.flow.first
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import java.security.MessageDigest
-import java.time.Instant
 import java.util.UUID
 
 /** Manual, opt-in API probe. No microphone, UI, app storage reads or generated test fixtures in memory. */
@@ -422,22 +421,23 @@ class GeminiSyntheticProbe : Instrumentation() {
                 val journal = RoomAgentRunJournal(db)
                 var memoryConsent = true
                 val policy = ConsentAgentRuntimePolicy(cloudConsent = { true }, memoryConsent = { memoryConsent })
+                val languages = onlyCase?.takeIf { it in setOf("az", "ru") }?.let { listOf(it) } ?: listOf("az", "ru")
 
                 if (phase == "mutate") {
-                    check(repository.allFinanceEvents(syntheticUuid("$runId:az:scope")).isEmpty())
-                    check(repository.allFinanceEvents(syntheticUuid("$runId:ru:scope")).isEmpty())
-                    runSyntheticFinanceFlow("az", runId, db, repository, conversations, journal, policy, results)
-                    runSyntheticFinanceFlow("ru", runId, db, repository, conversations, journal, policy, results)
+                    languages.forEach { language ->
+                        check(repository.allFinanceEvents(syntheticUuid("$runId:$language:scope")).isEmpty())
+                        runSyntheticFinanceFlow(language, runId, db, repository, conversations, journal, policy, results)
+                    }
 
                     stage = "revoked_consent_gate"
                     results.putString("active_stage", stage)
                     memoryConsent = false
-                    val scope = syntheticUuid("$runId:az:scope")
+                    val scope = syntheticUuid("$runId:${languages.first()}:scope")
                     val history = conversations.recentContext(scope, 12).map { AgentDialogueMessage(it.role, it.message.takeLast(4_000)) }
                     val result = AgentOrchestrator(GeminiAgentModelGateway(), DefaultAgentToolRegistry(
                         LocalMemoryTools(repository, ProtectedMemoryRepository(db), conversations = conversations).handlers()),
                         policy, journal).run(AgentTurnRequest(UUID.randomUUID().toString(), scope,
-                        syntheticUuid("$runId:az:actor"), null, "az-AZ", "synthetic revoked-consent probe",
+                        syntheticUuid("$runId:${languages.first()}:actor"), null, "az-AZ", "synthetic revoked-consent probe",
                         AgentInputChannel.TEXT, history))
                     check(result.status == AgentRunResultStatus.FAILED && result.code == "memory_consent_required" && result.toolResults.isEmpty()) {
                         "synthetic_revoked_consent_gate_failed"
@@ -445,8 +445,9 @@ class GeminiSyntheticProbe : Instrumentation() {
                     results.putString("revoked_consent", "blocked_before_model_and_tools")
                 } else {
                     stage = "database_readback_after_restart"
-                    verifySyntheticFinanceFlow("az", runId, db, repository, conversations, journal, policy, results)
-                    verifySyntheticFinanceFlow("ru", runId, db, repository, conversations, journal, policy, results)
+                    languages.forEach { language ->
+                        verifySyntheticFinanceFlow(language, runId, db, repository, conversations, journal, policy, results)
+                    }
                     results.putString("restart_readback", "verified")
                     results.putString("restart_search", "passed")
                 }
@@ -478,14 +479,14 @@ class GeminiSyntheticProbe : Instrumentation() {
         val locale = if (az) "az-AZ" else "ru-RU"
         val steps = if (az) listOf(
             "Samir mənə 100 manat verdi." to setOf("record_money_event"),
-            "Samir mənə 350 manat borcludur." to setOf("record_money_event"),
-            "O, borcundan 100 manat qaytardı." to setOf("record_money_event", "settle_debt"),
+            "Bu, onun əvvəlki borcunun qismən qaytarılması idi." to setOf("search_money", "annotate_money_event"),
+            "Bu qaytarmadan əvvəl Samirin mənə ümumilikdə 350 manat borcu var idi. Artıq yazılmış qaytarmanı həmin borcla əlaqələndir." to setOf("record_money_event", "settle_debt"),
             "Əvvəlki qaytarma məbləğini 80 manat olaraq düzəlt." to setOf("correct_money_event"),
             "Samirin mənə nə qədər borcu qalıb?" to setOf("search_money"),
         ) else listOf(
             "Самир дал мне 100 манат." to setOf("record_money_event"),
-            "Самир должен мне 350 манат." to setOf("record_money_event"),
-            "Он вернул 100 манат из долга." to setOf("record_money_event", "settle_debt"),
+            "Это была частичная выплата его прежнего долга." to setOf("search_money", "annotate_money_event"),
+            "До этого возврата Самир был должен мне всего 350 манат. Свяжи уже записанный возврат с этим долгом." to setOf("record_money_event", "settle_debt"),
             "Исправь сумму предыдущего возврата: вместо 100 было 80 манат." to setOf("correct_money_event"),
             "Сколько осталось?" to setOf("search_money"),
         )
@@ -493,11 +494,19 @@ class GeminiSyntheticProbe : Instrumentation() {
             results.putString("active_stage", "${language}_step_${index + 1}")
             val channel = if ((index + if (az) 0 else 1) % 2 == 0) AgentInputChannel.VOICE else AgentInputChannel.TEXT
             val result = runSyntheticTurn(language, index, utterance, expectedTools, scope, actor, locale, db,
-                repository, conversations, journal, policy, channel)
+                repository, conversations, journal, policy, channel, results)
             results.putString("${language}_step_${index + 1}", "${result.status.name.lowercase()}_expected_tools_applied")
-            if (index == 2) verifyFinanceState(repository, scope, expectedReceipts = listOf(10_000, 10_000),
+            if (index == 1) {
+                val receipts = repository.allFinanceEvents(scope).filter { it.kind == "receipt" && !repository.isFinanceEventVoided(scope, it.eventId) }
+                val annotations = repository.financeAdjustments(scope).filter { it.kind == "annotation" }
+                check(receipts.size == 1 && receipts.single().minorUnits == 10_000L && annotations.size == 1 &&
+                    annotations.single().reversesEventId == receipts.single().eventId && annotations.single().minorUnits == 0L) {
+                    "synthetic_${language}_clarification_annotation_readback_failed"
+                }
+            }
+            if (index == 2) verifyFinanceState(repository, scope, expectedReceipts = listOf(10_000),
                 expectedApplied = 10_000, expectedRemaining = 25_000, code = "synthetic_pre_correction_readback_failed")
-            if (index == 3) verifyFinanceState(repository, scope, expectedReceipts = listOf(10_000, 8_000),
+            if (index == 3) verifyFinanceState(repository, scope, expectedReceipts = listOf(8_000),
                 expectedApplied = 8_000, expectedRemaining = 27_000, code = "synthetic_correction_readback_failed")
         }
     }
@@ -508,13 +517,17 @@ class GeminiSyntheticProbe : Instrumentation() {
         val scope = syntheticUuid("$runId:$language:scope")
         val actor = syntheticUuid("$runId:$language:actor")
         results.putString("active_stage", "${language}_restart_readback")
-        verifyFinanceState(repository, scope, expectedReceipts = listOf(10_000, 8_000), expectedApplied = 8_000,
+        verifyFinanceState(repository, scope, expectedReceipts = listOf(8_000), expectedApplied = 8_000,
             expectedRemaining = 27_000, code = "synthetic_restart_readback_failed")
+        val annotations = repository.financeAdjustments(scope).filter { it.kind == "annotation" }
+        check(annotations.size == 1 && annotations.single().reversesEventId in repository.allFinanceEvents(scope)
+            .filter { it.kind == "receipt" }.map { it.eventId }) { "synthetic_restart_annotation_readback_failed" }
+        results.putString("${language}_restart_readback", "verified")
         val locale = if (language == "az") "az-AZ" else "ru-RU"
         val query = if (language == "az") "Samirin mənə nə qədər borcu qalıb?" else "Сколько Самир ещё должен?"
         results.putString("active_stage", "${language}_restart_search")
         val result = runSyntheticTurn(language, 6, query, setOf("search_money"), scope, actor, locale, db,
-            repository, conversations, journal, policy, AgentInputChannel.TEXT)
+            repository, conversations, journal, policy, AgentInputChannel.TEXT, results)
         val search = result.toolResults.singleOrNull { it.name == "search_money" && it.status == ToolObservationStatus.APPLIED }
         check(search != null) {
             "synthetic_restart_search_failed"
@@ -527,7 +540,7 @@ class GeminiSyntheticProbe : Instrumentation() {
     private suspend fun runSyntheticTurn(language: String, index: Int, utterance: String, expectedTools: Set<String>,
         scope: String, actor: String, locale: String, db: AgentDatabase, repository: ProtectedDomainRepository,
         conversations: ProtectedConversationRepository, journal: RoomAgentRunJournal,
-        policy: ConsentAgentRuntimePolicy, channel: AgentInputChannel): AgentRunResult {
+        policy: ConsentAgentRuntimePolicy, channel: AgentInputChannel, results: Bundle): AgentRunResult {
         val handlers = LocalMemoryTools(repository, ProtectedMemoryRepository(db),
             conversations = conversations).handlers()
         val history = conversations.recentContext(scope, 12).mapNotNull { row ->
@@ -535,16 +548,50 @@ class GeminiSyntheticProbe : Instrumentation() {
         }
         val turnId = UUID.randomUUID().toString()
         val turn = AgentTurnRequest(turnId, scope, actor, null, locale, utterance, channel, history)
-        val result = AgentOrchestrator(GeminiAgentModelGateway(), DefaultAgentToolRegistry(handlers), policy, journal).run(turn)
+        val prefix = "${language}_step_${index + 1}"
+        val delegate = GeminiAgentModelGateway()
+        var modelRound = 0
+        val gateway = object : AgentModelGateway {
+            override suspend fun complete(request: AgentModelRequest): AgentModelReply {
+                val key = "${prefix}_model_${++modelRound}"
+                return try {
+                    delegate.complete(request).also { reply ->
+                        results.putString(key, when (reply) {
+                            is AgentModelReply.Calls -> "function_calls"
+                            is AgentModelReply.Answer -> "answer"
+                            is AgentModelReply.Clarification -> "clarification"
+                        })
+                    }
+                } catch (error: AgentGatewayFailure) {
+                    results.putString(key, "failed:${error.safeCode.takeIf { it.matches(Regex("[a-z0-9_]{1,64}")) } ?: "model_request_failed"}")
+                    throw error
+                }
+            }
+        }
+        val started = System.nanoTime()
+        val result = AgentOrchestrator(gateway, DefaultAgentToolRegistry(handlers), policy, journal).run(turn)
+        results.putLong("${prefix}_duration_ms", (System.nanoTime() - started) / 1_000_000)
+        results.putString("${prefix}_trace_id", turnId)
+        results.putString("${prefix}_runtime_status", result.status.name.lowercase())
+        results.putString("${prefix}_runtime_code", result.code ?: "none")
+        result.toolResults.take(16).forEachIndexed { toolIndex, observation ->
+            // Only allowlisted tool metadata: never arguments, modelData, utterance or answer text.
+            val safeName = observation.name.takeIf { it.matches(Regex("[a-z][a-z0-9_]{0,63}")) } ?: "unknown"
+            val safeCode = observation.code.takeIf { it.matches(Regex("[a-z0-9_]{1,64}")) } ?: "tool_error"
+            results.putString("${prefix}_tool_${toolIndex + 1}", "$safeName:${observation.status.name.lowercase()}:$safeCode")
+        }
+        if (result.status in setOf(AgentRunResultStatus.COMPLETED, AgentRunResultStatus.PARTIAL,
+                AgentRunResultStatus.AWAITING_CLARIFICATION) && !result.answer.isNullOrBlank())
+            conversations.appendTurn(scope, turnId, utterance, requireNotNull(result.answer), System.currentTimeMillis())
         check(result.status == AgentRunResultStatus.COMPLETED && !result.answer.isNullOrBlank()) {
             "synthetic_${language}_step_${index + 1}_turn_failed_${result.code ?: result.status.name.lowercase()}"
         }
         expectedTools.forEach { expectedTool ->
             check(result.toolResults.any { it.name == expectedTool && it.status == ToolObservationStatus.APPLIED }) {
-                "synthetic_${language}_step_${index + 1}_${expectedTool}_not_applied"
+                val observation = result.toolResults.lastOrNull { it.name == expectedTool }
+                "synthetic_${language}_step_${index + 1}_${expectedTool}_${observation?.status?.name?.lowercase() ?: "not_selected"}"
             }
         }
-        conversations.appendTurn(scope, turnId, utterance, requireNotNull(result.answer), System.currentTimeMillis())
         return result
     }
 
@@ -561,7 +608,8 @@ class GeminiSyntheticProbe : Instrumentation() {
         val allocations = repository.financeAdjustments(scope).filter { it.kind == "settlement" }
         check(allocations.size == 1 && allocations.single().obligationId == debts.single().eventId) { code }
         val linkedReceipt = receipts.singleOrNull { it.eventId == allocations.single().reversesEventId } ?: error(code)
-        check(Instant.parse(linkedReceipt.recordedAt).isAfter(Instant.parse(debts.single().recordedAt))) { code }
+        // A previously captured receipt may be linked only after the user later records the debt context.
+        // The provenance link, not insertion order, is the invariant for this late-context path.
         check(repository.appliedToDebtMinor(scope, linkedReceipt.eventId) == expectedApplied) { code }
         check(receipts.filter { it.eventId != linkedReceipt.eventId }.all { repository.appliedToDebtMinor(scope, it.eventId) == 0L }) { code }
         check(history.remainingDebtMinorByEvent[debts.single().eventId] == expectedRemaining) { code }

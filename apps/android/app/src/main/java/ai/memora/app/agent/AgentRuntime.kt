@@ -18,7 +18,7 @@ internal val AGENT_PERSISTED_WRITE_TOOLS = setOf("save_note", "record_money_even
     "delete_memory_object", "restore_memory_object", "create_table", "add_table_row", "update_table_row",
     "delete_table_row", "restore_table_row", "rename_table", "delete_table", "restore_table", "create_task",
     "set_task_completion", "edit_task", "create_calendar_event", "edit_calendar_event", "cancel_calendar_event",
-    "settle_debt", "reverse_money_event")
+    "settle_debt", "reverse_money_event", "annotate_money_event")
 private val WRITE_FAILURES = setOf(ToolObservationStatus.REJECTED, ToolObservationStatus.CONFLICT, ToolObservationStatus.FAILED)
 
 internal fun unresolvedAgentWriteFailures(observations: List<AgentToolObservation>): List<AgentToolObservation> =
@@ -284,9 +284,21 @@ class AgentOrchestrator(
                                 answer = "Zəhmət olmasa, istəyinizi bir az dəqiqləşdirin.",
                                 code = "invalid_model_output", observations = observations)
                         }
-                        val failedWriteCount = unresolvedAgentWriteFailures(observations).size
+                        val failedWrites = unresolvedAgentWriteFailures(observations)
                         val appliedWriteCount = observations.count { it.name in AGENT_PERSISTED_WRITE_TOOLS && it.status == ToolObservationStatus.APPLIED }
-                        if (failedWriteCount > 0) {
+                        if (failedWrites.isNotEmpty()) {
+                            // Gemini text is returned as Answer, even when it asks a question. A typed
+                            // identity conflict must still lead to clarification, never a false save.
+                            if (appliedWriteCount == 0 && failedWrites.all {
+                                    it.status == ToolObservationStatus.CONFLICT && it.code == "person_name_ambiguous"
+                                }) {
+                                terminal = AgentTurnStatus.AWAITING_CLARIFICATION
+                                return@withTimeout finish(turn, terminal, answer = when (turn.locale) {
+                                    "ru-RU" -> "В памяти несколько людей с таким именем. Кого вы имеете в виду?"
+                                    "en-US" -> "There are several people with that name. Which one do you mean?"
+                                    else -> "Yaddaşda bu adda bir neçə şəxs var. Hansını nəzərdə tutursunuz?"
+                                }, code = "person_name_ambiguous", observations = observations)
+                            }
                             return@withTimeout finish(turn, AgentTurnStatus.PARTIAL,
                                 answer = if (appliedWriteCount > 0) partialWriteFailure(turn.locale) else writeFailure(turn.locale),
                                 code = "tool_write_failed", observations = observations)
@@ -302,7 +314,13 @@ class AgentOrchestrator(
                                 answer = "Zəhmət olmasa, istəyinizi bir az dəqiqləşdirin.",
                                 code = "invalid_model_output", observations = observations)
                         }
-                        if (unresolvedAgentWriteFailures(observations).isNotEmpty()) {
+                        // A domain conflict can be the correct reason to ask the user (for example,
+                        // two scoped people with the same name). Preserve that clarification while
+                        // still preventing an Answer from being reported as a successful write.
+                        val hardWriteFailure = unresolvedAgentWriteFailures(observations).any {
+                            it.status == ToolObservationStatus.REJECTED || it.status == ToolObservationStatus.FAILED
+                        }
+                        if (hardWriteFailure) {
                             terminal = AgentTurnStatus.PARTIAL
                             val hasAppliedWrite = observations.any { it.name in AGENT_PERSISTED_WRITE_TOOLS && it.status == ToolObservationStatus.APPLIED }
                             return@withTimeout finish(turn, terminal,
@@ -649,7 +667,7 @@ class AgentOrchestrator(
     private fun writeOperationKey(call: AgentModelToolCall): String? {
         if (call.name !in AGENT_PERSISTED_WRITE_TOOLS) return null
         val stableFields = when (call.name) {
-            "correct_money_event", "reverse_money_event" -> listOf("event_id")
+            "correct_money_event", "reverse_money_event", "annotate_money_event" -> listOf("event_id")
             "settle_debt" -> listOf("obligation_id")
             "edit_task", "set_task_completion" -> listOf("task_id")
             "edit_memory_object", "delete_memory_object", "restore_memory_object" -> listOf("object_id")

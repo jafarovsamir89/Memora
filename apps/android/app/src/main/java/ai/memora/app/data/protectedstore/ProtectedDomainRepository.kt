@@ -156,7 +156,7 @@ internal class ProtectedDomainRepository(private val db: AgentDatabase) {
         val adjustments = dao.adjustments(scope, obligationId)
         if (isFinanceEventVoided(scope, obligationId)) return 0L
         val principal = adjustedAmount(scope, debt)
-        check(adjustments.all { it.kind in setOf("settlement", "correction", "reversal", "amount_correction", "event_restore", "event_void") }) {
+        check(adjustments.all { it.kind in setOf("settlement", "correction", "reversal", "amount_correction", "event_restore", "event_void", "annotation") }) {
             "invalid_ledger_event"
         }
         val settled = adjustments.filter { it.kind in setOf("settlement", "correction", "reversal") }.fold(0L) { total, adjustment -> when (adjustment.kind) {
@@ -243,6 +243,34 @@ internal class ProtectedDomainRepository(private val db: AgentDatabase) {
     suspend fun allFinanceEvents(scope: String): List<MoneyEventRow> = dao.moneyEvents(scope).map { effectiveMoneyEvent(scope, it) }
     suspend fun financePeople(scope: String): List<PersonRow> = dao.people(scope)
     suspend fun financeAdjustments(scope: String): List<MoneyAdjustmentRow> = dao.adjustments(scope)
+
+    /** Appends the user's verbatim follow-up to one existing ledger event without changing its amount. */
+    suspend fun annotateFinanceEvent(scope: String, eventId: String, commandId: String, annotation: String,
+        occurredAt: String): MoneyAdjustmentRow = db.withTransaction {
+        require(scope.isNotBlank() && eventId.isNotBlank() && commandId.isNotBlank())
+        require(annotation.isNotBlank() && annotation.length <= 500)
+        java.time.Instant.parse(occurredAt)
+        val event = dao.scopedMoneyEvent(scope, eventId) ?: error("event_not_found")
+        check(!isFinanceEventVoided(scope, eventId)) { "event_already_reversed" }
+        val byCommand = dao.adjustmentForCommand(commandId)
+        if (byCommand != null) {
+            check(byCommand.scopeId == scope && byCommand.obligationId == eventId && byCommand.kind == "annotation" &&
+                byCommand.reversesEventId == eventId && byCommand.reason == annotation && byCommand.minorUnits == 0L) {
+                "idempotency_conflict"
+            }
+            return@withTransaction byCommand
+        }
+        val duplicate = dao.adjustments(scope, eventId).firstOrNull {
+            it.kind == "annotation" && it.reversesEventId == eventId && it.reason == annotation
+        }
+        if (duplicate != null) return@withTransaction duplicate
+        val row = MoneyAdjustmentRow(commandId, commandId, eventId, "annotation", 0L, event.currency,
+            occurredAt, eventId, annotation, scope)
+        dao.insertAdjustment(row)
+        val readback = requireNotNull(dao.adjustmentForCommand(commandId))
+        check(readback == row && dao.scopedMoneyEvent(scope, eventId) == event) { "finance_annotation_readback_mismatch" }
+        readback
+    }
 
     suspend fun recordFinanceEvent(scope: String, personName: String, kind: String, minorUnits: Long, currency: String,
         source: String, comment: String?, personId: String, eventId: String, commandId: String,

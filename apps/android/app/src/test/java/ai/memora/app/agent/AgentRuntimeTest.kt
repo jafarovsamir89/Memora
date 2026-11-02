@@ -109,6 +109,40 @@ class AgentRuntimeTest {
         assertFalse(result.answer.orEmpty().contains("synthetic-private-error"))
     }
 
+    @Test fun domainConflictCanReturnClarificationButCannotBeReportedAsSaved() = runBlocking {
+        fun ambiguousTool(code: String = "person_name_ambiguous") = object : AgentToolHandler {
+            override val descriptor = AgentToolDescriptor("record_money_event", 1, ToolAccess.PERSISTED_MEMORY,
+                ToolEffect.WRITE, runtimeEnabled = true)
+            override suspend fun prepare(call: AgentModelToolCall, turn: AgentTurnRequest, commandId: String) =
+                ToolPreparation.Conflict(code)
+            override suspend fun commit(command: PreparedAgentCommand) =
+                ToolCommitResult(ToolObservationStatus.APPLIED, "should_not_commit")
+        }
+        val clarification = "Hansı Samiri nəzərdə tutursunuz?"
+        val conflictWithQuestion = runtime(QueueModel(
+            AgentModelReply.Calls(listOf(call("ambiguous", "record_money_event"))),
+            AgentModelReply.Clarification(clarification),
+        ), DefaultAgentToolRegistry(listOf(ambiguousTool()))).run(turn)
+        assertEquals(AgentRunResultStatus.AWAITING_CLARIFICATION, conflictWithQuestion.status)
+        assertEquals(clarification, conflictWithQuestion.answer)
+        assertEquals(ToolObservationStatus.CONFLICT, conflictWithQuestion.toolResults.single().status)
+
+        val conflictWithFalseSuccess = runtime(QueueModel(
+            AgentModelReply.Calls(listOf(call("ambiguous", "record_money_event"))),
+            AgentModelReply.Answer("Yazıldı"),
+        ), DefaultAgentToolRegistry(listOf(ambiguousTool()))).run(turn)
+        assertEquals(AgentRunResultStatus.AWAITING_CLARIFICATION, conflictWithFalseSuccess.status)
+        assertEquals("person_name_ambiguous", conflictWithFalseSuccess.code)
+        assertFalse(conflictWithFalseSuccess.answer.orEmpty().contains("Yazıldı"))
+
+        val storageConflict = runtime(QueueModel(
+            AgentModelReply.Calls(listOf(call("conflict", "record_money_event"))),
+            AgentModelReply.Answer("Yazıldı"),
+        ), DefaultAgentToolRegistry(listOf(ambiguousTool("version_conflict")))).run(turn)
+        assertEquals(AgentRunResultStatus.PARTIAL, storageConflict.status)
+        assertEquals("tool_write_failed", storageConflict.code)
+    }
+
     @Test fun successfulRetryResolvesEarlierRejectedWriteForSameTarget() = runBlocking {
         var attempts = 0
         val correction = object : AgentToolHandler {
@@ -175,6 +209,22 @@ class AgentRuntimeTest {
         assertEquals(AgentRunResultStatus.PARTIAL, result.status)
         assertEquals("reply_timeout_after_write", result.code)
         assertTrue(result.answer.orEmpty().contains("təsdiqləyə bilmədi"))
+        assertEquals(ToolObservationStatus.APPLIED, result.toolResults.single().status)
+        assertEquals(1, tool.commits)
+        assertEquals(2, requests)
+    }
+
+    @Test fun emptyFollowupAfterAppliedWriteRemainsPartialAndDoesNotRepeatCommit() = runBlocking {
+        val tool = FakeTool(toolName = "save_note", access = ToolAccess.PERSISTED_MEMORY)
+        var requests = 0
+        val model = object : AgentModelGateway {
+            override suspend fun complete(request: AgentModelRequest): AgentModelReply =
+                if (++requests == 1) AgentModelReply.Calls(listOf(call("save", "save_note")))
+                else requireGeminiFinalAnswer("  ")
+        }
+        val result = runtime(model, DefaultAgentToolRegistry(listOf(tool))).run(turn)
+        assertEquals(AgentRunResultStatus.PARTIAL, result.status)
+        assertEquals("reply_unavailable_after_write", result.code)
         assertEquals(ToolObservationStatus.APPLIED, result.toolResults.single().status)
         assertEquals(1, tool.commits)
         assertEquals(2, requests)

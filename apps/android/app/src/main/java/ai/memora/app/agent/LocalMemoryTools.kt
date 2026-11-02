@@ -30,7 +30,7 @@ internal class LocalMemoryTools(private val repository: ProtectedDomainRepositor
         UpdateTableRow(), DeleteTableRow(), RestoreTableRow(), RenameTable(), DeleteTable(), RestoreTable(),
         SearchConversationHistory(), ListTasks(), CreateTask(), EditTask(), SetTaskCompletion(), ListCalendarEvents(), CreateCalendarEvent(),
         EditCalendarEvent(), CancelCalendarEvent(),
-        SearchMoney(), RecordMoneyEvent(), SettleDebt(), ReverseMoneyEvent(), CorrectMoneyEvent(),
+        SearchMoney(), RecordMoneyEvent(), SettleDebt(), ReverseMoneyEvent(), CorrectMoneyEvent(), AnnotateMoneyEvent(),
     )
 
     private inner class SearchMemory : AgentToolHandler {
@@ -705,13 +705,19 @@ internal class LocalMemoryTools(private val repository: ProtectedDomainRepositor
             val matchingEvents = (if (name.isNotBlank()) history?.events.orEmpty() else repository.allFinanceEvents(turn.scopeId).filter { event ->
                 listOfNotNull(names[event.personId], event.comment, event.source).any { it.contains(query, ignoreCase = true) }
             }).filter { kind == null || it.kind == kind }
-            val events = matchingEvents.take(12)
-            val eventData = events.map { event -> mapOf("event_id" to event.eventId, "kind" to event.kind,
+            val events = matchingEvents.asReversed().take(12)
+            val adjustments = repository.financeAdjustments(turn.scopeId)
+            val eventData = events.map { event ->
+                val annotations = adjustments.filter { it.kind == "annotation" && it.reversesEventId == event.eventId }
+                    .sortedByDescending { it.occurredAt }
+                mapOf("event_id" to event.eventId, "kind" to event.kind,
                 "person_name" to names[event.personId], "minor_units" to event.minorUnits, "currency" to event.currency,
                 "remaining_minor_units" to history?.remainingDebtMinorByEvent?.get(event.eventId),
                 "applied_to_debt_minor_units" to if (event.kind == "receipt") repository.appliedToDebtMinor(turn.scopeId, event.eventId) else null,
                 "voided" to (history?.voidedEventIds?.contains(event.eventId) ?: repository.isFinanceEventVoided(turn.scopeId, event.eventId)),
                 "recorded_at" to event.recordedAt, "occurred_at" to event.occurredAt,
+                "annotations" to annotations.take(4).map { it.reason },
+                "annotation_count" to annotations.size, "annotations_truncated" to (annotations.size > 4),
                 "comment" to event.comment?.take(250), "comment_truncated" to ((event.comment?.length ?: 0) > 250),
                 "source" to event.source.take(300), "source_truncated" to (event.source.length > 300)) }
             val financialSummary = history?.let { personHistory ->
@@ -721,12 +727,10 @@ internal class LocalMemoryTools(private val repository: ProtectedDomainRepositor
                     "spent_minor_units" to active.filter { it.kind == "expense" }.fold(0L) { total, event -> Math.addExact(total, event.minorUnits) },
                     "outstanding_debt_minor_units" to personHistory.remainingDebtMinorByEvent.values.fold(0L) { total, amount -> Math.addExact(total, amount) })
             }
-            return ToolCommitResult(ToolObservationStatus.APPLIED, "financial_evidence_loaded", mapOf(
+            return ToolCommitResult(ToolObservationStatus.APPLIED, "financial_evidence_loaded", boundedFinanceEvidence(mapOf(
                 "person_found" to (history != null), "person_name" to history?.person?.displayName,
-                "count" to eventData.size, "matching_event_count" to matchingEvents.size,
-                "truncated" to (matchingEvents.size > eventData.size), "financial_summary" to financialSummary,
-                "events" to eventData,
-            ))
+                "event_order" to "recorded_at_desc", "financial_summary" to financialSummary,
+            ), eventData, matchingEvents.size))
         }
         override suspend fun prepare(call: AgentModelToolCall, turn: AgentTurnRequest, commandId: String) = ToolPreparation.Rejected("read_only_tool")
         override suspend fun commit(command: PreparedAgentCommand) = rejected()
@@ -917,6 +921,38 @@ internal class LocalMemoryTools(private val repository: ProtectedDomainRepositor
         }
     }
 
+    private inner class AnnotateMoneyEvent : AgentToolHandler {
+        override val descriptor = AgentToolDescriptor("annotate_money_event", 1, ToolAccess.PERSISTED_MEMORY,
+            ToolEffect.WRITE, runtimeEnabled = financeEnabled)
+
+        override suspend fun prepare(call: AgentModelToolCall, turn: AgentTurnRequest, commandId: String): ToolPreparation {
+            val eventId = call.arguments["event_id"] as? String ?: return ToolPreparation.Rejected("invalid_event_id")
+            if (repository.moneyEvent(turn.scopeId, eventId) == null) return ToolPreparation.Rejected("event_not_found")
+            if (repository.isFinanceEventVoided(turn.scopeId, eventId)) return ToolPreparation.Rejected("event_already_reversed")
+            val annotation = turn.text.trim()
+            if (annotation.isBlank() || annotation.length > 500) return ToolPreparation.Rejected("invalid_annotation")
+            val digest = sha256("finance_annotation\u0000${turn.scopeId}\u0000$eventId\u0000$annotation")
+            return ToolPreparation.Prepared(PreparedAgentCommand(commandId, digest, emptyMap(), false,
+                FinanceAnnotationPayload(turn.scopeId, eventId, commandId, annotation)))
+        }
+
+        override suspend fun commit(command: PreparedAgentCommand): ToolCommitResult {
+            val payload = command.opaquePayload as? FinanceAnnotationPayload ?: return rejected()
+            return try {
+                val row = repository.annotateFinanceEvent(payload.scope, payload.eventId, payload.commandId,
+                    payload.annotation, Instant.now().toString())
+                ToolCommitResult(ToolObservationStatus.APPLIED, "money_event_annotated", mapOf(
+                    "event_id" to payload.eventId, "annotation" to row.reason))
+            } catch (error: Exception) {
+                when (error.message) {
+                    "event_not_found", "event_already_reversed" -> ToolCommitResult(ToolObservationStatus.CONFLICT, error.message!!)
+                    "idempotency_conflict" -> ToolCommitResult(ToolObservationStatus.CONFLICT, "duplicate_conflict")
+                    else -> ToolCommitResult(ToolObservationStatus.FAILED, "finance_annotation_failed")
+                }
+            }
+        }
+    }
+
     private data class SavePayload(val scope: String, val objectId: String,
         val kind: DomainKind, val title: String, val body: String)
     private data class EditObjectPayload(val scope: String, val id: String, val version: Long, val title: String,
@@ -948,6 +984,8 @@ internal class LocalMemoryTools(private val repository: ProtectedDomainRepositor
     private data class ReverseFinancePayload(val scope: String, val eventId: String, val commandId: String, val reason: String)
     private data class FinanceCorrectionPayload(val scope: String, val eventId: String, val newMinorUnits: Long,
         val commandId: String, val reason: String)
+    private data class FinanceAnnotationPayload(val scope: String, val eventId: String, val commandId: String,
+        val annotation: String)
     private data class TaskEditPayload(val event: TaskEvent)
 
     private data class ParsedCell(val valid: Boolean, val value: Any?)

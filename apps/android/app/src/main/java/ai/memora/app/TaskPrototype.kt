@@ -24,7 +24,6 @@ import androidx.compose.ui.unit.dp
 import ai.memora.app.data.*
 import ai.memora.app.domain.*
 import ai.memora.app.reminders.TaskReminders
-import ai.memora.app.data.protectedstore.AgentDatabase
 import ai.memora.app.data.protectedstore.ProtectedMemoryRepository
 import ai.memora.app.voice.AgentVoiceTurnProcessor
 import ai.memora.app.ui.*
@@ -253,9 +252,9 @@ fun TaskPrototype(store: EncryptedTaskStore) {
 @Composable
 private fun AssistantTasksSummary() {
     val context = LocalContext.current
-    val processor = remember(context) { AgentVoiceTurnProcessor(context) }
+    val database = rememberUiAgentDatabase()
+    val processor = remember(context, database) { AgentVoiceTurnProcessor(context, database) }
     val scopeId = remember(processor) { processor.conversationScopeId() }
-    val database = remember(context) { AgentDatabase.open(context) }
     val memory = remember(database) { ProtectedMemoryRepository(database) }
     val coroutineScope = rememberCoroutineScope()
     var tasks by remember { mutableStateOf<List<Task>?>(null) }

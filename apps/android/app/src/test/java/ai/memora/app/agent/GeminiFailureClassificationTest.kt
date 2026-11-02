@@ -1,9 +1,21 @@
 package ai.memora.app.agent
 
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertThrows
 import org.junit.Test
 
 class GeminiFailureClassificationTest {
+    @Test fun emptyResponseIsAnExplicitFailureInsteadOfInventedSuccess() {
+        listOf(null, "", " \n\t").forEach { text ->
+            val failure = assertThrows(AgentGatewayFailure::class.java) { requireGeminiFinalAnswer(text) }
+            assertEquals("model_empty_response", failure.safeCode)
+        }
+    }
+
+    @Test fun nonemptyFinalAnswerKeepsTheModelText() {
+        assertEquals(AgentModelReply.Answer("Saxlanıldı."), requireGeminiFinalAnswer("  Saxlanıldı. \n"))
+    }
+
     @Test fun quotaExceptionIsReportedAsRateLimited() {
         val result = classifyGeminiFailure(null, setOf("AgentGatewayFailure", "QuotaExceededException"), null)
 

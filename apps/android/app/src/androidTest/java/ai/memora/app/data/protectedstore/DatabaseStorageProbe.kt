@@ -9,8 +9,7 @@ import net.zetetic.database.sqlcipher.SupportOpenHelperFactory
 import ai.memora.app.data.EncryptedCaptureStore
 import ai.memora.app.data.EncryptedTaskStore
 import ai.memora.app.data.VoiceMoneyStore
-import ai.memora.app.agent.AgentCommandJournalEntry
-import ai.memora.app.agent.AgentTurnStatus
+import ai.memora.app.agent.*
 import ai.memora.app.data.CaptureRead
 import ai.memora.app.data.StoreRead
 import ai.memora.app.data.VoiceStoreRead
@@ -24,6 +23,7 @@ import java.io.File
 import java.io.FileOutputStream
 import java.io.IOException
 import java.security.KeyStore
+import java.util.UUID
 
 /** Manual, local-only probe. Requires explicit opt-in and writes a synthetic test-named database. */
 object DatabaseStorageProbe {
@@ -479,6 +479,7 @@ object DatabaseStorageProbe {
             check(replayed.tasks.single().title == "Call dentist" && replayed.tasks.single().version == 2L)
             check(replayed.deletedIds == setOf("deleted-task-marker"))
             verifyP3P6Domain(db!!)
+            verifyFinanceClarificationChain(db!!)
             db.close(); db = null
             val reopenedKey = DatabaseKeyProvider(context, databaseFile, envelope, store, alias).loadOrCreate()
             db = Room.databaseBuilder(context, AgentDatabase::class.java, dbName)
@@ -505,6 +506,42 @@ object DatabaseStorageProbe {
                 check(domain.calendarBetween("synthetic-scope", "2026-01-05", "2026-01-07").size == 2)
                 check(domain.recordSettlement("synthetic-scope", "synthetic-settlement-p6", "synthetic-settle-command", "synthetic-obligation-p6", 2500L, "AZN", null, "synthetic partial payment") == 7500L)
                 check(ProtectedMemoryRepository(db!!).tasks().tasks.single { it.id == "synthetic-task-p6" }.title == "Call Elchin")
+
+                val finance = ProtectedDomainRepository(db!!)
+                finance.correctFinanceEventAmount("synthetic-finance-context", "synthetic-context-receipt", 8_000L,
+                    "synthetic-context-correction", "Synthetic user correction from 100 to 80", "2026-11-03T09:00:00Z")
+                val financeHistory = requireNotNull(finance.financeHistory("synthetic-finance-context", "Samir"))
+                val receipt = financeHistory.events.single { it.kind == "receipt" }
+                val debt = financeHistory.events.single { it.kind == "debt" }
+                check(receipt.minorUnits == 8_000L && financeHistory.remainingDebtMinorByEvent[debt.eventId] == 27_000L)
+                check(finance.appliedToDebtMinor("synthetic-finance-context", receipt.eventId) == 8_000L)
+                val conversation = ProtectedConversationRepository(db!!).recentContext("synthetic-finance-context", 12)
+                check(conversation.size == 6 && conversation.any { it.message == "He said this receipt was a partial debt repayment." })
+                val searchHandler = LocalMemoryTools(finance, ProtectedMemoryRepository(db!!)).handlers()
+                    .single { it.descriptor.name == "search_money" }
+                val searchTurn = AgentTurnRequest(UUID.randomUUID().toString(), "synthetic-finance-context", UUID.randomUUID().toString(),
+                    null, "az-AZ", "How much remains?", AgentInputChannel.TEXT)
+                val searchResult = searchHandler.read(AgentModelToolCall("synthetic-search", "search_money", 1,
+                    mapOf("person_name" to "Samir", "query" to "", "kind" to "")), searchTurn)
+                val summary = searchResult.modelData["financial_summary"] as? Map<*, *>
+                val events = searchResult.modelData["events"] as? List<*>
+                val receiptData = events?.mapNotNull { it as? Map<*, *> }?.single { it["event_id"] == receipt.eventId }
+                check(searchResult.status == ToolObservationStatus.APPLIED && summary?.get("outstanding_debt_minor_units") == 27_000L)
+                check(receiptData?.get("annotations") == listOf("He said this receipt was a partial debt repayment."))
+
+                db!!.protectedStoreDao().putPeople(listOf(
+                    PersonRow("synthetic-rashad-one", "Rashad", "synthetic-finance-ambiguous"),
+                    PersonRow("synthetic-rashad-two", "Rashad", "synthetic-finance-ambiguous"),
+                ))
+                val ambiguousRepository = ProtectedDomainRepository(db!!)
+                val recordHandler = LocalMemoryTools(ambiguousRepository, ProtectedMemoryRepository(db!!)).handlers()
+                    .single { it.descriptor.name == "record_money_event" }
+                val beforeAmbiguous = ambiguousRepository.allFinanceEvents("synthetic-finance-ambiguous").size
+                val ambiguousPreparation = recordHandler.prepare(AgentModelToolCall("synthetic-ambiguous", "record_money_event", 1,
+                    mapOf("kind" to "receipt", "person_name" to "Rashad", "amount" to "50", "currency" to "AZN")),
+                    searchTurn.copy(scopeId = "synthetic-finance-ambiguous", text = "Rashad gave me 50 manat"), UUID.randomUUID().toString())
+                check(ambiguousPreparation is ToolPreparation.Conflict && ambiguousPreparation.code == "person_name_ambiguous")
+                check(ambiguousRepository.allFinanceEvents("synthetic-finance-ambiguous").size == beforeAmbiguous)
             }
             runBlocking {
                 check(db!!.protectedStoreDao().moneyEvents().single { it.eventId == "synthetic-receipt" }.minorUnits == 10205L)
@@ -528,6 +565,8 @@ object DatabaseStorageProbe {
             result.putBoolean("p4_typed_table_exact_money_export_import", true)
             result.putBoolean("p5_bounded_evidence_search", true)
             result.putBoolean("p6_exact_settlement_task_event_and_calendar_validation", true)
+            result.putBoolean("financial_clarification_annotation_correction_and_restart_readback", true)
+            result.putBoolean("same_name_conflict_has_no_finance_write", true)
             result.putBoolean("p3_p6_data_survives_database_reopen", true)
             result.putBoolean("room_2_to_3_recovery_journal_survives_reopen", true)
             result.putBoolean("resolved_turn_status_is_removed", true)
@@ -636,6 +675,36 @@ object DatabaseStorageProbe {
             val safeReason = error.message?.filter { it.isLetter() || it == '_' || it == ' ' }?.take(80)
             throw SyntheticProbeFailure(stage, safeReason, diagnostic)
         }
+    }
+
+    /** Synthetic multi-turn ledger path: clarification annotates an existing receipt; a later debt links it once. */
+    private fun verifyFinanceClarificationChain(db: AgentDatabase) = runBlocking {
+        val scope = "synthetic-finance-context"
+        val repository = ProtectedDomainRepository(db)
+        val conversations = ProtectedConversationRepository(db)
+        val receipt = repository.recordFinanceEvent(scope, "Samir", "receipt", 10_000L, "AZN",
+            "Samir gave me 100 manat", null, "synthetic-finance-context-person", "synthetic-context-receipt",
+            "synthetic-context-receipt-command", "2026-11-03T08:00:00Z", "2026-10-30T08:00:00Z")
+        conversations.appendTurn(scope, "synthetic-context-turn-1", "Samir gave me 100 manat", "Saved one receipt.", 1L)
+
+        val clarification = "He said this receipt was a partial debt repayment."
+        val annotation = repository.annotateFinanceEvent(scope, receipt.eventId, "synthetic-context-annotation",
+            clarification, "2026-11-03T08:01:00Z")
+        val duplicateAnnotation = repository.annotateFinanceEvent(scope, receipt.eventId, "synthetic-context-annotation-retry",
+            clarification, "2026-11-03T08:02:00Z")
+        check(annotation == duplicateAnnotation && annotation.kind == "annotation" && annotation.minorUnits == 0L)
+        conversations.appendTurn(scope, "synthetic-context-turn-2", clarification, "I attached that context to the saved receipt.", 2L)
+
+        val debt = repository.recordFinanceEvent(scope, "Samir", "debt", 35_000L, "AZN",
+            "Earlier, Samir owed me 350 manat", null, "synthetic-finance-context-person", "synthetic-context-debt",
+            "synthetic-context-debt-command", "2026-11-03T08:03:00Z", "2026-10-29T08:00:00Z")
+        val remainingBeforeRestart = repository.recordSettlement(scope, "synthetic-context-settlement",
+            "synthetic-context-settlement-command", debt.eventId, 10_000L, "AZN", "2026-10-30T08:00:00Z",
+            "Synthetic partial repayment", receipt.eventId)
+        check(remainingBeforeRestart == 25_000L)
+        check(repository.financeHistory(scope, "Samir")?.events?.count { it.kind == "receipt" } == 1)
+        conversations.appendTurn(scope, "synthetic-context-turn-3", "Earlier he owed me 350 manat.",
+            "The existing repayment is linked to that debt.", 3L)
     }
 
     private fun createMigrationCoordinator(

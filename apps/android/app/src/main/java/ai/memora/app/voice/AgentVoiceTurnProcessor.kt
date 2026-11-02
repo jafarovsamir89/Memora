@@ -16,11 +16,11 @@ import java.time.Instant
 import java.util.UUID
 
 /** Routes one recognized utterance through Gemini function calling and the encrypted local domain store. */
-internal class AgentVoiceTurnProcessor(context: Context) : VoiceTurnProcessor {
+internal class AgentVoiceTurnProcessor(context: Context, private val databaseOverride: AgentDatabase? = null) : VoiceTurnProcessor {
     private val appContext = context.applicationContext
     private val preferences = appContext.getSharedPreferences("voice-first-consent", Context.MODE_PRIVATE)
     private val financeStore = VoiceMoneyStore(File(appContext.filesDir, "voice-memory.bin"), VoiceMoneyKey::get)
-    private val database by lazy { AgentDatabase.open(appContext) }
+    private val database by lazy { databaseOverride ?: AgentDatabase.open(appContext) }
     private val conversations by lazy { ProtectedConversationRepository(database) }
     private val domainRepository by lazy { ProtectedDomainRepository(database) }
     private val scopeId by lazy { stableId("scope-id") }
