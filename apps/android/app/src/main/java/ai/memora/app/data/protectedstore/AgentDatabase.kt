@@ -254,6 +254,8 @@ internal interface ProtectedStoreDao {
 
     @androidx.room.Query("SELECT * FROM domain_object WHERE scopeId = :scope AND objectId = :id") suspend fun domainObject(scope: String, id: String): DomainObjectRow?
     @androidx.room.Query("SELECT * FROM domain_object WHERE scopeId = :scope AND deletedAt IS NULL ORDER BY kind, title, objectId") suspend fun activeObjects(scope: String): List<DomainObjectRow>
+    @androidx.room.Query("SELECT * FROM domain_object WHERE scopeId = :scope AND kind = :kind AND deletedAt IS NULL ORDER BY title COLLATE NOCASE, objectId LIMIT :limit")
+    suspend fun activeDomainObjects(scope: String, kind: String, limit: Int): List<DomainObjectRow>
     @androidx.room.Insert(onConflict = androidx.room.OnConflictStrategy.ABORT) suspend fun insertDomainObject(row: DomainObjectRow)
     @androidx.room.Query("UPDATE domain_object SET title=:title, body=:body, status=:status, version=:nextVersion WHERE scopeId=:scope AND objectId=:id AND version=:expected AND deletedAt IS NULL") suspend fun updateDomainObject(scope: String, id: String, expected: Long, nextVersion: Long, title: String, body: String?, status: String): Int
     @androidx.room.Query("UPDATE domain_object SET deletedAt=:at, version=:nextVersion WHERE scopeId=:scope AND objectId=:id AND version=:expected AND deletedAt IS NULL") suspend fun tombstoneDomainObject(scope: String, id: String, expected: Long, nextVersion: Long, at: String): Int

@@ -273,4 +273,12 @@
     <string name="calendar_empty">Hələ tədbir yoxdur.</string>
     <string name="calendar_refresh">Yenilə</string>
     <string name="calendar_cancelled">Ləğv edilib</string>
+    <string name="saved_objects_subtitle">Yaddaşda saxlanmış qeydlər.</string>
+    <string name="saved_objects_search">Axtarış</string>
+    <string name="saved_objects_empty">Hələlik heç nə yadda saxlanmayıb. Memora-dan qeyd etməsini istəyə bilərsiniz.</string>
+    <string name="saved_objects_no_matches">Axtarışa uyğun qeyd tapılmadı.</string>
+    <string name="saved_objects_load_error">Yaddaşı açmaq mümkün olmadı. Yenidən cəhd edin.</string>
+    <string name="saved_objects_archived">Arxivdə</string>
+    <string name="saved_objects_no_details">Əlavə məlumat yoxdur.</string>
+    <string name="saved_objects_details_truncated">Uzun qeydin ilk hissəsi göstərilir.</string>
 </resources>

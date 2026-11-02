@@ -36,7 +36,7 @@ internal data class FinanceHistory(val person: PersonRow, val events: List<Money
 internal data class FinanceReversedAllocation(val obligationId: String, val minorUnits: Long)
 internal data class FinanceReversalResult(val event: MoneyEventRow, val reversedAllocations: List<FinanceReversedAllocation>)
 
-/** Protected local domain port. This remains disconnected from application workflows until P1 gates pass. */
+/** Shared protected local domain store used by agent tools and visible Android data screens. */
 internal class ProtectedDomainRepository(private val db: AgentDatabase) {
     private val dao get() = db.protectedStoreDao()
 
@@ -257,6 +257,10 @@ internal class ProtectedDomainRepository(private val db: AgentDatabase) {
     suspend fun tableRow(scope: String, tableId: String, rowId: String): TableDataRow? =
         dao.rowById(rowId)?.takeIf { it.scopeId == scope && it.tableId == tableId }
     suspend fun domainObject(scope: String, id: String): DomainObjectRow? = dao.domainObject(scope, id)
+    suspend fun domainObjects(scope: String, kind: DomainKind, limit: Int = 200): List<DomainObjectRow> {
+        require(scope.isNotBlank() && limit in 1..500)
+        return dao.activeDomainObjects(scope, kind.name, limit)
+    }
 
     suspend fun createObject(scope: String, id: String, kind: DomainKind, title: String, body: String?,
         sourceRevisionId: String?, now: String): DomainObjectRow = db.withTransaction {

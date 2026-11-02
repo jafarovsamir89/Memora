@@ -22,6 +22,7 @@ import androidx.compose.ui.unit.sp
 import ai.memora.app.ui.*
 import ai.memora.app.voice.VoiceFirstScreen
 import ai.memora.app.voice.VoiceMemoryScreen
+import ai.memora.app.data.protectedstore.DomainKind
 import ai.memora.app.data.EncryptedTaskStore
 import ai.memora.app.data.TaskStoreKey
 import ai.memora.app.data.AppearanceSettings
@@ -231,8 +232,8 @@ fun MemoraApp(initialRoute: String = "home", initialTheme: String = "system", ca
                                 { entry -> captureModel.session.delete(entry.source.id, entry.source.revisions.last().id) })
                             "finance" -> FinanceScreen()
                             "calendar" -> CalendarScreen()
-                            "people" -> UnavailableModuleScreen(s(R.string.people))
-                            "projects" -> UnavailableModuleScreen(s(R.string.projects))
+                            "people" -> SavedObjectsScreen(DomainKind.PERSON)
+                            "projects" -> SavedObjectsScreen(DomainKind.PROJECT)
                             "settings" -> SettingsScreen(theme, { appearanceModel.change(theme = it) }, language, { appearanceModel.change(language = it) }, appearance.ready && !appearance.busy, appearance.error, { appearanceModel.load() }, { about = true })
                             "chat" -> AgentChatScreen(language)
                         }

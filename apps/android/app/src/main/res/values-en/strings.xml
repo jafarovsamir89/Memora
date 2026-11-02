@@ -273,4 +273,12 @@
     <string name="calendar_empty">No events yet.</string>
     <string name="calendar_refresh">Refresh</string>
     <string name="calendar_cancelled">Cancelled</string>
+    <string name="saved_objects_subtitle">Records saved in your memory.</string>
+    <string name="saved_objects_search">Search</string>
+    <string name="saved_objects_empty">Nothing has been saved yet. You can ask Memora to add a record.</string>
+    <string name="saved_objects_no_matches">No records match this search.</string>
+    <string name="saved_objects_load_error">Could not open memory. Please try again.</string>
+    <string name="saved_objects_archived">Archived</string>
+    <string name="saved_objects_no_details">No additional details.</string>
+    <string name="saved_objects_details_truncated">Only the beginning of this long record is shown.</string>
 </resources>

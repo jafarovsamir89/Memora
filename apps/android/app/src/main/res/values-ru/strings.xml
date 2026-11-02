@@ -273,4 +273,12 @@
     <string name="calendar_empty">Событий пока нет.</string>
     <string name="calendar_refresh">Обновить</string>
     <string name="calendar_cancelled">Отменено</string>
+    <string name="saved_objects_subtitle">Записи из вашей памяти.</string>
+    <string name="saved_objects_search">Поиск</string>
+    <string name="saved_objects_empty">Пока записей нет. Попросите Memora добавить запись.</string>
+    <string name="saved_objects_no_matches">По этому запросу ничего не найдено.</string>
+    <string name="saved_objects_load_error">Не удалось открыть память. Попробуйте ещё раз.</string>
+    <string name="saved_objects_archived">В архиве</string>
+    <string name="saved_objects_no_details">Дополнительных сведений нет.</string>
+    <string name="saved_objects_details_truncated">Показано начало длинной записи.</string>
 </resources>
