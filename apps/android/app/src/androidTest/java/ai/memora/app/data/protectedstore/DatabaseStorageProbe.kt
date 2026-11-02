@@ -429,7 +429,8 @@ object DatabaseStorageProbe {
             verifyRoomSchemaUpgrade(context, store)
             val key = DatabaseKeyProvider(context, databaseFile, envelope, store, alias).loadOrCreate()
             db = Room.databaseBuilder(context, AgentDatabase::class.java, dbName)
-                .addMigrations(AGENT_DB_1_TO_2, AGENT_DB_2_TO_3, AGENT_DB_3_TO_4, AGENT_DB_4_TO_5, AGENT_DB_5_TO_6)
+                .addMigrations(AGENT_DB_1_TO_2, AGENT_DB_2_TO_3, AGENT_DB_3_TO_4, AGENT_DB_4_TO_5,
+                    AGENT_DB_5_TO_6, AGENT_DB_6_TO_7, AGENT_DB_7_TO_8)
                 .setJournalMode(androidx.room.RoomDatabase.JournalMode.TRUNCATE)
                 .openHelperFactory(SupportOpenHelperFactory(key, null, false))
                 .build()
@@ -481,7 +482,8 @@ object DatabaseStorageProbe {
             db.close(); db = null
             val reopenedKey = DatabaseKeyProvider(context, databaseFile, envelope, store, alias).loadOrCreate()
             db = Room.databaseBuilder(context, AgentDatabase::class.java, dbName)
-                .addMigrations(AGENT_DB_1_TO_2, AGENT_DB_2_TO_3, AGENT_DB_3_TO_4, AGENT_DB_4_TO_5, AGENT_DB_5_TO_6)
+                .addMigrations(AGENT_DB_1_TO_2, AGENT_DB_2_TO_3, AGENT_DB_3_TO_4, AGENT_DB_4_TO_5,
+                    AGENT_DB_5_TO_6, AGENT_DB_6_TO_7, AGENT_DB_7_TO_8)
                 .setJournalMode(androidx.room.RoomDatabase.JournalMode.TRUNCATE)
                 .openHelperFactory(SupportOpenHelperFactory(reopenedKey, null, false)).build()
             db.openHelper.writableDatabase
@@ -610,7 +612,7 @@ object DatabaseStorageProbe {
 
         stage = "p6-finance"
         // Finance events are synthetic fixtures; a settlement cannot exceed the exact outstanding balance.
-        db.protectedStoreDao().putMoneyEvents(listOf(MoneyEventRow("synthetic-obligation-p6", "synthetic-debt-command", "synthetic-person-p3", "debt", 10_000L, "AZN", "synthetic", "2026-01-01T00:00:00Z", null, "synthetic-scope")))
+        db.protectedStoreDao().putMoneyEvents(listOf(MoneyEventRow("synthetic-obligation-p6", "synthetic-debt-command", "synthetic-person-p3", "debt", 10_000L, "AZN", "synthetic", "2026-01-01T00:00:00Z", null, null, "synthetic-scope")))
         check(domain.recordSettlement("synthetic-scope", "synthetic-settlement-p6", "synthetic-settle-command", "synthetic-obligation-p6", 2_500L, "AZN", null, "synthetic partial payment") == 7_500L)
         check(domain.recordSettlement("synthetic-scope", "synthetic-settlement-p6", "synthetic-settle-command", "synthetic-obligation-p6", 2_500L, "AZN", null, "synthetic partial payment") == 7_500L)
         check(runCatching { domain.recordSettlement("other-scope", "synthetic-cross-scope-p6", "synthetic-cross-scope-command", "synthetic-obligation-p6", 1L, "AZN", null, "wrong scope") }.isFailure)
@@ -706,7 +708,8 @@ object DatabaseStorageProbe {
 
             val upgradedKey = DatabaseKeyProvider(context, file, envelope, keyStore, alias).loadOrCreate()
             val upgraded = Room.databaseBuilder(context, AgentDatabase::class.java, dbName)
-                .addMigrations(AGENT_DB_1_TO_2, AGENT_DB_2_TO_3, AGENT_DB_3_TO_4, AGENT_DB_4_TO_5, AGENT_DB_5_TO_6)
+                .addMigrations(AGENT_DB_1_TO_2, AGENT_DB_2_TO_3, AGENT_DB_3_TO_4, AGENT_DB_4_TO_5,
+                    AGENT_DB_5_TO_6, AGENT_DB_6_TO_7, AGENT_DB_7_TO_8)
                 .setJournalMode(androidx.room.RoomDatabase.JournalMode.TRUNCATE)
                 .openHelperFactory(SupportOpenHelperFactory(upgradedKey, null, false)).build()
             upgraded.openHelper.writableDatabase

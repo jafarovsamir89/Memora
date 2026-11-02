@@ -30,7 +30,7 @@ internal class LocalMemoryTools(private val repository: ProtectedDomainRepositor
         UpdateTableRow(), DeleteTableRow(), RestoreTableRow(), RenameTable(), DeleteTable(), RestoreTable(),
         SearchConversationHistory(), ListTasks(), CreateTask(), EditTask(), SetTaskCompletion(), ListCalendarEvents(), CreateCalendarEvent(),
         EditCalendarEvent(), CancelCalendarEvent(),
-        SearchMoney(), RecordMoneyEvent(), SettleDebt(), ReverseMoneyEvent(),
+        SearchMoney(), RecordMoneyEvent(), SettleDebt(), ReverseMoneyEvent(), CorrectMoneyEvent(),
     )
 
     private inner class SearchMemory : AgentToolHandler {
@@ -801,16 +801,15 @@ internal class LocalMemoryTools(private val repository: ProtectedDomainRepositor
             val reason = (call.arguments["reason"] as? String)?.trim()?.takeIf { it.isNotEmpty() } ?: "Repayment"
             if (reason.length > 500) return ToolPreparation.Rejected("invalid_reason")
             val paymentEventId = (call.arguments["payment_event_id"] as? String)?.trim()?.takeIf { it.isNotEmpty() }
-            if (paymentEventId != null) {
-                if (paymentEventId.length > 100) return ToolPreparation.Rejected("invalid_payment_event")
-                val payment = repository.moneyEvent(turn.scopeId, paymentEventId)?.takeIf { it.kind == "receipt" }
-                    ?: return ToolPreparation.Rejected("payment_event_not_found")
-                if (payment.personId != debt.personId) return ToolPreparation.Conflict("payment_obligation_mismatch")
-                if (payment.currency != debt.currency) return ToolPreparation.Conflict("currency_mismatch")
-                if (repository.isFinanceEventVoided(turn.scopeId, paymentEventId)) return ToolPreparation.Conflict("payment_event_voided")
-                if (minor > payment.minorUnits - repository.appliedToDebtMinor(turn.scopeId, paymentEventId))
-                    return ToolPreparation.Conflict("payment_amount_already_applied")
-            }
+                ?: return ToolPreparation.Rejected("payment_event_required")
+            if (paymentEventId.length > 100) return ToolPreparation.Rejected("invalid_payment_event")
+            val payment = repository.moneyEvent(turn.scopeId, paymentEventId)?.takeIf { it.kind == "receipt" }
+                ?: return ToolPreparation.Rejected("payment_event_not_found")
+            if (payment.personId != debt.personId) return ToolPreparation.Conflict("payment_obligation_mismatch")
+            if (payment.currency != debt.currency) return ToolPreparation.Conflict("currency_mismatch")
+            if (repository.isFinanceEventVoided(turn.scopeId, paymentEventId)) return ToolPreparation.Conflict("payment_event_voided")
+            if (minor > payment.minorUnits - repository.appliedToDebtMinor(turn.scopeId, paymentEventId))
+                return ToolPreparation.Conflict("payment_amount_already_applied")
             val remaining = try { repository.outstandingDebtMinor(turn.scopeId, obligationId) }
                 catch (_: Exception) { return ToolPreparation.Rejected("obligation_unavailable") }
             if (remaining <= 0 || minor > remaining) return ToolPreparation.Conflict("settlement_exceeds_balance")
@@ -874,6 +873,50 @@ internal class LocalMemoryTools(private val repository: ProtectedDomainRepositor
         }
     }
 
+    private inner class CorrectMoneyEvent : AgentToolHandler {
+        override val descriptor = AgentToolDescriptor("correct_money_event", 1, ToolAccess.PERSISTED_MEMORY,
+            ToolEffect.WRITE, runtimeEnabled = financeEnabled)
+
+        override suspend fun prepare(call: AgentModelToolCall, turn: AgentTurnRequest, commandId: String): ToolPreparation {
+            val eventId = call.arguments["event_id"] as? String ?: return ToolPreparation.Rejected("invalid_event_id")
+            val amount = moneyAmountArgument(call.arguments["new_amount"]) ?: return ToolPreparation.Rejected("invalid_amount_type")
+            val minorUnits = VoiceMoneyRules.parseMinor(amount) ?: return ToolPreparation.Rejected("invalid_amount_format")
+            val event = repository.moneyEvent(turn.scopeId, eventId) ?: return ToolPreparation.Rejected("event_not_found")
+            if (event.currency != "AZN") return ToolPreparation.Rejected("unsupported_currency")
+            if (event.minorUnits == minorUnits) return ToolPreparation.Rejected("amount_unchanged")
+            val reason = (call.arguments["reason"] as? String)?.trim()?.takeIf { it.isNotEmpty() }
+                ?: "User-requested amount correction"
+            if (reason.length > 500) return ToolPreparation.Rejected("invalid_reason")
+            val digest = sha256("finance_correction\u0000${turn.scopeId}\u0000$eventId\u0000$minorUnits\u0000$reason")
+            return ToolPreparation.Prepared(PreparedAgentCommand(commandId, digest, emptyMap(), false,
+                FinanceCorrectionPayload(turn.scopeId, eventId, minorUnits, commandId, reason)))
+        }
+
+        override suspend fun commit(command: PreparedAgentCommand): ToolCommitResult {
+            val payload = command.opaquePayload as? FinanceCorrectionPayload ?: return rejected()
+            return try {
+                val result = repository.correctFinanceEventAmount(payload.scope, payload.eventId, payload.newMinorUnits,
+                    payload.commandId, payload.reason, Instant.now().toString())
+                ToolCommitResult(ToolObservationStatus.APPLIED, "money_event_corrected", mapOf(
+                    "event_id" to result.event.eventId,
+                    "kind" to result.event.kind,
+                    "new_minor_units" to result.event.minorUnits,
+                    "currency" to result.event.currency,
+                    "adjusted_allocation_count" to result.adjustedAllocations.size,
+                    "remaining_debt_minor_units" to result.remainingDebtMinorByEvent,
+                ))
+            } catch (error: Exception) {
+                when (error.message) {
+                    "event_not_found" -> ToolCommitResult(ToolObservationStatus.REJECTED, "event_not_found")
+                    "event_already_reversed" -> ToolCommitResult(ToolObservationStatus.CONFLICT, "event_already_reversed")
+                    "correction_below_settled_amount", "correction_requires_allocation_review", "settlement_exceeds_balance",
+                    "currency_mismatch", "amount_unchanged" -> ToolCommitResult(ToolObservationStatus.CONFLICT, error.message!!)
+                    else -> ToolCommitResult(ToolObservationStatus.FAILED, "finance_correction_failed")
+                }
+            }
+        }
+    }
+
     private data class SavePayload(val scope: String, val objectId: String,
         val kind: DomainKind, val title: String, val body: String)
     private data class EditObjectPayload(val scope: String, val id: String, val version: Long, val title: String,
@@ -903,6 +946,8 @@ internal class LocalMemoryTools(private val repository: ProtectedDomainRepositor
     private data class SettlementPayload(val scope: String, val obligationId: String, val minorUnits: Long,
         val currency: String, val occurredAt: String, val reason: String, val commandId: String, val paymentEventId: String?)
     private data class ReverseFinancePayload(val scope: String, val eventId: String, val commandId: String, val reason: String)
+    private data class FinanceCorrectionPayload(val scope: String, val eventId: String, val newMinorUnits: Long,
+        val commandId: String, val reason: String)
     private data class TaskEditPayload(val event: TaskEvent)
 
     private data class ParsedCell(val valid: Boolean, val value: Any?)

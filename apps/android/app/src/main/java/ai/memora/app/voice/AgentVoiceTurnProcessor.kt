@@ -25,22 +25,13 @@ internal class AgentVoiceTurnProcessor(context: Context) : VoiceTurnProcessor {
     private val domainRepository by lazy { ProtectedDomainRepository(database) }
     private val scopeId by lazy { stableId("scope-id") }
     private val actorId by lazy { stableId("actor-id") }
-    private val policy = object : AgentRuntimePolicy {
-        private fun cloudTurnAllowed(turn: AgentTurnRequest) = when (turn.channel) {
+    private val policy = ConsentAgentRuntimePolicy(
+        cloudConsent = { channel -> when (channel) {
             AgentInputChannel.VOICE -> preferences.getBoolean("google-audio-and-answer-v1", false)
             AgentInputChannel.TEXT -> preferences.getBoolean("gemini-text-and-answer-v1", false)
-        }
-        private fun memoryAllowed() = preferences.getBoolean("gemini-persisted-memory-v1", false)
-        override suspend fun beforeModelSend(turn: AgentTurnRequest, includesStoredMemory: Boolean) =
-            if (cloudTurnAllowed(turn) && (!includesStoredMemory || memoryAllowed())) PolicyDecision(PolicyAction.ALLOW, "allowed")
-            else PolicyDecision(PolicyAction.DENY, if (includesStoredMemory) "memory_consent_required" else "cloud_consent_required")
-        override suspend fun authorizeTool(turn: AgentTurnRequest, descriptor: AgentToolDescriptor) =
-            if (descriptor.access == ToolAccess.PERSISTED_MEMORY && memoryAllowed()) PolicyDecision(PolicyAction.ALLOW, "allowed")
-            else PolicyDecision(PolicyAction.DENY, "memory_consent_required")
-        override suspend fun authorizeCommit(turn: AgentTurnRequest, command: PreparedAgentCommand) =
-            if (memoryAllowed()) PolicyDecision(PolicyAction.ALLOW, "allowed") else PolicyDecision(PolicyAction.DENY, "memory_consent_required")
-        override suspend fun confirmationGranted(turn: AgentTurnRequest, command: PreparedAgentCommand) = false
-    }
+        } },
+        memoryConsent = { preferences.getBoolean("gemini-persisted-memory-v1", false) },
+    )
 
     override suspend fun handle(transcript: String): VoiceFirstResult = process(transcript, AgentInputChannel.VOICE)
 
@@ -82,12 +73,9 @@ internal class AgentVoiceTurnProcessor(context: Context) : VoiceTurnProcessor {
             when (result.status) {
                 AgentRunResultStatus.COMPLETED, AgentRunResultStatus.PARTIAL -> result.answer?.let {
                     conversations.appendTurn(scopeId, turnId, message, it, Instant.now().toEpochMilli())
-                    VoiceFirstResult.Ready(it, result.toolResults.any { tool -> tool.status == ToolObservationStatus.APPLIED &&
-                        tool.name in setOf("save_note", "record_money_event", "create_table", "add_table_row", "update_table_row",
-                            "delete_table_row", "restore_table_row", "rename_table", "delete_table", "restore_table",
-                            "create_task", "set_task_completion", "create_calendar_event", "edit_calendar_event", "cancel_calendar_event",
-                            "link_objects", "edit_memory_object",
-                            "delete_memory_object", "restore_memory_object") })
+                    VoiceFirstResult.Ready(it, result.toolResults.any { tool ->
+                        tool.status == ToolObservationStatus.APPLIED && tool.name in AGENT_PERSISTED_WRITE_TOOLS
+                    })
                 } ?: VoiceFirstResult.Unavailable
                 AgentRunResultStatus.AWAITING_CLARIFICATION -> (result.answer ?: "Zəhmət olmasa, istəyinizi dəqiqləşdirin.").let {
                     conversations.appendTurn(scopeId, turnId, message, it, Instant.now().toEpochMilli())

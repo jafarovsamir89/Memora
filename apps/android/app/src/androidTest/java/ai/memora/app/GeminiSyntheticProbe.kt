@@ -6,6 +6,12 @@ import android.app.Activity
 import android.app.Instrumentation
 import android.os.Bundle
 import ai.memora.app.data.protectedstore.DatabaseStorageProbe
+import ai.memora.app.data.protectedstore.AgentDatabase
+import ai.memora.app.data.protectedstore.ProtectedConversationRepository
+import ai.memora.app.data.protectedstore.ProtectedDomainRepository
+import ai.memora.app.data.protectedstore.ProtectedMemoryRepository
+import ai.memora.app.data.protectedstore.RoomAgentRunJournal
+import ai.memora.app.agent.*
 import ai.memora.app.ai.configureAppCheck
 import ai.memora.app.voice.FirebaseAudioNoteGateway
 import ai.memora.app.voice.TranscriptOrthography
@@ -19,14 +25,19 @@ import com.google.firebase.Firebase
 import com.google.firebase.FirebaseApp
 import com.google.firebase.ai.ai
 import com.google.firebase.ai.type.*
+import com.google.firebase.appcheck.FirebaseAppCheck
 import java.io.ByteArrayOutputStream
 import java.nio.ByteBuffer
 import java.nio.ByteOrder
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withTimeout
+import kotlinx.coroutines.tasks.await
 import kotlinx.coroutines.flow.first
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
+import java.security.MessageDigest
+import java.time.Instant
+import java.util.UUID
 
 /** Manual, opt-in API probe. No microphone, UI, app storage reads or generated test fixtures in memory. */
 class GeminiSyntheticProbe : Instrumentation() {
@@ -39,6 +50,12 @@ class GeminiSyntheticProbe : Instrumentation() {
     private var orthographyOnly = false
     private var intentOnly = false
     private var functionCallingOnly = false
+    private var simpleGenerationOnly = false
+    private var appCheckTokenOnly = false
+    private var syntheticModelName = "gemini-3.5-flash-lite"
+    private var agentE2ePhase: String? = null
+    private var syntheticAgentE2eAllowed = false
+    private var syntheticRunId: String? = null
     private var processDeathProbe: String? = null
     private var processDeathPermitted = false
     private var speechOnly = false
@@ -55,6 +72,16 @@ class GeminiSyntheticProbe : Instrumentation() {
         orthographyOnly = arguments?.getString("orthographyOnly") == "true"
         intentOnly = arguments?.getString("intentOnly") == "true"
         functionCallingOnly = arguments?.getString("functionCallingOnly") == "true"
+        simpleGenerationOnly = arguments?.getString("simpleGenerationOnly") == "true"
+        appCheckTokenOnly = arguments?.getString("appCheckTokenOnly") == "true"
+        syntheticModelName = arguments?.getString("syntheticModelName")
+            ?.takeIf { it in setOf("gemini-3.1-flash-lite", "gemini-3.5-flash-lite", "gemini-3.8-flash") }
+            ?: "gemini-3.5-flash-lite"
+        agentE2ePhase = arguments?.getString("agentE2ePhase")?.takeIf { it in setOf("mutate", "verify", "cleanup") }
+        syntheticAgentE2eAllowed = arguments?.getString("allowSyntheticAgentE2E") == "true"
+        syntheticRunId = arguments?.getString("syntheticRunId")?.takeIf {
+            it.matches(Regex("[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}"))
+        }
         processDeathProbe = arguments?.getString("processDeathProbe")?.takeIf {
             it in setOf("prepare", "verify", "rotation-prepare", "rotation-verify")
         }
@@ -99,8 +126,59 @@ class GeminiSyntheticProbe : Instrumentation() {
         val results = Bundle()
         FirebaseApp.initializeApp(targetContext)
         configureAppCheck(targetContext)
+        if (appCheckTokenOnly) {
+            val started = System.nanoTime()
+            try {
+                val token = runBlocking {
+                    withTimeout(10_000) {
+                        FirebaseAppCheck.getInstance(FirebaseApp.getInstance()).getAppCheckToken(true).await()
+                    }
+                }
+                results.putString("status", "app_check_token_acquired")
+                results.putBoolean("token_nonblank", token.token.isNotBlank())
+            } catch (error: Exception) {
+                results.putString("status", "app_check_token_failed")
+                results.putString("exception_type", error.javaClass.simpleName.take(64))
+                safeHttpStatus(error)?.let { results.putString("http_status", it) }
+                results.putString("code", safeProbeCode(error))
+            }
+            results.putLong("app_check_ms", (System.nanoTime() - started) / 1_000_000)
+            finish(if (results.getString("status") == "app_check_token_acquired" && results.getBoolean("token_nonblank"))
+                Activity.RESULT_OK else Activity.RESULT_CANCELED, results)
+            return
+        }
+        if (simpleGenerationOnly) {
+            val started = System.nanoTime()
+            results.putString("model_id", syntheticModelName)
+            try {
+                val model = Firebase.ai(backend = GenerativeBackend.googleAI()).generativeModel(
+                    syntheticModelName,
+                    generationConfig = generationConfig { temperature = 0f; maxOutputTokens = 32 },
+                )
+                val response = runBlocking {
+                    withTimeout(30_000) { model.generateContent("Reply exactly SYNTHETIC-GEMINI-READY and nothing else.") }
+                }
+                val matched = response.text.orEmpty().contains("SYNTHETIC-GEMINI-READY")
+                results.putString("status", if (matched) "synthetic_text_generation_passed" else "synthetic_text_generation_unexpected")
+                results.putBoolean("response_marker_matched", matched)
+            } catch (error: Exception) {
+                results.putString("status", "synthetic_text_generation_failed")
+                results.putString("exception_type", error.javaClass.simpleName.take(64))
+                safeHttpStatus(error)?.let { results.putString("http_status", it) }
+                results.putString("code", safeProbeCode(error))
+            }
+            results.putLong("generation_ms", (System.nanoTime() - started) / 1_000_000)
+            finish(if (results.getString("status") == "synthetic_text_generation_passed")
+                Activity.RESULT_OK else Activity.RESULT_CANCELED, results)
+            return
+        }
+        if (agentE2ePhase != null) {
+            runSyntheticAgentE2E(agentE2ePhase!!)
+            return
+        }
         if (functionCallingOnly) {
             val started = System.nanoTime()
+            results.putString("model_id", syntheticModelName)
             val functionName = "lookup_synthetic_marker"
             val declaration = FunctionDeclaration(
                 functionName,
@@ -109,7 +187,7 @@ class GeminiSyntheticProbe : Instrumentation() {
             )
             try {
                 val model = Firebase.ai(backend = GenerativeBackend.googleAI()).generativeModel(
-                    "gemini-3.1-flash-lite",
+                    syntheticModelName,
                     generationConfig = generationConfig { temperature = 0f; maxOutputTokens = 128 },
                     tools = listOf(Tool.functionDeclarations(listOf(declaration))),
                     systemInstruction = content { text("For every user request, call $functionName exactly once. Never claim a value that is not returned by that function.") },
@@ -313,6 +391,195 @@ class GeminiSyntheticProbe : Instrumentation() {
             else "gemini-3.5-transcribe-live-az-ru-verbatim")
         finish(if (passed == phrases.size) Activity.RESULT_OK else Activity.RESULT_CANCELED, results)
     }
+
+    private fun runSyntheticAgentE2E(phase: String) {
+        val results = Bundle().apply { putString("phase", phase) }
+        val runId = syntheticRunId
+        if (!permitted || !syntheticAgentE2eAllowed || runId == null) {
+            results.putString("status", "explicit_synthetic_opt_in_required")
+            finish(Activity.RESULT_CANCELED, results)
+            return
+        }
+        val databaseName = "memora_synthetic_e2e_${runId.replace("-", "")}.db"
+        require(databaseName.matches(Regex("memora_synthetic_e2e_[0-9a-f]{32}\\.db")))
+        results.putString("trace_id", runId)
+        if (phase == "cleanup") {
+            results.putString("status", if (targetContext.deleteDatabase(databaseName)) "synthetic_database_cleaned" else "synthetic_database_cleanup_failed")
+            finish(if (results.getString("status") == "synthetic_database_cleaned") Activity.RESULT_OK else Activity.RESULT_CANCELED, results)
+            return
+        }
+
+        val key = MessageDigest.getInstance("SHA-256").digest("Memora synthetic Gemini E2E v1:$runId".toByteArray(Charsets.UTF_8))
+        var database: AgentDatabase? = null
+        var stage = "database_open"
+        var passed = false
+        try {
+            database = AgentDatabase.openWithKeyForSyntheticProbe(targetContext, databaseName, key)
+            runBlocking {
+                val db = requireNotNull(database)
+                val repository = ProtectedDomainRepository(db)
+                val conversations = ProtectedConversationRepository(db)
+                val journal = RoomAgentRunJournal(db)
+                var memoryConsent = true
+                val policy = ConsentAgentRuntimePolicy(cloudConsent = { true }, memoryConsent = { memoryConsent })
+
+                if (phase == "mutate") {
+                    check(repository.allFinanceEvents(syntheticUuid("$runId:az:scope")).isEmpty())
+                    check(repository.allFinanceEvents(syntheticUuid("$runId:ru:scope")).isEmpty())
+                    runSyntheticFinanceFlow("az", runId, db, repository, conversations, journal, policy, results)
+                    runSyntheticFinanceFlow("ru", runId, db, repository, conversations, journal, policy, results)
+
+                    stage = "revoked_consent_gate"
+                    results.putString("active_stage", stage)
+                    memoryConsent = false
+                    val scope = syntheticUuid("$runId:az:scope")
+                    val history = conversations.recentContext(scope, 12).map { AgentDialogueMessage(it.role, it.message.takeLast(4_000)) }
+                    val result = AgentOrchestrator(GeminiAgentModelGateway(), DefaultAgentToolRegistry(
+                        LocalMemoryTools(repository, ProtectedMemoryRepository(db), conversations = conversations).handlers()),
+                        policy, journal).run(AgentTurnRequest(UUID.randomUUID().toString(), scope,
+                        syntheticUuid("$runId:az:actor"), null, "az-AZ", "synthetic revoked-consent probe",
+                        AgentInputChannel.TEXT, history))
+                    check(result.status == AgentRunResultStatus.FAILED && result.code == "memory_consent_required" && result.toolResults.isEmpty()) {
+                        "synthetic_revoked_consent_gate_failed"
+                    }
+                    results.putString("revoked_consent", "blocked_before_model_and_tools")
+                } else {
+                    stage = "database_readback_after_restart"
+                    verifySyntheticFinanceFlow("az", runId, db, repository, conversations, journal, policy, results)
+                    verifySyntheticFinanceFlow("ru", runId, db, repository, conversations, journal, policy, results)
+                    results.putString("restart_readback", "verified")
+                    results.putString("restart_search", "passed")
+                }
+            }
+            passed = true
+            results.putString("status", "synthetic_agent_e2e_${phase}_passed")
+        } catch (error: Exception) {
+            results.putString("status", "synthetic_agent_e2e_failed")
+            results.putString("stage", results.getString("active_stage") ?: stage)
+            results.putString("code", safeProbeCode(error))
+            results.putString("exception_type", error.javaClass.simpleName.take(64))
+            safeHttpStatus(error)?.let { results.putString("http_status", it) }
+        } finally {
+            runCatching { database?.close() }
+            key.fill(0)
+        }
+        if (phase == "verify" && passed) {
+            results.putString("synthetic_db_cleanup", if (targetContext.deleteDatabase(databaseName)) "completed" else "failed")
+        }
+        finish(if (passed) Activity.RESULT_OK else Activity.RESULT_CANCELED, results)
+    }
+
+    private suspend fun runSyntheticFinanceFlow(language: String, runId: String, db: AgentDatabase, repository: ProtectedDomainRepository,
+        conversations: ProtectedConversationRepository, journal: RoomAgentRunJournal, policy: ConsentAgentRuntimePolicy,
+        results: Bundle) {
+        val scope = syntheticUuid("$runId:$language:scope")
+        val actor = syntheticUuid("$runId:$language:actor")
+        val az = language == "az"
+        val locale = if (az) "az-AZ" else "ru-RU"
+        val steps = if (az) listOf(
+            "Samir mənə 100 manat verdi." to setOf("record_money_event"),
+            "Samir mənə 350 manat borcludur." to setOf("record_money_event"),
+            "O, borcundan 100 manat qaytardı." to setOf("record_money_event", "settle_debt"),
+            "Əvvəlki qaytarma məbləğini 80 manat olaraq düzəlt." to setOf("correct_money_event"),
+            "Samirin mənə nə qədər borcu qalıb?" to setOf("search_money"),
+        ) else listOf(
+            "Самир дал мне 100 манат." to setOf("record_money_event"),
+            "Самир должен мне 350 манат." to setOf("record_money_event"),
+            "Он вернул 100 манат из долга." to setOf("record_money_event", "settle_debt"),
+            "Исправь сумму предыдущего возврата: вместо 100 было 80 манат." to setOf("correct_money_event"),
+            "Сколько осталось?" to setOf("search_money"),
+        )
+        steps.forEachIndexed { index, (utterance, expectedTools) ->
+            results.putString("active_stage", "${language}_step_${index + 1}")
+            val channel = if ((index + if (az) 0 else 1) % 2 == 0) AgentInputChannel.VOICE else AgentInputChannel.TEXT
+            val result = runSyntheticTurn(language, index, utterance, expectedTools, scope, actor, locale, db,
+                repository, conversations, journal, policy, channel)
+            results.putString("${language}_step_${index + 1}", "${result.status.name.lowercase()}_expected_tools_applied")
+            if (index == 2) verifyFinanceState(repository, scope, expectedReceipts = listOf(10_000, 10_000),
+                expectedApplied = 10_000, expectedRemaining = 25_000, code = "synthetic_pre_correction_readback_failed")
+            if (index == 3) verifyFinanceState(repository, scope, expectedReceipts = listOf(10_000, 8_000),
+                expectedApplied = 8_000, expectedRemaining = 27_000, code = "synthetic_correction_readback_failed")
+        }
+    }
+
+    private suspend fun verifySyntheticFinanceFlow(language: String, runId: String, db: AgentDatabase, repository: ProtectedDomainRepository,
+        conversations: ProtectedConversationRepository, journal: RoomAgentRunJournal, policy: ConsentAgentRuntimePolicy,
+        results: Bundle) {
+        val scope = syntheticUuid("$runId:$language:scope")
+        val actor = syntheticUuid("$runId:$language:actor")
+        results.putString("active_stage", "${language}_restart_readback")
+        verifyFinanceState(repository, scope, expectedReceipts = listOf(10_000, 8_000), expectedApplied = 8_000,
+            expectedRemaining = 27_000, code = "synthetic_restart_readback_failed")
+        val locale = if (language == "az") "az-AZ" else "ru-RU"
+        val query = if (language == "az") "Samirin mənə nə qədər borcu qalıb?" else "Сколько Самир ещё должен?"
+        results.putString("active_stage", "${language}_restart_search")
+        val result = runSyntheticTurn(language, 6, query, setOf("search_money"), scope, actor, locale, db,
+            repository, conversations, journal, policy, AgentInputChannel.TEXT)
+        val search = result.toolResults.singleOrNull { it.name == "search_money" && it.status == ToolObservationStatus.APPLIED }
+        check(search != null) {
+            "synthetic_restart_search_failed"
+        }
+        val summary = search.modelData["financial_summary"] as? Map<*, *>
+        check(summary?.get("outstanding_debt_minor_units") == 27_000L) { "synthetic_restart_balance_answer_evidence_failed" }
+        results.putString("${language}_restart_search", "passed")
+    }
+
+    private suspend fun runSyntheticTurn(language: String, index: Int, utterance: String, expectedTools: Set<String>,
+        scope: String, actor: String, locale: String, db: AgentDatabase, repository: ProtectedDomainRepository,
+        conversations: ProtectedConversationRepository, journal: RoomAgentRunJournal,
+        policy: ConsentAgentRuntimePolicy, channel: AgentInputChannel): AgentRunResult {
+        val handlers = LocalMemoryTools(repository, ProtectedMemoryRepository(db),
+            conversations = conversations).handlers()
+        val history = conversations.recentContext(scope, 12).mapNotNull { row ->
+            row.message.takeLast(4_000).takeIf(String::isNotBlank)?.let { AgentDialogueMessage(row.role, it) }
+        }
+        val turnId = UUID.randomUUID().toString()
+        val turn = AgentTurnRequest(turnId, scope, actor, null, locale, utterance, channel, history)
+        val result = AgentOrchestrator(GeminiAgentModelGateway(), DefaultAgentToolRegistry(handlers), policy, journal).run(turn)
+        check(result.status == AgentRunResultStatus.COMPLETED && !result.answer.isNullOrBlank()) {
+            "synthetic_${language}_step_${index + 1}_turn_failed_${result.code ?: result.status.name.lowercase()}"
+        }
+        expectedTools.forEach { expectedTool ->
+            check(result.toolResults.any { it.name == expectedTool && it.status == ToolObservationStatus.APPLIED }) {
+                "synthetic_${language}_step_${index + 1}_${expectedTool}_not_applied"
+            }
+        }
+        conversations.appendTurn(scope, turnId, utterance, requireNotNull(result.answer), System.currentTimeMillis())
+        return result
+    }
+
+    private suspend fun verifyFinanceState(repository: ProtectedDomainRepository, scope: String, expectedReceipts: List<Long>,
+        expectedApplied: Long, expectedRemaining: Long, code: String) {
+        val people = repository.financePeople(scope)
+        check(people.size == 1) { code }
+        val history = repository.financeHistory(scope, people.single().displayName) ?: error(code)
+        val active = history.events.filter { it.eventId !in history.voidedEventIds }
+        val receipts = active.filter { it.kind == "receipt" }
+        val debts = active.filter { it.kind == "debt" }
+        check(debts.size == 1) { code }
+        check(receipts.size == expectedReceipts.size && receipts.map { it.minorUnits }.sorted() == expectedReceipts.sorted()) { code }
+        val allocations = repository.financeAdjustments(scope).filter { it.kind == "settlement" }
+        check(allocations.size == 1 && allocations.single().obligationId == debts.single().eventId) { code }
+        val linkedReceipt = receipts.singleOrNull { it.eventId == allocations.single().reversesEventId } ?: error(code)
+        check(Instant.parse(linkedReceipt.recordedAt).isAfter(Instant.parse(debts.single().recordedAt))) { code }
+        check(repository.appliedToDebtMinor(scope, linkedReceipt.eventId) == expectedApplied) { code }
+        check(receipts.filter { it.eventId != linkedReceipt.eventId }.all { repository.appliedToDebtMinor(scope, it.eventId) == 0L }) { code }
+        check(history.remainingDebtMinorByEvent[debts.single().eventId] == expectedRemaining) { code }
+    }
+
+    private fun syntheticUuid(seed: String): String = UUID.nameUUIDFromBytes(seed.toByteArray(Charsets.UTF_8)).toString()
+
+    private fun safeProbeCode(error: Exception): String {
+        val value = error.message.orEmpty()
+        return value.takeIf { it.matches(Regex("synthetic_[a-z0-9_]{1,64}")) } ?: when (error) {
+            is kotlinx.coroutines.TimeoutCancellationException -> "synthetic_timeout"
+            is IllegalArgumentException -> "synthetic_invalid_response"
+            else -> "synthetic_e2e_failed"
+        }
+    }
+
+    private fun safeHttpStatus(error: Exception): String? = generateSequence(error as Throwable?) { it.cause }
+        .mapNotNull { it.message }.firstNotNullOfOrNull { Regex("(?<!\\d)(400|401|403|404|408|429|500|502|503|504)(?!\\d)").find(it)?.value }
 
     /** Compatibility probe only: Firebase documentation does not yet list this model. */
     private suspend fun transcribeLive(wav: ByteArray): String {

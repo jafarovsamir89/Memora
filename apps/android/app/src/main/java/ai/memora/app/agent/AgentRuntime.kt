@@ -14,6 +14,21 @@ import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeout
 import kotlinx.coroutines.withTimeoutOrNull
 
+internal val AGENT_PERSISTED_WRITE_TOOLS = setOf("save_note", "record_money_event", "correct_money_event", "link_objects", "edit_memory_object",
+    "delete_memory_object", "restore_memory_object", "create_table", "add_table_row", "update_table_row",
+    "delete_table_row", "restore_table_row", "rename_table", "delete_table", "restore_table", "create_task",
+    "set_task_completion", "edit_task", "create_calendar_event", "edit_calendar_event", "cancel_calendar_event",
+    "settle_debt", "reverse_money_event")
+private val WRITE_FAILURES = setOf(ToolObservationStatus.REJECTED, ToolObservationStatus.CONFLICT, ToolObservationStatus.FAILED)
+
+internal fun unresolvedAgentWriteFailures(observations: List<AgentToolObservation>): List<AgentToolObservation> =
+    observations.asSequence()
+        .filter { it.name in AGENT_PERSISTED_WRITE_TOOLS }
+        .groupBy { it.operationKey ?: "call:${it.callId}" }
+        .values
+        .map { it.last() }
+        .filter { it.status in WRITE_FAILURES }
+
 /** Ephemeral user input. Never written to AgentRunJournal. */
 enum class AgentInputChannel { VOICE, TEXT }
 
@@ -63,6 +78,8 @@ data class AgentToolObservation(
     /** Bounded, typed handler output; never raw provider exception/log text. */
     val code: String,
     val modelData: Map<String, Any?> = emptyMap(),
+    /** In-memory correlation digest for a model retry; never sent to Gemini or persisted. */
+    val operationKey: String? = null,
 )
 
 enum class ToolObservationStatus { APPLIED, REJECTED, CONFLICT, FAILED, UNKNOWN, NEEDS_CONFIRMATION }
@@ -115,6 +132,7 @@ sealed interface ToolPreparation {
     data class Prepared(val command: PreparedAgentCommand) : ToolPreparation
     data class Rejected(val code: String) : ToolPreparation
     data class Conflict(val code: String) : ToolPreparation
+    data class Failed(val code: String) : ToolPreparation
 }
 
 data class ToolCommitResult(
@@ -203,13 +221,14 @@ class AgentOrchestrator(
     private val idFactory: () -> String = { UUID.randomUUID().toString() },
     private val maxModelRounds: Int = 8,
     private val maxToolCalls: Int = 16,
-    private val modelTimeoutMillis: Long = 20_000,
+    private val modelTimeoutMillis: Long = 30_000,
+    private val modelFollowupTimeoutMillis: Long = 30_000,
     private val turnTimeoutMillis: Long = 60_000,
     private val clockMillis: () -> Long = System::currentTimeMillis,
 ) {
     init {
         require(maxModelRounds in 1..8 && maxToolCalls in 1..16)
-        require(modelTimeoutMillis in 1..20_000 && turnTimeoutMillis in 1..60_000)
+        require(modelTimeoutMillis in 1..30_000 && modelFollowupTimeoutMillis in 1..30_000 && turnTimeoutMillis in 1..60_000)
     }
 
     suspend fun run(turn: AgentTurnRequest): AgentRunResult {
@@ -228,29 +247,49 @@ class AgentOrchestrator(
             repeat(maxModelRounds) { round ->
                 failureStage = "consent_gate"
                 val consent = policy.beforeModelSend(turn, includesStoredMemory)
+                logStage(turn.turnId, "policy_model", consent.action.name.lowercase(), consent.code)
                 if (consent.action != PolicyAction.ALLOW) {
                     terminal = AgentTurnStatus.FAILED
                     return@withTimeout finish(turn, terminal, code = safeCode(consent.code), observations = observations)
                 }
                 failureStage = "model_gateway"
-                val reply = withTimeoutOrNull(modelTimeoutMillis) { model.complete(AgentModelRequest(
-                    turnId = turn.turnId,
-                    locale = turn.locale,
-                    userText = turn.text,
-                    previousToolResults = observations.toList(),
-                    tools = registry.enabledTools(),
-                    conversationHistory = turn.conversationHistory,
-                )) } ?: return@withTimeout finish(turn, AgentTurnStatus.FAILED,
-                    code = "model_timeout", observations = observations)
+                val requestTimeout = if (observations.isEmpty()) modelTimeoutMillis else modelFollowupTimeoutMillis
+                val reply = try {
+                    withTimeoutOrNull(requestTimeout) { model.complete(AgentModelRequest(
+                        turnId = turn.turnId,
+                        locale = turn.locale,
+                        userText = turn.text,
+                        previousToolResults = observations.toList(),
+                        tools = registry.enabledTools(),
+                        conversationHistory = turn.conversationHistory,
+                    )) }
+                } catch (error: AgentGatewayFailure) {
+                    val fallback = finishAfterModelFailure(turn, observations, error.safeCode)
+                    if (fallback != null) return@withTimeout fallback
+                    throw error
+                } ?: run {
+                    logWarning("model_timeout trace_id=${turn.turnId} phase=${if (observations.isEmpty()) "initial" else "followup"} tool_results=${observations.size} timeout_ms=$requestTimeout")
+                    val fallback = finishAfterModelFailure(turn, observations, "model_timeout")
+                    if (fallback != null) return@withTimeout fallback
+                    return@withTimeout finish(turn, AgentTurnStatus.FAILED,
+                        code = "model_timeout", observations = observations)
+                }
                 failureStage = "model_reply_validation"
                 when (reply) {
                     is AgentModelReply.Answer -> {
                         failureStage = "answer_validation"
                         if (!safeOutput(reply.text)) {
-                            Log.w("MemoraAgent", "model_reply_rejected kind=answer")
+                            logWarning("model_reply_rejected kind=answer")
                             return@withTimeout finish(turn, AgentTurnStatus.AWAITING_CLARIFICATION,
                                 answer = "Zəhmət olmasa, istəyinizi bir az dəqiqləşdirin.",
                                 code = "invalid_model_output", observations = observations)
+                        }
+                        val failedWriteCount = unresolvedAgentWriteFailures(observations).size
+                        val appliedWriteCount = observations.count { it.name in AGENT_PERSISTED_WRITE_TOOLS && it.status == ToolObservationStatus.APPLIED }
+                        if (failedWriteCount > 0) {
+                            return@withTimeout finish(turn, AgentTurnStatus.PARTIAL,
+                                answer = if (appliedWriteCount > 0) partialWriteFailure(turn.locale) else writeFailure(turn.locale),
+                                code = "tool_write_failed", observations = observations)
                         }
                         terminal = if (failedTools) AgentTurnStatus.PARTIAL else AgentTurnStatus.COMPLETED
                         return@withTimeout finish(turn, terminal, answer = reply.text, observations = observations)
@@ -258,10 +297,17 @@ class AgentOrchestrator(
                     is AgentModelReply.Clarification -> {
                         failureStage = "clarification_validation"
                         if (!safeOutput(reply.text)) {
-                            Log.w("MemoraAgent", "model_reply_rejected kind=clarification")
+                            logWarning("model_reply_rejected kind=clarification")
                             return@withTimeout finish(turn, AgentTurnStatus.AWAITING_CLARIFICATION,
                                 answer = "Zəhmət olmasa, istəyinizi bir az dəqiqləşdirin.",
                                 code = "invalid_model_output", observations = observations)
+                        }
+                        if (unresolvedAgentWriteFailures(observations).isNotEmpty()) {
+                            terminal = AgentTurnStatus.PARTIAL
+                            val hasAppliedWrite = observations.any { it.name in AGENT_PERSISTED_WRITE_TOOLS && it.status == ToolObservationStatus.APPLIED }
+                            return@withTimeout finish(turn, terminal,
+                                answer = if (hasAppliedWrite) partialWriteFailure(turn.locale) else writeFailure(turn.locale),
+                                code = "tool_write_failed", observations = observations)
                         }
                         terminal = AgentTurnStatus.AWAITING_CLARIFICATION
                         return@withTimeout finish(turn, terminal, answer = reply.text, code = "clarification_required", observations = observations)
@@ -269,7 +315,7 @@ class AgentOrchestrator(
                     is AgentModelReply.Calls -> {
                         failureStage = "tool_call_validation"
                         if (reply.calls.isEmpty() || reply.calls.size > maxToolCalls) {
-                            Log.w("MemoraAgent", "model_reply_rejected kind=tool_calls count=${reply.calls.size}")
+                            logWarning("model_reply_rejected kind=tool_calls count=${reply.calls.size}")
                             return@withTimeout finish(turn, AgentTurnStatus.AWAITING_CLARIFICATION,
                                 answer = "Zəhmət olmasa, istəyinizi bir az dəqiqləşdirin.",
                                 code = "invalid_model_tool_calls", observations = observations)
@@ -280,22 +326,26 @@ class AgentOrchestrator(
                                 return@withTimeout finish(turn, AgentTurnStatus.PARTIAL, code = "tool_call_limit", observations = observations)
                             }
                             if (!validCallPayload(call) || !seenCallIds.add(call.callId)) {
-                                failedTools = true
-                                observations += rejected(call, if (validCall(call)) "invalid_or_duplicate_call" else "invalid_tool_call")
-                                Log.w("MemoraAgent", "model_tool_rejected name=${call.name.takeIf { it.matches(Regex("[a-z][a-z0-9_]{0,63}")) } ?: "unknown"}")
+                                if (call.name !in AGENT_PERSISTED_WRITE_TOOLS) failedTools = true
+                                logStage(turn.turnId, "tool_validation", "rejected", "invalid_or_duplicate_call")
+                                observations += rejected(call, if (validCall(call)) "invalid_or_duplicate_call" else "invalid_tool_call", turn.turnId)
+                                logWarning("model_tool_rejected trace_id=${turn.turnId} name=${call.name.takeIf { it.matches(Regex("[a-z][a-z0-9_]{0,63}")) } ?: "unknown"}")
                                 continue
                             }
+                            logStage(turn.turnId, "tool_validation", "passed", "valid_call")
+                            logStage(turn.turnId, "tool_selected", "selected", call.name)
                             val handler = registry.handler(call.name, call.version)
                             if (handler == null) {
-                                failedTools = true
-                                observations += rejected(call, "tool_unavailable")
+                                if (call.name !in AGENT_PERSISTED_WRITE_TOOLS) failedTools = true
+                                observations += rejected(call, "tool_unavailable", turn.turnId)
                                 continue
                             }
                             if (handler.descriptor.access == ToolAccess.PERSISTED_MEMORY) includesStoredMemory = true
                             val toolPermission = policy.authorizeTool(turn, handler.descriptor)
+                            logStage(turn.turnId, "policy_tool", toolPermission.action.name.lowercase(), toolPermission.code)
                             if (toolPermission.action != PolicyAction.ALLOW) {
-                                failedTools = true
-                                observations += rejected(call, toolPermission.code)
+                                if (call.name !in AGENT_PERSISTED_WRITE_TOOLS) failedTools = true
+                                observations += rejected(call, toolPermission.code, turn.turnId)
                                 continue
                             }
 
@@ -312,39 +362,57 @@ class AgentOrchestrator(
                                 val validatedReadData = runCatching { validateModelData(readResult.modelData) }.getOrNull()
                                 if (validatedReadData == null) {
                                     failedTools = true
+                                    logStage(turn.turnId, "tool_read_result_validation", "rejected", "tool_result_invalid")
                                     observations += AgentToolObservation(call.callId, call.name, ToolObservationStatus.FAILED,
                                         "tool_result_invalid")
-                                    logToolOutcome(call.name, ToolObservationStatus.FAILED, "tool_result_invalid")
-                                    Log.w("MemoraAgent", "tool_read_result_rejected name=${call.name.take(64)}")
+                                    logToolOutcome(call.name, ToolObservationStatus.FAILED, "tool_result_invalid", turn.turnId)
+                                    logWarning("tool_read_result_rejected name=${call.name.take(64)}")
                                     continue
                                 }
-                                logToolOutcome(call.name, readResult.status, readResult.code)
+                                logStage(turn.turnId, "tool_read_result_validation", "passed", "valid_result")
+                                logToolOutcome(call.name, readResult.status, readResult.code, turn.turnId)
                                 val observation = AgentToolObservation(call.callId, call.name, readResult.status,
                                     safeCode(readResult.code), validatedReadData)
                                 if (!withinResultBudget(observations, observation)) {
                                     failedTools = true
-                                    observations += rejected(call, "tool_result_limit_exceeded")
+                                    observations += rejected(call, "tool_result_limit_exceeded", turn.turnId)
                                     continue
                                 }
                                 observations += observation
                                 if (readResult.status != ToolObservationStatus.APPLIED) failedTools = true
+                                else logStage(turn.turnId, "database_readback", "verified", observation.code)
                                 continue
                             }
 
                             failureStage = "tool_prepare"
                             val commandId = idFactory()
                             require(isUuid(commandId)) { "Application ID factory returned invalid command ID" }
-                            when (val prepared = handler.prepare(call, turn, commandId)) {
+                            val preparation = try {
+                                handler.prepare(call, turn, commandId)
+                            } catch (cancelled: CancellationException) {
+                                throw cancelled
+                            } catch (_: Exception) {
+                                ToolPreparation.Failed("prepare_failed")
+                            }
+                            when (val prepared = preparation) {
                                 is ToolPreparation.Rejected -> {
-                                    failedTools = true
-                                    observations += rejected(call, prepared.code)
+                                    logStage(turn.turnId, "tool_prepare", "rejected", prepared.code)
+                                    observations += rejected(call, prepared.code, turn.turnId)
                                 }
                                 is ToolPreparation.Conflict -> {
-                                    failedTools = true
-                                    logToolOutcome(call.name, ToolObservationStatus.CONFLICT, prepared.code)
-                                    observations += AgentToolObservation(call.callId, call.name, ToolObservationStatus.CONFLICT, safeCode(prepared.code))
+                                    logStage(turn.turnId, "tool_prepare", "conflict", prepared.code)
+                                    logToolOutcome(call.name, ToolObservationStatus.CONFLICT, prepared.code, turn.turnId)
+                                    observations += AgentToolObservation(call.callId, call.name, ToolObservationStatus.CONFLICT,
+                                        safeCode(prepared.code), operationKey = writeOperationKey(call))
+                                }
+                                is ToolPreparation.Failed -> {
+                                    logStage(turn.turnId, "tool_prepare", "failed", prepared.code)
+                                    observations += AgentToolObservation(call.callId, call.name, ToolObservationStatus.FAILED,
+                                        safeCode(prepared.code), operationKey = writeOperationKey(call))
+                                    logToolOutcome(call.name, ToolObservationStatus.FAILED, prepared.code, turn.turnId)
                                 }
                                 is ToolPreparation.Prepared -> {
+                                    logStage(turn.turnId, "tool_prepare", "prepared", "ready")
                                     failureStage = "tool_command_validation"
                                     validatePrepared(prepared.command, commandId)
                                     val requiresConfirmation = prepared.command.requiresConfirmation ||
@@ -353,23 +421,25 @@ class AgentOrchestrator(
                                         journal.setTurnStatus(turn.turnId, AgentTurnStatus.AWAITING_CONFIRMATION)
                                         terminal = AgentTurnStatus.AWAITING_CONFIRMATION
                                         val needed = AgentToolObservation(call.callId, call.name, ToolObservationStatus.NEEDS_CONFIRMATION,
-                                            "confirmation_required")
-                                        logToolOutcome(call.name, needed.status, needed.code)
+                                            "confirmation_required", operationKey = writeOperationKey(call))
+                                        logToolOutcome(call.name, needed.status, needed.code, turn.turnId)
                                         observations += needed
                                         return@withTimeout finish(turn, terminal, code = "confirmation_required", observations = observations)
                                     }
                                     val commitPermission = policy.authorizeCommit(turn, prepared.command)
+                                    logStage(turn.turnId, "policy_commit", commitPermission.action.name.lowercase(), commitPermission.code)
                                     if (commitPermission.action == PolicyAction.NEEDS_CONFIRMATION) {
                                         journal.setTurnStatus(turn.turnId, AgentTurnStatus.AWAITING_CONFIRMATION)
                                         terminal = AgentTurnStatus.AWAITING_CONFIRMATION
                                         observations += AgentToolObservation(call.callId, call.name,
-                                            ToolObservationStatus.NEEDS_CONFIRMATION, "confirmation_required")
-                                        logToolOutcome(call.name, ToolObservationStatus.NEEDS_CONFIRMATION, "confirmation_required")
+                                            ToolObservationStatus.NEEDS_CONFIRMATION, "confirmation_required",
+                                            operationKey = writeOperationKey(call))
+                                        logToolOutcome(call.name, ToolObservationStatus.NEEDS_CONFIRMATION, "confirmation_required", turn.turnId)
                                         return@withTimeout finish(turn, terminal, code = "confirmation_required", observations = observations)
                                     }
                                     if (commitPermission.action != PolicyAction.ALLOW) {
-                                        failedTools = true
-                                        observations += rejected(call, commitPermission.code)
+                                        if (call.name !in AGENT_PERSISTED_WRITE_TOOLS) failedTools = true
+                                        observations += rejected(call, commitPermission.code, turn.turnId)
                                         continue
                                     }
                                     val entry = AgentCommandJournalEntry(commandId, prepared.command.payloadDigest, "prepared",
@@ -387,9 +457,10 @@ class AgentOrchestrator(
                                         journal.setCommandStatus(commandId, "applying", "reconciling")
                                         failedTools = true
                                         uncertainEffect = true
+                                        logStage(turn.turnId, "tool_commit", "unknown", "effect_outcome_unknown")
                                         observations += AgentToolObservation(call.callId, call.name, ToolObservationStatus.UNKNOWN,
-                                            "effect_outcome_unknown")
-                                        logToolOutcome(call.name, ToolObservationStatus.UNKNOWN, "effect_outcome_unknown")
+                                            "effect_outcome_unknown", operationKey = writeOperationKey(call))
+                                        logToolOutcome(call.name, ToolObservationStatus.UNKNOWN, "effect_outcome_unknown", turn.turnId)
                                         terminal = AgentTurnStatus.RECOVERY_REQUIRED
                                         return@withTimeout finish(turn, terminal, code = "effect_outcome_unknown", observations = observations)
                                     }
@@ -398,33 +469,37 @@ class AgentOrchestrator(
                                         ToolObservationStatus.CONFLICT -> "conflict"
                                         ToolObservationStatus.REJECTED -> "rejected"
                                         ToolObservationStatus.NEEDS_CONFIRMATION -> "rejected"
-                                        ToolObservationStatus.FAILED -> "rejected"
+                                        ToolObservationStatus.FAILED -> "failed"
                                         ToolObservationStatus.UNKNOWN -> "reconciling"
                                     }
                                     journal.setCommandStatus(commandId, "applying", nextStatus)
+                                    logStage(turn.turnId, "tool_commit", committed.status.name.lowercase(), committed.code)
                                     val validatedModelData = runCatching { validateModelData(committed.modelData) }.getOrNull()
                                     if (validatedModelData == null) {
                                         failedTools = true
                                         observations += AgentToolObservation(call.callId, call.name, committed.status,
-                                            "tool_result_invalid")
+                                            "tool_result_invalid", operationKey = writeOperationKey(call))
                                         terminal = if (committed.status == ToolObservationStatus.UNKNOWN)
                                             AgentTurnStatus.RECOVERY_REQUIRED else AgentTurnStatus.PARTIAL
                                         return@withTimeout finish(turn, terminal, code = "tool_result_invalid", observations = observations)
                                     }
                                     failureStage = "tool_result_validation"
                                     val observation = AgentToolObservation(call.callId, call.name, committed.status,
-                                        safeCode(committed.code), validatedModelData)
-                                    logToolOutcome(call.name, observation.status, observation.code)
+                                        safeCode(committed.code), validatedModelData, writeOperationKey(call))
+                                    logToolOutcome(call.name, observation.status, observation.code, turn.turnId)
+                                    if (observation.status == ToolObservationStatus.APPLIED)
+                                        logStage(turn.turnId, "database_readback", "verified", observation.code)
                                     if (!withinResultBudget(observations, observation)) {
                                         failedTools = true
                                         observations += AgentToolObservation(call.callId, call.name, committed.status,
-                                            "tool_result_limit_exceeded")
+                                            "tool_result_limit_exceeded", operationKey = writeOperationKey(call))
                                         terminal = if (committed.status == ToolObservationStatus.UNKNOWN)
                                             AgentTurnStatus.RECOVERY_REQUIRED else AgentTurnStatus.PARTIAL
                                         return@withTimeout finish(turn, terminal, code = "tool_result_limit_exceeded", observations = observations)
                                     }
                                     observations += observation
-                                    if (committed.status != ToolObservationStatus.APPLIED) failedTools = true
+                                    if (committed.status != ToolObservationStatus.APPLIED && call.name !in AGENT_PERSISTED_WRITE_TOOLS)
+                                        failedTools = true
                                     if (committed.status == ToolObservationStatus.UNKNOWN) {
                                         terminal = AgentTurnStatus.RECOVERY_REQUIRED
                                         return@withTimeout finish(turn, terminal, code = "effect_outcome_unknown", observations = observations)
@@ -454,9 +529,12 @@ class AgentOrchestrator(
             }
             throw AgentTurnCancelledException(uncertainEffect).also { it.initCause(cancelled) }
         } catch (error: Exception) {
-            Log.w("MemoraAgent", "runtime_failed stage=$failureStage type=${error.javaClass.simpleName.take(64)}")
+            val gatewayCode = (error as? AgentGatewayFailure)?.safeCode
+                ?.takeIf { it.matches(Regex("[a-z0-9_]{1,64}")) }
+            val failureCode = gatewayCode ?: "agent_execution_failed"
+            logWarning("runtime_failed stage=$failureStage type=${error.javaClass.simpleName.take(64)} code=$failureCode")
             terminal = AgentTurnStatus.FAILED
-            return finish(turn, terminal, code = "agent_execution_failed", observations = observations)
+            return finish(turn, terminal, code = failureCode, observations = observations)
         }
     }
 
@@ -485,6 +563,38 @@ class AgentOrchestrator(
         }
     }
 
+    /** Preserve verified local writes when Gemini cannot provide the next turn; never call that a full success. */
+    private suspend fun finishAfterModelFailure(
+        turn: AgentTurnRequest,
+        observations: List<AgentToolObservation>,
+        failureCode: String,
+    ): AgentRunResult? {
+        val writes = observations.filter { it.name in AGENT_PERSISTED_WRITE_TOOLS }
+        if (writes.isEmpty()) return null
+        val applied = writes.any { it.status == ToolObservationStatus.APPLIED }
+        val unresolved = unresolvedAgentWriteFailures(observations)
+        if (unresolved.isNotEmpty()) {
+            return finish(turn, if (applied) AgentTurnStatus.PARTIAL else AgentTurnStatus.FAILED,
+                answer = if (applied) partialWriteFailure(turn.locale) else writeFailure(turn.locale),
+                code = "tool_write_failed", observations = observations)
+        }
+        if (!applied) return null
+        val anotherToolFailed = observations.any {
+            it.name !in AGENT_PERSISTED_WRITE_TOOLS && it.status in WRITE_FAILURES
+        }
+        val answer = when (turn.locale) {
+            "ru-RU" -> if (anotherToolFailed)
+                "Запись сохранена, но один из дополнительных шагов не выполнен. Проверьте результат."
+            else "Запись сохранена, но Gemini не подтвердил, завершены ли дополнительные действия. Проверьте результат."
+            else -> if (anotherToolFailed)
+                "Qeyd yadda saxlanıldı, amma əlavə addımlardan biri tamamlanmadı. Nəticəni yoxlayın."
+            else "Qeyd yadda saxlanıldı, amma Gemini əlavə addımların tamamlandığını təsdiqləyə bilmədi. Nəticəni yoxlayın."
+        }
+        val safeCode = if (anotherToolFailed) "tool_operation_failed_after_write"
+            else if (failureCode == "model_timeout") "reply_timeout_after_write" else "reply_unavailable_after_write"
+        return finish(turn, AgentTurnStatus.PARTIAL, answer = answer, code = safeCode, observations = observations)
+    }
+
     private suspend fun finish(
         turn: AgentTurnRequest,
         status: AgentTurnStatus,
@@ -493,7 +603,26 @@ class AgentOrchestrator(
         observations: List<AgentToolObservation> = emptyList(),
     ): AgentRunResult {
         journal.finishTurn(turn.turnId, status)
+        logStage(turn.turnId, "final_answer", status.name.lowercase(), code ?: if (answer.isNullOrBlank()) "empty" else "ready")
         return AgentRunResult(turn.turnId, status.toResult(), answer, code, observations.toList())
+    }
+
+    private fun writeFailure(locale: String) = if (locale == "ru-RU")
+        "Не удалось сохранить изменение. Повторите попытку."
+    else "Məlumatı yadda saxlaya bilmədim. Yenidən cəhd edin."
+
+    private fun partialWriteFailure(locale: String) = if (locale == "ru-RU")
+        "Часть операции выполнена, но одно изменение не сохранилось. Проверьте запись."
+    else "Əməliyyat qismən tamamlandı, amma bir dəyişiklik yadda saxlanmadı. Yazını yoxlayın."
+
+    private fun logStage(traceId: String, stage: String, status: String, code: String) {
+        val safeStage = stage.takeIf { it.matches(Regex("[a-z_]{1,40}")) } ?: "unknown"
+        val safeStatus = status.takeIf { it.matches(Regex("[a-z_]{1,40}")) } ?: "unknown"
+        runCatching { Log.i("MemoraAgent", "stage trace_id=$traceId name=$safeStage status=$safeStatus code=${safeCode(code)}") }
+    }
+
+    private fun logWarning(message: String) {
+        runCatching { Log.w("MemoraAgent", message) }
     }
 
     private fun validateTurn(turn: AgentTurnRequest) {
@@ -516,16 +645,40 @@ class AgentOrchestrator(
         call.arguments.keys.all { it.matches(Regex("[a-zA-Z][a-zA-Z0-9_]{0,63}")) } &&
         call.arguments.values.all { safeValue(it, 0) } && runCatching { AgentCanonical.bytes(call.arguments).size <= 32_768 }.getOrDefault(false)
 
-    private fun rejected(call: AgentModelToolCall, code: String): AgentToolObservation {
-        val safeName = call.name.takeIf { it.matches(Regex("[a-z][a-z0-9_]{0,63}")) } ?: "unknown"
-        val safe = safeCode(code)
-        logToolOutcome(safeName, ToolObservationStatus.REJECTED, safe)
-        return AgentToolObservation(call.callId.take(128), call.name.take(64), ToolObservationStatus.REJECTED, safe)
+    /** Hash stable target identity so a later successful retry can resolve its earlier failed attempt. */
+    private fun writeOperationKey(call: AgentModelToolCall): String? {
+        if (call.name !in AGENT_PERSISTED_WRITE_TOOLS) return null
+        val stableFields = when (call.name) {
+            "correct_money_event", "reverse_money_event" -> listOf("event_id")
+            "settle_debt" -> listOf("obligation_id")
+            "edit_task", "set_task_completion" -> listOf("task_id")
+            "edit_memory_object", "delete_memory_object", "restore_memory_object" -> listOf("object_id")
+            "update_table_row", "delete_table_row", "restore_table_row" -> listOf("table_id", "row_id")
+            "rename_table", "delete_table", "restore_table" -> listOf("table_id")
+            "edit_calendar_event", "cancel_calendar_event" -> listOf("event_id")
+            else -> emptyList()
+        }
+        val stableTarget = stableFields.mapNotNull { field -> (call.arguments[field] as? String)?.takeIf(String::isNotBlank) }
+        val identity: Map<String, Any?> = if (stableTarget.isNotEmpty()) {
+            mapOf("tool" to call.name, "target" to stableTarget)
+        } else {
+            mapOf("tool" to call.name, "arguments" to call.arguments)
+        }
+        return runCatching { AgentCanonical.commandDigest(identity) }.getOrNull()
+            ?: call.callId.takeIf { it.matches(Regex("[a-zA-Z0-9_-]{1,128}")) }
     }
 
-    private fun logToolOutcome(name: String, status: ToolObservationStatus, code: String) {
+    private fun rejected(call: AgentModelToolCall, code: String, traceId: String): AgentToolObservation {
+        val safeName = call.name.takeIf { it.matches(Regex("[a-z][a-z0-9_]{0,63}")) } ?: "unknown"
+        val safe = safeCode(code)
+        logToolOutcome(safeName, ToolObservationStatus.REJECTED, safe, traceId)
+        return AgentToolObservation(call.callId.take(128), call.name.take(64), ToolObservationStatus.REJECTED, safe,
+            operationKey = writeOperationKey(call))
+    }
+
+    private fun logToolOutcome(name: String, status: ToolObservationStatus, code: String, traceId: String = "unknown") {
         val safeName = name.takeIf { it.matches(Regex("[a-z][a-z0-9_]{0,63}")) } ?: "unknown"
-        Log.i("MemoraAgent", "tool_outcome name=$safeName status=${status.name.lowercase()} code=${safeCode(code)}")
+        runCatching { Log.i("MemoraAgent", "tool_outcome trace_id=$traceId name=$safeName status=${status.name.lowercase()} code=${safeCode(code)}") }
     }
 
     private fun validateModelData(data: Map<String, Any?>): Map<String, Any?> {

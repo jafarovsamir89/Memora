@@ -35,6 +35,8 @@ internal data class FinanceHistory(val person: PersonRow, val events: List<Money
     val voidedEventIds: Set<String>)
 internal data class FinanceReversedAllocation(val obligationId: String, val minorUnits: Long)
 internal data class FinanceReversalResult(val event: MoneyEventRow, val reversedAllocations: List<FinanceReversedAllocation>)
+internal data class FinanceCorrectionResult(val event: MoneyEventRow, val adjustedAllocations: List<FinanceReversedAllocation>,
+    val remainingDebtMinorByEvent: Map<String, Long>)
 
 /** Shared protected local domain store used by agent tools and visible Android data screens. */
 internal class ProtectedDomainRepository(private val db: AgentDatabase) {
@@ -119,28 +121,51 @@ internal class ProtectedDomainRepository(private val db: AgentDatabase) {
         return dao.people(scope).filter { VoiceMoneyRules.key(it.displayName) == key }
     }
 
+    private suspend fun effectiveMoneyEvent(scope: String, event: MoneyEventRow): MoneyEventRow =
+        event.copy(minorUnits = adjustedAmount(scope, event))
+
+    private suspend fun adjustedAmount(scope: String, event: MoneyEventRow): Long {
+        val adjustments = dao.adjustments(scope, event.eventId).filter {
+            it.kind == "amount_correction" && it.reversesEventId == event.eventId
+        }
+        return Math.addExact(event.minorUnits, adjustments.fold(0L) { total, item -> Math.addExact(total, item.minorUnits) })
+    }
+
+    private fun effectiveSettlementAmount(all: List<MoneyAdjustmentRow>, settlement: MoneyAdjustmentRow): Long {
+        val corrections = all.asSequence().filter { it.kind == "correction" && it.reversesEventId == settlement.eventId }
+            .fold(0L) { total, item -> Math.addExact(total, item.minorUnits) }
+        val reversals = all.asSequence().filter { it.kind == "reversal" && it.reversesEventId == settlement.eventId }
+            .fold(0L) { total, item -> Math.addExact(total, item.minorUnits) }
+        return Math.subtractExact(Math.addExact(settlement.minorUnits, corrections), reversals)
+    }
+
     suspend fun financeHistory(scope: String, name: String): FinanceHistory? {
         val matches = matchingFinancePeople(scope, name)
         check(matches.size <= 1) { "person_name_ambiguous" }
         val person = matches.singleOrNull() ?: return null
-        val events = dao.moneyEventsForPerson(scope, person.personId)
+        val events = dao.moneyEventsForPerson(scope, person.personId).map { effectiveMoneyEvent(scope, it) }
         val remaining = events.filter { it.kind == "debt" }.associate { debt -> debt.eventId to outstandingDebtMinor(scope, debt.eventId) }
         val voided = events.filter { isFinanceEventVoided(scope, it.eventId) }.map { it.eventId }.toSet()
         return FinanceHistory(person, events, remaining, voided)
     }
 
-    suspend fun moneyEvent(scope: String, eventId: String): MoneyEventRow? = dao.moneyEvent(scope, eventId)
+    suspend fun moneyEvent(scope: String, eventId: String): MoneyEventRow? = dao.moneyEvent(scope, eventId)?.let { effectiveMoneyEvent(scope, it) }
 
     suspend fun outstandingDebtMinor(scope: String, obligationId: String): Long {
         val debt = dao.moneyEvent(scope, obligationId)?.takeIf { it.kind == "debt" } ?: error("obligation_not_found")
         val adjustments = dao.adjustments(scope, obligationId)
         if (isFinanceEventVoided(scope, obligationId)) return 0L
-        val settled = adjustments.fold(0L) { total, adjustment -> when (adjustment.kind) {
+        val principal = adjustedAmount(scope, debt)
+        check(adjustments.all { it.kind in setOf("settlement", "correction", "reversal", "amount_correction", "event_restore", "event_void") }) {
+            "invalid_ledger_event"
+        }
+        val settled = adjustments.filter { it.kind in setOf("settlement", "correction", "reversal") }.fold(0L) { total, adjustment -> when (adjustment.kind) {
             "settlement", "correction" -> Math.addExact(total, adjustment.minorUnits)
             "reversal" -> Math.subtractExact(total, adjustment.minorUnits)
             else -> error("invalid_ledger_event")
         } }
-        return Math.subtractExact(debt.minorUnits, settled)
+        check(settled in 0..principal) { "invalid_ledger_balance" }
+        return Math.subtractExact(principal, settled)
     }
 
     suspend fun isFinanceEventVoided(scope: String, eventId: String): Boolean =
@@ -162,11 +187,7 @@ internal class ProtectedDomainRepository(private val db: AgentDatabase) {
         val all = dao.adjustments(scope)
         val linked = all.filter { it.kind == "settlement" && it.reversesEventId == payment.eventId }
         val linkedIds = linked.map { it.eventId }.toSet()
-        val applied = Math.subtractExact(
-            linked.fold(0L) { total, item -> Math.addExact(total, item.minorUnits) },
-            all.asSequence().filter { it.kind == "reversal" && it.reversesEventId in linkedIds }
-                .fold(0L) { total, item -> Math.addExact(total, item.minorUnits) },
-        )
+        val applied = linked.fold(0L) { total, item -> Math.addExact(total, effectiveSettlementAmount(all, item)) }
         check(applied >= 0L) { "invalid_ledger_event" }
         return applied
     }
@@ -178,33 +199,48 @@ internal class ProtectedDomainRepository(private val db: AgentDatabase) {
         dao.adjustmentForCommand(commandId)?.let { existing ->
             check(existing.scopeId == scope && existing.obligationId == eventId && existing.kind == "event_void" &&
                 existing.reversesEventId == eventId && existing.reason == reason) { "idempotency_conflict" }
-            val priorLinked = dao.adjustments(scope).filter { it.kind == "settlement" && it.reversesEventId == eventId }
-            return@withTransaction FinanceReversalResult(event, priorLinked.groupBy { it.obligationId }.map { (obligationId, rows) ->
-                FinanceReversedAllocation(obligationId, rows.fold(0L) { total, item -> Math.addExact(total, item.minorUnits) })
+            val all = dao.adjustments(scope)
+            val priorLinked = all.filter { it.kind == "settlement" && it.reversesEventId == eventId }
+                .map { it to effectiveSettlementAmount(all, it) }.filter { it.second > 0 }
+            return@withTransaction FinanceReversalResult(event, priorLinked.groupBy { it.first.obligationId }.map { (obligationId, rows) ->
+                FinanceReversedAllocation(obligationId, rows.fold(0L) { total, item -> Math.addExact(total, item.second) })
             })
         }
         check(!isFinanceEventVoided(scope, eventId)) { "event_already_reversed" }
         if (event.kind == "debt") check(dao.adjustments(scope, eventId).none { it.kind in setOf("settlement", "correction", "reversal") }) {
             "event_has_settlements"
         }
+        val allAdjustments = dao.adjustments(scope)
         val allocations = if (event.kind == "receipt") {
-            dao.adjustments(scope).filter { it.kind == "settlement" && it.reversesEventId == eventId }
+            allAdjustments.filter { it.kind == "settlement" && it.reversesEventId == eventId }
+                .map { it to effectiveSettlementAmount(allAdjustments, it) }.filter { it.second > 0 }
         } else emptyList()
-        allocations.forEach { allocation ->
+        allocations.forEachIndexed { index, (allocation, effectiveAmount) ->
             dao.insertAdjustment(MoneyAdjustmentRow(
-                UUID.randomUUID().toString(), "$commandId:link:${allocation.eventId}", allocation.obligationId,
-                "reversal", allocation.minorUnits, allocation.currency, occurredAt, allocation.eventId,
+                UUID.randomUUID().toString(), "$commandId:link:$index", allocation.obligationId,
+                "reversal", effectiveAmount, allocation.currency, occurredAt, allocation.eventId,
                 "${reason.take(430)} (receipt allocation reversed)", scope,
             ))
         }
         dao.insertAdjustment(MoneyAdjustmentRow(commandId, commandId, eventId, "event_void", event.minorUnits,
             event.currency, occurredAt, eventId, reason, scope))
-        FinanceReversalResult(event, allocations.groupBy { it.obligationId }.map { (obligationId, rows) ->
-            FinanceReversedAllocation(obligationId, rows.fold(0L) { total, item -> Math.addExact(total, item.minorUnits) })
+        val voidReadback = requireNotNull(dao.adjustmentForCommand(commandId))
+        check(voidReadback.scopeId == scope && voidReadback.eventId == commandId && voidReadback.obligationId == eventId &&
+            voidReadback.kind == "event_void" && voidReadback.reversesEventId == eventId && voidReadback.reason == reason) {
+            "finance_reversal_readback_mismatch"
+        }
+        val readbackAdjustments = dao.adjustments(scope)
+        check(isFinanceEventVoided(scope, eventId)) { "finance_reversal_readback_mismatch" }
+        check(allocations.mapIndexed { index, (allocation, amount) ->
+            readbackAdjustments.any { it.commandId == "$commandId:link:$index" && it.kind == "reversal" &&
+                it.reversesEventId == allocation.eventId && it.minorUnits == amount }
+        }.all { it }) { "finance_reversal_allocation_readback_mismatch" }
+        FinanceReversalResult(event, allocations.groupBy { it.first.obligationId }.map { (obligationId, rows) ->
+            FinanceReversedAllocation(obligationId, rows.fold(0L) { total, item -> Math.addExact(total, item.second) })
         })
     }
 
-    suspend fun allFinanceEvents(scope: String): List<MoneyEventRow> = dao.moneyEvents(scope)
+    suspend fun allFinanceEvents(scope: String): List<MoneyEventRow> = dao.moneyEvents(scope).map { effectiveMoneyEvent(scope, it) }
     suspend fun financePeople(scope: String): List<PersonRow> = dao.people(scope)
     suspend fun financeAdjustments(scope: String): List<MoneyAdjustmentRow> = dao.adjustments(scope)
 
@@ -244,7 +280,9 @@ internal class ProtectedDomainRepository(private val db: AgentDatabase) {
             if (existingPerson == null) dao.insertPerson(person)
         }
         dao.insertMoneyEvent(incoming)
-        requireNotNull(dao.scopedMoneyEvent(scope, eventId))
+        val readback = requireNotNull(dao.scopedMoneyEvent(scope, eventId))
+        check(readback == incoming && (person == null || dao.person(scope, person.personId) == person)) { "finance_write_readback_mismatch" }
+        readback
     }
 
     suspend fun tables(scope: String): List<TableSnapshot> = dao.activeUserTables(scope).map { table ->
@@ -268,7 +306,9 @@ internal class ProtectedDomainRepository(private val db: AgentDatabase) {
         require(body == null || body.length <= 100_000)
         val row = DomainObjectRow(id, scope, kind.name, title, body, "active", 1, null)
         dao.insertDomainObject(row)
-        dao.insertDomainRevision(DomainRevisionRow(id, 1, payload(title, body, "active", null), sourceRevisionId, now))
+        val revision = DomainRevisionRow(id, 1, payload(title, body, "active", null), sourceRevisionId, now)
+        dao.insertDomainRevision(revision)
+        check(dao.domainObject(scope, id) == row && dao.domainRevisions(id).lastOrNull() == revision) { "domain_create_readback_mismatch" }
         row
     }
 
@@ -280,8 +320,12 @@ internal class ProtectedDomainRepository(private val db: AgentDatabase) {
         require(status in setOf("active", "archived")); check(expectedVersion < Long.MAX_VALUE)
         val next = expectedVersion + 1
         check(dao.updateDomainObject(scope, id, expectedVersion, next, title, body, status) == 1) { "version_conflict" }
-        dao.insertDomainRevision(DomainRevisionRow(id, next, payload(title, body, status, null), sourceRevisionId, now))
-        requireNotNull(dao.domainObject(scope, id))
+        val revision = DomainRevisionRow(id, next, payload(title, body, status, null), sourceRevisionId, now)
+        dao.insertDomainRevision(revision)
+        val readback = requireNotNull(dao.domainObject(scope, id))
+        check(readback.version == next && readback.title == title && readback.body == body && readback.status == status &&
+            dao.domainRevisions(id).lastOrNull() == revision) { "domain_update_readback_mismatch" }
+        readback
     }
 
     suspend fun link(scope: String, linkId: String, fromId: String, toId: String, relation: String) = db.withTransaction {
@@ -289,7 +333,9 @@ internal class ProtectedDomainRepository(private val db: AgentDatabase) {
         val from = dao.domainObject(scope, fromId); val to = dao.domainObject(scope, toId)
         check(from?.deletedAt == null && to?.deletedAt == null) { "not_found" }
         check(dao.activeLinks(scope).none { it.fromId == fromId && it.toId == toId && it.relation == relation }) { "duplicate_link" }
-        dao.insertDomainLink(DomainLinkRow(linkId, scope, fromId, toId, relation, 1, null))
+        val row = DomainLinkRow(linkId, scope, fromId, toId, relation, 1, null)
+        dao.insertDomainLink(row)
+        check(dao.activeLinks(scope).any { it == row }) { "domain_link_readback_mismatch" }
     }
 
     suspend fun previewDelete(scope: String, id: String, expectedVersion: Long): DeletePreview {
@@ -305,7 +351,9 @@ internal class ProtectedDomainRepository(private val db: AgentDatabase) {
         check(dao.tombstoneDomainObject(scope, preview.objectId, preview.expectedVersion, preview.expectedVersion + 1, now) == 1)
         val row = requireNotNull(dao.domainObject(scope, preview.objectId))
         val sourceRevisionId = dao.domainRevisions(row.objectId).lastOrNull()?.sourceRevisionId
-        dao.insertDomainRevision(DomainRevisionRow(row.objectId, row.version, payload(row.title, row.body, row.status, row.deletedAt), sourceRevisionId, now))
+        val revision = DomainRevisionRow(row.objectId, row.version, payload(row.title, row.body, row.status, row.deletedAt), sourceRevisionId, now)
+        dao.insertDomainRevision(revision)
+        check(dao.domainRevisions(row.objectId).lastOrNull() == revision) { "domain_delete_readback_mismatch" }
     }
 
     suspend fun restore(scope: String, id: String, expectedVersion: Long, now: String): DomainObjectRow = db.withTransaction {
@@ -314,7 +362,9 @@ internal class ProtectedDomainRepository(private val db: AgentDatabase) {
         check(dao.restoreDomainObject(scope, id, expectedVersion, expectedVersion + 1) == 1)
         val restored = requireNotNull(dao.domainObject(scope, id))
         val sourceRevisionId = dao.domainRevisions(id).lastOrNull()?.sourceRevisionId
-        dao.insertDomainRevision(DomainRevisionRow(id, restored.version, payload(restored.title, restored.body, restored.status, null), sourceRevisionId, now))
+        val revision = DomainRevisionRow(id, restored.version, payload(restored.title, restored.body, restored.status, null), sourceRevisionId, now)
+        dao.insertDomainRevision(revision)
+        check(dao.domainRevisions(id).lastOrNull() == revision) { "domain_restore_readback_mismatch" }
         restored
     }
 
@@ -323,7 +373,10 @@ internal class ProtectedDomainRepository(private val db: AgentDatabase) {
         dao.insertUserTable(UserTableRow(id, scope, title, mode, 1, 1, null))
         val columns = schema.mapIndexed { index, col -> TableColumnRow(id, col.id, index, col.name, col.type.name, col.required, col.config.toString()) }
         dao.insertColumns(columns)
-        dao.insertSchemaRevision(TableSchemaRevisionRow(id, 1, columnsJson(columns), now))
+        val revision = TableSchemaRevisionRow(id, 1, columnsJson(columns), now)
+        dao.insertSchemaRevision(revision)
+        check(dao.userTable(scope, id) == UserTableRow(id, scope, title, mode, 1, 1, null) &&
+            dao.columns(id) == columns && dao.schemaRevisions(id).lastOrNull() == revision) { "table_create_readback_mismatch" }
     }
 
     /** Safe schema edits preserve every existing column ID/type and only append optional columns. */
@@ -347,7 +400,10 @@ internal class ProtectedDomainRepository(private val db: AgentDatabase) {
         val updated = schema.mapIndexed { index, col -> TableColumnRow(tableId, col.id, index, col.name, col.type.name, col.required, col.config.toString()) }
         dao.updateColumns(updated.filter { it.columnId in old })
         dao.insertColumns(updated.filter { it.columnId !in old })
-        dao.insertSchemaRevision(TableSchemaRevisionRow(tableId, expectedSchemaVersion + 1, columnsJson(updated), now))
+        val revision = TableSchemaRevisionRow(tableId, expectedSchemaVersion + 1, columnsJson(updated), now)
+        dao.insertSchemaRevision(revision)
+        check(dao.userTable(scope, tableId)?.schemaVersion == expectedSchemaVersion + 1 &&
+            dao.columns(tableId) == updated && dao.schemaRevisions(tableId).lastOrNull() == revision) { "table_schema_readback_mismatch" }
         expectedSchemaVersion + 1
     }
 
@@ -356,19 +412,23 @@ internal class ProtectedDomainRepository(private val db: AgentDatabase) {
         val current = dao.userTable(scope, tableId) ?: error("not_found")
         check(current.deletedAt == null && current.version == expectedVersion && expectedVersion < Long.MAX_VALUE) { "version_conflict" }
         check(dao.renameUserTable(scope, tableId, expectedVersion, expectedVersion + 1, title.trim()) == 1) { "version_conflict" }
-        requireNotNull(dao.userTable(scope, tableId))
+        val readback = requireNotNull(dao.userTable(scope, tableId))
+        check(readback == current.copy(title = title.trim(), version = expectedVersion + 1)) { "table_rename_readback_mismatch" }
+        readback
     }
 
     suspend fun deleteTable(scope: String, tableId: String, expectedVersion: Long, now: String) = db.withTransaction {
         val current = dao.userTable(scope, tableId) ?: error("not_found")
         check(current.deletedAt == null && current.version == expectedVersion && expectedVersion < Long.MAX_VALUE) { "version_conflict" }
         check(dao.tombstoneUserTable(scope, tableId, expectedVersion, expectedVersion + 1, now) == 1) { "version_conflict" }
+        check(dao.userTable(scope, tableId) == current.copy(version = expectedVersion + 1, deletedAt = now)) { "table_delete_readback_mismatch" }
     }
 
     suspend fun restoreTable(scope: String, tableId: String, expectedVersion: Long) = db.withTransaction {
         val current = dao.userTable(scope, tableId) ?: error("not_found")
         check(current.deletedAt != null && current.version == expectedVersion && expectedVersion < Long.MAX_VALUE) { "version_conflict" }
         check(dao.restoreUserTable(scope, tableId, expectedVersion, expectedVersion + 1) == 1) { "version_conflict" }
+        check(dao.userTable(scope, tableId) == current.copy(version = expectedVersion + 1, deletedAt = null)) { "table_restore_readback_mismatch" }
     }
 
     suspend fun addRows(scope: String, tableId: String, expectedSchemaVersion: Long, rowValues: List<Pair<String, Map<String, Any?>>>) = db.withTransaction {
@@ -388,7 +448,9 @@ internal class ProtectedDomainRepository(private val db: AgentDatabase) {
         val missing = prepared.filter { it.rowId !in existingRows }
         missing.forEach { row -> check(dao.rowById(row.rowId) == null) { "row_id_exists_in_another_table" } }
         missing.forEach { dao.insertTableRows(listOf(it)) }
-        prepared
+        val readback = dao.rows(tableId, scope).associateBy { it.rowId }
+        check(prepared.all { readback[it.rowId] == it }) { "table_rows_add_readback_mismatch" }
+        prepared.map { readback.getValue(it.rowId) }
     }
 
     suspend fun updateRow(scope: String, tableId: String, rowId: String, expectedVersion: Long,
@@ -402,7 +464,9 @@ internal class ProtectedDomainRepository(private val db: AgentDatabase) {
         validateRow(columns, values)
         val encoded = encodeValues(values)
         check(dao.updateTableRow(rowId, tableId, scope, expectedVersion, expectedVersion + 1, encoded) == 1)
-        existing.copy(version = expectedVersion + 1, valuesJson = encoded)
+        val expected = existing.copy(version = expectedVersion + 1, valuesJson = encoded)
+        check(dao.rowById(rowId) == expected) { "table_row_update_readback_mismatch" }
+        expected
     }
 
     suspend fun deleteRow(scope: String, tableId: String, rowId: String, expectedVersion: Long, now: String) = db.withTransaction {
@@ -411,6 +475,7 @@ internal class ProtectedDomainRepository(private val db: AgentDatabase) {
         val row = dao.rows(tableId, scope).firstOrNull { it.rowId == rowId } ?: error("not_found")
         check(row.version == expectedVersion && expectedVersion < Long.MAX_VALUE) { "version_conflict" }
         check(dao.tombstoneTableRow(rowId, tableId, scope, expectedVersion, expectedVersion + 1, now) == 1) { "version_conflict" }
+        check(dao.rowById(rowId) == row.copy(version = expectedVersion + 1, deletedAt = now)) { "table_row_delete_readback_mismatch" }
     }
 
     suspend fun restoreRow(scope: String, tableId: String, rowId: String, expectedVersion: Long) = db.withTransaction {
@@ -419,6 +484,7 @@ internal class ProtectedDomainRepository(private val db: AgentDatabase) {
         val row = dao.rowById(rowId)?.takeIf { it.tableId == tableId && it.scopeId == scope } ?: error("not_found")
         check(row.deletedAt != null && row.version == expectedVersion && expectedVersion < Long.MAX_VALUE) { "version_conflict" }
         check(dao.restoreTableRow(rowId, tableId, scope, expectedVersion, expectedVersion + 1) == 1) { "version_conflict" }
+        check(dao.rowById(rowId) == row.copy(version = expectedVersion + 1, deletedAt = null)) { "table_row_restore_readback_mismatch" }
     }
 
     /** Exact money aggregate; results stay partitioned by currency and never use floating point. */
@@ -455,8 +521,17 @@ internal class ProtectedDomainRepository(private val db: AgentDatabase) {
         val result = events.fold<TaskEvent, Task?>(current) { task, event ->
             (TaskRules.apply(task, event) as? TaskApply.Applied ?: error("task_conflict_or_invalid")).task
         }
-        dao.putTaskEvents(events.map(::toTaskRow))
-        requireNotNull(result)
+        val expectedRows = events.map(::toTaskRow)
+        dao.putTaskEvents(expectedRows)
+        val readbackRows = events.map { event -> dao.taskEventsForCommand(event.commandId).singleOrNull() }
+        check(readbackRows.size == expectedRows.size && expectedRows.indices.all { index ->
+            readbackRows[index]?.let { it.copy(sequence = expectedRows[index].sequence) == expectedRows[index] } == true
+        }) { "task_event_write_readback_mismatch" }
+        val readback = dao.taskEvents(first.taskId, first.scopeId).fold<TaskEventRow, Task?>(null) { task, row ->
+            (TaskRules.apply(task, fromTaskRow(row)) as? TaskApply.Applied ?: error("task_history_readback_mismatch")).task
+        }
+        check(readback == result) { "task_projection_readback_mismatch" }
+        requireNotNull(readback)
     }
 
     suspend fun exportTable(scope: String, tableId: String): String {
@@ -531,6 +606,98 @@ internal class ProtectedDomainRepository(private val db: AgentDatabase) {
         return search(scope, query, limit = 100).takeWhile { hit -> (used + hit.evidenceText.length).let { fits -> if (fits <= maxChars) used = fits; fits <= maxChars } }
     }
 
+    suspend fun correctFinanceEventAmount(scope: String, eventId: String, newMinorUnits: Long, commandId: String,
+        reason: String, recordedAt: String): FinanceCorrectionResult = db.withTransaction {
+        require(scope.isNotBlank() && eventId.isNotBlank() && commandId.isNotBlank())
+        require(newMinorUnits > 0 && reason.isNotBlank() && reason.length <= 500)
+        java.time.Instant.parse(recordedAt)
+        val event = dao.moneyEvent(scope, eventId) ?: error("event_not_found")
+        check(event.kind in setOf("receipt", "debt", "expense")) { "event_kind_unsupported" }
+        check(!isFinanceEventVoided(scope, eventId)) { "event_already_reversed" }
+
+        val prior = dao.adjustmentForCommand(commandId)
+        if (prior != null) {
+            check(prior.scopeId == scope && prior.obligationId == eventId && prior.kind == "amount_correction" &&
+                prior.reversesEventId == eventId && prior.reason == reason) { "idempotency_conflict" }
+            val earlierCorrections = dao.adjustments(scope, eventId).filter {
+                it.kind == "amount_correction" && it.reversesEventId == eventId && it.commandId != commandId
+            }.fold(0L) { total, item -> Math.addExact(total, item.minorUnits) }
+            check(Math.addExact(Math.addExact(event.minorUnits, earlierCorrections), prior.minorUnits) == newMinorUnits) {
+                "idempotency_conflict"
+            }
+            return@withTransaction correctionReadback(scope, event, prior, emptyList())
+        }
+
+        val previousAmount = adjustedAmount(scope, event)
+        require(newMinorUnits != previousAmount) { "amount_unchanged" }
+        val amountDelta = Math.subtractExact(newMinorUnits, previousAmount)
+        val allAdjustments = dao.adjustments(scope)
+        val allocationAdjustments = mutableListOf<MoneyAdjustmentRow>()
+        val changedAllocations = mutableListOf<FinanceReversedAllocation>()
+
+        if (event.kind == "debt") {
+            val remaining = outstandingDebtMinor(scope, eventId)
+            val alreadySettled = Math.subtractExact(previousAmount, remaining)
+            require(newMinorUnits >= alreadySettled) { "correction_below_settled_amount" }
+        } else if (event.kind == "receipt") {
+            val allocations = allAdjustments.filter { it.kind == "settlement" && it.reversesEventId == eventId }
+                .map { it to effectiveSettlementAmount(allAdjustments, it) }.filter { it.second > 0 }
+            val totalApplied = allocations.fold(0L) { total, item -> Math.addExact(total, item.second) }
+            if (totalApplied > newMinorUnits && allocations.size > 1) error("correction_requires_allocation_review")
+            if (allocations.size == 1) {
+                val (allocation, currentlyApplied) = allocations.single()
+                val desiredApplied = when {
+                    totalApplied > newMinorUnits -> newMinorUnits
+                    totalApplied == previousAmount -> newMinorUnits
+                    else -> currentlyApplied
+                }
+                val allocationDelta = Math.subtractExact(desiredApplied, currentlyApplied)
+                if (allocationDelta != 0L) {
+                    val debt = dao.moneyEvent(scope, allocation.obligationId)?.takeIf { it.kind == "debt" }
+                        ?: error("obligation_not_found")
+                    check(!isFinanceEventVoided(scope, debt.eventId)) { "obligation_voided" }
+                    require(debt.currency == event.currency) { "currency_mismatch" }
+                    if (allocationDelta > 0) {
+                        require(allocationDelta <= outstandingDebtMinor(scope, debt.eventId)) { "settlement_exceeds_balance" }
+                    }
+                    val index = allocationAdjustments.size
+                    val adjustmentId = "$commandId:allocation:$index"
+                    allocationAdjustments += MoneyAdjustmentRow(adjustmentId, adjustmentId, allocation.obligationId,
+                        "correction", allocationDelta, allocation.currency, allocation.occurredAt, allocation.eventId,
+                        "${reason.take(430)} (linked repayment amount corrected)", scope)
+                    changedAllocations += FinanceReversedAllocation(debt.eventId, desiredApplied)
+                }
+            }
+        }
+
+        val correction = MoneyAdjustmentRow(commandId, commandId, eventId, "amount_correction", amountDelta,
+            event.currency, recordedAt, eventId, reason, scope)
+        dao.insertAdjustment(correction)
+        for (adjustment in allocationAdjustments) dao.insertAdjustment(adjustment)
+        val result = correctionReadback(scope, event, correction, changedAllocations)
+        check(result.event.minorUnits == newMinorUnits) { "finance_correction_readback_mismatch" }
+        if (event.kind == "receipt") {
+            val applied = appliedToDebtMinor(scope, eventId)
+            check(applied <= newMinorUnits) { "finance_allocation_readback_mismatch" }
+            if (changedAllocations.isNotEmpty()) check(applied == changedAllocations.single().minorUnits) {
+                "finance_allocation_readback_mismatch"
+            }
+        }
+        result
+    }
+
+    private suspend fun correctionReadback(scope: String, event: MoneyEventRow, correction: MoneyAdjustmentRow,
+        changedAllocations: List<FinanceReversedAllocation>): FinanceCorrectionResult {
+        val readback = requireNotNull(dao.adjustmentForCommand(correction.commandId))
+        check(readback == correction) { "finance_correction_readback_mismatch" }
+        val updatedEvent = requireNotNull(dao.scopedMoneyEvent(scope, event.eventId)).let { effectiveMoneyEvent(scope, it) }
+        val affectedDebtIds = if (event.kind == "receipt") dao.adjustments(scope)
+            .filter { it.kind == "settlement" && it.reversesEventId == event.eventId }.map { it.obligationId }.distinct()
+        else if (event.kind == "debt") listOf(event.eventId) else emptyList()
+        val remaining = affectedDebtIds.associateWith { outstandingDebtMinor(scope, it) }
+        return FinanceCorrectionResult(updatedEvent, changedAllocations, remaining)
+    }
+
     suspend fun recordSettlement(scope: String, eventId: String, commandId: String, obligationId: String, minorUnits: Long,
         currency: String, occurredAt: String?, reason: String, paymentEventId: String? = null): Long = db.withTransaction {
         require(scope.isNotBlank() && minorUnits > 0 && reason.isNotBlank() && reason.length <= 500)
@@ -540,40 +707,49 @@ internal class ProtectedDomainRepository(private val db: AgentDatabase) {
                 existing.minorUnits == minorUnits && existing.currency == currency && existing.occurredAt == occurredAt &&
                 existing.reason == reason && existing.reversesEventId == paymentEventId) { "idempotency_conflict" }
             val obligation = dao.moneyEvent(scope, obligationId)?.takeIf { it.kind == "debt" } ?: error("obligation_not_found")
-            val settled = dao.adjustments(scope, obligationId).fold(0L) { total, item -> when (item.kind) {
+            val adjustments = dao.adjustments(scope, obligationId)
+            val settled = adjustments.filter { it.kind in setOf("settlement", "correction", "reversal") }.fold(0L) { total, item -> when (item.kind) {
                 "settlement", "correction" -> Math.addExact(total, item.minorUnits)
                 "reversal" -> Math.subtractExact(total, item.minorUnits)
                 else -> error("invalid_ledger_event")
             } }
-            return@withTransaction Math.subtractExact(obligation.minorUnits, settled)
+            return@withTransaction Math.subtractExact(adjustedAmount(scope, obligation), settled)
         }
         val obligation = dao.moneyEvent(scope, obligationId)?.takeIf { it.kind == "debt" } ?: error("obligation_not_found")
         check(!isFinanceEventVoided(scope, obligationId)) { "obligation_voided" }
         require(currency == obligation.currency && isCurrency(currency)) { "currency_mismatch" }
         val prior = dao.adjustments(scope, obligationId)
-        val net = prior.fold(0L) { total, item -> when (item.kind) {
+        val net = prior.filter { it.kind in setOf("settlement", "correction", "reversal") }.fold(0L) { total, item -> when (item.kind) {
             "settlement" -> Math.addExact(total, item.minorUnits)
             "correction" -> Math.addExact(total, item.minorUnits)
             "reversal" -> Math.subtractExact(total, item.minorUnits)
             else -> error("invalid_ledger_event")
         } }
-        val remaining = Math.subtractExact(obligation.minorUnits, net)
+        val principal = adjustedAmount(scope, obligation)
+        val remaining = Math.subtractExact(principal, net)
         require(minorUnits <= remaining) { "settlement_exceeds_balance" }
         if (paymentEventId != null) {
             val payment = dao.moneyEvent(scope, paymentEventId)?.takeIf { it.kind == "receipt" } ?: error("payment_event_not_found")
             check(payment.personId == obligation.personId) { "payment_obligation_mismatch" }
             check(!isFinanceEventVoided(scope, paymentEventId)) { "payment_event_voided" }
             require(payment.currency == currency) { "currency_mismatch" }
-            require(minorUnits <= payment.minorUnits - appliedToDebtMinor(scope, paymentEventId)) { "payment_amount_already_applied" }
+            require(minorUnits <= adjustedAmount(scope, payment) - appliedToDebtMinor(scope, paymentEventId)) { "payment_amount_already_applied" }
         }
-        dao.insertAdjustment(MoneyAdjustmentRow(eventId, commandId, obligationId, "settlement", minorUnits, currency, occurredAt,
-            paymentEventId, reason, scope))
-        remaining - minorUnits
+        val inserted = MoneyAdjustmentRow(eventId, commandId, obligationId, "settlement", minorUnits, currency, occurredAt,
+            paymentEventId, reason, scope)
+        dao.insertAdjustment(inserted)
+        val readback = requireNotNull(dao.adjustmentForCommand(commandId))
+        check(readback == inserted) { "settlement_write_readback_mismatch" }
+        val readbackRemaining = outstandingDebtMinor(scope, obligationId)
+        check(readbackRemaining == remaining - minorUnits) { "settlement_balance_readback_mismatch" }
+        readbackRemaining
     }
 
     suspend fun createCalendarEvent(input: CalendarInput): LocalCalendarEventRow = db.withTransaction {
         val row = validatedCalendarRow(input, 1)
-        dao.insertCalendarEvent(row); row
+        dao.insertCalendarEvent(row)
+        check(dao.calendarEvent(input.scopeId, input.eventId) == row) { "calendar_create_readback_mismatch" }
+        row
     }
 
     suspend fun updateCalendarEvent(scope: String, input: CalendarInput, expectedVersion: Long): LocalCalendarEventRow = db.withTransaction {
@@ -584,14 +760,20 @@ internal class ProtectedDomainRepository(private val db: AgentDatabase) {
         val next = validatedCalendarRow(input, expectedVersion + 1)
         check(dao.updateCalendarEvent(scope, input.eventId, expectedVersion, next.version, next.title, next.startLocal,
             next.endLocal, next.zoneId, next.timePrecision, current.status) == 1) { "version_conflict" }
-        next.copy(status = current.status)
+        val expected = next.copy(status = current.status)
+        val readback = requireNotNull(dao.calendarEvent(scope, input.eventId))
+        check(readback == expected) { "calendar_update_readback_mismatch" }
+        readback
     }
 
     suspend fun cancelCalendarEvent(scope: String, eventId: String, expectedVersion: Long): LocalCalendarEventRow = db.withTransaction {
         val current = dao.calendarEvent(scope, eventId) ?: error("not_found")
         check(current.status == "active" && current.version == expectedVersion && expectedVersion < Long.MAX_VALUE) { "version_conflict" }
         check(dao.cancelCalendarEvent(scope, eventId, expectedVersion, expectedVersion + 1) == 1) { "version_conflict" }
-        current.copy(status = "cancelled", version = expectedVersion + 1)
+        val expected = current.copy(status = "cancelled", version = expectedVersion + 1)
+        val readback = requireNotNull(dao.calendarEvent(scope, eventId))
+        check(readback == expected) { "calendar_cancel_readback_mismatch" }
+        readback
     }
 
     suspend fun calendarEvent(scope: String, eventId: String): LocalCalendarEventRow? = dao.calendarEvent(scope, eventId)

@@ -76,6 +76,110 @@ class AgentRuntimeTest {
         assertEquals(listOf(ToolObservationStatus.APPLIED, ToolObservationStatus.REJECTED), result.toolResults.map { it.status })
     }
 
+    @Test fun allCallsInOneModelReplyAreCommittedAndReturnedTogether() = runBlocking {
+        val note = FakeTool(toolName = "save_note")
+        val finance = FakeTool(toolName = "record_money_event")
+        val model = QueueModel(
+            AgentModelReply.Calls(listOf(call("a", "save_note"), call("b", "record_money_event"))),
+            AgentModelReply.Answer("Yadda saxlanıldı"),
+        )
+        val result = runtime(model, DefaultAgentToolRegistry(listOf(note, finance))).run(turn)
+
+        assertEquals(AgentRunResultStatus.COMPLETED, result.status)
+        assertEquals(1, note.commits)
+        assertEquals(1, finance.commits)
+        assertEquals(listOf("save_note", "record_money_event"), model.lastRequest!!.previousToolResults.map { it.name })
+    }
+
+    @Test fun prepareFailureIsReportedAndDoesNotStopOtherCallsOrInviteFalseSuccess() = runBlocking {
+        val failing = FakeTool(toolName = "save_note", prepareFailure = IllegalStateException("synthetic-private-error"))
+        val succeeding = FakeTool(toolName = "record_money_event")
+        val model = QueueModel(
+            AgentModelReply.Calls(listOf(call("bad", "save_note"), call("good", "record_money_event"))),
+            AgentModelReply.Answer("Hər şey hazırdır"),
+        )
+        val result = runtime(model, DefaultAgentToolRegistry(listOf(failing, succeeding))).run(turn)
+
+        assertEquals(AgentRunResultStatus.PARTIAL, result.status)
+        assertEquals("Əməliyyat qismən tamamlandı, amma bir dəyişiklik yadda saxlanmadı. Yazını yoxlayın.", result.answer)
+        assertEquals(listOf(ToolObservationStatus.FAILED, ToolObservationStatus.APPLIED), result.toolResults.map { it.status })
+        assertEquals("prepare_failed", result.toolResults.first().code)
+        assertEquals(0, failing.commits)
+        assertEquals(1, succeeding.commits)
+        assertFalse(result.answer.orEmpty().contains("synthetic-private-error"))
+    }
+
+    @Test fun successfulRetryResolvesEarlierRejectedWriteForSameTarget() = runBlocking {
+        var attempts = 0
+        val correction = object : AgentToolHandler {
+            override val descriptor = AgentToolDescriptor("correct_money_event", 1, ToolAccess.PERSISTED_MEMORY,
+                ToolEffect.WRITE, runtimeEnabled = true)
+            override suspend fun prepare(call: AgentModelToolCall, turn: AgentTurnRequest, commandId: String): ToolPreparation {
+                attempts++
+                if (attempts == 1) return ToolPreparation.Rejected("invalid_amount")
+                return ToolPreparation.Prepared(PreparedAgentCommand(commandId, "a".repeat(64), emptyMap(), false, Unit))
+            }
+            override suspend fun commit(command: PreparedAgentCommand) = ToolCommitResult(ToolObservationStatus.APPLIED, "corrected")
+        }
+        val target = id(27)
+        val args = mapOf("event_id" to target, "new_amount" to "80")
+        val result = runtime(QueueModel(
+            AgentModelReply.Calls(listOf(call("attempt-1", "correct_money_event", args))),
+            AgentModelReply.Calls(listOf(call("attempt-2", "correct_money_event", args))),
+            AgentModelReply.Answer("Düzəliş edildi"),
+        ), DefaultAgentToolRegistry(listOf(correction))).run(turn)
+
+        assertEquals(AgentRunResultStatus.COMPLETED, result.status)
+        assertEquals(listOf(ToolObservationStatus.REJECTED, ToolObservationStatus.APPLIED), result.toolResults.map { it.status })
+        assertEquals(1, result.toolResults.map { it.operationKey }.distinct().size)
+        assertEquals("Düzəliş edildi", result.answer)
+    }
+
+    @Test fun successfulDifferentWriteDoesNotMaskAnUnresolvedFailure() = runBlocking {
+        val correction = object : AgentToolHandler {
+            override val descriptor = AgentToolDescriptor("correct_money_event", 1, ToolAccess.PERSISTED_MEMORY,
+                ToolEffect.WRITE, runtimeEnabled = true)
+            override suspend fun prepare(call: AgentModelToolCall, turn: AgentTurnRequest, commandId: String): ToolPreparation {
+                if (call.arguments["event_id"] == id(28)) return ToolPreparation.Rejected("invalid_amount")
+                return ToolPreparation.Prepared(PreparedAgentCommand(commandId, "a".repeat(64), emptyMap(), false, Unit))
+            }
+            override suspend fun commit(command: PreparedAgentCommand) = ToolCommitResult(ToolObservationStatus.APPLIED, "corrected")
+        }
+        val result = runtime(QueueModel(
+            AgentModelReply.Calls(listOf(
+                call("failed", "correct_money_event", mapOf("event_id" to id(28), "new_amount" to "80")),
+                call("applied", "correct_money_event", mapOf("event_id" to id(29), "new_amount" to "80")),
+            )),
+            AgentModelReply.Answer("Hər şey hazırdır"),
+        ), DefaultAgentToolRegistry(listOf(correction))).run(turn)
+
+        assertEquals(AgentRunResultStatus.PARTIAL, result.status)
+        assertEquals("tool_write_failed", result.code)
+        assertEquals(listOf(ToolObservationStatus.REJECTED, ToolObservationStatus.APPLIED), result.toolResults.map { it.status })
+    }
+
+    @Test fun followupTimeoutAfterVerifiedWriteReportsPartialInsteadOfFalseStorageFailure() = runBlocking {
+        val tool = FakeTool(toolName = "save_note", access = ToolAccess.PERSISTED_MEMORY)
+        var requests = 0
+        val model = object : AgentModelGateway {
+            override suspend fun complete(request: AgentModelRequest): AgentModelReply {
+                requests++
+                return if (requests == 1) AgentModelReply.Calls(listOf(call("save", "save_note")))
+                else CompletableDeferred<AgentModelReply>().await()
+            }
+        }
+        val journal = MemoryJournal()
+        val result = AgentOrchestrator(model, DefaultAgentToolRegistry(listOf(tool)), AllowPolicy(journal), journal,
+            modelTimeoutMillis = 100, modelFollowupTimeoutMillis = 25, turnTimeoutMillis = 500).run(turn)
+
+        assertEquals(AgentRunResultStatus.PARTIAL, result.status)
+        assertEquals("reply_timeout_after_write", result.code)
+        assertTrue(result.answer.orEmpty().contains("təsdiqləyə bilmədi"))
+        assertEquals(ToolObservationStatus.APPLIED, result.toolResults.single().status)
+        assertEquals(1, tool.commits)
+        assertEquals(2, requests)
+    }
+
     @Test fun commandIdentityComesFromAppAndDigestAndVersionsAreJournaled() = runBlocking {
         val appCommandId = id(20)
         val tool = FakeTool()
@@ -272,14 +376,16 @@ class AgentRuntimeTest {
     }
 
     private class FakeTool(
+        private val toolName: String = "write_test",
         access: ToolAccess = ToolAccess.CURRENT_TURN,
         effect: ToolEffect = ToolEffect.WRITE,
         enabled: Boolean = true,
         private val requiresConfirmation: Boolean = false,
+        private val prepareFailure: Exception? = null,
         private val commitFailure: Exception? = null,
         private val commitHook: (suspend () -> Unit)? = null,
     ) : AgentToolHandler {
-        override val descriptor = AgentToolDescriptor("write_test", 1, access, effect, enabled)
+        override val descriptor = AgentToolDescriptor(toolName, 1, access, effect, enabled)
         var commits = 0
         var reads = 0
         var lastCommandId = ""
@@ -289,6 +395,7 @@ class AgentRuntimeTest {
         }
         override suspend fun prepare(call: AgentModelToolCall, turn: AgentTurnRequest, commandId: String): ToolPreparation {
             lastCommandId = commandId
+            prepareFailure?.let { throw it }
             return ToolPreparation.Prepared(PreparedAgentCommand(commandId, "a".repeat(64),
                 mapOf("00000000-0000-4000-8000-000000000008" to 3), requiresConfirmation, "opaque"))
         }

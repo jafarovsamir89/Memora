@@ -109,7 +109,7 @@ internal class RoomAgentRunJournal(
     private fun isUuid(value: String) = value.matches(Regex("[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}"))
 
     private companion object {
-        val COMMAND_STATES = setOf("prepared", "applying", "reconciling", "committed", "conflict", "rejected")
+        val COMMAND_STATES = setOf("prepared", "applying", "reconciling", "committed", "conflict", "rejected", "failed")
         val INTERRUPTED_STATES = setOf(AgentTurnStatus.THINKING, AgentTurnStatus.EXECUTING)
     }
 }
