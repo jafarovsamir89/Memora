@@ -266,4 +266,11 @@
     <string name="finance_settlement_label">Borc ödənişi</string>
     <string name="table_columns_help">Nümunə: Ad:TEXT, Tarix:DATE, Məbləğ:MONEY. Dəstəklənən tiplər: TEXT, INTEGER, DECIMAL, BOOLEAN, DATE, DATETIME, MONEY.</string>
     <string name="finance_reversed_label">Ləğv edilib</string>
+    <string name="finance_debt_remaining">Qalan borc</string>
+    <string name="finance_receipt_applied">Borcun ödənilməsinə yönəldilib</string>
+    <string name="calendar_title">Təqvim</string>
+    <string name="calendar_hint">Yerli tədbirləri və görüşləri görün. Köməkçidən dəyişməyi xahiş edə bilərsiniz.</string>
+    <string name="calendar_empty">Hələ tədbir yoxdur.</string>
+    <string name="calendar_refresh">Yenilə</string>
+    <string name="calendar_cancelled">Ləğv edilib</string>
 </resources>

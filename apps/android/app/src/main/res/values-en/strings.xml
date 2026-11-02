@@ -266,4 +266,11 @@
     <string name="finance_settlement_label">Debt repayment</string>
     <string name="table_columns_help">Example: Name:TEXT, Date:DATE, Amount:MONEY. Types: TEXT, INTEGER, DECIMAL, BOOLEAN, DATE, DATETIME, MONEY.</string>
     <string name="finance_reversed_label">Reversed</string>
+    <string name="finance_debt_remaining">Remaining debt</string>
+    <string name="finance_receipt_applied">Applied to debt repayment</string>
+    <string name="calendar_title">Calendar</string>
+    <string name="calendar_hint">Local events and meetings. Ask the assistant to change an event.</string>
+    <string name="calendar_empty">No events yet.</string>
+    <string name="calendar_refresh">Refresh</string>
+    <string name="calendar_cancelled">Cancelled</string>
 </resources>

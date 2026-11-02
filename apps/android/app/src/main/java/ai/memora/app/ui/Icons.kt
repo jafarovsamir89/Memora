@@ -23,6 +23,7 @@ object Glyph {
     val Memory = icon("Memory", "M4 4H9A3 3 0 0 1 12 7V21A4 4 0 0 0 8 18H3V4ZM20 4H15A3 3 0 0 0 12 7V21A4 4 0 0 1 16 18H21V4Z")
     val Mic = icon("Microphone", "M9 5A3 3 0 0 1 15 5V11A3 3 0 0 1 9 11ZM5 10V11A7 7 0 0 0 19 11V10M12 18V22M9 22H15")
     val Tasks = icon("Tasks", "M9 4H20V20H4V9M3 4L5 6L9 2M8 11H16M8 15H14")
+    val Calendar = icon("Calendar", "M5 3V7M19 3V7M3 10H21M5 5H19A2 2 0 0 1 21 7V20H3V7A2 2 0 0 1 5 5ZM7 14H10M14 14H17M7 17H10")
     val Grid = icon("More", "M3 3H9V9H3ZM15 3H21V9H15ZM3 15H9V21H3ZM15 15H21V21H15Z")
     val Search = icon("Search", "M19 10A7 7 0 1 1 5 10A7 7 0 1 1 19 10M15 15L21 21")
     val Arrow = icon("Arrow", "M5 12H20M14 6L20 12L14 18")

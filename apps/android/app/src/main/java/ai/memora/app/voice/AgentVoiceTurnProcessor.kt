@@ -1,6 +1,7 @@
 package ai.memora.app.voice
 
 import android.content.Context
+import android.util.Log
 import ai.memora.app.agent.*
 import ai.memora.app.data.VoiceMoneyKey
 import ai.memora.app.data.VoiceMoneyStore
@@ -68,19 +69,24 @@ internal class AgentVoiceTurnProcessor(context: Context) : VoiceTurnProcessor {
             val repo = domainRepository
             val handlers = if (preferences.getBoolean("gemini-persisted-memory-v1", false))
                 LocalMemoryTools(repo, ProtectedMemoryRepository(database), financeEnabled = migrateLegacyFinance(),
-                    onTaskChanged = { task -> TaskReminders.schedule(appContext, task).name.lowercase() }).handlers() else emptyList()
+                    onTaskChanged = { task -> TaskReminders.schedule(appContext, task).name.lowercase() },
+                    conversations = conversations).handlers() else emptyList()
             val orchestrator = AgentOrchestrator(GeminiAgentModelGateway(), DefaultAgentToolRegistry(handlers), policy,
                 RoomAgentRunJournal(database))
             val turnId = UUID.randomUUID().toString()
             val result = orchestrator.run(AgentTurnRequest(turnId, scopeId, actorId, null,
                 locale = "az-AZ", text = message, channel = channel, conversationHistory = history))
+            if (result.status == AgentRunResultStatus.FAILED || result.status == AgentRunResultStatus.RECOVERY_REQUIRED) {
+                Log.w("MemoraAgent", "turn_unavailable status=${result.status.name.lowercase()} code=${result.code ?: "unknown"}")
+            }
             when (result.status) {
                 AgentRunResultStatus.COMPLETED, AgentRunResultStatus.PARTIAL -> result.answer?.let {
                     conversations.appendTurn(scopeId, turnId, message, it, Instant.now().toEpochMilli())
                     VoiceFirstResult.Ready(it, result.toolResults.any { tool -> tool.status == ToolObservationStatus.APPLIED &&
                         tool.name in setOf("save_note", "record_money_event", "create_table", "add_table_row", "update_table_row",
                             "delete_table_row", "restore_table_row", "rename_table", "delete_table", "restore_table",
-                            "create_task", "set_task_completion", "create_calendar_event", "link_objects", "edit_memory_object",
+                            "create_task", "set_task_completion", "create_calendar_event", "edit_calendar_event", "cancel_calendar_event",
+                            "link_objects", "edit_memory_object",
                             "delete_memory_object", "restore_memory_object") })
                 } ?: VoiceFirstResult.Unavailable
                 AgentRunResultStatus.AWAITING_CLARIFICATION -> (result.answer ?: "Zəhmət olmasa, istəyinizi dəqiqləşdirin.").let {
@@ -90,7 +96,8 @@ internal class AgentVoiceTurnProcessor(context: Context) : VoiceTurnProcessor {
                 AgentRunResultStatus.AWAITING_CONFIRMATION -> VoiceFirstResult.Ready("Bu əməliyyat üçün təsdiq lazımdır.", false)
                 else -> VoiceFirstResult.Unavailable
             }
-        } catch (_: Exception) {
+        } catch (error: Exception) {
+            Log.w("MemoraAgent", "turn_exception type=${error.javaClass.simpleName.take(64)}")
             VoiceFirstResult.Unavailable
         }
     }

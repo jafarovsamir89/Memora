@@ -7,6 +7,7 @@ import java.time.LocalDateTime
 import java.time.ZoneId
 import java.util.Currency
 import java.util.Locale
+import java.util.UUID
 import java.security.MessageDigest
 import ai.memora.app.domain.Task
 import ai.memora.app.domain.TaskApply
@@ -32,6 +33,8 @@ internal data class TableSnapshot(val table: UserTableRow, val columns: List<Tab
 internal data class CalendarInput(val eventId: String, val scopeId: String, val title: String, val startLocal: String, val endLocal: String?, val zoneId: String, val precision: String)
 internal data class FinanceHistory(val person: PersonRow, val events: List<MoneyEventRow>, val remainingDebtMinorByEvent: Map<String, Long>,
     val voidedEventIds: Set<String>)
+internal data class FinanceReversedAllocation(val obligationId: String, val minorUnits: Long)
+internal data class FinanceReversalResult(val event: MoneyEventRow, val reversedAllocations: List<FinanceReversedAllocation>)
 
 /** Protected local domain port. This remains disconnected from application workflows until P1 gates pass. */
 internal class ProtectedDomainRepository(private val db: AgentDatabase) {
@@ -154,22 +157,51 @@ internal class ProtectedDomainRepository(private val db: AgentDatabase) {
         return null
     }
 
-    suspend fun reverseFinanceEvent(scope: String, eventId: String, commandId: String, reason: String, occurredAt: String): MoneyEventRow = db.withTransaction {
+    suspend fun appliedToDebtMinor(scope: String, paymentEventId: String): Long {
+        val payment = dao.moneyEvent(scope, paymentEventId)?.takeIf { it.kind == "receipt" } ?: error("payment_event_not_found")
+        val all = dao.adjustments(scope)
+        val linked = all.filter { it.kind == "settlement" && it.reversesEventId == payment.eventId }
+        val linkedIds = linked.map { it.eventId }.toSet()
+        val applied = Math.subtractExact(
+            linked.fold(0L) { total, item -> Math.addExact(total, item.minorUnits) },
+            all.asSequence().filter { it.kind == "reversal" && it.reversesEventId in linkedIds }
+                .fold(0L) { total, item -> Math.addExact(total, item.minorUnits) },
+        )
+        check(applied >= 0L) { "invalid_ledger_event" }
+        return applied
+    }
+
+    suspend fun reverseFinanceEvent(scope: String, eventId: String, commandId: String, reason: String, occurredAt: String): FinanceReversalResult = db.withTransaction {
         val event = dao.moneyEvent(scope, eventId) ?: error("event_not_found")
         require(reason.isNotBlank() && reason.length <= 500)
         java.time.Instant.parse(occurredAt)
         dao.adjustmentForCommand(commandId)?.let { existing ->
             check(existing.scopeId == scope && existing.obligationId == eventId && existing.kind == "event_void" &&
                 existing.reversesEventId == eventId && existing.reason == reason) { "idempotency_conflict" }
-            return@withTransaction event
+            val priorLinked = dao.adjustments(scope).filter { it.kind == "settlement" && it.reversesEventId == eventId }
+            return@withTransaction FinanceReversalResult(event, priorLinked.groupBy { it.obligationId }.map { (obligationId, rows) ->
+                FinanceReversedAllocation(obligationId, rows.fold(0L) { total, item -> Math.addExact(total, item.minorUnits) })
+            })
         }
         check(!isFinanceEventVoided(scope, eventId)) { "event_already_reversed" }
         if (event.kind == "debt") check(dao.adjustments(scope, eventId).none { it.kind in setOf("settlement", "correction", "reversal") }) {
             "event_has_settlements"
         }
+        val allocations = if (event.kind == "receipt") {
+            dao.adjustments(scope).filter { it.kind == "settlement" && it.reversesEventId == eventId }
+        } else emptyList()
+        allocations.forEach { allocation ->
+            dao.insertAdjustment(MoneyAdjustmentRow(
+                UUID.randomUUID().toString(), "$commandId:link:${allocation.eventId}", allocation.obligationId,
+                "reversal", allocation.minorUnits, allocation.currency, occurredAt, allocation.eventId,
+                "${reason.take(430)} (receipt allocation reversed)", scope,
+            ))
+        }
         dao.insertAdjustment(MoneyAdjustmentRow(commandId, commandId, eventId, "event_void", event.minorUnits,
             event.currency, occurredAt, eventId, reason, scope))
-        event
+        FinanceReversalResult(event, allocations.groupBy { it.obligationId }.map { (obligationId, rows) ->
+            FinanceReversedAllocation(obligationId, rows.fold(0L) { total, item -> Math.addExact(total, item.minorUnits) })
+        })
     }
 
     suspend fun allFinanceEvents(scope: String): List<MoneyEventRow> = dao.moneyEvents(scope)
@@ -496,12 +528,13 @@ internal class ProtectedDomainRepository(private val db: AgentDatabase) {
     }
 
     suspend fun recordSettlement(scope: String, eventId: String, commandId: String, obligationId: String, minorUnits: Long,
-        currency: String, occurredAt: String?, reason: String): Long = db.withTransaction {
+        currency: String, occurredAt: String?, reason: String, paymentEventId: String? = null): Long = db.withTransaction {
         require(scope.isNotBlank() && minorUnits > 0 && reason.isNotBlank() && reason.length <= 500)
         val existing = dao.adjustmentForCommand(commandId)
         if (existing != null) {
             check(existing.scopeId == scope && existing.eventId == eventId && existing.obligationId == obligationId && existing.kind == "settlement" &&
-                existing.minorUnits == minorUnits && existing.currency == currency && existing.occurredAt == occurredAt && existing.reason == reason) { "idempotency_conflict" }
+                existing.minorUnits == minorUnits && existing.currency == currency && existing.occurredAt == occurredAt &&
+                existing.reason == reason && existing.reversesEventId == paymentEventId) { "idempotency_conflict" }
             val obligation = dao.moneyEvent(scope, obligationId)?.takeIf { it.kind == "debt" } ?: error("obligation_not_found")
             val settled = dao.adjustments(scope, obligationId).fold(0L) { total, item -> when (item.kind) {
                 "settlement", "correction" -> Math.addExact(total, item.minorUnits)
@@ -522,7 +555,15 @@ internal class ProtectedDomainRepository(private val db: AgentDatabase) {
         } }
         val remaining = Math.subtractExact(obligation.minorUnits, net)
         require(minorUnits <= remaining) { "settlement_exceeds_balance" }
-        dao.insertAdjustment(MoneyAdjustmentRow(eventId, commandId, obligationId, "settlement", minorUnits, currency, occurredAt, null, reason, scope))
+        if (paymentEventId != null) {
+            val payment = dao.moneyEvent(scope, paymentEventId)?.takeIf { it.kind == "receipt" } ?: error("payment_event_not_found")
+            check(payment.personId == obligation.personId) { "payment_obligation_mismatch" }
+            check(!isFinanceEventVoided(scope, paymentEventId)) { "payment_event_voided" }
+            require(payment.currency == currency) { "currency_mismatch" }
+            require(minorUnits <= payment.minorUnits - appliedToDebtMinor(scope, paymentEventId)) { "payment_amount_already_applied" }
+        }
+        dao.insertAdjustment(MoneyAdjustmentRow(eventId, commandId, obligationId, "settlement", minorUnits, currency, occurredAt,
+            paymentEventId, reason, scope))
         remaining - minorUnits
     }
 
@@ -534,12 +575,23 @@ internal class ProtectedDomainRepository(private val db: AgentDatabase) {
     suspend fun updateCalendarEvent(scope: String, input: CalendarInput, expectedVersion: Long): LocalCalendarEventRow = db.withTransaction {
         val current = dao.calendarEvent(scope, input.eventId) ?: error("not_found")
         check(current.version == expectedVersion && expectedVersion < Long.MAX_VALUE) { "version_conflict" }
+        check(current.status == "active") { "calendar_event_cancelled" }
         check(input.scopeId == scope)
         val next = validatedCalendarRow(input, expectedVersion + 1)
         check(dao.updateCalendarEvent(scope, input.eventId, expectedVersion, next.version, next.title, next.startLocal,
-            next.endLocal, next.zoneId, next.timePrecision) == 1) { "version_conflict" }
-        next
+            next.endLocal, next.zoneId, next.timePrecision, current.status) == 1) { "version_conflict" }
+        next.copy(status = current.status)
     }
+
+    suspend fun cancelCalendarEvent(scope: String, eventId: String, expectedVersion: Long): LocalCalendarEventRow = db.withTransaction {
+        val current = dao.calendarEvent(scope, eventId) ?: error("not_found")
+        check(current.status == "active" && current.version == expectedVersion && expectedVersion < Long.MAX_VALUE) { "version_conflict" }
+        check(dao.cancelCalendarEvent(scope, eventId, expectedVersion, expectedVersion + 1) == 1) { "version_conflict" }
+        current.copy(status = "cancelled", version = expectedVersion + 1)
+    }
+
+    suspend fun calendarEvent(scope: String, eventId: String): LocalCalendarEventRow? = dao.calendarEvent(scope, eventId)
+    suspend fun allCalendarEvents(scope: String): List<LocalCalendarEventRow> = dao.calendarEvents(scope)
 
     suspend fun calendarBetween(scope: String, fromLocal: String, untilLocal: String): List<LocalCalendarEventRow> {
         require(fromLocal < untilLocal)

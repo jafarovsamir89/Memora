@@ -151,7 +151,7 @@ fun MemoraApp(initialRoute: String = "home", initialTheme: String = "system", ca
             val icons = listOf(Glyph.Home, Glyph.Memory, Glyph.Mic, Glyph.Tasks, Glyph.Grid)
             val titleId = when (route) {
                 "memory" -> R.string.nav_memory; "tasks" -> R.string.nav_tasks; "more" -> R.string.nav_more
-                "inbox" -> R.string.inbox; "finance" -> R.string.finance; "people" -> R.string.people
+                "inbox" -> R.string.inbox; "finance" -> R.string.finance; "calendar" -> R.string.calendar_title; "people" -> R.string.people
                 "projects" -> R.string.projects; "settings" -> R.string.settings; "chat" -> R.string.chat
                 "voice_memory" -> R.string.voice_memory_title; "tables" -> R.string.tables_title
                 "licenses" -> R.string.open_source_licenses
@@ -230,6 +230,7 @@ fun MemoraApp(initialRoute: String = "home", initialTheme: String = "system", ca
                                 captureState.managementBusy, { request -> captureModel.session.revise(request) },
                                 { entry -> captureModel.session.delete(entry.source.id, entry.source.revisions.last().id) })
                             "finance" -> FinanceScreen()
+                            "calendar" -> CalendarScreen()
                             "people" -> UnavailableModuleScreen(s(R.string.people))
                             "projects" -> UnavailableModuleScreen(s(R.string.projects))
                             "settings" -> SettingsScreen(theme, { appearanceModel.change(theme = it) }, language, { appearanceModel.change(language = it) }, appearance.ready && !appearance.busy, appearance.error, { appearanceModel.load() }, { about = true })

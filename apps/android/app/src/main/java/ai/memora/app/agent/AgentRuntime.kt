@@ -1,5 +1,6 @@
 package ai.memora.app.agent
 
+import android.util.Log
 import java.util.UUID
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
@@ -220,15 +221,18 @@ class AgentOrchestrator(
         var failedTools = false
         var uncertainEffect = false
         var terminal = AgentTurnStatus.FAILED
+        var failureStage = "turn_loop"
         try {
             return withTimeout(turnTimeoutMillis) {
             journal.setTurnStatus(turn.turnId, AgentTurnStatus.THINKING)
             repeat(maxModelRounds) { round ->
+                failureStage = "consent_gate"
                 val consent = policy.beforeModelSend(turn, includesStoredMemory)
                 if (consent.action != PolicyAction.ALLOW) {
                     terminal = AgentTurnStatus.FAILED
                     return@withTimeout finish(turn, terminal, code = safeCode(consent.code), observations = observations)
                 }
+                failureStage = "model_gateway"
                 val reply = withTimeoutOrNull(modelTimeoutMillis) { model.complete(AgentModelRequest(
                     turnId = turn.turnId,
                     locale = turn.locale,
@@ -238,28 +242,47 @@ class AgentOrchestrator(
                     conversationHistory = turn.conversationHistory,
                 )) } ?: return@withTimeout finish(turn, AgentTurnStatus.FAILED,
                     code = "model_timeout", observations = observations)
+                failureStage = "model_reply_validation"
                 when (reply) {
                     is AgentModelReply.Answer -> {
-                        requireSafeOutput(reply.text)
+                        failureStage = "answer_validation"
+                        if (!safeOutput(reply.text)) {
+                            Log.w("MemoraAgent", "model_reply_rejected kind=answer")
+                            return@withTimeout finish(turn, AgentTurnStatus.AWAITING_CLARIFICATION,
+                                answer = "Zəhmət olmasa, istəyinizi bir az dəqiqləşdirin.",
+                                code = "invalid_model_output", observations = observations)
+                        }
                         terminal = if (failedTools) AgentTurnStatus.PARTIAL else AgentTurnStatus.COMPLETED
                         return@withTimeout finish(turn, terminal, answer = reply.text, observations = observations)
                     }
                     is AgentModelReply.Clarification -> {
-                        requireSafeOutput(reply.text)
+                        failureStage = "clarification_validation"
+                        if (!safeOutput(reply.text)) {
+                            Log.w("MemoraAgent", "model_reply_rejected kind=clarification")
+                            return@withTimeout finish(turn, AgentTurnStatus.AWAITING_CLARIFICATION,
+                                answer = "Zəhmət olmasa, istəyinizi bir az dəqiqləşdirin.",
+                                code = "invalid_model_output", observations = observations)
+                        }
                         terminal = AgentTurnStatus.AWAITING_CLARIFICATION
                         return@withTimeout finish(turn, terminal, answer = reply.text, code = "clarification_required", observations = observations)
                     }
                     is AgentModelReply.Calls -> {
-                        require(reply.calls.isNotEmpty() && reply.calls.size <= maxToolCalls &&
-                            reply.calls.all(::validCallPayload))
+                        failureStage = "tool_call_validation"
+                        if (reply.calls.isEmpty() || reply.calls.size > maxToolCalls) {
+                            Log.w("MemoraAgent", "model_reply_rejected kind=tool_calls count=${reply.calls.size}")
+                            return@withTimeout finish(turn, AgentTurnStatus.AWAITING_CLARIFICATION,
+                                answer = "Zəhmət olmasa, istəyinizi bir az dəqiqləşdirin.",
+                                code = "invalid_model_tool_calls", observations = observations)
+                        }
                         journal.setTurnStatus(turn.turnId, AgentTurnStatus.EXECUTING)
                         for (call in reply.calls) {
                             if (observations.size >= maxToolCalls) {
                                 return@withTimeout finish(turn, AgentTurnStatus.PARTIAL, code = "tool_call_limit", observations = observations)
                             }
-                            if (!validCall(call) || !seenCallIds.add(call.callId)) {
+                            if (!validCallPayload(call) || !seenCallIds.add(call.callId)) {
                                 failedTools = true
-                                observations += rejected(call, "invalid_or_duplicate_call")
+                                observations += rejected(call, if (validCall(call)) "invalid_or_duplicate_call" else "invalid_tool_call")
+                                Log.w("MemoraAgent", "model_tool_rejected name=${call.name.takeIf { it.matches(Regex("[a-z][a-z0-9_]{0,63}")) } ?: "unknown"}")
                                 continue
                             }
                             val handler = registry.handler(call.name, call.version)
@@ -277,6 +300,7 @@ class AgentOrchestrator(
                             }
 
                             if (handler.descriptor.effect == ToolEffect.READ) {
+                                failureStage = "tool_read"
                                 val readResult = try {
                                     handler.read(call, turn)
                                 } catch (cancelled: CancellationException) {
@@ -284,8 +308,19 @@ class AgentOrchestrator(
                                 } catch (_: Exception) {
                                     ToolCommitResult(ToolObservationStatus.FAILED, "read_failed")
                                 }
+                                failureStage = "tool_read_result_validation"
+                                val validatedReadData = runCatching { validateModelData(readResult.modelData) }.getOrNull()
+                                if (validatedReadData == null) {
+                                    failedTools = true
+                                    observations += AgentToolObservation(call.callId, call.name, ToolObservationStatus.FAILED,
+                                        "tool_result_invalid")
+                                    logToolOutcome(call.name, ToolObservationStatus.FAILED, "tool_result_invalid")
+                                    Log.w("MemoraAgent", "tool_read_result_rejected name=${call.name.take(64)}")
+                                    continue
+                                }
+                                logToolOutcome(call.name, readResult.status, readResult.code)
                                 val observation = AgentToolObservation(call.callId, call.name, readResult.status,
-                                    safeCode(readResult.code), validateModelData(readResult.modelData))
+                                    safeCode(readResult.code), validatedReadData)
                                 if (!withinResultBudget(observations, observation)) {
                                     failedTools = true
                                     observations += rejected(call, "tool_result_limit_exceeded")
@@ -296,6 +331,7 @@ class AgentOrchestrator(
                                 continue
                             }
 
+                            failureStage = "tool_prepare"
                             val commandId = idFactory()
                             require(isUuid(commandId)) { "Application ID factory returned invalid command ID" }
                             when (val prepared = handler.prepare(call, turn, commandId)) {
@@ -305,9 +341,11 @@ class AgentOrchestrator(
                                 }
                                 is ToolPreparation.Conflict -> {
                                     failedTools = true
+                                    logToolOutcome(call.name, ToolObservationStatus.CONFLICT, prepared.code)
                                     observations += AgentToolObservation(call.callId, call.name, ToolObservationStatus.CONFLICT, safeCode(prepared.code))
                                 }
                                 is ToolPreparation.Prepared -> {
+                                    failureStage = "tool_command_validation"
                                     validatePrepared(prepared.command, commandId)
                                     val requiresConfirmation = prepared.command.requiresConfirmation ||
                                         handler.descriptor.access == ToolAccess.EXTERNAL
@@ -316,6 +354,7 @@ class AgentOrchestrator(
                                         terminal = AgentTurnStatus.AWAITING_CONFIRMATION
                                         val needed = AgentToolObservation(call.callId, call.name, ToolObservationStatus.NEEDS_CONFIRMATION,
                                             "confirmation_required")
+                                        logToolOutcome(call.name, needed.status, needed.code)
                                         observations += needed
                                         return@withTimeout finish(turn, terminal, code = "confirmation_required", observations = observations)
                                     }
@@ -325,6 +364,7 @@ class AgentOrchestrator(
                                         terminal = AgentTurnStatus.AWAITING_CONFIRMATION
                                         observations += AgentToolObservation(call.callId, call.name,
                                             ToolObservationStatus.NEEDS_CONFIRMATION, "confirmation_required")
+                                        logToolOutcome(call.name, ToolObservationStatus.NEEDS_CONFIRMATION, "confirmation_required")
                                         return@withTimeout finish(turn, terminal, code = "confirmation_required", observations = observations)
                                     }
                                     if (commitPermission.action != PolicyAction.ALLOW) {
@@ -336,6 +376,7 @@ class AgentOrchestrator(
                                         prepared.command.targetVersions)
                                     journal.recordCommand(entry)
                                     journal.setCommandStatus(commandId, "prepared", "applying")
+                                    failureStage = "tool_commit"
                                     val committed = try {
                                         handler.commit(prepared.command)
                                     } catch (cancelled: CancellationException) {
@@ -348,6 +389,7 @@ class AgentOrchestrator(
                                         uncertainEffect = true
                                         observations += AgentToolObservation(call.callId, call.name, ToolObservationStatus.UNKNOWN,
                                             "effect_outcome_unknown")
+                                        logToolOutcome(call.name, ToolObservationStatus.UNKNOWN, "effect_outcome_unknown")
                                         terminal = AgentTurnStatus.RECOVERY_REQUIRED
                                         return@withTimeout finish(turn, terminal, code = "effect_outcome_unknown", observations = observations)
                                     }
@@ -369,8 +411,10 @@ class AgentOrchestrator(
                                             AgentTurnStatus.RECOVERY_REQUIRED else AgentTurnStatus.PARTIAL
                                         return@withTimeout finish(turn, terminal, code = "tool_result_invalid", observations = observations)
                                     }
+                                    failureStage = "tool_result_validation"
                                     val observation = AgentToolObservation(call.callId, call.name, committed.status,
                                         safeCode(committed.code), validatedModelData)
+                                    logToolOutcome(call.name, observation.status, observation.code)
                                     if (!withinResultBudget(observations, observation)) {
                                         failedTools = true
                                         observations += AgentToolObservation(call.callId, call.name, committed.status,
@@ -409,7 +453,8 @@ class AgentOrchestrator(
                 finish(turn, terminal, code = if (uncertainEffect) "effect_outcome_unknown" else "cancelled", observations = observations)
             }
             throw AgentTurnCancelledException(uncertainEffect).also { it.initCause(cancelled) }
-        } catch (_: Exception) {
+        } catch (error: Exception) {
+            Log.w("MemoraAgent", "runtime_failed stage=$failureStage type=${error.javaClass.simpleName.take(64)}")
             terminal = AgentTurnStatus.FAILED
             return finish(turn, terminal, code = "agent_execution_failed", observations = observations)
         }
@@ -471,13 +516,22 @@ class AgentOrchestrator(
         call.arguments.keys.all { it.matches(Regex("[a-zA-Z][a-zA-Z0-9_]{0,63}")) } &&
         call.arguments.values.all { safeValue(it, 0) } && runCatching { AgentCanonical.bytes(call.arguments).size <= 32_768 }.getOrDefault(false)
 
-    private fun rejected(call: AgentModelToolCall, code: String) =
-        AgentToolObservation(call.callId.take(128), call.name.take(64), ToolObservationStatus.REJECTED, safeCode(code))
+    private fun rejected(call: AgentModelToolCall, code: String): AgentToolObservation {
+        val safeName = call.name.takeIf { it.matches(Regex("[a-z][a-z0-9_]{0,63}")) } ?: "unknown"
+        val safe = safeCode(code)
+        logToolOutcome(safeName, ToolObservationStatus.REJECTED, safe)
+        return AgentToolObservation(call.callId.take(128), call.name.take(64), ToolObservationStatus.REJECTED, safe)
+    }
+
+    private fun logToolOutcome(name: String, status: ToolObservationStatus, code: String) {
+        val safeName = name.takeIf { it.matches(Regex("[a-z][a-z0-9_]{0,63}")) } ?: "unknown"
+        Log.i("MemoraAgent", "tool_outcome name=$safeName status=${status.name.lowercase()} code=${safeCode(code)}")
+    }
 
     private fun validateModelData(data: Map<String, Any?>): Map<String, Any?> {
         require(data.size <= 32 && data.keys.all { it.matches(Regex("[a-zA-Z][a-zA-Z0-9_]{0,63}")) })
         data.forEach { (key, value) -> require(safeValue(value, 0)) { "Unsafe tool result field: $key" } }
-        require(AgentCanonical.bytes(data).size <= 2_048)
+        require(AgentCanonical.bytes(data).size <= 12_288)
         return data.toMap()
     }
 
@@ -504,9 +558,7 @@ class AgentOrchestrator(
 
     private fun safeCode(value: String) = value.takeIf { it.matches(Regex("[a-z0-9_]{1,64}")) } ?: "tool_error"
 
-    private fun requireSafeOutput(output: String) {
-        require(output.isNotBlank() && output.length <= 20_000 && wellFormedUnicode(output))
-    }
+    private fun safeOutput(output: String) = output.isNotBlank() && output.length <= 20_000 && wellFormedUnicode(output)
 
     private fun isUuid(value: String) = value.matches(Regex("[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}"))
 

@@ -5,6 +5,7 @@ import ai.memora.app.data.protectedstore.ColumnSpec
 import ai.memora.app.data.protectedstore.ColumnType
 import ai.memora.app.data.protectedstore.TableColumnRow
 import ai.memora.app.data.protectedstore.CalendarInput
+import ai.memora.app.data.protectedstore.ProtectedConversationRepository
 import ai.memora.app.data.protectedstore.ProtectedDomainRepository
 import ai.memora.app.data.protectedstore.ProtectedMemoryRepository
 import ai.memora.app.domain.TaskEvent
@@ -13,6 +14,7 @@ import ai.memora.app.domain.TaskDecision
 import ai.memora.app.domain.TaskRules
 import ai.memora.app.domain.VoiceMoneyRules
 import java.security.MessageDigest
+import java.math.BigDecimal
 import java.time.Instant
 import java.time.LocalDate
 import java.time.ZoneId
@@ -21,11 +23,13 @@ import org.json.JSONObject
 
 /** First production tool slice: bounded evidence search and explicit local memory writes. */
 internal class LocalMemoryTools(private val repository: ProtectedDomainRepository, private val memory: ProtectedMemoryRepository,
-    private val financeEnabled: Boolean = true, private val onTaskChanged: (Task) -> String = { "not_scheduled" }) {
+    private val financeEnabled: Boolean = true, private val onTaskChanged: (Task) -> String = { "not_scheduled" },
+    private val conversations: ProtectedConversationRepository? = null) {
     fun handlers(): List<AgentToolHandler> = listOf(
         SearchMemory(), SaveNote(), EditMemoryObject(), DeleteMemoryObject(), RestoreMemoryObject(), LinkObjects(), ListTables(), ReadTableRows(), CreateTable(), AddTableRow(),
         UpdateTableRow(), DeleteTableRow(), RestoreTableRow(), RenameTable(), DeleteTable(), RestoreTable(),
-        ListTasks(), CreateTask(), EditTask(), SetTaskCompletion(), ListCalendarEvents(), CreateCalendarEvent(),
+        SearchConversationHistory(), ListTasks(), CreateTask(), EditTask(), SetTaskCompletion(), ListCalendarEvents(), CreateCalendarEvent(),
+        EditCalendarEvent(), CancelCalendarEvent(),
         SearchMoney(), RecordMoneyEvent(), SettleDebt(), ReverseMoneyEvent(),
     )
 
@@ -36,11 +40,12 @@ internal class LocalMemoryTools(private val repository: ProtectedDomainRepositor
         override suspend fun read(call: AgentModelToolCall, turn: AgentTurnRequest): ToolCommitResult {
             val query = call.arguments["query"] as? String ?: return rejected()
             if (query.isBlank() || query.length > 200) return rejected()
-            val hits = repository.search(turn.scopeId, query, limit = 12)
+            val hits = repository.search(turn.scopeId, query, limit = 8)
             return ToolCommitResult(ToolObservationStatus.APPLIED, "evidence_found", mapOf(
                 "count" to hits.size,
                 "evidence" to hits.map { hit -> mapOf("id" to hit.objectId, "kind" to hit.kind.name.lowercase(),
-                    "title" to hit.title, "text" to hit.evidenceText.take(700), "revision" to hit.evidenceRevisionId) },
+                    "title" to hit.title, "text" to hit.evidenceText.take(500),
+                    "text_truncated" to (hit.evidenceText.length > 500), "revision" to hit.evidenceRevisionId) },
             ))
         }
 
@@ -158,11 +163,14 @@ internal class LocalMemoryTools(private val repository: ProtectedDomainRepositor
             ToolEffect.READ, runtimeEnabled = true)
         override suspend fun read(call: AgentModelToolCall, turn: AgentTurnRequest): ToolCommitResult {
             val tables = repository.tables(turn.scopeId)
-            return ToolCommitResult(ToolObservationStatus.APPLIED, "tables_loaded", mapOf("tables" to tables.map { item ->
-                mapOf("id" to item.table.tableId, "title" to item.table.title, "schema_version" to item.table.schemaVersion,
-                    "columns" to item.columns.map { mapOf("id" to it.columnId, "name" to it.name, "type" to it.valueType) },
-                    "rows" to item.rows.take(30).map { it.valuesJson })
-            }))
+            val selected = tables.take(8)
+            return ToolCommitResult(ToolObservationStatus.APPLIED, "tables_loaded", mapOf(
+                "table_count" to tables.size, "truncated" to (tables.size > selected.size),
+                "tables" to selected.map { item -> mapOf("id" to item.table.tableId, "title" to item.table.title.take(120),
+                    "schema_version" to item.table.schemaVersion, "row_count" to item.rows.size,
+                    "schema_truncated" to (item.columns.size > 8),
+                    "columns" to item.columns.take(8).map { mapOf("id" to it.columnId, "name" to it.name.take(80), "type" to it.valueType) }) }
+            ))
         }
         override suspend fun prepare(call: AgentModelToolCall, turn: AgentTurnRequest, commandId: String) = ToolPreparation.Rejected("read_only_tool")
         override suspend fun commit(command: PreparedAgentCommand) = rejected()
@@ -177,11 +185,14 @@ internal class LocalMemoryTools(private val repository: ProtectedDomainRepositor
             if (tableId.isBlank() || query.length > 200) return rejected()
             val table = repository.tables(turn.scopeId).firstOrNull { it.table.tableId == tableId }
                 ?: return ToolCommitResult(ToolObservationStatus.REJECTED, "table_not_found")
-            val rows = table.rows.asSequence().filter { query.isBlank() || it.valuesJson.contains(query, ignoreCase = true) }
-                .take(40).map { mapOf("id" to it.rowId, "version" to it.version, "values" to it.valuesJson.take(4000)) }.toList()
+            val matchingRows = table.rows.filter { query.isBlank() || it.valuesJson.contains(query, ignoreCase = true) }
+            val rows = matchingRows.take(10).map { row -> mapOf("id" to row.rowId, "version" to row.version,
+                "values" to row.valuesJson.take(700), "values_truncated" to (row.valuesJson.length > 700)) }
             return ToolCommitResult(ToolObservationStatus.APPLIED, "table_rows_loaded", mapOf(
-                "table_id" to tableId, "title" to table.table.title, "columns" to table.columns.map { mapOf("id" to it.columnId, "name" to it.name, "type" to it.valueType) },
-                "rows" to rows, "returned" to rows.size,
+                "table_id" to tableId, "title" to table.table.title.take(120),
+                "columns" to table.columns.take(12).map { mapOf("id" to it.columnId, "name" to it.name.take(80), "type" to it.valueType) },
+                "rows" to rows, "returned" to rows.size, "matching_row_count" to matchingRows.size,
+                "truncated" to (matchingRows.size > rows.size),
             ))
         }
         override suspend fun prepare(call: AgentModelToolCall, turn: AgentTurnRequest, commandId: String) = ToolPreparation.Rejected("read_only_tool")
@@ -446,10 +457,12 @@ internal class LocalMemoryTools(private val repository: ProtectedDomainRepositor
             ToolEffect.READ, runtimeEnabled = true)
         override suspend fun read(call: AgentModelToolCall, turn: AgentTurnRequest): ToolCommitResult {
             val snapshot = memory.tasks()
-            return ToolCommitResult(ToolObservationStatus.APPLIED, "tasks_loaded", mapOf("tasks" to snapshot.tasks
-                .filter { it.scopeId == turn.scopeId }.take(100).map { mapOf("id" to it.id, "title" to it.title,
+            val matching = snapshot.tasks.filter { it.scopeId == turn.scopeId }
+            val selected = matching.take(16)
+            return ToolCommitResult(ToolObservationStatus.APPLIED, "tasks_loaded", mapOf("tasks" to selected.map { mapOf("id" to it.id, "title" to it.title.take(160),
                     "completed" to it.completed, "due_local" to it.dueLocal, "due_zone" to it.dueZone,
-                    "remind" to it.remind, "person" to it.personLabel, "project" to it.projectLabel) }))
+                    "remind" to it.remind, "person" to it.personLabel?.take(80), "project" to it.projectLabel?.take(80)) },
+                "task_count" to matching.size, "truncated" to (matching.size > selected.size)))
         }
         override suspend fun prepare(call: AgentModelToolCall, turn: AgentTurnRequest, commandId: String) = ToolPreparation.Rejected("read_only_tool")
         override suspend fun commit(command: PreparedAgentCommand) = rejected()
@@ -564,12 +577,35 @@ internal class LocalMemoryTools(private val repository: ProtectedDomainRepositor
             val until = call.arguments["until_local"] as? String ?: return rejected()
             if (from.length > 30 || until.length > 30 || from >= until) return rejected()
             return try {
-                val events = repository.calendarBetween(turn.scopeId, from, until).take(100)
+                val matching = repository.calendarBetween(turn.scopeId, from, until)
+                val events = matching.take(16)
                 ToolCommitResult(ToolObservationStatus.APPLIED, "calendar_loaded", mapOf("events" to events.map { event ->
-                    mapOf("id" to event.eventId, "title" to event.title, "start_local" to event.startLocal,
+                    mapOf("id" to event.eventId, "title" to event.title.take(160), "start_local" to event.startLocal,
                         "end_local" to event.endLocal, "zone_id" to event.zoneId, "precision" to event.timePrecision)
-                }))
+                }, "event_count" to matching.size, "truncated" to (matching.size > events.size)))
             } catch (_: Exception) { ToolCommitResult(ToolObservationStatus.REJECTED, "invalid_calendar_range") }
+        }
+        override suspend fun prepare(call: AgentModelToolCall, turn: AgentTurnRequest, commandId: String) = ToolPreparation.Rejected("read_only_tool")
+        override suspend fun commit(command: PreparedAgentCommand) = rejected()
+    }
+
+    private inner class SearchConversationHistory : AgentToolHandler {
+        override val descriptor = AgentToolDescriptor("search_conversation_history", 1, ToolAccess.PERSISTED_MEMORY,
+            ToolEffect.READ, runtimeEnabled = conversations != null)
+        override suspend fun read(call: AgentModelToolCall, turn: AgentTurnRequest): ToolCommitResult {
+            val query = (call.arguments["query"] as? String)?.trim().orEmpty()
+            val daysBack = (call.arguments["days_back"] as? Number)?.toInt()
+            val limit = (call.arguments["max_results"] as? Number)?.toInt() ?: 8
+            if (query.length > 300 || (query.isBlank() && daysBack == null) || (daysBack != null && daysBack !in 1..365) || limit !in 1..8)
+                return rejected()
+            return try {
+                val hits = conversations?.search(turn.scopeId, query, daysBack, limit).orEmpty()
+                ToolCommitResult(ToolObservationStatus.APPLIED, "conversation_evidence_loaded", mapOf(
+                    "searched_days_back" to daysBack, "count" to hits.size,
+                    "evidence" to hits.map { hit -> mapOf("turn_id" to hit.turnId, "speaker" to hit.role,
+                        "time_epoch_ms" to hit.createdAtMillis, "relevance" to hit.score, "snippet" to hit.snippet.take(600),
+                        "snippet_truncated" to (hit.snippet.length > 600)) }))
+            } catch (_: Exception) { ToolCommitResult(ToolObservationStatus.FAILED, "conversation_search_failed") }
         }
         override suspend fun prepare(call: AgentModelToolCall, turn: AgentTurnRequest, commandId: String) = ToolPreparation.Rejected("read_only_tool")
         override suspend fun commit(command: PreparedAgentCommand) = rejected()
@@ -600,6 +636,60 @@ internal class LocalMemoryTools(private val repository: ProtectedDomainRepositor
         }
     }
 
+    private inner class EditCalendarEvent : AgentToolHandler {
+        override val descriptor = AgentToolDescriptor("edit_calendar_event", 1, ToolAccess.PERSISTED_MEMORY,
+            ToolEffect.WRITE, runtimeEnabled = true)
+        override suspend fun prepare(call: AgentModelToolCall, turn: AgentTurnRequest, commandId: String): ToolPreparation {
+            val eventId = call.arguments["event_id"] as? String ?: return ToolPreparation.Rejected("invalid_event_id")
+            val current = repository.calendarEvent(turn.scopeId, eventId) ?: return ToolPreparation.Rejected("calendar_event_not_found")
+            if (current.status != "active") return ToolPreparation.Conflict("calendar_event_cancelled")
+            val clearEnd = call.arguments["clear_end"] as? Boolean ?: false
+            val endArgument = call.arguments["end_local"] as? String
+            if (clearEnd && endArgument != null) return ToolPreparation.Rejected("invalid_calendar_end")
+            val input = CalendarInput(eventId, turn.scopeId,
+                (call.arguments["title"] as? String)?.trim()?.takeIf(String::isNotEmpty) ?: current.title,
+                (call.arguments["start_local"] as? String)?.trim()?.takeIf(String::isNotEmpty) ?: current.startLocal,
+                if (clearEnd) null else endArgument ?: current.endLocal,
+                (call.arguments["zone_id"] as? String)?.trim()?.takeIf(String::isNotEmpty) ?: current.zoneId,
+                (call.arguments["precision"] as? String)?.trim()?.takeIf(String::isNotEmpty) ?: current.timePrecision)
+            if (input.title.length > 200 || input.startLocal.length > 30 || (input.endLocal?.length ?: 0) > 30 || input.zoneId.length > 80 ||
+                input.precision !in setOf("date", "minute")) return ToolPreparation.Rejected("invalid_calendar_event")
+            return ToolPreparation.Prepared(PreparedAgentCommand(commandId,
+                sha256("calendar_edit\u0000${turn.scopeId}\u0000$eventId\u0000${current.version}\u0000${input.hashCode()}"),
+                mapOf(eventId to current.version), false, CalendarEditPayload(input, current.version)))
+        }
+        override suspend fun commit(command: PreparedAgentCommand): ToolCommitResult {
+            val payload = command.opaquePayload as? CalendarEditPayload ?: return rejected()
+            return try {
+                val event = repository.updateCalendarEvent(payload.input.scopeId, payload.input, payload.expectedVersion)
+                ToolCommitResult(ToolObservationStatus.APPLIED, "calendar_event_updated", mapOf("id" to event.eventId,
+                    "title" to event.title, "start_local" to event.startLocal, "end_local" to event.endLocal,
+                    "zone_id" to event.zoneId, "precision" to event.timePrecision))
+            } catch (_: Exception) { ToolCommitResult(ToolObservationStatus.CONFLICT, "calendar_event_update_conflict") }
+        }
+    }
+
+    private inner class CancelCalendarEvent : AgentToolHandler {
+        override val descriptor = AgentToolDescriptor("cancel_calendar_event", 1, ToolAccess.PERSISTED_MEMORY,
+            ToolEffect.WRITE, runtimeEnabled = true)
+        override suspend fun prepare(call: AgentModelToolCall, turn: AgentTurnRequest, commandId: String): ToolPreparation {
+            val eventId = call.arguments["event_id"] as? String ?: return ToolPreparation.Rejected("invalid_event_id")
+            val current = repository.calendarEvent(turn.scopeId, eventId) ?: return ToolPreparation.Rejected("calendar_event_not_found")
+            if (current.status != "active") return ToolPreparation.Conflict("calendar_event_already_cancelled")
+            return ToolPreparation.Prepared(PreparedAgentCommand(commandId,
+                sha256("calendar_cancel\u0000${turn.scopeId}\u0000$eventId\u0000${current.version}"),
+                mapOf(eventId to current.version), false, CalendarCancelPayload(turn.scopeId, eventId, current.version)))
+        }
+        override suspend fun commit(command: PreparedAgentCommand): ToolCommitResult {
+            val payload = command.opaquePayload as? CalendarCancelPayload ?: return rejected()
+            return try {
+                val event = repository.cancelCalendarEvent(payload.scope, payload.eventId, payload.expectedVersion)
+                ToolCommitResult(ToolObservationStatus.APPLIED, "calendar_event_cancelled", mapOf("id" to event.eventId,
+                    "title" to event.title, "start_local" to event.startLocal, "status" to event.status))
+            } catch (_: Exception) { ToolCommitResult(ToolObservationStatus.CONFLICT, "calendar_event_cancel_conflict") }
+        }
+    }
+
     private inner class SearchMoney : AgentToolHandler {
         override val descriptor = AgentToolDescriptor("search_money", 1, ToolAccess.PERSISTED_MEMORY,
             ToolEffect.READ, runtimeEnabled = financeEnabled)
@@ -612,18 +702,30 @@ internal class LocalMemoryTools(private val repository: ProtectedDomainRepositor
             val history = try { if (name.isNotBlank()) repository.financeHistory(turn.scopeId, name) else null }
             catch (_: IllegalStateException) { return ToolCommitResult(ToolObservationStatus.CONFLICT, "person_name_ambiguous") }
             val names = repository.financePeople(turn.scopeId).associate { it.personId to it.displayName }
-            val events = (if (name.isNotBlank()) history?.events.orEmpty() else repository.allFinanceEvents(turn.scopeId).filter { event ->
+            val matchingEvents = (if (name.isNotBlank()) history?.events.orEmpty() else repository.allFinanceEvents(turn.scopeId).filter { event ->
                 listOfNotNull(names[event.personId], event.comment, event.source).any { it.contains(query, ignoreCase = true) }
-            }).filter { kind == null || it.kind == kind }.take(100)
+            }).filter { kind == null || it.kind == kind }
+            val events = matchingEvents.take(12)
             val eventData = events.map { event -> mapOf("event_id" to event.eventId, "kind" to event.kind,
                 "person_name" to names[event.personId], "minor_units" to event.minorUnits, "currency" to event.currency,
                 "remaining_minor_units" to history?.remainingDebtMinorByEvent?.get(event.eventId),
+                "applied_to_debt_minor_units" to if (event.kind == "receipt") repository.appliedToDebtMinor(turn.scopeId, event.eventId) else null,
                 "voided" to (history?.voidedEventIds?.contains(event.eventId) ?: repository.isFinanceEventVoided(turn.scopeId, event.eventId)),
                 "recorded_at" to event.recordedAt, "occurred_at" to event.occurredAt,
-                "comment" to event.comment, "source" to event.source.take(1000)) }
+                "comment" to event.comment?.take(250), "comment_truncated" to ((event.comment?.length ?: 0) > 250),
+                "source" to event.source.take(300), "source_truncated" to (event.source.length > 300)) }
+            val financialSummary = history?.let { personHistory ->
+                val active = personHistory.events.filterNot { it.eventId in personHistory.voidedEventIds }
+                mapOf("currency" to "AZN",
+                    "received_minor_units" to active.filter { it.kind == "receipt" }.fold(0L) { total, event -> Math.addExact(total, event.minorUnits) },
+                    "spent_minor_units" to active.filter { it.kind == "expense" }.fold(0L) { total, event -> Math.addExact(total, event.minorUnits) },
+                    "outstanding_debt_minor_units" to personHistory.remainingDebtMinorByEvent.values.fold(0L) { total, amount -> Math.addExact(total, amount) })
+            }
             return ToolCommitResult(ToolObservationStatus.APPLIED, "financial_evidence_loaded", mapOf(
                 "person_found" to (history != null), "person_name" to history?.person?.displayName,
-                "count" to eventData.size, "events" to eventData,
+                "count" to eventData.size, "matching_event_count" to matchingEvents.size,
+                "truncated" to (matchingEvents.size > eventData.size), "financial_summary" to financialSummary,
+                "events" to eventData,
             ))
         }
         override suspend fun prepare(call: AgentModelToolCall, turn: AgentTurnRequest, commandId: String) = ToolPreparation.Rejected("read_only_tool")
@@ -636,7 +738,7 @@ internal class LocalMemoryTools(private val repository: ProtectedDomainRepositor
         override suspend fun prepare(call: AgentModelToolCall, turn: AgentTurnRequest, commandId: String): ToolPreparation {
             val kind = call.arguments["kind"] as? String ?: return ToolPreparation.Rejected("invalid_kind")
             val personName = (call.arguments["person_name"] as? String)?.trim().orEmpty()
-            val amount = call.arguments["amount"] as? String ?: return ToolPreparation.Rejected("invalid_amount")
+            val amount = moneyAmountArgument(call.arguments["amount"]) ?: return ToolPreparation.Rejected("invalid_amount")
             val currency = (call.arguments["currency"] as? String)?.uppercase() ?: "AZN"
             val comment = (call.arguments["comment"] as? String)?.takeIf { it.isNotBlank() }
             val localDate = (call.arguments["occurred_date"] as? String)?.takeIf { it.isNotBlank() }
@@ -685,7 +787,7 @@ internal class LocalMemoryTools(private val repository: ProtectedDomainRepositor
 
         override suspend fun prepare(call: AgentModelToolCall, turn: AgentTurnRequest, commandId: String): ToolPreparation {
             val obligationId = call.arguments["obligation_id"] as? String ?: return ToolPreparation.Rejected("invalid_obligation")
-            val amount = call.arguments["amount"] as? String ?: return ToolPreparation.Rejected("invalid_amount")
+            val amount = moneyAmountArgument(call.arguments["amount"]) ?: return ToolPreparation.Rejected("invalid_amount")
             val minor = VoiceMoneyRules.parseMinor(amount) ?: return ToolPreparation.Rejected("invalid_amount")
             val debt = repository.moneyEvent(turn.scopeId, obligationId)?.takeIf { it.kind == "debt" }
                 ?: return ToolPreparation.Rejected("obligation_not_found")
@@ -698,26 +800,40 @@ internal class LocalMemoryTools(private val repository: ProtectedDomainRepositor
                 .atStartOfDay(ZoneId.of("Asia/Baku")).toInstant()
             val reason = (call.arguments["reason"] as? String)?.trim()?.takeIf { it.isNotEmpty() } ?: "Repayment"
             if (reason.length > 500) return ToolPreparation.Rejected("invalid_reason")
+            val paymentEventId = (call.arguments["payment_event_id"] as? String)?.trim()?.takeIf { it.isNotEmpty() }
+            if (paymentEventId != null) {
+                if (paymentEventId.length > 100) return ToolPreparation.Rejected("invalid_payment_event")
+                val payment = repository.moneyEvent(turn.scopeId, paymentEventId)?.takeIf { it.kind == "receipt" }
+                    ?: return ToolPreparation.Rejected("payment_event_not_found")
+                if (payment.personId != debt.personId) return ToolPreparation.Conflict("payment_obligation_mismatch")
+                if (payment.currency != debt.currency) return ToolPreparation.Conflict("currency_mismatch")
+                if (repository.isFinanceEventVoided(turn.scopeId, paymentEventId)) return ToolPreparation.Conflict("payment_event_voided")
+                if (minor > payment.minorUnits - repository.appliedToDebtMinor(turn.scopeId, paymentEventId))
+                    return ToolPreparation.Conflict("payment_amount_already_applied")
+            }
             val remaining = try { repository.outstandingDebtMinor(turn.scopeId, obligationId) }
                 catch (_: Exception) { return ToolPreparation.Rejected("obligation_unavailable") }
             if (remaining <= 0 || minor > remaining) return ToolPreparation.Conflict("settlement_exceeds_balance")
-            val digest = sha256("settlement\u0000${turn.scopeId}\u0000$obligationId\u0000$minor\u0000${debt.currency}\u0000$occurredAt\u0000$reason\u0000${turn.text}")
+            val digest = sha256("settlement\u0000${turn.scopeId}\u0000$obligationId\u0000$minor\u0000${debt.currency}\u0000$occurredAt\u0000$reason\u0000${paymentEventId.orEmpty()}\u0000${turn.text}")
             return ToolPreparation.Prepared(PreparedAgentCommand(commandId, digest, mapOf(obligationId to debt.minorUnits), false,
-                SettlementPayload(turn.scopeId, obligationId, minor, debt.currency, occurredAt.toString(), reason, commandId)))
+                SettlementPayload(turn.scopeId, obligationId, minor, debt.currency, occurredAt.toString(), reason, commandId, paymentEventId)))
         }
 
         override suspend fun commit(command: PreparedAgentCommand): ToolCommitResult {
             val payload = command.opaquePayload as? SettlementPayload ?: return rejected()
             return try {
                 val remaining = repository.recordSettlement(payload.scope, payload.commandId, payload.commandId,
-                    payload.obligationId, payload.minorUnits, payload.currency, payload.occurredAt, payload.reason)
+                    payload.obligationId, payload.minorUnits, payload.currency, payload.occurredAt, payload.reason, payload.paymentEventId)
                 ToolCommitResult(ToolObservationStatus.APPLIED, "debt_settlement_recorded", mapOf(
                     "obligation_id" to payload.obligationId, "settled_minor_units" to payload.minorUnits,
-                    "currency" to payload.currency, "remaining_minor_units" to remaining, "occurred_at" to payload.occurredAt))
+                    "payment_event_id" to payload.paymentEventId, "currency" to payload.currency,
+                    "remaining_minor_units" to remaining, "occurred_at" to payload.occurredAt))
             } catch (error: Exception) {
                 when (error.message) {
-                    "settlement_exceeds_balance" -> ToolCommitResult(ToolObservationStatus.CONFLICT, "settlement_exceeds_balance")
+                    "settlement_exceeds_balance", "payment_obligation_mismatch", "payment_event_voided", "payment_amount_already_applied" ->
+                        ToolCommitResult(ToolObservationStatus.CONFLICT, error.message!!)
                     "obligation_not_found" -> ToolCommitResult(ToolObservationStatus.REJECTED, "obligation_not_found")
+                    "payment_event_not_found" -> ToolCommitResult(ToolObservationStatus.REJECTED, "payment_event_not_found")
                     else -> ToolCommitResult(ToolObservationStatus.FAILED, "settlement_failed")
                 }
             }
@@ -740,11 +856,14 @@ internal class LocalMemoryTools(private val repository: ProtectedDomainRepositor
         override suspend fun commit(command: PreparedAgentCommand): ToolCommitResult {
             val payload = command.opaquePayload as? ReverseFinancePayload ?: return rejected()
             return try {
-                val event = repository.reverseFinanceEvent(payload.scope, payload.eventId, payload.commandId,
+                val result = repository.reverseFinanceEvent(payload.scope, payload.eventId, payload.commandId,
                     payload.reason, Instant.now().toString())
                 ToolCommitResult(ToolObservationStatus.APPLIED, "financial_event_reversed", mapOf(
-                    "event_id" to event.eventId, "kind" to event.kind, "minor_units" to event.minorUnits,
-                    "currency" to event.currency, "reversed" to true, "replacement_required_if_correcting" to true))
+                    "event_id" to result.event.eventId, "kind" to result.event.kind, "minor_units" to result.event.minorUnits,
+                    "currency" to result.event.currency, "reversed" to true,
+                    "reversed_debt_allocations" to result.reversedAllocations.map { mapOf(
+                        "obligation_id" to it.obligationId, "minor_units" to it.minorUnits) },
+                    "replacement_required_if_correcting" to true))
             } catch (error: Exception) {
                 when (error.message) {
                     "event_not_found" -> ToolCommitResult(ToolObservationStatus.REJECTED, "event_not_found")
@@ -776,11 +895,13 @@ internal class LocalMemoryTools(private val repository: ProtectedDomainRepositor
     private data class CompletionPayload(val id: String, val scope: String, val actor: String, val commandId: String,
         val version: Long, val completed: Boolean)
     private data class CalendarPayload(val input: CalendarInput)
+    private data class CalendarEditPayload(val input: CalendarInput, val expectedVersion: Long)
+    private data class CalendarCancelPayload(val scope: String, val eventId: String, val expectedVersion: Long)
     private data class FinancePayload(val scope: String, val personName: String, val kind: String, val amount: String,
         val currency: String, val source: String, val comment: String?, val personId: String, val eventId: String,
         val commandId: String, val recordedAt: Instant, val occurredAt: Instant)
     private data class SettlementPayload(val scope: String, val obligationId: String, val minorUnits: Long,
-        val currency: String, val occurredAt: String, val reason: String, val commandId: String)
+        val currency: String, val occurredAt: String, val reason: String, val commandId: String, val paymentEventId: String?)
     private data class ReverseFinancePayload(val scope: String, val eventId: String, val commandId: String, val reason: String)
     private data class TaskEditPayload(val event: TaskEvent)
 
@@ -834,6 +955,13 @@ internal class LocalMemoryTools(private val repository: ProtectedDomainRepositor
     }
 
     private fun rejected() = ToolCommitResult(ToolObservationStatus.REJECTED, "invalid_arguments")
+    private fun moneyAmountArgument(value: Any?): String? = when (value) {
+        is String -> value.takeIf { it.length <= 32 }
+        is Number -> runCatching {
+            BigDecimal(value.toString()).stripTrailingZeros().toPlainString().takeIf { it.length <= 32 }
+        }.getOrNull()
+        else -> null
+    }
     private fun sha256(value: String) = MessageDigest.getInstance("SHA-256").digest(value.toByteArray(Charsets.UTF_8))
         .joinToString("") { "%02x".format(it) }
 }

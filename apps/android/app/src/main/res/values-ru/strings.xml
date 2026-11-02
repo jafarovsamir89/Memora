@@ -266,4 +266,11 @@
     <string name="finance_settlement_label">Погашение долга</string>
     <string name="table_columns_help">Пример: Имя:TEXT, Дата:DATE, Сумма:MONEY. Типы: TEXT, INTEGER, DECIMAL, BOOLEAN, DATE, DATETIME, MONEY.</string>
     <string name="finance_reversed_label">Отменено</string>
+    <string name="finance_debt_remaining">Остаток долга</string>
+    <string name="finance_receipt_applied">Зачтено в погашение долга</string>
+    <string name="calendar_title">Календарь</string>
+    <string name="calendar_hint">Локальные события и встречи. Попросите помощника изменить событие.</string>
+    <string name="calendar_empty">Событий пока нет.</string>
+    <string name="calendar_refresh">Обновить</string>
+    <string name="calendar_cancelled">Отменено</string>
 </resources>

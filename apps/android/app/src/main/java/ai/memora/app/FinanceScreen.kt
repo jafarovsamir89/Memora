@@ -30,6 +30,8 @@ fun FinanceScreen() {
     var settlements by remember { mutableStateOf<List<Pair<MoneyAdjustmentRow, String>>>(emptyList()) }
     var voidedEventIds by remember { mutableStateOf<Set<String>>(emptySet()) }
     var people by remember { mutableStateOf<Map<String, String>>(emptyMap()) }
+    var remainingDebtByEventId by remember { mutableStateOf<Map<String, Long>>(emptyMap()) }
+    var appliedToDebtByReceiptId by remember { mutableStateOf<Map<String, Long>>(emptyMap()) }
     var unavailable by remember { mutableStateOf(false) }
 
     LaunchedEffect(scopeId) {
@@ -38,9 +40,13 @@ fun FinanceScreen() {
             val loadedEvents = repository.allFinanceEvents(scopeId)
             events = loadedEvents.asReversed()
             voidedEventIds = loadedEvents.filter { repository.isFinanceEventVoided(scopeId, it.eventId) }.map { it.eventId }.toSet()
+            remainingDebtByEventId = loadedEvents.filter { it.kind == "debt" }
+                .associate { it.eventId to repository.outstandingDebtMinor(scopeId, it.eventId) }
+            appliedToDebtByReceiptId = loadedEvents.filter { it.kind == "receipt" }
+                .associate { it.eventId to repository.appliedToDebtMinor(scopeId, it.eventId) }
             val loadedPeople = repository.financePeople(scopeId).associate { it.personId to it.displayName }
             people = loadedPeople
-            settlements = repository.financeAdjustments(scopeId).filter { it.kind == "settlement" }.mapNotNull { adjustment ->
+            settlements = repository.financeAdjustments(scopeId).filter { it.kind == "settlement" && it.reversesEventId == null }.mapNotNull { adjustment ->
                 repository.moneyEvent(scopeId, adjustment.obligationId)?.let { event -> adjustment to (loadedPeople[event.personId] ?: "") }
             }.asReversed()
             unavailable = false
@@ -63,7 +69,16 @@ fun FinanceScreen() {
                 }
                 androidx.compose.material3.Text(s(label))
                 if (event.eventId in voidedEventIds) androidx.compose.material3.Text(s(R.string.finance_reversed_label), color = androidx.compose.material3.MaterialTheme.colorScheme.error)
-                androidx.compose.material3.Text("${event.minorUnits / 100},${(event.minorUnits % 100).toString().padStart(2, '0')} ${event.currency}")
+                val amount = "${event.minorUnits / 100},${(event.minorUnits % 100).toString().padStart(2, '0')} ${event.currency}"
+                androidx.compose.material3.Text(amount)
+                if (event.kind == "debt") {
+                    val remaining = remainingDebtByEventId[event.eventId]
+                    if (remaining != null) androidx.compose.material3.Text("${s(R.string.finance_debt_remaining)}: ${remaining / 100},${(remaining % 100).toString().padStart(2, '0')} ${event.currency}")
+                }
+                if (event.kind == "receipt") {
+                    val applied = appliedToDebtByReceiptId[event.eventId] ?: 0L
+                    if (applied > 0L) androidx.compose.material3.Text("${s(R.string.finance_receipt_applied)}: ${applied / 100},${(applied % 100).toString().padStart(2, '0')} ${event.currency}")
+                }
                 event.occurredAt?.let { raw ->
                     val date = runCatching { Instant.parse(raw).atZone(ZoneId.of("Asia/Baku")).toLocalDate().toString() }.getOrNull()
                     if (date != null) androidx.compose.material3.Text(date)
