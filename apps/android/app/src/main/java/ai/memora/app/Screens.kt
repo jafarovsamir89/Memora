@@ -68,6 +68,8 @@ fun MoreScreen(navigate: (String) -> Unit, about: () -> Unit) {
             HorizontalDivider(color = colors.line)
             MenuRow(Glyph.Inbox, s(R.string.inbox), s(R.string.inbox_hint)) { navigate("inbox") }
             HorizontalDivider(color = colors.line)
+            MenuRow(Glyph.Note, s(R.string.notes_title), s(R.string.notes_hint)) { navigate("notes") }
+            HorizontalDivider(color = colors.line)
             MenuRow(Glyph.Wallet, s(R.string.finance), s(R.string.finance_hint), 1) { navigate("finance") }
             HorizontalDivider(color = colors.line)
             MenuRow(Glyph.Calendar, s(R.string.calendar_title), s(R.string.calendar_hint)) { navigate("calendar") }

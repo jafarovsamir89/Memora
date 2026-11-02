@@ -152,7 +152,7 @@ fun MemoraApp(initialRoute: String = "home", initialTheme: String = "system", ca
             val icons = listOf(Glyph.Home, Glyph.Memory, Glyph.Mic, Glyph.Tasks, Glyph.Grid)
             val titleId = when (route) {
                 "memory" -> R.string.nav_memory; "tasks" -> R.string.nav_tasks; "more" -> R.string.nav_more
-                "inbox" -> R.string.inbox; "finance" -> R.string.finance; "calendar" -> R.string.calendar_title; "people" -> R.string.people
+                "inbox" -> R.string.inbox; "notes" -> R.string.notes_title; "finance" -> R.string.finance; "calendar" -> R.string.calendar_title; "people" -> R.string.people
                 "projects" -> R.string.projects; "settings" -> R.string.settings; "chat" -> R.string.chat
                 "voice_memory" -> R.string.voice_memory_title; "tables" -> R.string.tables_title
                 "licenses" -> R.string.open_source_licenses
@@ -217,6 +217,7 @@ fun MemoraApp(initialRoute: String = "home", initialTheme: String = "system", ca
                             "tasks" -> ScreenColumn { ScreenHeading(s(R.string.tasks_title), s(R.string.working_tasks_hint)); TaskPrototype(taskStore) }
                             "more" -> MoreScreen(navigate, { about = true })
                             "voice_memory" -> VoiceMemoryScreen()
+                            "notes" -> SavedObjectsScreen(DomainKind.NOTE)
                             "tables" -> TablesScreen()
                             "licenses" -> OpenSourceLicensesScreen()
                             "inbox" -> InboxScreen(captureState.captures, captureState.loading, captureState.error && !captureState.ready,

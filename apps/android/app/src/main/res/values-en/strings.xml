@@ -281,4 +281,6 @@
     <string name="saved_objects_archived">Archived</string>
     <string name="saved_objects_no_details">No additional details.</string>
     <string name="saved_objects_details_truncated">Only the beginning of this long record is shown.</string>
+    <string name="notes_title">Notes</string>
+    <string name="notes_hint">Notes saved in memory</string>
 </resources>

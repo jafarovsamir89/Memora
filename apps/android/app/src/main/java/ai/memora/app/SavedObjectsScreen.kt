@@ -71,7 +71,12 @@ internal fun SavedObjectsScreen(kind: DomainKind) {
     }
 
     ScreenColumn {
-        ScreenHeading(s(if (kind == DomainKind.PERSON) ai.memora.app.R.string.people else ai.memora.app.R.string.projects),
+        val titleId = when (kind) {
+            DomainKind.PERSON -> ai.memora.app.R.string.people
+            DomainKind.PROJECT -> ai.memora.app.R.string.projects
+            DomainKind.NOTE -> ai.memora.app.R.string.notes_title
+        }
+        ScreenHeading(s(titleId),
             s(ai.memora.app.R.string.saved_objects_subtitle))
         OutlinedTextField(
             value = query,

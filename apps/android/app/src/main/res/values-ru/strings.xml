@@ -281,4 +281,6 @@
     <string name="saved_objects_archived">В архиве</string>
     <string name="saved_objects_no_details">Дополнительных сведений нет.</string>
     <string name="saved_objects_details_truncated">Показано начало длинной записи.</string>
+    <string name="notes_title">Заметки</string>
+    <string name="notes_hint">Заметки, сохранённые в памяти</string>
 </resources>

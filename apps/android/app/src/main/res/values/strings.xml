@@ -281,4 +281,6 @@
     <string name="saved_objects_archived">Arxivdə</string>
     <string name="saved_objects_no_details">Əlavə məlumat yoxdur.</string>
     <string name="saved_objects_details_truncated">Uzun qeydin ilk hissəsi göstərilir.</string>
+    <string name="notes_title">Qeydlər</string>
+    <string name="notes_hint">Yaddaşda saxlanmış qeydlər</string>
 </resources>
