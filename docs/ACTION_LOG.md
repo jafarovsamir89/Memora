@@ -1,5 +1,13 @@
 # Memora — лог действий
 
+## ACT-0127 - 2026-11-03 - Explicit person aliases
+
+Added owner-managed, scope-local aliases for existing PERSON domain objects. Matching uses NFC, case folding and whitespace normalization only. Add/retire/restore writes revision history, checks canonical/alias collisions and reads back the persisted row. Finance tools may resolve an alias only through an existing owner-confirmed identity link; an absent/ambiguous link returns a conflict without creating a duplicate finance person. Room migration 15→16 adds alias/revision tables and indexes without backfill or data rewrite. UI strings cover Azerbaijani, Russian and English. ADR: `docs/adr/ADR-014-person-alias-resolution.md`.
+
+Focused repository/agent finance tests and the alias person-card UI test passed before packaging. Fresh full-suite XML reports show 55 suites / 278 tests, 0 failures/errors/skips. Debug and AndroidTest APKs assembled; AndroidTest Kotlin compile passed. The broad Gradle lint portion was stopped at the owner’s request to shorten turnaround; lint is not claimed. APK v42 / `1.1.20-person-aliases`, Room schema 16, SHA-256 `7AFBE0476AB2AB4A8BE05BDD4A0EF29A0523B292A480407CC17805E5301BFC1C`; backup `C:\memora-backups\Memora-v42-1.1.20-person-aliases-2026-11-03.apk` matches. After the owner reported ADB connected, `adb install -r` succeeded on Redmi Android 13, the app launched, and package manager confirmed versionCode 42. App data were not cleared; user DB contents were not accessed. Live Gemini, on-device migration/readback and owner feature acceptance remain open.
+
+Git status at entry: changes are local and not yet committed/pushed. Next: finish documentation synchronization, inspect the final diff, commit/push main, verify remote synchronization; then let the owner exercise aliases and continue the next M20 slice. Do not treat this package as M20 or release completion.
+
 ## ACT-0126 - 2026-11-03 - Person card case detail navigation
 
 В карточке человека добавлен переход по уже связанной записи дела в полный read-only просмотр `CaseSnapshot`: summary, status, next action, participants и хронология. Доступные task/calendar evidence открываются из хронологии в том же dialog; Back возвращает к делу, затем к карточке. У диалога сбрасывается scroll state при смене выбранной детали, поэтому новый экран не наследует позицию прокрутки из карточки. Не добавлялись name matching, записи/изменения БД, миграции или новые права доступа.

@@ -1,6 +1,12 @@
 # M20-08 Native validation matrix
 
-Status as of 2026-11-03, APK v41 / 1.1.19-person-cases, Room schema 15. This matrix records existing evidence and remaining work; it does not turn host tests into device or live-provider acceptance.
+Status as of 2026-11-03, APK v42 / 1.1.20-person-aliases, Room schema 16. This matrix records existing evidence and remaining work; it does not turn host tests into device or live-provider acceptance.
+
+## ACT-0127 update
+
+Owner-managed person aliases are stored in new SQLCipher tables via additive Room migration 15→16. Matching is exact after NFC normalization, case folding and whitespace collapse; fuzzy, prefix and automatic merge behavior are deliberately absent. Add/retire/restore is revisioned and collision-checked. Finance tools may reuse an alias only through an existing owner-confirmed finance identity link; otherwise the tool returns a conflict and creates no duplicate person.
+
+Fresh unit XML reports show 55 suites / 278 tests with 0 failures, errors or skips. Debug and AndroidTest APKs assembled and AndroidTest Kotlin compiled. The broad lint task was interrupted at the owner’s request to shorten turnaround; lint is unverified for v42. APK SHA-256 `7AFBE0476AB2AB4A8BE05BDD4A0EF29A0523B292A480407CC17805E5301BFC1C`; matching backup exists at `C:\memora-backups\Memora-v42-1.1.20-person-aliases-2026-11-03.apk`. v42 installed with `adb install -r` and launched on Redmi Android 13. App data were not cleared; user DB content was not inspected. Startup was observed, but SQLCipher migration/readback, live Gemini and owner acceptance remain open.
 
 ## ACT-0126 update
 

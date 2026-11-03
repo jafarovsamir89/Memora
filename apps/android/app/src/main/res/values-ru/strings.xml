@@ -331,6 +331,12 @@
     <string name="person_identity_linked_elsewhere">Этот финансовый профиль уже связан с другой карточкой человека.</string>
     <string name="person_identity_unlink">Отменить связь</string>
     <string name="person_identity_unlink_question">Удалится только связь; финансовая запись и карточка человека останутся. Продолжить?</string>
+    <string name="person_aliases">Другие имена</string>
+    <string name="person_aliases_help">Используются только точные имена, добавленные вами. Похожие имена не объединяют людей.</string>
+    <string name="person_alias_add">Добавить имя</string>
+    <string name="person_alias_retire">Удалить</string>
+    <string name="person_alias_restore">Восстановить</string>
+    <string name="person_alias_action_failed">Не удалось сохранить имя. Возможно, оно уже связано с другим профилем.</string>
     <string name="person_finance_events_empty">В этом профиле пока нет финансовых событий.</string>
     <string name="case_source_missing">Источник больше недоступен; ссылка сохранена в истории дела.</string>
     <string name="case_source_open_details">Открыть подробности источника</string>

@@ -10,6 +10,8 @@ import ai.memora.app.data.protectedstore.ProtectedConversationRepository
 import ai.memora.app.data.protectedstore.ProtectedProfileMemoryRepository
 import ai.memora.app.data.protectedstore.ProtectedDomainRepository
 import ai.memora.app.data.protectedstore.ProtectedMemoryRepository
+import ai.memora.app.data.protectedstore.PersonAliasRepository
+import ai.memora.app.data.protectedstore.FinanceAliasResolution
 import ai.memora.app.domain.TaskEvent
 import ai.memora.app.domain.Task
 import ai.memora.app.domain.TaskDecision
@@ -30,7 +32,8 @@ import org.json.JSONArray
 internal class LocalMemoryTools(private val repository: ProtectedDomainRepository, private val memory: ProtectedMemoryRepository,
     private val financeEnabled: Boolean = true, private val onTaskChanged: (Task) -> String = { "not_scheduled" },
     private val conversations: ProtectedConversationRepository? = null,
-    private val profileMemory: ProtectedProfileMemoryRepository? = null) {
+    private val profileMemory: ProtectedProfileMemoryRepository? = null,
+    private val personAliases: PersonAliasRepository? = null) {
     fun handlers(): List<AgentToolHandler> = listOf(
         SearchMemory(), SaveProfileFact(), EditProfileFact(), DeleteProfileFact(), SaveNote(), SaveMemoryEpisode(), DeleteMemoryEpisode(), EditMemoryObject(), DeleteMemoryObject(), RestoreMemoryObject(), LinkObjects(), ListTables(), ReadTableRows(), CreateTable(), AddTableRow(),
         UpdateTableRow(), DeleteTableRow(), RestoreTableRow(), RenameTable(), DeleteTable(), RestoreTable(),
@@ -51,15 +54,20 @@ internal class LocalMemoryTools(private val repository: ProtectedDomainRepositor
             if (terms.isEmpty()) return ToolCommitResult(ToolObservationStatus.APPLIED, "evidence_found", mapOf(
                 "count" to 0, "match_mode" to "normalized_lexical", "evidence" to emptyList<Any>(), "episodes" to emptyList<Any>(),
                 "conversation_turns" to emptyList<Any>(),
-                "profile_facts" to emptyList<Any>(), "activity" to emptyList<Any>(), "activity_truncated" to false,
+                "profile_facts" to emptyList<Any>(), "person_aliases" to emptyList<Any>(), "activity" to emptyList<Any>(), "activity_truncated" to false,
             ))
             val hits = repository.search(turn.scopeId, query, limit = 8)
             val episodes = conversations?.searchEpisodes(turn.scopeId, query, limit = 5).orEmpty()
             val conversationTurns = conversations?.search(turn.scopeId, query, limit = 5).orEmpty()
             val profileFacts = profileMemory?.list(turn.scopeId, query, limit = 8).orEmpty()
+            val aliasHits = personAliases?.exactActiveMatches(turn.scopeId, query).orEmpty().mapNotNull { alias ->
+                repository.domainObject(turn.scopeId, alias.domainPersonId)?.takeIf { it.kind == DomainKind.PERSON.name && it.deletedAt == null }
+                    ?.let { mapOf("person_id" to it.objectId, "canonical_name" to it.title, "alias" to alias.aliasText,
+                        "revision" to alias.version, "source_turn_id" to alias.sourceTurnId) }
+            }
             val activity = searchRelatedActivity(turn.scopeId, terms, query)
             return ToolCommitResult(ToolObservationStatus.APPLIED, "evidence_found", mapOf(
-                "count" to (hits.size + episodes.size + conversationTurns.size + profileFacts.size + activity.items.size),
+                "count" to (hits.size + episodes.size + conversationTurns.size + profileFacts.size + aliasHits.size + activity.items.size),
                 "match_mode" to "normalized_lexical",
                 "truncated" to (hits.size == 8 || episodes.size == 5 || conversationTurns.size == 5 ||
                     profileFacts.size == 8 || activity.truncated),
@@ -77,6 +85,7 @@ internal class LocalMemoryTools(private val repository: ProtectedDomainRepositor
                     "category" to fact.category, "fact" to fact.fact, "revision" to fact.revision,
                     "source_turn_ids" to fact.sourceTurnIds, "provenance" to fact.revisions.lastOrNull()?.provenance,
                     "explicit_user_memory" to true) },
+                "person_aliases" to aliasHits,
                 "activity" to activity.items,
                 "activity_truncated" to activity.truncated,
                 "activity_limit" to MAX_UNIFIED_ACTIVITY_HITS,
@@ -1174,7 +1183,16 @@ internal class LocalMemoryTools(private val repository: ProtectedDomainRepositor
             val kind = (call.arguments["kind"] as? String)?.takeIf { it.isNotBlank() }
             if ((name.isBlank() && query.isBlank()) || name.length > 100 || query.length > 200 ||
                 (kind != null && kind !in setOf("receipt", "debt", "expense"))) return rejected()
-            val history = try { if (name.isNotBlank()) repository.financeHistory(turn.scopeId, name) else null }
+            val history = try {
+                if (name.isBlank()) null else when (val alias = personAliases?.resolveFinanceAlias(turn.scopeId, name)) {
+                    null, FinanceAliasResolution.NotAlias -> repository.financeHistory(turn.scopeId, name)
+                    is FinanceAliasResolution.Resolved -> repository.financeHistoryByPersonId(turn.scopeId, alias.financePerson.personId)
+                    FinanceAliasResolution.OwnerLinkRequired -> return ToolCommitResult(ToolObservationStatus.CONFLICT,
+                        "person_alias_finance_identity_unconfirmed")
+                    FinanceAliasResolution.RetiredAlias -> return ToolCommitResult(ToolObservationStatus.CONFLICT, "person_alias_retired")
+                    FinanceAliasResolution.Ambiguous -> return ToolCommitResult(ToolObservationStatus.CONFLICT, "person_alias_ambiguous")
+                }
+            }
             catch (_: IllegalStateException) { return ToolCommitResult(ToolObservationStatus.CONFLICT, "person_name_ambiguous") }
             val names = repository.financePeople(turn.scopeId).associate { it.personId to it.displayName }
             val matchingEvents = (if (name.isNotBlank()) history?.events.orEmpty() else repository.allFinanceEvents(turn.scopeId).filter { event ->
@@ -1320,16 +1338,31 @@ internal class LocalMemoryTools(private val repository: ProtectedDomainRepositor
                 return ToolPreparation.Rejected("invalid_money_event")
             val personMatches = try { if (personName.isBlank()) emptyList() else repository.matchingFinancePeople(turn.scopeId, personName) }
                 catch (_: Exception) { return ToolPreparation.Rejected("finance_store_unavailable") }
+            var canonicalPersonName = personName
+            var aliasFinancePersonId: String? = null
+            when (val alias = personAliases?.resolveFinanceAlias(turn.scopeId, personName)) {
+                null, FinanceAliasResolution.NotAlias -> Unit
+                is FinanceAliasResolution.Resolved -> {
+                    aliasFinancePersonId = alias.financePerson.personId
+                    canonicalPersonName = alias.financePerson.displayName
+                }
+                FinanceAliasResolution.OwnerLinkRequired -> return ToolPreparation.Conflict("person_alias_finance_identity_unconfirmed")
+                FinanceAliasResolution.RetiredAlias -> return ToolPreparation.Conflict("person_alias_retired")
+                FinanceAliasResolution.Ambiguous -> return ToolPreparation.Conflict("person_alias_ambiguous")
+            }
             if (personMatches.size > 1) return ToolPreparation.Conflict("person_name_ambiguous")
-            val personId = personMatches.singleOrNull()?.personId ?: personName.takeIf { it.isNotBlank() }?.let { UUID.randomUUID().toString() }.orEmpty()
+            if (aliasFinancePersonId != null && personMatches.any { it.personId != aliasFinancePersonId })
+                return ToolPreparation.Conflict("person_alias_finance_identity_conflict")
+            val personId = aliasFinancePersonId ?: personMatches.singleOrNull()?.personId
+                ?: personName.takeIf { it.isNotBlank() }?.let { UUID.randomUUID().toString() }.orEmpty()
             val eventId = UUID.randomUUID().toString()
             val recordedAt = Instant.now()
             val occurredAt = (localDate ?: recordedAt.atZone(ZoneId.of("Asia/Baku")).toLocalDate())
                 .atStartOfDay(ZoneId.of("Asia/Baku")).toInstant()
-            val digest = sha256("money\u0000${turn.scopeId}\u0000$kind\u0000${VoiceMoneyRules.key(personName)}\u0000$amount\u0000$currency\u0000$occurredAt\u0000${comment.orEmpty()}\u0000${turn.text}")
+            val digest = sha256("money\u0000${turn.scopeId}\u0000$kind\u0000${VoiceMoneyRules.key(canonicalPersonName)}\u0000$amount\u0000$currency\u0000${occurredAt}\u0000${comment.orEmpty()}\u0000${turn.text}")
             if (kind !in setOf("receipt", "debt", "expense")) return ToolPreparation.Rejected("invalid_kind")
             return ToolPreparation.Prepared(PreparedAgentCommand(commandId, digest, emptyMap(), false,
-                FinancePayload(turn.scopeId, personName.trim(), kind, amount, currency, turn.text, comment,
+                FinancePayload(turn.scopeId, canonicalPersonName.trim(), kind, amount, currency, turn.text, comment,
                     personId, eventId, commandId, recordedAt, occurredAt)))
         }
         override suspend fun commit(command: PreparedAgentCommand): ToolCommitResult {

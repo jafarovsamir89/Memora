@@ -3,10 +3,14 @@ package ai.memora.app.agent
 import ai.memora.app.UiAgentDatabaseRule
 import ai.memora.app.data.protectedstore.ProtectedDomainRepository
 import ai.memora.app.data.protectedstore.ProtectedMemoryRepository
+import ai.memora.app.data.protectedstore.DomainKind
+import ai.memora.app.data.protectedstore.PersonAliasRepository
+import ai.memora.app.data.protectedstore.ProtectedCaseRepository
 import java.util.ArrayDeque
 import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
+import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -49,6 +53,49 @@ class AgentFakeProviderFinanceTest {
         assertEquals("receipt_recorded", result.toolResults.single().code)
         assertEquals(10_025L, result.toolResults.single().modelData["minor_units"])
         assertEquals(2, provider.turnCount)
+    }
+
+    @Test fun exactAliasWritesToConfirmedFinanceIdentityAndRefusesUnlinkedAlias() = runBlocking {
+        val db = databaseRule.database
+        val scope = "synthetic-alias-finance-scope"
+        val domain = ProtectedDomainRepository(db)
+        val aliasRepository = PersonAliasRepository(db)
+        domain.createObject(scope, "synthetic-alias-person", DomainKind.PERSON, "Canonical Person", null, null,
+            "2026-11-03T10:00:00Z")
+        domain.recordFinanceEvent(scope, "Ledger Canonical", "receipt", 5_000L, "AZN", "synthetic seed", null,
+            "synthetic-finance-person", "synthetic-seed-event", "synthetic-seed-command",
+            "2026-11-03T10:01:00Z", "2026-11-03T10:01:00Z")
+        aliasRepository.add(scope, "synthetic-alias-person", "Samir Usta", nowMillis = 10)
+        val handler = LocalMemoryTools(domain, ProtectedMemoryRepository(db), personAliases = aliasRepository).handlers()
+            .single { it.descriptor.name == "record_money_event" }
+        val turn = AgentTurnRequest("synthetic-alias-turn", scope, "synthetic-owner", null, "az-AZ",
+            "Synthetic: Samir Usta paid 25 manat", AgentInputChannel.TEXT)
+        val call = AgentModelToolCall("synthetic-alias-call", "record_money_event", 1, mapOf(
+            "kind" to "receipt", "person_name" to "Samir Usta", "amount" to "25", "currency" to "AZN",
+        ))
+
+        val unlinked = handler.prepare(call, turn, "synthetic-alias-command-unlinked")
+        assertTrue(unlinked is ToolPreparation.Conflict)
+        assertEquals("person_alias_finance_identity_unconfirmed", (unlinked as ToolPreparation.Conflict).code)
+        assertEquals(1, domain.financePeople(scope).size)
+
+        ProtectedCaseRepository(db).confirmFinancePersonIdentity(scope, "synthetic-finance-person",
+            "synthetic-alias-person", confirmedBy = "owner", now = "2026-11-03T10:02:00Z")
+        val prepared = handler.prepare(call, turn, "synthetic-alias-command-linked")
+        assertTrue(prepared is ToolPreparation.Prepared)
+        val result = handler.commit((prepared as ToolPreparation.Prepared).command)
+        assertEquals(ToolObservationStatus.APPLIED, result.status)
+        assertEquals("Ledger Canonical", result.modelData["person_name"])
+        assertEquals(1, domain.financePeople(scope).size)
+        assertEquals(2, domain.allFinanceEvents(scope).size)
+
+        val search = LocalMemoryTools(domain, ProtectedMemoryRepository(db), personAliases = aliasRepository).handlers()
+            .single { it.descriptor.name == "search_money" }
+        val found = search.read(AgentModelToolCall("synthetic-alias-search", "search_money", 1,
+            mapOf("person_name" to "Samir Usta", "query" to "", "kind" to "")), turn)
+        assertEquals(ToolObservationStatus.APPLIED, found.status)
+        assertEquals(true, found.modelData["person_found"])
+        assertEquals(2, (found.modelData["events"] as List<*>).size)
     }
 
     @Test fun alternateProviderReadsExactMonthlyFinanceFromProtectedLedgerWithoutWriting() = runBlocking {

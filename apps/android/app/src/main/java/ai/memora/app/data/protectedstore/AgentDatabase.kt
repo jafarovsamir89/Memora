@@ -135,6 +135,17 @@ internal val AGENT_DB_14_TO_15 = androidx.room.migration.Migration(14, 15) { db 
     db.execSQL("CREATE INDEX IF NOT EXISTS index_profile_fact_revision_factId ON profile_fact_revision(factId)")
 }
 
+/** Add explicit, scope-local aliases without rewriting any existing person or ledger row. */
+internal val AGENT_DB_15_TO_16 = androidx.room.migration.Migration(15, 16) { db ->
+    db.execSQL("CREATE TABLE IF NOT EXISTS person_alias (aliasId TEXT NOT NULL, scopeId TEXT NOT NULL, domainPersonId TEXT NOT NULL, aliasText TEXT NOT NULL, normalizedAlias TEXT NOT NULL, activeAliasKey TEXT, version INTEGER NOT NULL, actorId TEXT NOT NULL, sourceTurnId TEXT, createdAtMillis INTEGER NOT NULL, updatedAtMillis INTEGER NOT NULL, deletedAtMillis INTEGER, PRIMARY KEY(aliasId), FOREIGN KEY(domainPersonId) REFERENCES domain_object(objectId) ON UPDATE NO ACTION ON DELETE CASCADE)")
+    db.execSQL("CREATE UNIQUE INDEX IF NOT EXISTS index_person_alias_activeAliasKey ON person_alias(activeAliasKey)")
+    db.execSQL("CREATE INDEX IF NOT EXISTS index_person_alias_domainPersonId ON person_alias(domainPersonId)")
+    db.execSQL("CREATE INDEX IF NOT EXISTS index_person_alias_scopeId_domainPersonId_deletedAtMillis ON person_alias(scopeId, domainPersonId, deletedAtMillis)")
+    db.execSQL("CREATE INDEX IF NOT EXISTS index_person_alias_scopeId_normalizedAlias_deletedAtMillis ON person_alias(scopeId, normalizedAlias, deletedAtMillis)")
+    db.execSQL("CREATE TABLE IF NOT EXISTS person_alias_revision (aliasId TEXT NOT NULL, version INTEGER NOT NULL, scopeId TEXT NOT NULL, domainPersonId TEXT NOT NULL, action TEXT NOT NULL, aliasText TEXT NOT NULL, normalizedAlias TEXT NOT NULL, actorId TEXT NOT NULL, sourceTurnId TEXT, recordedAtMillis INTEGER NOT NULL, PRIMARY KEY(aliasId, version), FOREIGN KEY(aliasId) REFERENCES person_alias(aliasId) ON UPDATE NO ACTION ON DELETE CASCADE)")
+    db.execSQL("CREATE INDEX IF NOT EXISTS index_person_alias_revision_scopeId_aliasId_version ON person_alias_revision(scopeId, aliasId, version)")
+}
+
 /** Minimal command journal. Only identifiers, digest, status and recovery versions are retained. */
 @Entity(tableName = "agent_command_journal")
 internal data class AgentCommandJournalRow(
@@ -373,6 +384,48 @@ internal data class PersonIdentityLinkRow(
     val deletedAt: String?,
 )
 
+/** Explicit owner-reviewed alternate name for exactly one canonical PERSON object. */
+@Entity(tableName = "person_alias", foreignKeys = [androidx.room.ForeignKey(
+    entity = DomainObjectRow::class, parentColumns = ["objectId"], childColumns = ["domainPersonId"],
+    onDelete = androidx.room.ForeignKey.CASCADE,
+)], indices = [
+    androidx.room.Index(value = ["activeAliasKey"], unique = true),
+    androidx.room.Index(value = ["domainPersonId"]),
+    androidx.room.Index(value = ["scopeId", "domainPersonId", "deletedAtMillis"]),
+    androidx.room.Index(value = ["scopeId", "normalizedAlias", "deletedAtMillis"]),
+])
+internal data class PersonAliasRow(
+    @PrimaryKey val aliasId: String,
+    val scopeId: String,
+    val domainPersonId: String,
+    val aliasText: String,
+    val normalizedAlias: String,
+    val activeAliasKey: String?,
+    val version: Long,
+    val actorId: String,
+    val sourceTurnId: String?,
+    val createdAtMillis: Long,
+    val updatedAtMillis: Long,
+    val deletedAtMillis: Long?,
+)
+
+@Entity(tableName = "person_alias_revision", primaryKeys = ["aliasId", "version"],
+    foreignKeys = [androidx.room.ForeignKey(entity = PersonAliasRow::class, parentColumns = ["aliasId"],
+        childColumns = ["aliasId"], onDelete = androidx.room.ForeignKey.CASCADE)],
+    indices = [androidx.room.Index(value = ["scopeId", "aliasId", "version"])])
+internal data class PersonAliasRevisionRow(
+    val aliasId: String,
+    val version: Long,
+    val scopeId: String,
+    val domainPersonId: String,
+    val action: String,
+    val aliasText: String,
+    val normalizedAlias: String,
+    val actorId: String,
+    val sourceTurnId: String?,
+    val recordedAtMillis: Long,
+)
+
 @Entity(tableName = "case_record", indices = [androidx.room.Index(value = ["scopeId", "status", "deletedAt"])])
 internal data class CaseRecordRow(
     @PrimaryKey val caseId: String,
@@ -509,6 +562,23 @@ internal interface ProtectedStoreDao {
     @androidx.room.Insert(onConflict = androidx.room.OnConflictStrategy.ABORT) suspend fun insertPersonIdentityLink(row: PersonIdentityLinkRow)
     @androidx.room.Query("UPDATE person_identity_link SET deletedAt=:at WHERE scopeId=:scope AND linkId=:id AND deletedAt IS NULL")
     suspend fun unlinkPersonIdentity(scope: String, id: String, at: String): Int
+
+    @androidx.room.Query("SELECT * FROM person_alias WHERE scopeId=:scope AND domainPersonId=:personId ORDER BY deletedAtMillis, aliasText COLLATE NOCASE, aliasId")
+    suspend fun personAliases(scope: String, personId: String): List<PersonAliasRow>
+    @androidx.room.Query("SELECT * FROM person_alias WHERE scopeId=:scope AND deletedAtMillis IS NULL ORDER BY normalizedAlias, aliasId")
+    suspend fun activePersonAliases(scope: String): List<PersonAliasRow>
+    @androidx.room.Query("SELECT * FROM person_alias WHERE scopeId=:scope AND normalizedAlias=:normalized ORDER BY deletedAtMillis, aliasId")
+    suspend fun personAliasesForExactAlias(scope: String, normalized: String): List<PersonAliasRow>
+    @androidx.room.Query("SELECT * FROM person_alias WHERE scopeId=:scope AND aliasId=:id")
+    suspend fun personAlias(scope: String, id: String): PersonAliasRow?
+    @androidx.room.Insert(onConflict = androidx.room.OnConflictStrategy.ABORT) suspend fun insertPersonAlias(row: PersonAliasRow)
+    @androidx.room.Query("UPDATE person_alias SET version=:nextVersion, updatedAtMillis=:at, deletedAtMillis=:at, activeAliasKey=NULL WHERE scopeId=:scope AND aliasId=:id AND version=:expected AND deletedAtMillis IS NULL")
+    suspend fun retirePersonAlias(scope: String, id: String, expected: Long, nextVersion: Long, at: Long): Int
+    @androidx.room.Query("UPDATE person_alias SET version=:nextVersion, updatedAtMillis=:at, deletedAtMillis=NULL, activeAliasKey=:activeKey WHERE scopeId=:scope AND aliasId=:id AND version=:expected AND deletedAtMillis IS NOT NULL")
+    suspend fun restorePersonAlias(scope: String, id: String, expected: Long, nextVersion: Long, at: Long, activeKey: String): Int
+    @androidx.room.Insert(onConflict = androidx.room.OnConflictStrategy.ABORT) suspend fun insertPersonAliasRevision(row: PersonAliasRevisionRow)
+    @androidx.room.Query("SELECT * FROM person_alias_revision WHERE scopeId=:scope AND aliasId=:id ORDER BY version")
+    suspend fun personAliasRevisions(scope: String, id: String): List<PersonAliasRevisionRow>
 
     @androidx.room.Query("SELECT * FROM case_record WHERE scopeId=:scope AND caseId=:id") suspend fun caseRecord(scope: String, id: String): CaseRecordRow?
     @androidx.room.Query("SELECT * FROM case_record WHERE scopeId=:scope AND deletedAt IS NULL ORDER BY updatedAt DESC, caseId LIMIT :limit")
@@ -741,8 +811,8 @@ internal interface ProtectedStoreDao {
     DomainObjectRow::class, DomainRevisionRow::class, DomainLinkRow::class, UserTableRow::class, TableColumnRow::class,
     TableDataRow::class, MoneyAdjustmentRow::class, LocalCalendarEventRow::class, TableSchemaRevisionRow::class,
     LocalProfileRow::class, PersonIdentityLinkRow::class, CaseRecordRow::class, CaseRevisionRow::class,
-    CaseParticipantRow::class, CaseEvidenceRow::class],
-    version = 15, exportSchema = true)
+    CaseParticipantRow::class, CaseEvidenceRow::class, PersonAliasRow::class, PersonAliasRevisionRow::class],
+    version = 16, exportSchema = true)
 internal abstract class AgentDatabase : RoomDatabase() {
     abstract fun protectedStoreDao(): ProtectedStoreDao
     companion object {
@@ -852,7 +922,8 @@ internal abstract class AgentDatabase : RoomDatabase() {
                 database = Room.databaseBuilder(context.applicationContext, AgentDatabase::class.java, databaseName)
                     .addMigrations(AGENT_DB_1_TO_2, AGENT_DB_2_TO_3, AGENT_DB_3_TO_4, AGENT_DB_4_TO_5,
                         AGENT_DB_5_TO_6, AGENT_DB_6_TO_7, AGENT_DB_7_TO_8, AGENT_DB_8_TO_9, AGENT_DB_9_TO_10,
-                        AGENT_DB_10_TO_11, AGENT_DB_11_TO_12, AGENT_DB_12_TO_13, AGENT_DB_13_TO_14, AGENT_DB_14_TO_15)
+                        AGENT_DB_10_TO_11, AGENT_DB_11_TO_12, AGENT_DB_12_TO_13, AGENT_DB_13_TO_14, AGENT_DB_14_TO_15,
+                        AGENT_DB_15_TO_16)
                     .setJournalMode(RoomDatabase.JournalMode.TRUNCATE)
                     // WAL remains disabled until P1 WAL/SHM privacy and recovery gates pass.
                     .openHelperFactory(SupportOpenHelperFactory(databaseKey, null, false))

@@ -30,6 +30,8 @@ import ai.memora.app.data.protectedstore.DomainObjectRow
 import ai.memora.app.data.protectedstore.FinancePersonIdentityChoices
 import ai.memora.app.data.protectedstore.LinkedDomainObject
 import ai.memora.app.data.protectedstore.PersonIdentityLinkRow
+import ai.memora.app.data.protectedstore.PersonAliasRepository
+import ai.memora.app.data.protectedstore.PersonAliasRow
 import ai.memora.app.data.protectedstore.ProtectedCaseRepository
 import ai.memora.app.data.protectedstore.ProtectedDomainRepository
 import ai.memora.app.ui.EmptyState
@@ -58,6 +60,7 @@ internal fun SavedObjectsScreen(kind: DomainKind) {
     val scopeId = remember(processor) { processor.conversationScopeId() }
     val database = rememberUiAgentDatabase()
     val repository = remember(database) { ProtectedDomainRepository(database) }
+    val aliasRepository = remember(database) { PersonAliasRepository(database) }
     val coroutineScope = rememberCoroutineScope()
     var records by remember(kind) { mutableStateOf<List<DomainObjectRow>>(emptyList()) }
     var query by remember(kind) { mutableStateOf("") }
@@ -172,7 +175,7 @@ internal fun SavedObjectsScreen(kind: DomainKind) {
                         if (body != null && body.length > 20_000) {
                             Text(s(ai.memora.app.R.string.saved_objects_details_truncated), modifier = Modifier.padding(top = 8.dp), color = colors.muted)
                         }
-                        if (record.kind == DomainKind.PERSON.name) PersonCardSections(record, scopeId, repository,
+                        if (record.kind == DomainKind.PERSON.name) PersonCardSections(record, scopeId, repository, aliasRepository,
                             remember(database) { ProtectedCaseRepository(database) },
                             onOpenLinkedObject = { linked ->
                                 detailStack = detailStack + record
@@ -215,6 +218,7 @@ private fun PersonCardSections(
     person: DomainObjectRow,
     scopeId: String,
     domainRepository: ProtectedDomainRepository,
+    aliasRepository: PersonAliasRepository,
     caseRepository: ProtectedCaseRepository,
     onOpenLinkedObject: (DomainObjectRow) -> Unit,
     onOpenCaseSource: (CaseEvidenceView) -> Unit,
@@ -226,14 +230,19 @@ private fun PersonCardSections(
     var historyByPersonId by remember(person.objectId) { mutableStateOf<Map<String, ai.memora.app.data.protectedstore.FinanceHistory>>(emptyMap()) }
     var relatedCases by remember(person.objectId) { mutableStateOf<List<CaseSnapshot>>(emptyList()) }
     var relatedObjects by remember(person.objectId) { mutableStateOf<List<LinkedDomainObject>>(emptyList()) }
+    var aliases by remember(person.objectId) { mutableStateOf<List<PersonAliasRow>>(emptyList()) }
+    var newAlias by remember(person.objectId) { mutableStateOf("") }
+    var aliasInputVisible by remember(person.objectId) { mutableStateOf(false) }
     var loading by remember(person.objectId) { mutableStateOf(true) }
     var pendingLink by remember { mutableStateOf<FinancePersonIdentityChoices?>(null) }
     var pendingUnlink by remember { mutableStateOf<PersonIdentityLinkRow?>(null) }
     var actionFailed by remember { mutableStateOf(false) }
+    var aliasActionFailed by remember { mutableStateOf(false) }
 
     LaunchedEffect(scopeId, person.objectId, refreshVersion) {
         loading = true
         actionFailed = false
+        aliasActionFailed = false
         try {
             val matched = domainRepository.matchingFinancePeople(scopeId, person.title).mapNotNull {
                 caseRepository.financePersonIdentityChoices(scopeId, it.personId)
@@ -248,10 +257,89 @@ private fun PersonCardSections(
                 }
             }
             relatedObjects = domainRepository.linkedObjects(scopeId, person.objectId)
+            aliases = aliasRepository.list(scopeId, person.objectId)
         } catch (_: Exception) {
             actionFailed = true
         } finally {
             loading = false
+        }
+    }
+
+    Text(s(ai.memora.app.R.string.person_aliases), modifier = Modifier.padding(top = 18.dp),
+        style = androidx.compose.material3.MaterialTheme.typography.titleSmall, color = colors.ink)
+    Text(s(ai.memora.app.R.string.person_aliases_help), color = colors.muted,
+        style = androidx.compose.material3.MaterialTheme.typography.bodySmall)
+    if (!aliasInputVisible) {
+        TextButton(modifier = Modifier.testTag("person_alias_open_action"), onClick = { aliasInputVisible = true }) {
+            Text(s(ai.memora.app.R.string.person_alias_add))
+        }
+    } else {
+        OutlinedTextField(
+            value = newAlias,
+            onValueChange = { newAlias = it.take(120); aliasActionFailed = false },
+            modifier = Modifier.fillMaxWidth().padding(top = 8.dp).testTag("person_alias_input"),
+            label = { Text(s(ai.memora.app.R.string.person_alias_add)) },
+            singleLine = true,
+        )
+        TextButton(modifier = Modifier.testTag("person_alias_add_action"), enabled = newAlias.isNotBlank() && !loading,
+            onClick = {
+                val requestedAlias = newAlias
+                coroutineScope.launch {
+                    try {
+                        aliasRepository.add(scopeId, person.objectId, requestedAlias, actorId = "owner")
+                        newAlias = ""
+                        aliasInputVisible = false
+                        refreshVersion++
+                    } catch (_: Exception) { aliasActionFailed = true }
+                }
+            }) { Text(s(ai.memora.app.R.string.person_alias_add)) }
+    }
+    if (aliasActionFailed) Text(s(ai.memora.app.R.string.person_alias_action_failed),
+        modifier = Modifier.testTag("person_alias_error"), color = colors.amber)
+    aliases.filter { it.deletedAtMillis == null }.forEach { alias ->
+        androidx.compose.material3.Surface(
+            modifier = Modifier.fillMaxWidth().padding(top = 6.dp).testTag("person_alias_item_${alias.aliasId}"),
+            color = colors.card, shape = androidx.compose.foundation.shape.RoundedCornerShape(12.dp),
+            border = androidx.compose.foundation.BorderStroke(1.dp, colors.line),
+        ) {
+            androidx.compose.foundation.layout.Row(
+                modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 4.dp),
+                horizontalArrangement = androidx.compose.foundation.layout.Arrangement.SpaceBetween,
+                verticalAlignment = androidx.compose.ui.Alignment.CenterVertically,
+            ) {
+                Text(alias.aliasText, modifier = Modifier.weight(1f), color = colors.ink)
+                TextButton(modifier = Modifier.testTag("person_alias_retire_${alias.aliasId}"), onClick = {
+                    coroutineScope.launch {
+                        try {
+                            aliasRepository.retire(scopeId, alias.aliasId, alias.version, actorId = "owner")
+                            refreshVersion++
+                        } catch (_: Exception) { aliasActionFailed = true }
+                    }
+                }) { Text(s(ai.memora.app.R.string.person_alias_retire)) }
+            }
+        }
+    }
+    aliases.filter { it.deletedAtMillis != null }.forEach { alias ->
+        androidx.compose.material3.Surface(
+            modifier = Modifier.fillMaxWidth().padding(top = 6.dp).testTag("person_alias_retired_${alias.aliasId}"),
+            color = colors.card, shape = androidx.compose.foundation.shape.RoundedCornerShape(12.dp),
+            border = androidx.compose.foundation.BorderStroke(1.dp, colors.line),
+        ) {
+            androidx.compose.foundation.layout.Row(
+                modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 4.dp),
+                horizontalArrangement = androidx.compose.foundation.layout.Arrangement.SpaceBetween,
+                verticalAlignment = androidx.compose.ui.Alignment.CenterVertically,
+            ) {
+                Text(alias.aliasText, modifier = Modifier.weight(1f), color = colors.muted)
+                TextButton(modifier = Modifier.testTag("person_alias_restore_${alias.aliasId}"), onClick = {
+                    coroutineScope.launch {
+                        try {
+                            aliasRepository.restore(scopeId, alias.aliasId, alias.version, actorId = "owner")
+                            refreshVersion++
+                        } catch (_: Exception) { aliasActionFailed = true }
+                    }
+                }) { Text(s(ai.memora.app.R.string.person_alias_restore)) }
+            }
         }
     }
 

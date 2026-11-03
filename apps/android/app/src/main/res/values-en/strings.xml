@@ -331,6 +331,12 @@
     <string name="person_identity_linked_elsewhere">This finance profile is already linked to another person card.</string>
     <string name="person_identity_unlink">Remove link</string>
     <string name="person_identity_unlink_question">Only the link will be removed; the finance record and person card will stay. Continue?</string>
+    <string name="person_aliases">Other names</string>
+    <string name="person_aliases_help">Only exact names you add are used. Similar names never merge people.</string>
+    <string name="person_alias_add">Add name</string>
+    <string name="person_alias_retire">Remove</string>
+    <string name="person_alias_restore">Restore</string>
+    <string name="person_alias_action_failed">Could not save this name. It may already belong to another profile.</string>
     <string name="person_finance_events_empty">This profile has no finance events yet.</string>
     <string name="case_source_missing">This source is no longer available; its reference remains in the case history.</string>
     <string name="case_source_open_details">Open source details</string>

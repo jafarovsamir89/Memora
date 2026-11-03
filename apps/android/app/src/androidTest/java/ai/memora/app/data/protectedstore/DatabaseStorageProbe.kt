@@ -431,7 +431,7 @@ object DatabaseStorageProbe {
             db = Room.databaseBuilder(context, AgentDatabase::class.java, dbName)
                 .addMigrations(AGENT_DB_1_TO_2, AGENT_DB_2_TO_3, AGENT_DB_3_TO_4, AGENT_DB_4_TO_5,
                     AGENT_DB_5_TO_6, AGENT_DB_6_TO_7, AGENT_DB_7_TO_8, AGENT_DB_8_TO_9, AGENT_DB_9_TO_10, AGENT_DB_10_TO_11,
-                    AGENT_DB_11_TO_12, AGENT_DB_12_TO_13, AGENT_DB_13_TO_14, AGENT_DB_14_TO_15)
+                    AGENT_DB_11_TO_12, AGENT_DB_12_TO_13, AGENT_DB_13_TO_14, AGENT_DB_14_TO_15, AGENT_DB_15_TO_16)
                 .setJournalMode(androidx.room.RoomDatabase.JournalMode.TRUNCATE)
                 .openHelperFactory(SupportOpenHelperFactory(key, null, false))
                 .build()
@@ -481,6 +481,7 @@ object DatabaseStorageProbe {
             check(replayed.deletedIds == setOf("deleted-task-marker"))
             verifyP3P6Domain(db!!)
             verifyFinanceClarificationChain(db!!)
+            val aliasProbe = verifyPersonAliasChain(db!!)
             runBlocking {
                 val archive = ProtectedConversationRepository(db!!)
                 val now = System.currentTimeMillis()
@@ -502,7 +503,7 @@ object DatabaseStorageProbe {
             db = Room.databaseBuilder(context, AgentDatabase::class.java, dbName)
                 .addMigrations(AGENT_DB_1_TO_2, AGENT_DB_2_TO_3, AGENT_DB_3_TO_4, AGENT_DB_4_TO_5,
                     AGENT_DB_5_TO_6, AGENT_DB_6_TO_7, AGENT_DB_7_TO_8, AGENT_DB_8_TO_9, AGENT_DB_9_TO_10, AGENT_DB_10_TO_11,
-                    AGENT_DB_11_TO_12, AGENT_DB_12_TO_13, AGENT_DB_13_TO_14, AGENT_DB_14_TO_15)
+                    AGENT_DB_11_TO_12, AGENT_DB_12_TO_13, AGENT_DB_13_TO_14, AGENT_DB_14_TO_15, AGENT_DB_15_TO_16)
                 .setJournalMode(androidx.room.RoomDatabase.JournalMode.TRUNCATE)
                 .openHelperFactory(SupportOpenHelperFactory(reopenedKey, null, false)).build()
             db.openHelper.writableDatabase
@@ -522,6 +523,12 @@ object DatabaseStorageProbe {
                 check(archive.turn("synthetic-retention", "synthetic-kept-turn").size == 2)
                 check(archive.actionResults("synthetic-retention", "synthetic-kept-turn").single().targetId ==
                     "00000000-0000-4000-8000-000000000092")
+                val (aliasScope, aliasPersonId, aliasId) = aliasProbe
+                val aliases = PersonAliasRepository(db!!)
+                check(aliases.list(aliasScope, aliasPersonId).single { it.aliasId == aliasId }.deletedAtMillis == null)
+                check(db!!.protectedStoreDao().personAliasRevisions(aliasScope, aliasId).map { it.action } ==
+                    listOf("added", "retired", "restored"))
+                check(aliases.resolveFinanceAlias(aliasScope, "Synthetic Alias") is FinanceAliasResolution.Resolved)
                 val domain = ProtectedDomainRepository(db!!)
                 check(domain.search("synthetic-scope", "FILTER").single().version == 4L)
                 check(db!!.protectedStoreDao().rows("synthetic-table-p4", "synthetic-scope").size == 2)
@@ -730,6 +737,28 @@ object DatabaseStorageProbe {
             "The existing repayment is linked to that debt.", 3L)
     }
 
+    /** Synthetic migration/reopen proof for explicit aliases and the existing owner-confirmed ledger bridge. */
+    private fun verifyPersonAliasChain(db: AgentDatabase): Triple<String, String, String> = runBlocking {
+        val scope = "synthetic-person-alias-migration"
+        val personId = "synthetic-alias-domain-person"
+        val domain = ProtectedDomainRepository(db)
+        domain.createObject(scope, personId, DomainKind.PERSON, "Synthetic Canonical Person", null, null,
+            "2026-11-03T10:00:00Z")
+        domain.recordFinanceEvent(scope, "Synthetic Ledger Person", "receipt", 100L, "AZN", "synthetic alias probe",
+            null, "synthetic-alias-finance-person", "synthetic-alias-finance-event", "synthetic-alias-finance-command",
+            "2026-11-03T10:01:00Z", "2026-11-03T10:01:00Z")
+        val aliases = PersonAliasRepository(db)
+        val saved = aliases.add(scope, personId, "Synthetic Alias", actorId = "owner",
+            sourceTurnId = "synthetic-alias-source-turn", nowMillis = 100)
+        check(aliases.resolveFinanceAlias(scope, "synthetic alias") == FinanceAliasResolution.OwnerLinkRequired)
+        ProtectedCaseRepository(db).confirmFinancePersonIdentity(scope, "synthetic-alias-finance-person", personId,
+            confirmedBy = "owner", now = "2026-11-03T10:02:00Z")
+        check(aliases.resolveFinanceAlias(scope, "Synthetic Alias") is FinanceAliasResolution.Resolved)
+        val retired = aliases.retire(scope, saved.aliasId, saved.version, nowMillis = 200)
+        aliases.restore(scope, retired.aliasId, retired.version, nowMillis = 300)
+        Triple(scope, personId, saved.aliasId)
+    }
+
     private fun createMigrationCoordinator(
         context: Context,
         repository: ProtectedMemoryRepository,
@@ -802,7 +831,7 @@ object DatabaseStorageProbe {
             val upgraded = Room.databaseBuilder(context, AgentDatabase::class.java, dbName)
                 .addMigrations(AGENT_DB_1_TO_2, AGENT_DB_2_TO_3, AGENT_DB_3_TO_4, AGENT_DB_4_TO_5,
                     AGENT_DB_5_TO_6, AGENT_DB_6_TO_7, AGENT_DB_7_TO_8, AGENT_DB_8_TO_9, AGENT_DB_9_TO_10, AGENT_DB_10_TO_11,
-                    AGENT_DB_11_TO_12, AGENT_DB_12_TO_13, AGENT_DB_13_TO_14, AGENT_DB_14_TO_15)
+                    AGENT_DB_11_TO_12, AGENT_DB_12_TO_13, AGENT_DB_13_TO_14, AGENT_DB_14_TO_15, AGENT_DB_15_TO_16)
                 .setJournalMode(androidx.room.RoomDatabase.JournalMode.TRUNCATE)
                 .openHelperFactory(SupportOpenHelperFactory(upgradedKey, null, false)).build()
             upgraded.openHelper.writableDatabase
@@ -811,7 +840,7 @@ object DatabaseStorageProbe {
                     check(cursor.moveToFirst())
                     cursor.getInt(0)
                 }
-                check(schemaVersion == 15)
+                check(schemaVersion == 16)
                 check(upgraded.protectedStoreDao().command("synthetic-v1-command")?.status == "pending")
                 check(upgraded.protectedStoreDao().migrations().isEmpty())
                 val migratedProfile = requireNotNull(upgraded.protectedStoreDao().localProfile())
@@ -823,7 +852,7 @@ object DatabaseStorageProbe {
                 for (table in listOf("person_identity_link", "case_record", "case_revision", "case_participant",
                         "case_evidence", "conversation_retention", "agent_action_result", "conversation_episode",
                         "conversation_episode_revision", "conversation_episode_source", "profile_fact",
-                        "profile_fact_source", "profile_fact_revision")) {
+                        "profile_fact_source", "profile_fact_revision", "person_alias", "person_alias_revision")) {
                     check(upgraded.openHelper.readableDatabase.query(
                         "SELECT name FROM sqlite_master WHERE type='table' AND name=?", arrayOf(table),
                     ).use { it.moveToFirst() })

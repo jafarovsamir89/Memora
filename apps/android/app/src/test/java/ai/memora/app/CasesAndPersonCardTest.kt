@@ -12,6 +12,7 @@ import ai.memora.app.data.protectedstore.DomainKind
 import ai.memora.app.data.protectedstore.CalendarInput
 import ai.memora.app.data.protectedstore.ProtectedCaseRepository
 import ai.memora.app.data.protectedstore.ProtectedDomainRepository
+import ai.memora.app.data.protectedstore.PersonAliasRepository
 import ai.memora.app.domain.TaskEvent
 import ai.memora.app.voice.AgentVoiceTurnProcessor
 import ai.memora.app.ui.LocalStrings
@@ -116,6 +117,39 @@ class CasesAndPersonCardTest {
         compose.waitUntil(10_000) { compose.onAllNodesWithTag("person_story_synthetic-samir-receipt").fetchSemanticsNodes().isNotEmpty() }
         compose.onNodeWithTag("person_story_synthetic-samir-receipt").performScrollTo().assertIsDisplayed()
         compose.onNodeWithText("100 AZN").assertExists()
+    }
+
+    @Test fun personCardShowsSavedAliasesAndEditControls() = runBlocking<Unit> {
+        val context = ApplicationProvider.getApplicationContext<Context>()
+        val scope = AgentVoiceTurnProcessor(context).conversationScopeId()
+        val domain = ProtectedDomainRepository(databaseRule.database)
+        domain.createObject(scope, "synthetic-alias-ui-person", DomainKind.PERSON,
+            "Synthetic Canonical Person", null, null, "2026-11-03T10:00:00Z")
+        val aliases = PersonAliasRepository(databaseRule.database)
+        aliases.add(scope, "synthetic-alias-ui-person", "Synthetic Alternate Name", nowMillis = 10)
+        val retired = aliases.add(scope, "synthetic-alias-ui-person", "Synthetic Retired Name", nowMillis = 11)
+        aliases.retire(scope, retired.aliasId, retired.version, nowMillis = 12)
+        compose.setContent {
+            CompositionLocalProvider(LocalAgentDatabaseOverride provides databaseRule.database) {
+                CompositionLocalProvider(LocalStrings provides context.resources) {
+                    MemoraTheme("light") { SavedObjectsScreen(DomainKind.PERSON) }
+                }
+            }
+        }
+        compose.waitUntil(10_000) {
+            compose.onAllNodesWithTag("saved_object_synthetic-alias-ui-person").fetchSemanticsNodes().isNotEmpty()
+        }
+        compose.onNodeWithTag("saved_object_synthetic-alias-ui-person").performScrollTo().performClick()
+        val rows = runBlocking { aliases.list(scope, "synthetic-alias-ui-person") }
+        val active = rows.single { it.deletedAtMillis == null }
+        val retiredRow = rows.single { it.deletedAtMillis != null }
+        compose.waitUntil(10_000) {
+            compose.onAllNodesWithTag("person_alias_item_${active.aliasId}").fetchSemanticsNodes().isNotEmpty()
+        }
+        compose.onNodeWithTag("person_alias_item_${active.aliasId}").assertExists()
+        compose.onNodeWithTag("person_alias_retired_${retiredRow.aliasId}").assertExists()
+        compose.onNodeWithTag("person_alias_restore_${retiredRow.aliasId}").assertExists()
+        compose.onNodeWithTag("person_alias_open_action").assertExists()
     }
 
     @Test fun personCardShowsOnlyExplicitlyLinkedRecordsAndOpensTheirSource() = runBlocking<Unit> {
