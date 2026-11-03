@@ -10,7 +10,7 @@ Synthetic Compose coverage verifies one appearance per linked task/calendar sour
 
     .\gradlew.bat :app:testDebugUnitTest :app:assembleDebug :app:assembleDebugAndroidTest :app:compileDebugAndroidTestKotlin :app:lintDebug --no-daemon --console=plain --max-workers=2
 
-Result: 54 suites / 274 tests, 0 failures/errors; debug/AndroidTest APKs and AndroidTest Kotlin compile passed; lint 0 errors / 57 warnings / 0 information. APK v40 SHA-256 `A892D58646BC09C47C6B98D68365B606D48325633831BEE7BD877310F3A61757`; matching backup `C:\memora-backups\Memora-v40-1.1.18-person-sources-2026-11-03.apk`. The connected Redmi (Android 13) was updated from v38 with `adb install -r` and launched; versionCode 40 verified. The installed v38 APK was backed up before update. User DB was not opened/read/cleared. No live Gemini request: the owner cannot perform that check now. Device visual/owner/TalkBack acceptance, real DB migration/readback, Gemini and remaining M20 scenarios remain open.
+Result: 54 suites / 274 tests, 0 failures/errors; debug/AndroidTest APKs and AndroidTest Kotlin compile passed; lint 0 errors / 57 warnings / 0 information. APK v40 SHA-256 `A892D58646BC09C47C6B98D68365B606D48325633831BEE7BD877310F3A61757`; matching backup `C:\memora-backups\Memora-v40-1.1.18-person-sources-2026-11-03.apk`. The connected Redmi (Android 13) was updated from v38 with `adb install -r` and launched; versionCode 40 verified. The installed v38 APK was backed up before update. User DB contents were not exported or inspected, and app data were not cleared. No live Gemini request: the owner cannot perform that check now. Device visual/owner/TalkBack acceptance, real DB migration/readback, Gemini and remaining M20 scenarios remain open.
 
 ## ACT-0124 update
 
