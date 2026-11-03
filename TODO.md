@@ -1,6 +1,6 @@
 # Memora — полный рабочий чек-лист от идеи до production
 
-**Создан:** 2026-10-28. **Состояние 2026-11-03:** утверждён Memora 2.0; выполняется audit M20-00 поверх существующего Android-клиента. Полная реализация и production-приёмка не завершены.
+**Создан:** 2026-10-28. **Состояние 2026-11-03:** M20-00 audit завершён; реализован и локально проверен provider-neutral tool catalog для M20-01; начат M20-02 profile/onboarding. Полная реализация и production-приёмка не завершены.
 
 Это основной список выполнения. [Инженерный план](docs/ENGINEERING_PLAN.md) объясняет этапы E0–E7 и решения, [дневник](docs/AGENT_DIARY.md) хранит текущий контекст, [полная спецификация](docs/FULL_PRODUCT_SPEC.md) определяет продукт. Правила работы — [AGENTS.md](AGENTS.md).
 
@@ -18,15 +18,15 @@
 
 ## Где мы сейчас и что делаем следующим
 
-**M20-00 завершён; следующий этап — M20-01, 2026-11-03.** Репозиторий синхронизирован на `main`; исходная реализация v26 / `1.1.4-field-secretary`, Room schema 8, тестовый отчет ACT-0095 содержит 219/219 unit tests, успешные debug/AndroidTest сборки и lint. APK сохранён вне репозитория; SHA и путь записаны в [аудите M20-00](docs/MEMORA_2_0_AUDIT.md). Текущая сессия не запускала эти проверки повторно и не подключала телефон.
+**M20-00 завершён; кодовый срез M20-01 проверен; следующий — M20-02, 2026-11-03.** Исходная реализация v26 / `1.1.4-field-secretary`, Room schema 8; APK backup вне репозитория, SHA и путь в [аудите M20-00](docs/MEMORA_2_0_AUDIT.md). Для M20-01 сейчас прошли targeted unit tests (5 assertions/tests across two classes), `assembleDebug` и `lintDebug` (0 errors, 47 warnings, 2 hints). Телефон не подключён; live Gemini после переноса деклараций ещё не повторялся, поэтому реальная модельная приёмка остаётся открытой.
 
-Аудит подтвердил рабочие Gemini tools, AgentRuntime, SQLCipher ledger, capture/task/calendar/table функции и отсутствие production demo seeding. Выявлены отдельные источники задач, заметок и людей, отсутствие onboarding/local profile/cases, а также незавершённая переносимость Keystore-защищённой базы при reinstall/restore. Полная карта требований и gaps — [MEMORA_2_0_AUDIT.md](docs/MEMORA_2_0_AUDIT.md). Ничего из M20-01..09 пока не объявляется реализованным.
+Аудит подтвердил рабочие Gemini tools, AgentRuntime, SQLCipher ledger, capture/task/calendar/table функции и отсутствие production demo seeding. Provider catalog теперь держит все 31 tool contract без Firebase типов; Gemini gateway строит из него декларации и результаты, а fake provider проверяет разговор без записи и запись точной суммы в существующий ledger. Выявлены отдельные источники задач, заметок и людей, отсутствие onboarding/local profile/cases, а также незавершённая переносимость Keystore-защищённой базы при reinstall/restore. Полная карта и ограничения — [MEMORA_2_0_AUDIT.md](docs/MEMORA_2_0_AUDIT.md). M20-01 не закрывается до повторного synthetic Gemini probe после адаптерного рефакторинга.
 
 | M20 checkpoint | Состояние на 2026-11-03 | Следующий проверяемый результат |
 | --- | --- | --- |
 | M20-00 Audit | Завершён для baseline 2026-11-03: product/data/security/UX/engineering contracts, ADR-010/011, Kotlin routes, stores, schema v8, backup/key behavior, tests and APK evidence mapped. | См. [MEMORA_2_0_AUDIT.md](docs/MEMORA_2_0_AUDIT.md); повторная сверка требуется после миграций/переходов источника данных. |
-| M20-01 Provider-neutral secretary | Следующий этап. Сохранить runtime/policy; добавить canonical tool catalog и fake adapter conformance. | Одни canonical schemas/results и одинаковые доменные эффекты для двух adapters; разговоры без write. |
-| M20-02 First run/profile | Открыт. | AZ-first optional local profile/onboarding; blank new profile; additive non-destructive update. |
+| M20-01 Provider-neutral secretary | Кодовый срез готов; Gemini live probe после изменений отложен до устройства/доступного synthetic API окна. | Повторить AZ/RU synthetic Gemini function-chain; затем зафиксировать conformance. |
+| M20-02 First run/profile | Начат. | AZ-first optional profile, чистый onboarding и migration-safe legacy completion без новых фактов. |
 | M20-03 People/cases | Открыт. | Reversible verified identity bridge, same-name clarification, case and sourced timeline. |
 | M20-04 Long-term memory | Открыт. | Profile/episodic summaries with turn provenance, retrieval, correction and deletion propagation. |
 | M20-05 Premium experience | Открыт. | Today/Secretary/Cases/Memory, rich results, legacy reachability, screenshot and accessibility review. |

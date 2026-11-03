@@ -104,6 +104,7 @@ sealed interface AgentModelReply {
 }
 
 interface AgentModelGateway {
+    /** Exchanges canonical model/tool values only; provider SDK objects stay inside the adapter. */
     suspend fun complete(request: AgentModelRequest): AgentModelReply
 }
 
