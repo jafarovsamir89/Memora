@@ -6,6 +6,10 @@
 
 Проверки: полный `:app:testDebugUnitTest :app:assembleDebug :app:assembleDebugAndroidTest :app:compileDebugAndroidTestKotlin :app:lintDebug --no-daemon --console=plain --max-workers=2` — `BUILD SUCCESSFUL`; 46 JUnit suites / 249 tests, failures/errors/skipped = 0; lint 0 errors, 55 warnings, 3 hints. Синтетические UI screenshots `16-finance-reports-top.png`, `17-finance-reports-tools.png` сгенерированы и просмотрены; APK debug и AndroidTest собраны; AndroidTest Kotlin скомпилирован. APK v32 `1.1.10-reports`: 29,362,011 bytes, SHA-256 `59727E8D76EE33756E178D90D2ED1B016545D5C6DFD171DAA85D6435D1C974D2`; резервная копия `C:\memora-backups\Memora-v32-1.1.10-reports-2026-11-03.apk` проверена совпадением SHA. Schema migration не нужна. `adb devices -l` пуст; нет установки, device SQLCipher/TalkBack, live Gemini API или owner acceptance; личная база не трогалась. Код и документация ожидают финальный review/commit/push.
 
+## ACT-0108 · 2026-11-03 · Git handoff ACT-0107
+
+Проверенный M20-06 report package зафиксирован коммитом `7e0d3e54bd4220a9d30c6bd410bcf0300fc0adc9` (`feat(android): add ledger-backed finance reports`) и отправлен в `origin/main`. `git fetch origin main`, `git ls-remote origin refs/heads/main` и локальный HEAD совпали; после push рабочее дерево было чистым. Следующая кодовая задача — grounded анализ дел/задач и сохранённого gift context; M20-06/device/live gates остаются открытыми.
+
 ## ACT-0105 · 2026-11-03 · M20-05 persistent action-result cards
 
 Добавлены Room 11→12 result attachments, транзакционная запись с разговором, scope/read validation, retention/delete propagation и безопасное сопоставление write observations. Secretary рисует локализованную карточку исхода, открывает source turn и связанные finance/case/task/calendar/table/memory destinations; correction path готовит только редактируемый draft и не вызывает AI или инструменты до явной отправки пользователем. Добавлены repo/mapper/Compose tests, migration probe, схема 12 и AZ/RU/EN строки. Поведение consent и tool gates не расширялось.
