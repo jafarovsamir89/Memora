@@ -1,6 +1,8 @@
 # Memora AI — Your Second Memory
 
-**Current implementation checkpoint ACT-0127:** Android v42 / 1.1.20-person-aliases, Room schema 16. People support explicit exact aliases with revision history; finance resolution requires an existing owner-confirmed identity link. 278/278 JVM tests passed according to fresh XML reports; app and AndroidTest APK builds and AndroidTest Kotlin compile passed. Lint was stopped at the owner’s request and remains unverified. APK backup hash matches; v42 installed and launched on Redmi Android 13 without clearing data. Live Gemini, database migration/readback and overall M20 acceptance remain open. See [validation matrix](docs/M20_08_VALIDATION_MATRIX.md), [diary](docs/AGENT_DIARY.md) and [action log](docs/ACTION_LOG.md).
+**Current implementation checkpoint ACT-0128:** Android v43 / 1.1.21-appcheck-token-input, Room schema 16. The debug APK accepts a Firebase Console App Check debug token in Settings and verifies it with Firebase. Debug-only; release keeps Play Integrity. Debug APK SHA-256 178C25BE3464BD5E23CFC9D4E32BF73F2885EDB4F008DF86B1735D7AE72101A4; backup is stored outside Git. APK builds and release Kotlin compilation passed. The token has not yet been validated with the owner’s Console token; see docs/AGENT_DIARY.md and docs/ACTION_LOG.md.
+
+**Previous implementation checkpoint ACT-0127:** Android v42 / 1.1.20-person-aliases, Room schema 16. People support explicit exact aliases with revision history; finance resolution requires an existing owner-confirmed identity link. 278/278 JVM tests passed according to fresh XML reports; app and AndroidTest APK builds and AndroidTest Kotlin compile passed. Lint was stopped at the owner’s request and remains unverified. APK backup hash matches; v42 installed and launched on Redmi Android 13 without clearing data. Live Gemini, database migration/readback and overall M20 acceptance remain open. See [validation matrix](docs/M20_08_VALIDATION_MATRIX.md), [diary](docs/AGENT_DIARY.md) and [action log](docs/ACTION_LOG.md).
 
 > **Memora 2.0 — утверждённое новое видение (2026-11-03):** [Полное ТЗ Memora 2.0](docs/MEMORA_2_0_PRODUCT_SPEC.md) · [Master-промпт для автономного кодинг-агента](docs/MEMORA_2_0_AGENT_MASTER_PROMPT.md). Основной продукт теперь строится как личный ИИ-секретарь/собеседник с единой памятью, связанными делами и карточками людей, качественным UI и сменяемым AI-провайдером. Сохраняем проверенный Android runtime, инструменты, миграции и данные. Онбординг/локальный профиль для новой чистой установки; обновление APK не стирает пользовательские записи. Серверная авторизация/синхронизация — после подтверждённого нативного этапа. **Это целевое ТЗ; реализация Memora 2.0 ещё не объявлена готовой.**
 
@@ -55,6 +57,7 @@ Memora AI — независимый, многоязычный персонал�
 
 ## Продолжение на другом компьютере
 
+Для друга, который проверяет Gemini, передайте файл apps/android/app/build/outputs/apk/debug/app-debug.apk. Firebase-конфигурация уже включена в эту сборку; на телефоне друга скачивать google-services.json не нужно. В Firebase Console откройте App Check → Apps → ai.memora.app → Manage debug tokens → Create, передайте созданный debug token другу приватно. В APK он откроет Настройки → Firebase App Check test access, вставит токен и нажмёт Save and verify. Приложение покажет результат обмена с Firebase. Это debug APK; обычный release build продолжает использовать Play Integrity.
 Для новой рабочей копии:
 
 ```sh

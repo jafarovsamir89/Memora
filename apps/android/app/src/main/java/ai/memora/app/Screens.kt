@@ -255,6 +255,7 @@ fun SettingsScreen(theme: String, changeTheme: (String) -> Unit, language: Strin
         Filters(listOf("ru" to "Русский", "az" to "Azərbaycan", "en" to "English"), language, changeLanguage, enabled = ready)
         AttentionSettingsControls()
         DevicePermissionSettings()
+        AppCheckDebugSettings()
         if (granted) OutlinedButton(onClick = {
             if (voiceConsent.edit().clear().commit()) granted = false
         }, modifier = Modifier.testTag("voice_revoke_consent")) { Text(s(R.string.voice_revoke_consent)) }

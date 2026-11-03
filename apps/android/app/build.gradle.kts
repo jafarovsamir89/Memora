@@ -19,8 +19,8 @@ android {
         applicationId = "ai.memora.app"
         minSdk = 26
         targetSdk = 36
-        versionCode = 42
-        versionName = "1.1.20-person-aliases"
+        versionCode = 43
+        versionName = "1.1.21-appcheck-token-input"
         testInstrumentationRunner = "ai.memora.app.GeminiSyntheticProbe"
     }
     buildFeatures { compose = true }

@@ -1,5 +1,15 @@
 # Memora — лог действий
 
+## ACT-0128 - 2026-11-03 - Firebase App Check token input for debug APK
+
+По уточнению владельца добавлен debug-only экран настроек для токена, созданного в Firebase Console для `ai.memora.app`. Поле маскирует ввод; debug secret сохраняется только в app-private preferences, не попадает в журналы/исходники/экспорт. Экран проверяет запись реальным Firebase App Check token exchange и показывает только результат либо HTTP status. Новый provider использует официальный `projects.apps.exchangeDebugToken` endpoint с session и limited-use режимами; без введённого токена сохраняется автоматический `DebugAppCheckProviderFactory`. Release source set содержит пустой UI компонент и штатный Play Integrity provider.
+
+Проверка: `:app:compileDebugKotlin` прошёл; `:app:assembleDebug :app:compileReleaseKotlin --no-daemon --console=plain --max-workers=2` завершился `BUILD SUCCESSFUL` за 7m27s. Остались два прежних warning `TablesScreen.kt:148` (условие всегда false). Unit tests и lint не запускались по принятому владельцем режиму быстрой полевой проверки. Реального token exchange пока нет: debug token ещё не создан/введён. APK v43 / `1.1.21-appcheck-token-input`, versionCode 43, Room schema 16; SHA-256 `178C25BE3464BD5E23CFC9D4E32BF73F2885EDB4F008DF86B1735D7AE72101A4`. Backup `C:\memora-backups\Memora-v43-1.1.21-appcheck-token-input-2026-11-03.apk` byte-for-byte совпадает. Устройство не обновлялось; пользовательская БД не затрагивалась.
+
+После последней правки локализованного статуса финальная `:app:assembleDebug` пересобрана и прошла за 53s; `aapt` подтвердил package `ai.memora.app`, versionCode 43 и versionName `1.1.21-appcheck-token-input`. Резервная копия обновлена после этой сборки и совпадает по SHA-256.
+
+README, `AGENTS.md`, TODO и дневник описывают получение токена в Firebase Console и ввод в Settings APK. Следующая проверка — владелец создаёт секрет для Android app `ai.memora.app`, передаёт его другу приватно; друг нажимает **Save and verify** и подтверждает результат в приложении. M20-08, live Gemini на втором устройстве и release readiness остаются открытыми.
+
 ## ACT-0127 - 2026-11-03 - Explicit person aliases
 
 Added owner-managed, scope-local aliases for existing PERSON domain objects. Matching uses NFC, case folding and whitespace normalization only. Add/retire/restore writes revision history, checks canonical/alias collisions and reads back the persisted row. Finance tools may resolve an alias only through an existing owner-confirmed identity link; an absent/ambiguous link returns a conflict without creating a duplicate finance person. Room migration 15→16 adds alias/revision tables and indexes without backfill or data rewrite. UI strings cover Azerbaijani, Russian and English. ADR: `docs/adr/ADR-014-person-alias-resolution.md`.

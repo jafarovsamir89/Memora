@@ -494,4 +494,17 @@
 <string name="today_attention_suggestions">Your next 1–3 steps</string>
 <string name="attention_settings_notifications_unavailable">Notifications are turned off in Android settings, so Memora cannot show the briefing.</string>
 <string name="attention_settings_permission_denied">Notification permission was denied. The daily briefing remains off.</string>
+    <string name="app_check_debug_title">Firebase App Check test access</string>
+    <string name="app_check_debug_description">Enter the debug token created in Firebase Console for ai.memora.app. It is stored only on this phone. Keep this test token private and delete it from Console after testing.</string>
+    <string name="app_check_debug_token_label">Firebase App Check debug token</string>
+    <string name="app_check_debug_save">Save and verify</string>
+    <string name="app_check_debug_clear">Remove saved token</string>
+    <string name="app_check_debug_token_empty">Enter the debug token first.</string>
+    <string name="app_check_debug_not_configured">This APK is not configured for a Firebase project.</string>
+    <string name="app_check_debug_save_failed">Could not save the token on this phone.</string>
+    <string name="app_check_debug_token_accepted">Firebase App Check accepted the debug token.</string>
+    <string name="app_check_debug_exchange_failed">Firebase App Check could not verify the token. Check the network and Console registration.</string>
+    <string name="app_check_debug_http_failed">Firebase App Check request failed (HTTP %1$d). Check that the token is registered in Console.</string>
+    <string name="app_check_debug_token_saved">The debug token is saved on this phone.</string>
+    <string name="app_check_debug_token_removed">Console token removed; the automatic debug provider will be used.</string>
 </resources>

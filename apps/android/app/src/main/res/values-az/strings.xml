@@ -494,4 +494,17 @@
 <string name="today_attention_suggestions">Növbəti 1–3 addım</string>
 <string name="attention_settings_notifications_unavailable">Bildirişlər Android ayarlarında bağlıdır; Memora xülasəni göndərə bilməz.</string>
 <string name="attention_settings_permission_denied">Bildiriş icazəsi verilmədi; gündəlik xülasə söndürülmüş qalır.</string>
+    <string name="app_check_debug_title">Firebase App Check test girişi</string>
+    <string name="app_check_debug_description">Firebase Console-da ai.memora.app üçün yaratdığınız debug token-i daxil edin. Token yalnız bu telefonda saxlanılır. Bu test token-i məxfi saxlayın və sınaq bitəndə Console-dan silin.</string>
+    <string name="app_check_debug_token_label">Firebase App Check debug token</string>
+    <string name="app_check_debug_save">Yadda saxla və yoxla</string>
+    <string name="app_check_debug_clear">Saxlanmış tokeni sil</string>
+    <string name="app_check_debug_token_empty">Əvvəlcə debug token-i daxil edin.</string>
+    <string name="app_check_debug_not_configured">Bu APK Firebase layihəsi ilə konfiqurasiya edilməyib.</string>
+    <string name="app_check_debug_save_failed">Tokeni bu telefonda saxlamaq mümkün olmadı.</string>
+    <string name="app_check_debug_token_accepted">Firebase App Check debug token-ini qəbul etdi.</string>
+    <string name="app_check_debug_exchange_failed">Firebase App Check tokenini yoxlaya bilmədi. Şəbəkəni və Console qeydiyyatını yoxlayın.</string>
+    <string name="app_check_debug_http_failed">Firebase App Check sorğusu alınmadı (HTTP %1$d). Tokenin Console-da qeydiyyatda olduğunu yoxlayın.</string>
+    <string name="app_check_debug_token_saved">Debug token bu telefonda saxlanılıb.</string>
+    <string name="app_check_debug_token_removed">Console token silindi; avtomatik debug provider istifadə olunacaq.</string>
 </resources>
