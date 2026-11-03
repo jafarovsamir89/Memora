@@ -1,5 +1,9 @@
 # Memora — лог действий
 
+## ACT-0121 - 2026-11-03 - Git handoff ACT-0120
+
+ACT-0120 system-instruction/probe refinement and synchronized project status were committed as `8663984ca907b33c3b5362743f7a7773ec7b8a62` (`fix(android): strengthen explicit profile memory actions`) and pushed to `origin/main`. `git fetch origin main`, local HEAD and `git ls-remote origin refs/heads/main` matched; worktree was clean at handoff. APK v37 remains installed and launched. Next implementation slice: unified cross-domain evidence retrieval for M20-04, keeping each source's permission, canonical store and provenance; do not read or migrate the owner's DB without an explicit, content-safe plan.
+
 ## ACT-0120 - 2026-11-03 - Profile tool routing and partial delete response
 
 The first repeated synthetic save request completed without selecting a tool. Strengthened `GeminiAgentModelGateway` guidance: when the user directly asks to remember an allowed stable fact from the current turn, call `save_profile_fact` first and only claim saved after `APPLIED`. Tightened the synthetic AZ probe wording. Bumped app to versionCode 37 / `1.1.15-profile-memory-actions`.
@@ -8,7 +12,7 @@ Full Gradle run passed: `:app:testDebugUnitTest :app:assembleDebug :app:assemble
 
 Live Gemini synthetic run `3081098a-3ed9-4794-8b73-14e41e3fc1bf` used a separate SQLCipher database and no user data. After the guidance change, `save_profile_fact` was APPLIED/read back, memory search returned the preference, and `edit_profile_fact` was APPLIED with revision 2/source readback. Memory consent revocation blocked before model/tools. After force-stop, a separate invocation reopened the synthetic DB and Gemini search returned the corrected revision. In the final step `delete_profile_fact` returned APPLIED, but Gemini's follow-up was `model_rate_limited`; runtime returned `PARTIAL / reply_unavailable_after_write`, so this run does not establish the delete final answer or post-delete query readback. The run was marked failed for that scenario and the synthetic DB was removed through the explicit cleanup phase; no provider retry was made. The existing runtime supplies a truthful partial-write fallback. Logs retained only safe tool/status/code/trace metadata, not utterance/fact/answer text.
 
-M20-04/08 remain partial. Open: stable natural-language memory actions under provider quota, delete live readback, semantic/cross-domain retrieval, mixed RU/AZ, full episode continuity, direct user DB migration/readback and product acceptance. Git handoff pending.
+M20-04/08 remain partial. Open: stable natural-language memory actions under provider quota, delete live readback, semantic/cross-domain retrieval, mixed RU/AZ, full episode continuity, direct user DB migration/readback and product acceptance. Handoff ACT-0121 records the commit/push.
 
 ## ACT-0119 - 2026-11-03 - Git handoff ACT-0118
 

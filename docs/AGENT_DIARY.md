@@ -16,7 +16,7 @@
 
 Полный Gradle прогон ACT-0120: 53 suites / 271 JVM tests, 0 failures/errors/skips; app и AndroidTest APK собраны, AndroidTest Kotlin скомпилирован; lint 0 errors / 57 warnings / 3 hints. Установлен APK v37 / `1.1.15-profile-memory-actions`, versionCode 37, SHA-256 `DAA1DD587C3F75BDB5B547C7B788A32E2C7ECDEE9E766CA8FA920F4DE54A5247`; backup `C:\memora-backups\Memora-v37-1.1.15-profile-memory-actions-2026-11-03.apk` совпадает. `adb install -r` обновил v36→v37, приложение запущено. Пользовательская БД не открывалась и не очищалась. В E2E использовалась только синтетическая отдельная БД; trace ID `3081098a-3ed9-4794-8b73-14e41e3fc1bf`; исходная реплика, profile fact и ответ в логи не записывались.
 
-Предыдущий профильный пакет ACT-0118 зафиксирован `2950dbe619edcfc4bf42b7f66aabf7c9b078d798`, handoff — ACT-0119 (`6727e0bbb45654e5f19eb683db243d3be2207ce0`). ACT-0120 ещё не закоммичен.
+Пакет ACT-0120 зафиксирован `8663984ca907b33c3b5362743f7a7773ec7b8a62` и отправлен в `origin/main`; fetch/local HEAD/remote HEAD совпали, дерево было чистым. Предыдущий профильный handoff — ACT-0119 (`6727e0bbb45654e5f19eb683db243d3be2207ce0`).
 
 M20-04/08 остаются частичными: profile save/search/edit выбраны Gemini и проверены на synthetic data; delete tool получил APPLIED, но final response был ограничен квотой и сквозной readback не завершён. Остаются semantic/cross-domain retrieval, mixed RU/AZ, episodic continuation, фактическая миграция/перезапуск пользовательской БД, accessibility, BMW/gift/business сценарии и приёмка владельца. Следующий срез — стабилизировать единый поиск памяти по существующим источникам и продолжать M20 acceptance. Memora 2.0 и релиз не завершены.
 
