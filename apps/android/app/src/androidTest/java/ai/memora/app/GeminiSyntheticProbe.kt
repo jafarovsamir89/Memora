@@ -553,7 +553,7 @@ class GeminiSyntheticProbe : Instrumentation() {
         profileMemory: ProtectedProfileMemoryRepository, results: Bundle) {
         val scope = syntheticUuid("$runId:profile:scope")
         val actor = syntheticUuid("$runId:profile:actor")
-        val source = "Yadda saxla: gələcək cavablarında qısa və sadə izahları üstün tuturam."
+        val source = "Bu, mənim daimi cavab tərcihimdir: qısa və sadə izahları üstün tuturam. Bunu profil yaddaşına yaz."
         results.putString("active_stage", "profile_live_save")
         val save = runSyntheticTurn("az", 0, source, setOf("save_profile_fact"), scope, actor, "az-AZ", db,
             repository, conversations, journal, policy, AgentInputChannel.TEXT, results, profileMemory)
@@ -579,6 +579,20 @@ class GeminiSyntheticProbe : Instrumentation() {
             "synthetic_profile_live_search_not_applied"
         }
         results.putString("profile_live_search", "passed")
+
+        results.putString("active_stage", "profile_live_edit")
+        val correction = runSyntheticTurn("az", 2,
+            "Cavab tərcihimi dəyiş: qısa və sadə əvəzinə ətraflı, strukturlaşdırılmış izahları üstün tuturam.",
+            setOf("edit_profile_fact"), scope, actor, "az-AZ", db, repository, conversations, journal, policy,
+            AgentInputChannel.TEXT, results, profileMemory)
+        check(correction.toolResults.any { it.name == "edit_profile_fact" && it.status == ToolObservationStatus.APPLIED }) {
+            "synthetic_profile_edit_not_applied"
+        }
+        val corrected = profileMemory.list(scope, "ətraflı strukturlaşdırılmış izah", 5).singleOrNull()
+            ?: error("synthetic_profile_edit_readback_failed")
+        check(corrected.revision == 2L && corrected.sourceTurnIds.size == 2 &&
+            corrected.fact.contains("ətraflı", ignoreCase = true)) { "synthetic_profile_edit_revision_failed" }
+        results.putString("profile_edit_readback", "verified")
     }
 
     private suspend fun verifySyntheticProfileFlow(runId: String, db: AgentDatabase,
@@ -588,18 +602,33 @@ class GeminiSyntheticProbe : Instrumentation() {
         val scope = syntheticUuid("$runId:profile:scope")
         val actor = syntheticUuid("$runId:profile:actor")
         results.putString("active_stage", "profile_restart_readback")
-        val stored = profileMemory.list(scope, "qısa sadə izah", 5).singleOrNull()
+        val stored = profileMemory.list(scope, "ətraflı strukturlaşdırılmış izah", 5).singleOrNull()
             ?: error("synthetic_profile_restart_readback_failed")
-        check(stored.sourceTurnIds.size == 1 && stored.revision == 1L) { "synthetic_profile_restart_provenance_failed" }
+        check(stored.sourceTurnIds.size == 2 && stored.revision == 2L &&
+            stored.fact.contains("ətraflı", ignoreCase = true)) { "synthetic_profile_restart_provenance_failed" }
         results.putString("profile_restart_readback", "verified")
         results.putString("active_stage", "profile_live_retrieval")
         val result = runSyntheticTurn("az", 0,
-            "Əvvəl dediyim cavab tərcihimi xatırla və hansı olduğunu qısa de.",
+            "Yenilənmiş cavab tərcihim hansı idi? Yaddaşındakı son məlumatı yoxla.",
             setOf("search_memory"), scope, actor, "az-AZ", db, repository, conversations, journal, policy,
             AgentInputChannel.TEXT, results, profileMemory)
         val answer = result.answer.orEmpty().lowercase(java.util.Locale.forLanguageTag("az-AZ"))
-        check(listOf("qısa", "sadə").any(answer::contains)) { "synthetic_profile_restart_answer_semantics_failed" }
+        check(listOf("ətraflı", "strukturlaşdırılmış").any(answer::contains)) {
+            "synthetic_profile_restart_answer_semantics_failed"
+        }
         results.putString("profile_live_retrieval", "passed")
+
+        results.putString("active_stage", "profile_live_delete")
+        val deletion = runSyntheticTurn("az", 1, "Bu cavab tərcihini yaddaşından sil.",
+            setOf("delete_profile_fact"), scope, actor, "az-AZ", db, repository, conversations, journal, policy,
+            AgentInputChannel.TEXT, results, profileMemory)
+        check(deletion.toolResults.any { it.name == "delete_profile_fact" && it.status == ToolObservationStatus.APPLIED }) {
+            "synthetic_profile_delete_not_applied"
+        }
+        check(profileMemory.list(scope, "ətraflı strukturlaşdırılmış izah", 5).isEmpty()) {
+            "synthetic_profile_delete_readback_failed"
+        }
+        results.putString("profile_delete_readback", "verified")
     }
 
     private suspend fun verifySyntheticEpisodeFlow(runId: String, db: AgentDatabase, repository: ProtectedDomainRepository,

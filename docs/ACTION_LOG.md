@@ -1,5 +1,15 @@
 # Memora — лог действий
 
+## ACT-0120 - 2026-11-03 - Profile tool routing and partial delete response
+
+The first repeated synthetic save request completed without selecting a tool. Strengthened `GeminiAgentModelGateway` guidance: when the user directly asks to remember an allowed stable fact from the current turn, call `save_profile_fact` first and only claim saved after `APPLIED`. Tightened the synthetic AZ probe wording. Bumped app to versionCode 37 / `1.1.15-profile-memory-actions`.
+
+Full Gradle run passed: `:app:testDebugUnitTest :app:assembleDebug :app:assembleDebugAndroidTest :app:compileDebugAndroidTestKotlin :app:lintDebug --no-daemon --console=plain --max-workers=2`; 53 suites / 271 tests, 0 failures/errors/skips; lint 0 errors / 57 warnings / 3 hints. APK SHA-256 `DAA1DD587C3F75BDB5B547C7B788A32E2C7ECDEE9E766CA8FA920F4DE54A5247`; backup `C:\memora-backups\Memora-v37-1.1.15-profile-memory-actions-2026-11-03.apk` matches. App v37 and AndroidTest APK installed with `adb install -r`; package manager confirmed v37 and the app launched. No data clear/uninstall; user DB not opened.
+
+Live Gemini synthetic run `3081098a-3ed9-4794-8b73-14e41e3fc1bf` used a separate SQLCipher database and no user data. After the guidance change, `save_profile_fact` was APPLIED/read back, memory search returned the preference, and `edit_profile_fact` was APPLIED with revision 2/source readback. Memory consent revocation blocked before model/tools. After force-stop, a separate invocation reopened the synthetic DB and Gemini search returned the corrected revision. In the final step `delete_profile_fact` returned APPLIED, but Gemini's follow-up was `model_rate_limited`; runtime returned `PARTIAL / reply_unavailable_after_write`, so this run does not establish the delete final answer or post-delete query readback. The run was marked failed for that scenario and the synthetic DB was removed through the explicit cleanup phase; no provider retry was made. The existing runtime supplies a truthful partial-write fallback. Logs retained only safe tool/status/code/trace metadata, not utterance/fact/answer text.
+
+M20-04/08 remain partial. Open: stable natural-language memory actions under provider quota, delete live readback, semantic/cross-domain retrieval, mixed RU/AZ, full episode continuity, direct user DB migration/readback and product acceptance. Git handoff pending.
+
 ## ACT-0119 - 2026-11-03 - Git handoff ACT-0118
 
 ACT-0118 profile-memory implementation, Android synthetic Gemini probe, validation matrix, TODO, diary and memory contract were committed as `2950dbe619edcfc4bf42b7f66aabf7c9b078d798` (`feat(android): add editable profile memory`) and pushed to `origin/main`. `git fetch origin main`, local HEAD and `git ls-remote origin refs/heads/main` matched this SHA; the tree was clean at handoff. APK v36 remains installed and launched; user data were not cleared or inspected. Next: continue M20-04 cross-domain retrieval and remaining M20 acceptance scenarios; do not claim Memora 2.0 or release completion.
