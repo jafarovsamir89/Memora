@@ -1,6 +1,16 @@
 # M20-08 Native validation matrix
 
-Status as of 2026-11-03, APK v39 / 1.1.17-person-links, Room schema 15. This matrix records existing evidence and remaining work; it does not turn host tests into device or live-provider acceptance.
+Status as of 2026-11-03, APK v40 / 1.1.18-person-sources, Room schema 15. This matrix records existing evidence and remaining work; it does not turn host tests into device or live-provider acceptance.
+
+## ACT-0125 update
+
+Person story entries now open task/calendar source details only when the source is explicitly linked through persisted case evidence and the viewed person is an explicit participant in that case. No identity is inferred from names or labels. Source details are embedded in the current person dialog with a Back action; Azerbaijani, Russian and English labels cover the supported follow-up/appointment relations. No schema migration or finance write path changed.
+
+Synthetic Compose coverage verifies one appearance per linked task/calendar source, source detail content, and return navigation. Screenshots `20-person-card-explicit-sources.png` and `21-person-task-source-detail.png` were viewed. Full host command:
+
+    .\gradlew.bat :app:testDebugUnitTest :app:assembleDebug :app:assembleDebugAndroidTest :app:compileDebugAndroidTestKotlin :app:lintDebug --no-daemon --console=plain --max-workers=2
+
+Result: 54 suites / 274 tests, 0 failures/errors; debug/AndroidTest APKs and AndroidTest Kotlin compile passed; lint 0 errors / 57 warnings / 0 information. APK v40 SHA-256 `A892D58646BC09C47C6B98D68365B606D48325633831BEE7BD877310F3A61757`; matching backup `C:\memora-backups\Memora-v40-1.1.18-person-sources-2026-11-03.apk`. The connected Redmi (Android 13) was updated from v38 with `adb install -r` and launched; versionCode 40 verified. The installed v38 APK was backed up before update. User DB was not opened/read/cleared. No live Gemini request: the owner cannot perform that check now. Device visual/owner/TalkBack acceptance, real DB migration/readback, Gemini and remaining M20 scenarios remain open.
 
 ## ACT-0124 update
 

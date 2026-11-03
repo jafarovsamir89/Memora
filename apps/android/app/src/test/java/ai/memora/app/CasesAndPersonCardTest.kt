@@ -9,8 +9,10 @@ import androidx.compose.ui.test.*
 import androidx.compose.ui.test.junit4.v2.createComposeRule
 import androidx.test.core.app.ApplicationProvider
 import ai.memora.app.data.protectedstore.DomainKind
+import ai.memora.app.data.protectedstore.CalendarInput
 import ai.memora.app.data.protectedstore.ProtectedCaseRepository
 import ai.memora.app.data.protectedstore.ProtectedDomainRepository
+import ai.memora.app.domain.TaskEvent
 import ai.memora.app.voice.AgentVoiceTurnProcessor
 import ai.memora.app.ui.LocalStrings
 import ai.memora.app.ui.MemoraTheme
@@ -155,6 +157,64 @@ class CasesAndPersonCardTest {
         compose.waitUntil(10_000) {
             compose.onAllNodesWithTag("person_linked_object_synthetic-linked-project").fetchSemanticsNodes().isNotEmpty()
         }
+        compose.onNodeWithTag("saved_object_detail_close").performClick()
+    }
+
+    @Test fun personTimelineOpensExplicitTaskAndCalendarSourcesAndReturnsToCard() = runBlocking<Unit> {
+        val context = ApplicationProvider.getApplicationContext<Context>()
+        val scope = AgentVoiceTurnProcessor(context).conversationScopeId()
+        val repository = ProtectedDomainRepository(databaseRule.database)
+        val cases = ProtectedCaseRepository(databaseRule.database)
+        repository.createObject(scope, "synthetic-source-person", DomainKind.PERSON, "Synthetic Planner", null, null,
+            "2026-11-03T10:00:00Z")
+        repository.appendTaskEvent(TaskEvent.Created("synthetic-linked-task", scope, "synthetic-test-owner",
+            "synthetic-linked-task-create", "Synthetic follow-up task"))
+        repository.createCalendarEvent(CalendarInput("synthetic-linked-calendar", scope, "Synthetic appointment",
+            "2026-11-07T11:00", "2026-11-07T11:30", "Asia/Baku", "minute"))
+        cases.createCase(scope, "synthetic-source-case", "Synthetic planning case", null,
+            sourceTurnId = "00000000-0000-4000-8000-000000000202", now = "2026-11-03T10:01:00Z")
+        cases.addParticipant(scope, "synthetic-source-case", "synthetic-source-person", now = "2026-11-03T10:02:00Z")
+        cases.addEvidence(scope, "synthetic-source-case", "task", "synthetic-linked-task", "follow_up",
+            evidenceId = "synthetic-task-evidence", now = "2026-11-03T10:03:00Z")
+        cases.addEvidence(scope, "synthetic-source-case", "calendar_event", "synthetic-linked-calendar", "appointment",
+            evidenceId = "synthetic-calendar-evidence", now = "2026-11-03T10:04:00Z")
+
+        compose.setContent {
+            CompositionLocalProvider(LocalAgentDatabaseOverride provides databaseRule.database) {
+                CompositionLocalProvider(LocalStrings provides context.resources) {
+                    MemoraTheme("light") { SavedObjectsScreen(DomainKind.PERSON) }
+                }
+            }
+        }
+        compose.waitUntil(10_000) {
+            compose.onAllNodesWithTag("saved_object_synthetic-source-person").fetchSemanticsNodes().isNotEmpty()
+        }
+        compose.onNodeWithTag("saved_object_synthetic-source-person").performScrollTo().performClick()
+        val taskStoryTag = "person_story_case-evidence:synthetic-task-evidence"
+        val calendarStoryTag = "person_story_case-evidence:synthetic-calendar-evidence"
+        compose.waitUntil(10_000) {
+            compose.onAllNodesWithTag(taskStoryTag).fetchSemanticsNodes().isNotEmpty() &&
+                compose.onAllNodesWithTag(calendarStoryTag).fetchSemanticsNodes().isNotEmpty()
+        }
+        compose.onAllNodesWithTag(taskStoryTag).assertCountEquals(1)
+        compose.onAllNodesWithTag(calendarStoryTag).assertCountEquals(1)
+        compose.onNodeWithTag(taskStoryTag).performScrollTo()
+        screenshot("20-person-card-explicit-sources")
+
+        compose.onNodeWithTag(taskStoryTag).performScrollTo().performClick()
+        compose.onNodeWithTag("saved_object_detail_title").assertTextEquals("Synthetic follow-up task")
+        compose.onNodeWithText("Relationship: Follow-up").assertExists()
+        screenshot("21-person-task-source-detail")
+        compose.onNodeWithTag("saved_object_detail_back").performClick()
+        compose.onNodeWithTag("saved_object_detail_title").assertTextEquals("Synthetic Planner")
+        compose.waitUntil(10_000) {
+            compose.onAllNodesWithTag(calendarStoryTag).fetchSemanticsNodes().isNotEmpty()
+        }
+        compose.onNodeWithTag(calendarStoryTag).performScrollTo().performClick()
+        compose.onNodeWithTag("saved_object_detail_title").assertTextEquals("Synthetic appointment")
+        compose.onNodeWithText("Relationship: Appointment").assertExists()
+        compose.onNodeWithTag("saved_object_detail_back").performClick()
+        compose.onNodeWithTag("saved_object_detail_title").assertTextEquals("Synthetic Planner")
         compose.onNodeWithTag("saved_object_detail_close").performClick()
     }
 

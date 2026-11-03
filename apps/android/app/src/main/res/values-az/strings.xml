@@ -357,6 +357,8 @@
     <string name="person_related_relation_part_of">hissəsidir</string>
     <string name="finance_event_reversed">Ləğv edilib</string>
     <string name="case_source_calendar">Təqvim qeydi</string>
+    <string name="person_source_relation_follow_up">Növbəti addım</string>
+    <string name="person_source_relation_appointment">Görüş</string>
     <string name="notes_title">Qeydlər</string>
     <string name="notes_hint">Yaddaşda saxlanmış qeydlər</string>
     <string name="onboarding_eyebrow">MEMORA — ŞƏXSİ KATİBİNİZ</string>

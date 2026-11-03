@@ -1,5 +1,15 @@
 # Memora — лог действий
 
+## ACT-0125 - 2026-11-03 - Person timeline task/calendar source navigation
+
+Extended the person card's chronological story so a task or calendar item is clickable only when an existing `case_evidence` row explicitly links that source to a case whose participant list contains this person in the current scope. The source detail opens inside the existing person dialog and Back returns to the card. Case revision entries remain non-clickable; finance filtering is unchanged. No matching by task `personLabel`, calendar name, or person title was added; no database/schema/ledger change.
+
+Added localized Azerbaijani/Russian/English labels for task follow-up and appointment relations. Synthetic Compose coverage creates one person, one task, one calendar event and explicit evidence rows, asserts each story source appears once, opens both source details, and returns to the person. Screenshots `20-person-card-explicit-sources.png` and `21-person-task-source-detail.png` were visually reviewed.
+
+Full validation command passed (`.\gradlew.bat :app:testDebugUnitTest :app:assembleDebug :app:assembleDebugAndroidTest :app:compileDebugAndroidTestKotlin :app:lintDebug --no-daemon --console=plain --max-workers=2`): 54 suites / 274 JVM tests, 0 failures/errors; debug and AndroidTest APK builds and AndroidTest Kotlin compile passed; lint 0 errors / 57 warnings / 0 information. Focused new navigation test passed. APK v40 / `1.1.18-person-sources`, versionCode 40, Room schema 15, SHA-256 `A892D58646BC09C47C6B98D68365B606D48325633831BEE7BD877310F3A61757`; backup `C:\memora-backups\Memora-v40-1.1.18-person-sources-2026-11-03.apk` matches. Before install, the Redmi's installed v38 base APK was pulled to `C:\memora-backups\Memora-v38-installed-pre-v40-2026-11-03.apk`, SHA-256 `5D0D84E6B1594BAA463B6264B6EB75C8368DA60332C62A322A1B929064B2E9BF`. `adb install -r` upgraded Android 13 v38→v40 without clearing data; app launch and package versionCode 40 verified. The user DB was not opened/read/cleared.
+
+Owner cannot run the live Gemini check now; no API call was made and no App Check diagnosis was confirmed. Device UI/owner/TalkBack acceptance and all broader M20/release gates remain open. Git handoff state: pending verification.
+
 ## ACT-0124 - 2026-11-03 - Explicit relationships in the person card
 
 Added a scope-filtered DAO query and read-only `ProtectedDomainRepository.linkedObjects` projection over existing active `domain_link` rows. Person detail now shows only explicitly persisted connections to people/projects/notes, with localized kind/relation labels. Opening a connected object replaces the current detail content in the same dialog; a local detail stack restores the person when the user presses Back. No same-name matching or schema migration was introduced; task/calendar person labels remain unlinked strings and are not presented as canonical relations.

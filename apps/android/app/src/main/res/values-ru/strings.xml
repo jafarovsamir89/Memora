@@ -357,6 +357,8 @@
     <string name="person_related_relation_part_of">часть</string>
     <string name="finance_event_reversed">Отменено</string>
     <string name="case_source_calendar">Событие календаря</string>
+    <string name="person_source_relation_follow_up">Следующее действие</string>
+    <string name="person_source_relation_appointment">Встреча</string>
     <string name="notes_title">Заметки</string>
     <string name="notes_hint">Заметки, сохранённые в памяти</string>
     <string name="onboarding_eyebrow">MEMORA — ВАШ ЛИЧНЫЙ СЕКРЕТАРЬ</string>

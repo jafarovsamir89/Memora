@@ -24,6 +24,7 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import ai.memora.app.data.protectedstore.CaseSnapshot
+import ai.memora.app.data.protectedstore.CaseEvidenceView
 import ai.memora.app.data.protectedstore.DomainKind
 import ai.memora.app.data.protectedstore.DomainObjectRow
 import ai.memora.app.data.protectedstore.FinancePersonIdentityChoices
@@ -40,7 +41,14 @@ import ai.memora.app.ui.s
 import ai.memora.app.voice.AgentVoiceTurnProcessor
 import kotlinx.coroutines.launch
 
-private data class PersonStoryEntry(val id: String, val at: String, val sortOrder: Long, val title: String, val detail: String?)
+private data class PersonStoryEntry(
+    val id: String,
+    val at: String,
+    val sortOrder: Long,
+    val title: String,
+    val detail: String?,
+    val source: CaseEvidenceView? = null,
+)
 
 /** Read-only view of the same encrypted people/projects written through the agent tool registry. */
 @Composable
@@ -54,6 +62,7 @@ internal fun SavedObjectsScreen(kind: DomainKind) {
     var records by remember(kind) { mutableStateOf<List<DomainObjectRow>>(emptyList()) }
     var query by remember(kind) { mutableStateOf("") }
     var selected by remember { mutableStateOf<DomainObjectRow?>(null) }
+    var selectedCaseSource by remember { mutableStateOf<CaseEvidenceView?>(null) }
     var detailStack by remember { mutableStateOf<List<DomainObjectRow>>(emptyList()) }
     var loading by remember(kind) { mutableStateOf(true) }
     var failed by remember(kind) { mutableStateOf(false) }
@@ -101,7 +110,7 @@ internal fun SavedObjectsScreen(kind: DomainKind) {
             filtered.isEmpty() -> EmptyState(s(ai.memora.app.R.string.working_no_data), s(ai.memora.app.R.string.saved_objects_no_matches))
             else -> filtered.forEach { record ->
                 MemoraCard(
-                    onClick = { selected = record; detailStack = emptyList() },
+                    onClick = { selected = record; selectedCaseSource = null; detailStack = emptyList() },
                     modifier = Modifier.testTag("saved_object_${record.objectId}"),
                 ) {
                     Text(record.title, color = colors.ink, style = androidx.compose.material3.MaterialTheme.typography.titleMedium)
@@ -118,28 +127,57 @@ internal fun SavedObjectsScreen(kind: DomainKind) {
 
     selected?.let { record ->
         AlertDialog(
-            onDismissRequest = { selected = null; detailStack = emptyList() },
-            title = { Text(record.title, modifier = Modifier.testTag("saved_object_detail_title")) },
+            onDismissRequest = { selected = null; selectedCaseSource = null; detailStack = emptyList() },
+            title = {
+                val sourceTitle = selectedCaseSource?.let { personCaseSourceTitle(it) }
+                Text(sourceTitle ?: record.title,
+                    modifier = Modifier.testTag("saved_object_detail_title"))
+            },
             text = {
                 Column(Modifier.heightIn(max = 420.dp).verticalScroll(rememberScrollState())) {
-                    val body = record.body?.takeIf(String::isNotBlank)
-                    Text(body?.take(20_000) ?: s(ai.memora.app.R.string.saved_objects_no_details), color = colors.ink)
-                    if (body != null && body.length > 20_000) {
-                        Text(s(ai.memora.app.R.string.saved_objects_details_truncated), modifier = Modifier.padding(top = 8.dp), color = colors.muted)
+                    val source = selectedCaseSource
+                    if (source != null) {
+                        Text(personCaseSourceKindLabel(source), color = colors.accent,
+                            style = androidx.compose.material3.MaterialTheme.typography.labelMedium)
+                        source.detail?.takeIf(String::isNotBlank)?.let { Text(it.take(2_000), color = colors.ink) }
+                        Text("${s(ai.memora.app.R.string.case_source_relation)}: ${personCaseRelationLabel(source.evidence.relation)}",
+                            modifier = Modifier.padding(top = 12.dp), color = colors.muted)
+                        Text("${s(ai.memora.app.R.string.case_source_time)}: ${source.evidence.occurredAt}",
+                            modifier = Modifier.padding(top = 6.dp), color = colors.muted)
+                        if (!source.sourceAvailable) Text(s(ai.memora.app.R.string.case_source_missing),
+                            modifier = Modifier.padding(top = 8.dp), color = colors.amber)
+                    } else {
+                        val body = record.body?.takeIf(String::isNotBlank)
+                        Text(body?.take(20_000) ?: s(ai.memora.app.R.string.saved_objects_no_details), color = colors.ink)
+                        if (body != null && body.length > 20_000) {
+                            Text(s(ai.memora.app.R.string.saved_objects_details_truncated), modifier = Modifier.padding(top = 8.dp), color = colors.muted)
+                        }
+                        if (record.kind == DomainKind.PERSON.name) PersonCardSections(record, scopeId, repository,
+                            remember(database) { ProtectedCaseRepository(database) },
+                            onOpenLinkedObject = { linked ->
+                                detailStack = detailStack + record
+                                selectedCaseSource = null
+                                selected = linked
+                            },
+                            onOpenCaseSource = { source -> selectedCaseSource = source })
                     }
-                    if (record.kind == DomainKind.PERSON.name) PersonCardSections(record, scopeId, repository,
-                        remember(database) { ProtectedCaseRepository(database) },
-                        onOpenLinkedObject = { linked -> detailStack = detailStack + record; selected = linked })
                 }
             },
             confirmButton = {
-                if (detailStack.isNotEmpty()) {
+                if (selectedCaseSource != null || detailStack.isNotEmpty()) {
                     TextButton(modifier = Modifier.testTag("saved_object_detail_back"), onClick = {
-                        selected = detailStack.last()
-                        detailStack = detailStack.dropLast(1)
+                        if (selectedCaseSource != null) {
+                            selectedCaseSource = null
+                        } else {
+                            selected = detailStack.last()
+                            detailStack = detailStack.dropLast(1)
+                        }
                     }) { Text(s(ai.memora.app.R.string.person_related_back)) }
                 } else {
-                    TextButton(modifier = Modifier.testTag("saved_object_detail_close"), onClick = { selected = null }) {
+                    TextButton(modifier = Modifier.testTag("saved_object_detail_close"), onClick = {
+                        selected = null
+                        detailStack = emptyList()
+                    }) {
                         Text(s(ai.memora.app.R.string.close))
                     }
                 }
@@ -155,6 +193,7 @@ private fun PersonCardSections(
     domainRepository: ProtectedDomainRepository,
     caseRepository: ProtectedCaseRepository,
     onOpenLinkedObject: (DomainObjectRow) -> Unit,
+    onOpenCaseSource: (CaseEvidenceView) -> Unit,
 ) {
     val coroutineScope = rememberCoroutineScope()
     var refreshVersion by remember(person.objectId) { mutableIntStateOf(0) }
@@ -254,12 +293,15 @@ private fun PersonCardSections(
         relatedCases.forEach { snapshot ->
             snapshot.timeline.filterNot { it.sourceKind == "money_event" && it.sourceId in financeEventIds }
                 .forEach { event ->
+                    val source = if (event.id.startsWith("evidence:")) {
+                        snapshot.evidence.firstOrNull { "evidence:${it.evidence.evidenceId}" == event.id && it.sourceAvailable }
+                    } else null
                     val label = when {
                         event.sourceKind == "case_revision" -> event.title.ifBlank { s(ai.memora.app.R.string.case_timeline_update) }
                         event.title.isNotBlank() -> "${snapshot.record.title}: ${event.title}"
                         else -> snapshot.record.title
                     }
-                    add(PersonStoryEntry("case-${event.id}", event.at, personTimelineOrder(event.at), label, event.detail))
+                    add(PersonStoryEntry("case-${event.id}", event.at, personTimelineOrder(event.at), label, event.detail, source))
                 }
         }
     }.distinctBy { it.id }.sortedWith(compareByDescending<PersonStoryEntry> { it.sortOrder }.thenBy { it.id }).take(40)
@@ -286,10 +328,13 @@ private fun PersonCardSections(
         Text(s(ai.memora.app.R.string.person_timeline), modifier = Modifier.padding(top = 18.dp),
             style = androidx.compose.material3.MaterialTheme.typography.titleSmall, color = colors.ink)
         personStory.forEach { entry ->
-            MemoraCard(modifier = Modifier.padding(top = 8.dp).testTag("person_story_${entry.id}")) {
+            MemoraCard(modifier = Modifier.padding(top = 8.dp).testTag("person_story_${entry.id}"),
+                onClick = entry.source?.let { { onOpenCaseSource(it) } }) {
                 Text(entry.title, color = colors.ink, style = androidx.compose.material3.MaterialTheme.typography.titleSmall)
                 entry.detail?.takeIf(String::isNotBlank)?.let { Text(it.take(500), color = colors.muted) }
                 Text(entry.at, color = colors.muted, style = androidx.compose.material3.MaterialTheme.typography.labelSmall)
+                if (entry.source != null) Text(s(ai.memora.app.R.string.case_source_open_details), color = colors.accent,
+                    style = androidx.compose.material3.MaterialTheme.typography.labelMedium)
             }
         }
     }
@@ -378,3 +423,36 @@ private fun caseStatusLabelForPerson(status: String): String = s(when (status) {
 })
 
 private fun personTimelineOrder(value: String): Long = runCatching { java.time.Instant.parse(value).toEpochMilli() }.getOrDefault(0L)
+
+@Composable
+private fun personCaseSourceTitle(source: CaseEvidenceView): String {
+    val kindLabel = personCaseSourceKindLabel(source)
+    val title = source.title.takeIf(String::isNotBlank)
+    return if (source.eventKind != null && title != null) {
+        val action = s(when (source.eventKind) {
+            "receipt" -> ai.memora.app.R.string.finance_receipt_label
+            "debt" -> ai.memora.app.R.string.voice_debt_label
+            else -> ai.memora.app.R.string.finance_expense_label
+        })
+        "$action: $title"
+    } else title ?: kindLabel
+}
+
+@Composable
+private fun personCaseSourceKindLabel(source: CaseEvidenceView): String = s(when (source.evidence.sourceKind) {
+        "task" -> ai.memora.app.R.string.case_source_task
+        "calendar_event" -> ai.memora.app.R.string.case_source_calendar
+        "memory_revision" -> ai.memora.app.R.string.case_source_memory
+        "money_event" -> ai.memora.app.R.string.finance
+        else -> ai.memora.app.R.string.case_source_generic
+    })
+
+@Composable
+private fun personCaseRelationLabel(relation: String): String {
+    val resource = when (relation) {
+        "follow_up" -> ai.memora.app.R.string.person_source_relation_follow_up
+        "appointment" -> ai.memora.app.R.string.person_source_relation_appointment
+        else -> null
+    }
+    return if (resource == null) relation else s(resource)
+}

@@ -357,6 +357,8 @@
     <string name="person_related_relation_part_of">part of</string>
     <string name="finance_event_reversed">Reversed</string>
     <string name="case_source_calendar">Calendar event</string>
+    <string name="person_source_relation_follow_up">Follow-up</string>
+    <string name="person_source_relation_appointment">Appointment</string>
     <string name="notes_title">Notes</string>
     <string name="notes_hint">Notes saved in memory</string>
     <string name="onboarding_eyebrow">MEMORA — YOUR PERSONAL SECRETARY</string>
