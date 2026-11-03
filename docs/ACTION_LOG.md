@@ -10,6 +10,8 @@
 
 README, `AGENTS.md`, TODO и дневник описывают получение токена в Firebase Console и ввод в Settings APK. Следующая проверка — владелец создаёт секрет для Android app `ai.memora.app`, передаёт его другу приватно; друг нажимает **Save and verify** и подтверждает результат в приложении. M20-08, live Gemini на втором устройстве и release readiness остаются открытыми.
 
+Git handoff: implementation commit `7d0033983309f10f39973a33d9a3d389fdd9ac56` (`feat(android): accept Firebase App Check debug token`) отправлен в `origin/main`. После `git fetch origin main`, local `HEAD`, `origin/main` и `git ls-remote origin refs/heads/main` совпали. Эта проверочная запись оформляется отдельным documentation commit.
+
 ## ACT-0127 - 2026-11-03 - Explicit person aliases
 
 Added owner-managed, scope-local aliases for existing PERSON domain objects. Matching uses NFC, case folding and whitespace normalization only. Add/retire/restore writes revision history, checks canonical/alias collisions and reads back the persisted row. Finance tools may resolve an alias only through an existing owner-confirmed identity link; an absent/ambiguous link returns a conflict without creating a duplicate finance person. Room migration 15→16 adds alias/revision tables and indexes without backfill or data rewrite. UI strings cover Azerbaijani, Russian and English. ADR: `docs/adr/ADR-014-person-alias-resolution.md`.
