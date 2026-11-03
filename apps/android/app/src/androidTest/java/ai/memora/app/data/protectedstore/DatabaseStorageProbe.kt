@@ -840,9 +840,17 @@ object DatabaseStorageProbe {
                     check(cursor.moveToFirst())
                     cursor.getInt(0)
                 }
-                check(schemaVersion == 16)
+                check(schemaVersion == 17)
                 check(upgraded.protectedStoreDao().command("synthetic-v1-command")?.status == "pending")
                 check(upgraded.protectedStoreDao().migrations().isEmpty())
+                val linkTables = upgraded.openHelper.readableDatabase.query(
+                    "SELECT name FROM sqlite_master WHERE type='table' AND name IN (?, ?) ORDER BY name",
+                    arrayOf("task_person_link", "task_person_link_revision"),
+                ).use { cursor -> buildList { while (cursor.moveToNext()) add(cursor.getString(0)) } }
+                check(linkTables == listOf("task_person_link", "task_person_link_revision"))
+                check(upgraded.openHelper.readableDatabase.query("SELECT COUNT(*) FROM task_person_link").use { cursor ->
+                    check(cursor.moveToFirst()); cursor.getInt(0) == 0
+                })
                 val migratedProfile = requireNotNull(upgraded.protectedStoreDao().localProfile())
                 check(runCatching { UUID.fromString(migratedProfile.localProfileId) }.isSuccess)
                 check(migratedProfile.toneStyle == "friendly" && migratedProfile.responseStyle == "balanced")
