@@ -1,5 +1,15 @@
 # Memora — лог действий
 
+## ACT-0129 - 2026-11-03 - Относительные голосовые напоминания
+
+Для инструмента `create_task` добавлен типизированный `remind_in_minutes`. Gemini получает прямое правило: относительное напоминание вроде «через 15 минут» нужно сохранить инструментом сразу; точный срок вычисляет приложение по часам устройства и зоне задачи (по умолчанию Asia/Baku). Принимается точное целое от 1 минуты до года; несовместимые absolute/relative аргументы, некорректная зона и неоднозначное DST-время отклоняются. В notification теперь выводится сохранённое название задачи. Существующие consent/security gates и Android notification permission не менялись; расписание остаётся неточным, возможна задержка.
+
+Проверки: `TaskReminderTimeTest` и `AgentToolCatalogTest` прошли; `:app:assembleDebug` завершился `BUILD SUCCESSFUL` (финальный прогон 2m53s). APK v45 / `1.1.23-voice-task-reminders`, versionCode 45, Room schema 16; SHA-256 `F82B9502F493D8AA228A1A7DDA02E94106C61348C5C6147F9E8E700DBBDED9E0`; backup `C:\memora-backups\Memora-v45-1.1.23-voice-task-reminders-2026-11-03.apk` совпадает. После сообщения о подключённом устройстве `adb install -r` завершился Success; Redmi Android 13 запустил APK, package manager подтвердил versionCode 45. Системное разрешение `POST_NOTIFICATIONS` выдано. Личная база не открывалась и не очищалась. Live Gemini tool selection, успешное расписание и фактическая доставка уведомления ещё не проверены; полный suite и lint не запускались.
+
+До изменения сохранена предыдущая версия APK v43: `C:\memora-backups\Memora-v43-1.1.21-appcheck-token-input-before-reminders-2026-11-03.apk`, SHA-256 `178C25BE3464BD5E23CFC9D4E32BF73F2885EDB4F008DF86B1735D7AE72101A4`. Реализация закоммичена в `cc130d026ec984cd4681d222d3008e020c2dde8e` (`feat(android): support relative task reminders`); синхронизация документов входит в текущий Git handoff.
+
+Открыта field-проверка: одна синтетическая фраза с явным 15-минутным интервалом, task write/status, затем доставка уведомления с названием задачи. Gemini зависит от настроенного debug App Check token и включённого согласия на сохранение памяти; не заявлять полный acceptance до опыта владельца.
+
 ## ACT-0128 - 2026-11-03 - Firebase App Check token input for debug APK
 
 По уточнению владельца добавлен debug-only экран настроек для токена, созданного в Firebase Console для `ai.memora.app`. Поле маскирует ввод; debug secret сохраняется только в app-private preferences, не попадает в журналы/исходники/экспорт. Экран проверяет запись реальным Firebase App Check token exchange и показывает только результат либо HTTP status. Новый provider использует официальный `projects.apps.exchangeDebugToken` endpoint с session и limited-use режимами; без введённого токена сохраняется автоматический `DebugAppCheckProviderFactory`. Release source set содержит пустой UI компонент и штатный Play Integrity provider.
