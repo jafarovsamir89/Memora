@@ -36,11 +36,12 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.util.Locale
 
-data class DevicePermissionState(val microphone: Boolean, val notifications: Boolean)
+data class DevicePermissionState(val microphone: Boolean, val notifications: Boolean, val exactAlarms: Boolean)
 
 fun readDevicePermissionState(context: Context): DevicePermissionState = DevicePermissionState(
     microphone = context.checkSelfPermission(Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED,
     notifications = TaskReminders.available(context),
+    exactAlarms = TaskReminders.exactAlarmAvailable(context),
 )
 
 /** Permission changes are made in Android; returning refreshes rather than assuming success. */
@@ -61,11 +62,22 @@ fun DevicePermissionSettings() {
         val intent = Intent(Settings.ACTION_APP_NOTIFICATION_SETTINGS).putExtra(Settings.EXTRA_APP_PACKAGE, context.packageName)
         openError = runCatching { context.startActivity(intent); false }.getOrDefault(true)
     }
+    fun openExactAlarms() {
+        val intent = if (Build.VERSION.SDK_INT >= VERSION_CODES.S) {
+            Intent(Settings.ACTION_REQUEST_SCHEDULE_EXACT_ALARM, Uri.parse("package:${context.packageName}"))
+        } else Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.fromParts("package", context.packageName, null))
+        val opened = runCatching { context.startActivity(intent); true }.getOrDefault(false)
+        openError = if (opened) false else runCatching {
+            context.startActivity(Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS,
+                Uri.fromParts("package", context.packageName, null)))
+            false
+        }.getOrDefault(true)
+    }
     fun openMicrophone() {
         val intent = Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.fromParts("package", context.packageName, null))
         openError = runCatching { context.startActivity(intent); false }.getOrDefault(true)
     }
-    DevicePermissionControls(state, openError, ::openMicrophone, ::openNotifications)
+    DevicePermissionControls(state, openError, ::openMicrophone, ::openNotifications, ::openExactAlarms)
 }
 
 /** Independent, disabled-by-default consent for private, content-free daily local attention. */
@@ -207,7 +219,8 @@ private fun minuteTime(minutes: Int) = java.time.LocalTime.of((minutes.coerceIn(
 private fun formatMinute(time: java.time.LocalTime) = String.format(Locale.ROOT, "%02d:%02d", time.hour, time.minute)
 
 @Composable
-fun DevicePermissionControls(state: DevicePermissionState?, openError: Boolean, openMicrophone: () -> Unit, openNotifications: () -> Unit) {
+fun DevicePermissionControls(state: DevicePermissionState?, openError: Boolean, openMicrophone: () -> Unit,
+    openNotifications: () -> Unit, openExactAlarms: () -> Unit) {
     SectionHeading(s(R.string.permission_settings_title))
     Text(s(R.string.permission_settings_explanation), style = MaterialTheme.typography.bodySmall)
     val unknown = s(R.string.permission_unknown)
@@ -217,6 +230,14 @@ fun DevicePermissionControls(state: DevicePermissionState?, openError: Boolean, 
     OutlinedButton(onClick = openMicrophone, modifier = Modifier.fillMaxWidth().testTag("permission_microphone_settings")) { Text(s(R.string.permission_open_app)) }
     Text(s(R.string.permission_notifications) + ": " + (state?.let { if (it.notifications) allowed else unavailable } ?: unknown), modifier = Modifier.testTag("permission_notifications_status"))
     OutlinedButton(onClick = openNotifications, modifier = Modifier.fillMaxWidth().testTag("permission_notification_settings")) { Text(s(R.string.permission_open_notifications)) }
+    Text(s(R.string.permission_exact_alarms) + ": " + (state?.let { if (it.exactAlarms) allowed else unavailable } ?: unknown),
+        modifier = Modifier.testTag("permission_exact_alarms_status"))
+    if (state?.exactAlarms != true) {
+        OutlinedButton(onClick = openExactAlarms, modifier = Modifier.fillMaxWidth().testTag("permission_exact_alarms_settings")) {
+            Text(s(R.string.permission_open_exact_alarms))
+        }
+    }
+    Text(s(R.string.permission_exact_alarm_explanation), style = MaterialTheme.typography.bodySmall)
     Text(s(R.string.permission_notification_limits), style = MaterialTheme.typography.bodySmall)
     if (openError) Text(s(R.string.permission_open_error), color = MaterialTheme.colorScheme.error, modifier = Modifier.testTag("permission_settings_error"))
 }

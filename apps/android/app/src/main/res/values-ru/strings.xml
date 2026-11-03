@@ -234,6 +234,9 @@
     <string name="permission_open_app">Открыть настройки приложения</string>
     <string name="permission_open_notifications">Открыть настройки уведомлений</string>
     <string name="permission_notification_limits">Разрешение не гарантирует доставку или звук: влияют режимы устройства и системные ограничения. После изменения откройте «Дела», чтобы заново запланировать будущие напоминания.</string>
+    <string name="permission_exact_alarms">Точные напоминания</string>
+    <string name="permission_open_exact_alarms">Разрешить будильники и напоминания</string>
+    <string name="permission_exact_alarm_explanation">Разрешение на уведомления само по себе не гарантирует точное время. Доступ Android «Будильники и напоминания» помогает доставлять их вовремя.</string>
     <string name="permission_open_error">Не удалось открыть настройки Android. Откройте настройки приложения вручную.</string>
     <string name="capture_edit">Исправить</string>
     <string name="capture_edit_hint">Создастся новая версия. Прежний текст останется в истории и экспорте.</string>

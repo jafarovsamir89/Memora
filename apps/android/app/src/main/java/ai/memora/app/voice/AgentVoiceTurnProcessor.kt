@@ -71,7 +71,7 @@ internal class AgentVoiceTurnProcessor(context: Context, private val databaseOve
             }
             val handlers = if (preferences.getBoolean("gemini-persisted-memory-v1", false))
                 LocalMemoryTools(repo, ProtectedMemoryRepository(database), financeEnabled = migrateLegacyFinance(),
-                    onTaskChanged = { task -> TaskReminders.schedule(appContext, task).name.lowercase() },
+                    onTaskChanged = { task -> TaskReminders.schedule(appContext, task).code() },
                     conversations = conversations, profileMemory = ProtectedProfileMemoryRepository(database),
                     personAliases = ai.memora.app.data.protectedstore.PersonAliasRepository(database)).handlers() else emptyList()
             val orchestrator = AgentOrchestrator(GeminiAgentModelGateway(), DefaultAgentToolRegistry(handlers), policy,

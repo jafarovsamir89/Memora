@@ -18,10 +18,20 @@ class TaskReminderTest {
         val context = ApplicationProvider.getApplicationContext<Context>()
         val alarm = shadowOf(context.getSystemService(AlarmManager::class.java))
         val task = Task("abc", "local", "Synthetic", false, 1, "2030-10-31T09:00", "Asia/Baku", true)
-        assertEquals(ReminderStatus.Scheduled, TaskReminders.schedule(context, task, 0, true))
+        assertEquals(ReminderStatus.ScheduledInexact, TaskReminders.schedule(context, task, 0, true, false))
+        assertEquals("scheduled_inexact", ReminderStatus.ScheduledInexact.code())
         assertEquals(1, alarm.scheduledAlarms.size)
         assertEquals(ReminderStatus.None, TaskReminders.schedule(context, task.copy(completed = true), 0, true))
         assertEquals(0, alarm.scheduledAlarms.size)
+    }
+
+    @Test fun exactAccessSchedulesAnExactIdleAlarm() {
+        val context = ApplicationProvider.getApplicationContext<Context>()
+        val alarm = shadowOf(context.getSystemService(AlarmManager::class.java))
+        val task = Task("exact", "local", "Synthetic", false, 1, "2030-10-31T09:00", "Asia/Baku", true)
+        assertEquals(ReminderStatus.Scheduled, TaskReminders.schedule(context, task, 0, true, true))
+        assertEquals("scheduled", ReminderStatus.Scheduled.code())
+        assertEquals(1, alarm.scheduledAlarms.size)
     }
 
     @Test fun deniedOrPastReminderDoesNotSchedule() {

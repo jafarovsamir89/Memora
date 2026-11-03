@@ -234,6 +234,9 @@
     <string name="permission_open_app">Open app settings</string>
     <string name="permission_open_notifications">Open notification settings</string>
     <string name="permission_notification_limits">Permission does not guarantee delivery or sound: device modes and system restrictions also apply. After a change, open Tasks to reschedule future reminders.</string>
+    <string name="permission_exact_alarms">Exact reminders</string>
+    <string name="permission_open_exact_alarms">Allow alarms and reminders</string>
+    <string name="permission_exact_alarm_explanation">Notification permission alone does not guarantee exact timing. Android’s “Alarms &amp; reminders” access helps deliver reminders on time.</string>
     <string name="permission_open_error">Could not open Android settings. Open the app settings manually.</string>
     <string name="capture_edit">Correct</string>
     <string name="capture_edit_hint">A new version will be created. Previous text remains in history and exports.</string>

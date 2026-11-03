@@ -234,6 +234,9 @@
     <string name="permission_open_app">Tətbiq ayarlarını aç</string>
     <string name="permission_open_notifications">Bildiriş ayarlarını aç</string>
     <string name="permission_notification_limits">İcazə çatdırılmaya və ya səsə zəmanət vermir: cihaz rejimləri və sistem məhdudiyyətləri də təsir edir. Dəyişiklikdən sonra gələcək xatırlatmaları yenidən planlaşdırmaq üçün Tapşırıqları açın.</string>
+    <string name="permission_exact_alarms">Dəqiq xatırlatmalar</string>
+    <string name="permission_open_exact_alarms">Dəqiq zəngli saatlara icazə ver</string>
+    <string name="permission_exact_alarm_explanation">Bildiriş icazəsi ayrıca olaraq xatırlatmanın vaxtında gəlməsinə zəmanət vermir. Android-in “Zəngli saatlar və xatırlatmalar” icazəsi vaxtı dəqiq saxlamağa kömək edir.</string>
     <string name="permission_open_error">Android ayarları açıla bilmədi. Tətbiq ayarlarını özünüz açın.</string>
     <string name="capture_edit">Düzəlt</string>
     <string name="capture_edit_hint">Yeni versiya yaradılacaq. Əvvəlki mətn tarixçədə və ixracda qalacaq.</string>

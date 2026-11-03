@@ -54,19 +54,22 @@ class PermissionSettingsTest {
         val status = mutableStateOf<DevicePermissionState?>(null)
         var microphoneOpened = 0
         var notificationsOpened = 0
+        var exactAlarmsOpened = 0
         compose.setContent {
             val resources = LocalContext.current.resources
             CompositionLocalProvider(LocalStrings provides resources) {
-                MemoraTheme("light") { Column { DevicePermissionControls(status.value, true, { microphoneOpened++ }, { notificationsOpened++ }) } }
+                MemoraTheme("light") { Column { DevicePermissionControls(status.value, true, { microphoneOpened++ }, { notificationsOpened++ }, { exactAlarmsOpened++ }) } }
             }
         }
         compose.onNodeWithTag("permission_microphone_status").assertTextContains("Не удалось определить", substring = true)
         compose.onNodeWithTag("permission_settings_error").assertExists()
-        compose.runOnIdle { assertEquals(0, microphoneOpened); assertEquals(0, notificationsOpened); status.value = DevicePermissionState(false, true) }
+        compose.onNodeWithTag("permission_exact_alarms_status").assertExists()
+        compose.runOnIdle { assertEquals(0, microphoneOpened); assertEquals(0, notificationsOpened); assertEquals(0, exactAlarmsOpened); status.value = DevicePermissionState(false, true, false) }
         compose.onNodeWithTag("permission_microphone_status").assertTextContains("Не разрешено", substring = true)
         compose.onNodeWithTag("permission_notifications_status").assertTextContains("Разрешено", substring = true)
         compose.onNodeWithTag("permission_microphone_settings").performClick()
         compose.onNodeWithTag("permission_notification_settings").performClick()
-        compose.runOnIdle { assertEquals(1, microphoneOpened); assertEquals(1, notificationsOpened) }
+        compose.onNodeWithTag("permission_exact_alarms_settings").performClick()
+        compose.runOnIdle { assertEquals(1, microphoneOpened); assertEquals(1, notificationsOpened); assertEquals(1, exactAlarmsOpened) }
     }
 }

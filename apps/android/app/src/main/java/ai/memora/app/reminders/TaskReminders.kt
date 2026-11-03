@@ -24,7 +24,15 @@ import java.time.LocalDateTime
 import java.time.ZoneId
 import kotlinx.coroutines.runBlocking
 
-enum class ReminderStatus { None, Scheduled, Past, Denied, Invalid }
+enum class ReminderStatus {
+    None, Scheduled, ScheduledInexact, Past, Denied, Invalid;
+
+    fun code(): String = when (this) {
+        Scheduled -> "scheduled"
+        ScheduledInexact -> "scheduled_inexact"
+        else -> name.lowercase()
+    }
+}
 
 object TaskReminders {
     const val CHANNEL = "task-reminders"
@@ -44,6 +52,9 @@ object TaskReminders {
             manager.areNotificationsEnabled() && (channel == null || channel.importance != NotificationManager.IMPORTANCE_NONE)
     }
 
+    fun exactAlarmAvailable(context: Context): Boolean = Build.VERSION.SDK_INT < Build.VERSION_CODES.S ||
+        context.getSystemService(AlarmManager::class.java).canScheduleExactAlarms()
+
     fun dueAt(task: Task): Long? {
         return try {
             val local = LocalDateTime.parse(task.dueLocal ?: return null)
@@ -57,14 +68,25 @@ object TaskReminders {
         context.getSystemService(AlarmManager::class.java).cancel(pending(context, id))
     }
 
-    fun schedule(context: Context, task: Task, now: Long = System.currentTimeMillis(), permitted: Boolean = available(context)): ReminderStatus {
+    fun schedule(context: Context, task: Task, now: Long = System.currentTimeMillis(),
+        permitted: Boolean = available(context), exactPermitted: Boolean = exactAlarmAvailable(context)): ReminderStatus {
         cancel(context, task.id)
         if (!task.remind || task.completed) return ReminderStatus.None
         val due = dueAt(task) ?: return ReminderStatus.Invalid
         if (due <= now) return ReminderStatus.Past
         if (!permitted) return ReminderStatus.Denied
-        context.getSystemService(AlarmManager::class.java).setAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, due, pending(context, task.id, due, task.scopeId))
-        return ReminderStatus.Scheduled
+        val manager = context.getSystemService(AlarmManager::class.java)
+        val alarm = pending(context, task.id, due, task.scopeId)
+        if (exactPermitted) {
+            try {
+                manager.setExactAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, due, alarm)
+                return ReminderStatus.Scheduled
+            } catch (_: SecurityException) {
+                // Access may be revoked between checking Android settings and installing the alarm.
+            }
+        }
+        manager.setAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, due, alarm)
+        return ReminderStatus.ScheduledInexact
     }
 
     fun reschedule(context: Context, tasks: List<Task>) { tasks.forEach { schedule(context, it) } }
@@ -110,7 +132,8 @@ class TaskReminderReceiver : BroadcastReceiver() {
 class TaskRescheduleReceiver : BroadcastReceiver() {
     override fun onReceive(context: Context, intent: Intent) {
         if (intent.action !in setOf(Intent.ACTION_BOOT_COMPLETED, Intent.ACTION_MY_PACKAGE_REPLACED,
-                Intent.ACTION_TIME_CHANGED, Intent.ACTION_TIMEZONE_CHANGED)) return
+                Intent.ACTION_TIME_CHANGED, Intent.ACTION_TIMEZONE_CHANGED,
+                AlarmManager.ACTION_SCHEDULE_EXACT_ALARM_PERMISSION_STATE_CHANGED)) return
         val pending = goAsync()
         Thread {
             try {
