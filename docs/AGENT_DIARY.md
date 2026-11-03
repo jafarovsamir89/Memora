@@ -12,7 +12,23 @@
 
 ## Актуальное состояние
 
-**Текущий проверенный срез ACT-0136, 2026-11-03:** APK v52 / `1.1.30-delete-timeout-acknowledgement`, Room schema 16. Если persisted delete tool подтвердил локальную операцию, но следующий запрос модели завершился timeout/ошибкой, AZ/RU/EN fallback теперь сообщает, что сохранённая запись удалена, а пояснение помощника не завершено. Раньше одинаковый fallback для всех writes говорил «запись сохранена», что было неверно для удаления. Общий статус остаётся `PARTIAL`, tool readback `APPLIED`; при дополнительных отказах используется частичный исход. Схема БД не менялась.
+**Текущий проверенный срез ACT-0137, 2026-11-03:** APK v52 / `1.1.30-delete-timeout-acknowledgement`, Room schema 16; в этом пакете менялись только synthetic UI-test и документы, поэтому APK не менялся. Расширен M20-03 сценарий карточки человека: одно каноническое финансовое событие связано с двумя делами, но появляется в истории человека единственной карточкой; ledger содержит одну запись. Из карточки открывается точный источник `Money received: Synthetic Planner`, сумма `50 AZN`, и возврат ведёт обратно к человеку. Никакого связывания по совпадению имён не добавлено.
+
+`personTimelineOpensExplicitTaskAndCalendarSourcesAndReturnsToCard` проходит. Свежие отчёты `:app:testDebugUnitTest`: 56 suites / 286 tests, 0 failures/errors/skips. `:app:assembleDebug`, `:app:assembleDebugAndroidTest`, `:app:compileDebugAndroidTestKotlin`, `:app:lintDebug` прошли; lint 0 ошибок / 60 предупреждений / 3 подсказки. Просмотрены синтетические host screenshots `24-person-card-single-finance-source.png` и `25-person-single-receipt-source.png`; это не снимки телефона. APK по-прежнему SHA-256 `9045e9b8144b7875afb59f6f43e6b9d7a5f7dcc15e82d0007e2e096894b3ea26`. Телефон не обновлялся, пользовательская БД не открывалась.
+
+Следующий шаг: продолжить M20-03 canonical associations, сохраняя явные связи источников и provenance; затем проверять update/correction и batch operations. M20-01/03/04/05/08 остаются частичными; live Gemini, field/device acceptance и реальные SQLCipher upgrade/readback остаются открытыми.
+
+### ACT-0137 — 2026-11-03 — Проверка дедупликации финансового источника в карточке человека
+
+В существующий synthetic Compose сценарий добавлена одна каноническая финансовая запись, явно связанная с двумя делами, где указан тот же synthetic participant. Проверяется, что ledger содержит ровно одну запись, история человека выводит один элемент на основе канонической идентичности источника, а переход в деталь показывает название операции и точную сумму 50 AZN. Скриншоты `24-person-card-single-finance-source.png` и `25-person-single-receipt-source.png` просмотрены визуально; это host/Robolectric captures.
+
+Прицельный Compose test прошёл. Полный набор: 56 suites / 286 tests, 0 failures/errors/skips; debug APK и AndroidTest APK собраны, AndroidTest Kotlin compile и lint прошли, lint 0 errors / 60 warnings / 3 hints. Приложение и схема БД не менялись; APK v52 не переустанавливался, личная БД не открывалась.
+
+Изменены `CasesAndPersonCardTest.kt`, `TODO.md`, `docs/ENGINEERING_PLAN.md`, дневник и лог действий. M20-03 остаётся частичным: canonical links между доменами, acceptance людей/дел и проверки на реальном устройстве открыты.
+
+Git handoff ACT-0137 будет записан после commit/push и проверки совпадения удалённой ветки.
+
+**Предыдущий проверенный срез ACT-0136, 2026-11-03:** APK v52 / `1.1.30-delete-timeout-acknowledgement`, Room schema 16. Если persisted delete tool подтвердил локальную операцию, но следующий запрос модели завершился timeout/ошибкой, AZ/RU/EN fallback теперь сообщает, что сохранённая запись удалена, а пояснение помощника не завершено. Раньше одинаковый fallback для всех writes говорил «запись сохранена», что было неверно для удаления. Общий статус остаётся `PARTIAL`, tool readback `APPLIED`; при дополнительных отказах используется частичный исход. Схема БД не менялась.
 
 Проверки: `AgentRuntimeTest.successfulDeletionFollowedByModelTimeoutUsesDeletionWording` проходит fake delete + последующий `model_timeout`: status `PARTIAL`, code `reply_timeout_after_write`, observation `APPLIED`, ответ уточняет удаление. Прицельный тест и полный `:app:testDebugUnitTest`: 56 suites / 286 tests, 0 failures/errors/skips. `:app:assembleDebug`, `:app:assembleDebugAndroidTest`, `:app:compileDebugAndroidTestKotlin`, `:app:lintDebug` прошли; lint 0 ошибок / 60 предупреждений / 3 подсказки. APK SHA-256 `9045e9b8144b7875afb59f6f43e6b9d7a5f7dcc15e82d0007e2e096894b3ea26`. Устройство не обновлялось, пользовательская БД не открывалась.
 

@@ -203,6 +203,9 @@ class CasesAndPersonCardTest {
             "2026-11-03T10:00:00Z")
         repository.appendTaskEvent(TaskEvent.Created("synthetic-linked-task", scope, "synthetic-test-owner",
             "synthetic-linked-task-create", "Synthetic follow-up task"))
+        repository.recordFinanceEvent(scope, "Synthetic Planner", "receipt", 5_000, "AZN", "Synthetic advance", null,
+            "synthetic-planner-finance", "synthetic-planner-receipt", "synthetic-planner-receipt-command",
+            "2026-11-03T10:01:00Z", "2026-11-03T10:01:00Z")
         repository.createCalendarEvent(CalendarInput("synthetic-linked-calendar", scope, "Synthetic appointment",
             "2026-11-07T11:00", "2026-11-07T11:30", "Asia/Baku", "minute"))
         cases.createCase(scope, "synthetic-source-case", "Synthetic planning case", "Fictional planning summary",
@@ -213,11 +216,15 @@ class CasesAndPersonCardTest {
             evidenceId = "synthetic-task-evidence", now = "2026-11-03T10:03:00Z")
         cases.addEvidence(scope, "synthetic-source-case", "calendar_event", "synthetic-linked-calendar", "appointment",
             evidenceId = "synthetic-calendar-evidence", now = "2026-11-03T10:04:00Z")
+        cases.addEvidence(scope, "synthetic-source-case", "money_event", "synthetic-planner-receipt", "advance",
+            evidenceId = "synthetic-planner-receipt-evidence-1", now = "2026-11-03T10:04:30Z")
         cases.createCase(scope, "synthetic-source-case-2", "Synthetic follow-up case", "Second fictional case",
             sourceTurnId = "00000000-0000-4000-8000-000000000203", now = "2026-11-03T10:05:00Z")
         cases.addParticipant(scope, "synthetic-source-case-2", "synthetic-source-person", now = "2026-11-03T10:06:00Z")
         cases.addEvidence(scope, "synthetic-source-case-2", "task", "synthetic-linked-task", "follow_up",
             evidenceId = "synthetic-task-evidence-2", now = "2026-11-03T10:07:00Z")
+        cases.addEvidence(scope, "synthetic-source-case-2", "money_event", "synthetic-planner-receipt", "advance",
+            evidenceId = "synthetic-planner-receipt-evidence-2", now = "2026-11-03T10:07:30Z")
 
         compose.setContent {
             CompositionLocalProvider(LocalAgentDatabaseOverride provides databaseRule.database) {
@@ -232,14 +239,28 @@ class CasesAndPersonCardTest {
         compose.onNodeWithTag("saved_object_synthetic-source-person").performScrollTo().performClick()
         val taskStoryTag = "person_story_source-task-synthetic-linked-task-"
         val calendarStoryTag = "person_story_source-calendar_event-synthetic-linked-calendar-"
+        val receiptStoryTag = "person_story_source-money_event-synthetic-planner-receipt-"
         compose.waitUntil(10_000) { compose.onAllNodesWithTag(taskStoryTag).fetchSemanticsNodes().isNotEmpty() }
         compose.onAllNodesWithTag(calendarStoryTag).assertCountEquals(1)
+        compose.onAllNodesWithTag(receiptStoryTag).assertCountEquals(1)
         compose.onAllNodesWithTag(taskStoryTag).assertCountEquals(1)
         compose.onAllNodesWithTag(calendarStoryTag).assertCountEquals(1)
+        assertEquals(1, runBlocking { databaseRule.database.protectedStoreDao().moneyEvents(scope).size })
         compose.onNodeWithTag("person_related_case_synthetic-source-case").assertExists()
         compose.onNodeWithTag("person_related_case_synthetic-source-case-2").assertExists()
         compose.onNodeWithTag(taskStoryTag).performScrollTo()
         screenshot("20-person-card-explicit-sources")
+        compose.onNodeWithTag(receiptStoryTag).performScrollTo()
+        screenshot("24-person-card-single-finance-source")
+        compose.onNodeWithTag(receiptStoryTag).performScrollTo().performClick()
+        compose.onNodeWithTag("saved_object_detail_title").assertTextEquals("Money received: Synthetic Planner")
+        compose.onNodeWithText("50 AZN").assertExists()
+        screenshot("25-person-single-receipt-source")
+        compose.onNodeWithTag("saved_object_detail_back").performClick()
+        compose.onNodeWithTag("saved_object_detail_title").assertTextEquals("Synthetic Planner")
+        compose.waitUntil(10_000) {
+            compose.onAllNodesWithTag("person_related_case_synthetic-source-case").fetchSemanticsNodes().isNotEmpty()
+        }
 
         compose.onNodeWithTag("person_related_case_synthetic-source-case").performScrollTo().performClick()
         compose.onNodeWithTag("saved_object_detail_title").assertTextEquals("Synthetic planning case")

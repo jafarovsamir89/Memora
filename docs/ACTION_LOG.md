@@ -1105,3 +1105,12 @@ Live synthetic Gemini: первые AZ receipt/annotation шаги прошли;
 ACT-0095 зафиксирован коммитом fc2e21bd55e5f209f604a191d72f6c769305ec92 (fix(android): preserve finance context and verified tool results) и отправлен в origin/main. После push локальный HEAD и git ls-remote origin refs/heads/main совпали; рабочее дерево до добавления этой handoff-записи было чистым. В коммите указано продолжать разработку по docs/AI_AGENT_IMPLEMENTATION.md.
 
 Переданы APK v26 / 1.1.4-field-secretary, изменения runtime/gateway/repository, synthetic API/device probes, regression tests, обновлённые TODO/контракты и безопасный протокол GEMINI_TOOL_E2E_2026-11-03.md. Полный suite 219/219, lint и обе APK сборки успешны; реальные Gemini AZ/RU mutate/restart и SQLCipher device migration probe прошли. Финальный APK установлен и запущен без очистки данных. Следующий шаг — полевая приёмка владельца и оставшиеся TODO; полный продукт и релиз не объявляются завершёнными.
+## ACT-0137 - 2026-11-03 - Дедупликация финансового источника в карточке человека
+
+Расширен synthetic Compose сценарий M20-03: одно каноническое финансовое событие явно связано с двумя делами одного synthetic participant. История человека должна показывать source ровно один раз при единственной ledger row; открытие элемента должно показать точное название и 50 AZN, а возврат — карточку человека. Связь строится только из сохранённых canonical evidence links.
+
+Целевой `personTimelineOpensExplicitTaskAndCalendarSourcesAndReturnsToCard` прошёл. Свежие JUnit XML: 56 suites / 286 tests, 0 failures/errors/skips. `:app:assembleDebug`, `:app:assembleDebugAndroidTest`, `:app:compileDebugAndroidTestKotlin`, `:app:lintDebug` прошли; lint 0 errors / 60 warnings / 3 hints. Просмотрены host screenshots `24-person-card-single-finance-source.png` и `25-person-single-receipt-source.png`. Это synthetic/Robolectric evidence, не device acceptance.
+
+Изменён `CasesAndPersonCardTest.kt` и синхронизированы чек-лист, инженерный план, дневник и этот лог. Product code, APK и schema не менялись; личная БД не открывалась.
+
+Git handoff будет дополнен после push и проверки remote HEAD.
