@@ -75,6 +75,23 @@ internal val AGENT_DB_8_TO_9 = androidx.room.migration.Migration(8, 9) { db ->
     db.execSQL("INSERT INTO local_profile (localProfileId, displayName, language, toneStyle, responseStyle, timeZoneId, onboardingVersion, onboardingCompleted, remoteAccountId, createdAtMillis, updatedAtMillis) VALUES (lower(hex(randomblob(4))) || '-' || lower(hex(randomblob(2))) || '-4' || substr(lower(hex(randomblob(2))), 2, 3) || '-a' || substr(lower(hex(randomblob(2))), 2, 3) || '-' || lower(hex(randomblob(6))), NULL, 'az', 'friendly', 'balanced', 'Asia/Baku', 1, 1, NULL, CAST(strftime('%s','now') AS INTEGER) * 1000, CAST(strftime('%s','now') AS INTEGER) * 1000)")
 }
 
+/** Explicit, reversible cross-store identity and case projections; no rows are merged by name. */
+internal val AGENT_DB_9_TO_10 = androidx.room.migration.Migration(9, 10) { db ->
+    db.execSQL("CREATE TABLE IF NOT EXISTS person_identity_link (linkId TEXT NOT NULL, scopeId TEXT NOT NULL, financePersonId TEXT NOT NULL, domainPersonId TEXT NOT NULL, verifiedBy TEXT NOT NULL, createdAt TEXT NOT NULL, deletedAt TEXT, PRIMARY KEY(linkId))")
+    db.execSQL("CREATE INDEX IF NOT EXISTS index_person_identity_link_scopeId_financePersonId_deletedAt ON person_identity_link(scopeId, financePersonId, deletedAt)")
+    db.execSQL("CREATE INDEX IF NOT EXISTS index_person_identity_link_scopeId_domainPersonId_deletedAt ON person_identity_link(scopeId, domainPersonId, deletedAt)")
+    db.execSQL("CREATE TABLE IF NOT EXISTS case_record (caseId TEXT NOT NULL, scopeId TEXT NOT NULL, title TEXT NOT NULL, summary TEXT, status TEXT NOT NULL, nextAction TEXT, version INTEGER NOT NULL, sourceTurnId TEXT NOT NULL, createdAt TEXT NOT NULL, updatedAt TEXT NOT NULL, deletedAt TEXT, PRIMARY KEY(caseId))")
+    db.execSQL("CREATE INDEX IF NOT EXISTS index_case_record_scopeId_status_deletedAt ON case_record(scopeId, status, deletedAt)")
+    db.execSQL("CREATE TABLE IF NOT EXISTS case_revision (caseId TEXT NOT NULL, version INTEGER NOT NULL, payloadJson TEXT NOT NULL, sourceTurnId TEXT NOT NULL, changedAt TEXT NOT NULL, PRIMARY KEY(caseId, version))")
+    db.execSQL("CREATE TABLE IF NOT EXISTS case_participant (participantId TEXT NOT NULL, scopeId TEXT NOT NULL, caseId TEXT NOT NULL, domainPersonId TEXT NOT NULL, role TEXT NOT NULL, addedAt TEXT NOT NULL, deletedAt TEXT, PRIMARY KEY(participantId))")
+    db.execSQL("CREATE UNIQUE INDEX IF NOT EXISTS index_case_participant_scopeId_caseId_domainPersonId ON case_participant(scopeId, caseId, domainPersonId)")
+    db.execSQL("CREATE INDEX IF NOT EXISTS index_case_participant_scopeId_caseId_deletedAt ON case_participant(scopeId, caseId, deletedAt)")
+    db.execSQL("CREATE INDEX IF NOT EXISTS index_case_participant_scopeId_domainPersonId_deletedAt ON case_participant(scopeId, domainPersonId, deletedAt)")
+    db.execSQL("CREATE TABLE IF NOT EXISTS case_evidence (evidenceId TEXT NOT NULL, scopeId TEXT NOT NULL, caseId TEXT NOT NULL, sourceKind TEXT NOT NULL, sourceId TEXT NOT NULL, relation TEXT NOT NULL, sourceRevisionId TEXT, occurredAt TEXT NOT NULL, addedAt TEXT NOT NULL, deletedAt TEXT, PRIMARY KEY(evidenceId))")
+    db.execSQL("CREATE UNIQUE INDEX IF NOT EXISTS index_case_evidence_scopeId_caseId_sourceKind_sourceId ON case_evidence(scopeId, caseId, sourceKind, sourceId)")
+    db.execSQL("CREATE INDEX IF NOT EXISTS index_case_evidence_scopeId_caseId_occurredAt ON case_evidence(scopeId, caseId, occurredAt)")
+}
+
 /** Minimal command journal. Only identifiers, digest, status and recovery versions are retained. */
 @Entity(tableName = "agent_command_journal")
 internal data class AgentCommandJournalRow(
@@ -159,6 +176,77 @@ internal data class LocalProfileRow(
     val updatedAtMillis: Long,
 )
 
+/** Owner-confirmed link between finance identity and a canonical PERSON object; never inferred by name. */
+@Entity(tableName = "person_identity_link", indices = [
+    androidx.room.Index(value = ["scopeId", "financePersonId", "deletedAt"]),
+    androidx.room.Index(value = ["scopeId", "domainPersonId", "deletedAt"]),
+])
+internal data class PersonIdentityLinkRow(
+    @PrimaryKey val linkId: String,
+    val scopeId: String,
+    val financePersonId: String,
+    val domainPersonId: String,
+    val verifiedBy: String,
+    val createdAt: String,
+    val deletedAt: String?,
+)
+
+@Entity(tableName = "case_record", indices = [androidx.room.Index(value = ["scopeId", "status", "deletedAt"])])
+internal data class CaseRecordRow(
+    @PrimaryKey val caseId: String,
+    val scopeId: String,
+    val title: String,
+    val summary: String?,
+    val status: String,
+    val nextAction: String?,
+    val version: Long,
+    val sourceTurnId: String,
+    val createdAt: String,
+    val updatedAt: String,
+    val deletedAt: String?,
+)
+
+@Entity(tableName = "case_revision", primaryKeys = ["caseId", "version"])
+internal data class CaseRevisionRow(
+    val caseId: String,
+    val version: Long,
+    val payloadJson: String,
+    val sourceTurnId: String,
+    val changedAt: String,
+)
+
+@Entity(tableName = "case_participant", indices = [
+    androidx.room.Index(value = ["scopeId", "caseId", "deletedAt"]),
+    androidx.room.Index(value = ["scopeId", "domainPersonId", "deletedAt"]),
+    androidx.room.Index(value = ["scopeId", "caseId", "domainPersonId"], unique = true),
+])
+internal data class CaseParticipantRow(
+    @PrimaryKey val participantId: String,
+    val scopeId: String,
+    val caseId: String,
+    val domainPersonId: String,
+    val role: String,
+    val addedAt: String,
+    val deletedAt: String?,
+)
+
+@Entity(tableName = "case_evidence", indices = [
+    androidx.room.Index(value = ["scopeId", "caseId", "sourceKind", "sourceId"], unique = true),
+    androidx.room.Index(value = ["scopeId", "caseId", "occurredAt"]),
+])
+internal data class CaseEvidenceRow(
+    @PrimaryKey val evidenceId: String,
+    val scopeId: String,
+    val caseId: String,
+    val sourceKind: String,
+    val sourceId: String,
+    val relation: String,
+    val sourceRevisionId: String?,
+    val occurredAt: String,
+    val addedAt: String,
+    val deletedAt: String?,
+)
+
 @Entity(tableName = "memory_draft")
 internal data class MemoryDraftRow(@PrimaryKey val id: Int = 1, val text: String, val version: Long)
 
@@ -224,6 +312,43 @@ internal interface ProtectedStoreDao {
     @androidx.room.Query("UPDATE local_profile SET language=:language, updatedAtMillis=:updatedAt WHERE localProfileId=:id")
     suspend fun updateLocalProfileLanguage(id: String, language: String, updatedAt: Long): Int
 
+    @androidx.room.Query("SELECT * FROM person_identity_link WHERE scopeId=:scope AND deletedAt IS NULL ORDER BY createdAt, linkId")
+    suspend fun activePersonIdentityLinks(scope: String): List<PersonIdentityLinkRow>
+    @androidx.room.Query("SELECT * FROM person_identity_link WHERE scopeId=:scope AND financePersonId=:id AND deletedAt IS NULL")
+    suspend fun activeIdentityLinkForFinancePerson(scope: String, id: String): PersonIdentityLinkRow?
+    @androidx.room.Query("SELECT * FROM person_identity_link WHERE scopeId=:scope AND domainPersonId=:id AND deletedAt IS NULL")
+    suspend fun activeIdentityLinkForDomainPerson(scope: String, id: String): PersonIdentityLinkRow?
+    @androidx.room.Insert(onConflict = androidx.room.OnConflictStrategy.ABORT) suspend fun insertPersonIdentityLink(row: PersonIdentityLinkRow)
+    @androidx.room.Query("UPDATE person_identity_link SET deletedAt=:at WHERE scopeId=:scope AND linkId=:id AND deletedAt IS NULL")
+    suspend fun unlinkPersonIdentity(scope: String, id: String, at: String): Int
+
+    @androidx.room.Query("SELECT * FROM case_record WHERE scopeId=:scope AND caseId=:id") suspend fun caseRecord(scope: String, id: String): CaseRecordRow?
+    @androidx.room.Query("SELECT * FROM case_record WHERE scopeId=:scope AND deletedAt IS NULL ORDER BY updatedAt DESC, caseId LIMIT :limit")
+    suspend fun activeCases(scope: String, limit: Int): List<CaseRecordRow>
+    @androidx.room.Insert(onConflict = androidx.room.OnConflictStrategy.ABORT) suspend fun insertCase(row: CaseRecordRow)
+    @androidx.room.Query("UPDATE case_record SET title=:title, summary=:summary, status=:status, nextAction=:nextAction, version=:nextVersion, updatedAt=:now WHERE scopeId=:scope AND caseId=:id AND version=:expected AND deletedAt IS NULL")
+    suspend fun updateCase(scope: String, id: String, expected: Long, nextVersion: Long, title: String, summary: String?, status: String, nextAction: String?, now: String): Int
+    @androidx.room.Insert(onConflict = androidx.room.OnConflictStrategy.ABORT) suspend fun insertCaseRevision(row: CaseRevisionRow)
+    @androidx.room.Query("SELECT * FROM case_revision WHERE caseId=:id ORDER BY version") suspend fun caseRevisions(id: String): List<CaseRevisionRow>
+    @androidx.room.Query("SELECT * FROM case_participant WHERE scopeId=:scope AND caseId=:id AND deletedAt IS NULL ORDER BY addedAt, participantId")
+    suspend fun caseParticipants(scope: String, id: String): List<CaseParticipantRow>
+    @androidx.room.Query("SELECT * FROM case_participant WHERE scopeId=:scope AND caseId=:caseId AND domainPersonId=:personId")
+    suspend fun caseParticipant(scope: String, caseId: String, personId: String): CaseParticipantRow?
+    @androidx.room.Insert(onConflict = androidx.room.OnConflictStrategy.ABORT) suspend fun insertCaseParticipant(row: CaseParticipantRow)
+    @androidx.room.Query("UPDATE case_participant SET deletedAt=NULL, role=:role, addedAt=:at WHERE scopeId=:scope AND participantId=:id AND deletedAt IS NOT NULL")
+    suspend fun restoreCaseParticipant(scope: String, id: String, role: String, at: String): Int
+    @androidx.room.Query("UPDATE case_participant SET deletedAt=:at WHERE scopeId=:scope AND participantId=:id AND deletedAt IS NULL")
+    suspend fun unlinkCaseParticipant(scope: String, id: String, at: String): Int
+    @androidx.room.Query("SELECT * FROM case_evidence WHERE scopeId=:scope AND caseId=:id AND deletedAt IS NULL ORDER BY occurredAt, evidenceId")
+    suspend fun caseEvidence(scope: String, id: String): List<CaseEvidenceRow>
+    @androidx.room.Query("SELECT * FROM case_evidence WHERE scopeId=:scope AND caseId=:caseId AND sourceKind=:kind AND sourceId=:sourceId")
+    suspend fun caseEvidence(scope: String, caseId: String, kind: String, sourceId: String): CaseEvidenceRow?
+    @androidx.room.Insert(onConflict = androidx.room.OnConflictStrategy.ABORT) suspend fun insertCaseEvidence(row: CaseEvidenceRow)
+    @androidx.room.Query("UPDATE case_evidence SET deletedAt=NULL, relation=:relation, sourceRevisionId=:revision, occurredAt=:occurredAt, addedAt=:addedAt WHERE scopeId=:scope AND evidenceId=:id AND deletedAt IS NOT NULL")
+    suspend fun restoreCaseEvidence(scope: String, id: String, relation: String, revision: String?, occurredAt: String, addedAt: String): Int
+    @androidx.room.Query("UPDATE case_evidence SET deletedAt=:at WHERE scopeId=:scope AND evidenceId=:id AND deletedAt IS NULL")
+    suspend fun unlinkCaseEvidence(scope: String, id: String, at: String): Int
+
     @androidx.room.Insert(onConflict = androidx.room.OnConflictStrategy.ABORT)
     suspend fun putConversationMessages(rows: List<AgentConversationMessageRow>)
     @androidx.room.Query("SELECT * FROM agent_conversation_message WHERE scopeId=:scope ORDER BY sequence DESC LIMIT :limit")
@@ -248,6 +373,7 @@ internal interface ProtectedStoreDao {
     @androidx.room.Insert(onConflict = androidx.room.OnConflictStrategy.ABORT) suspend fun putTaskEvents(rows: List<TaskEventRow>)
     @androidx.room.Query("SELECT * FROM task_event WHERE commandId=:id") suspend fun taskEventsForCommand(id: String): List<TaskEventRow>
     @androidx.room.Query("SELECT taskId FROM deleted_task ORDER BY taskId") suspend fun deletedTasks(): List<String>
+    @androidx.room.Query("SELECT EXISTS(SELECT 1 FROM deleted_task WHERE taskId=:taskId)") suspend fun taskDeleted(taskId: String): Boolean
     @androidx.room.Insert(onConflict = androidx.room.OnConflictStrategy.ABORT) suspend fun putDeletedTasks(rows: List<DeletedTaskRow>)
     @androidx.room.Query("SELECT * FROM person ORDER BY personId") suspend fun people(): List<PersonRow>
     @androidx.room.Query("SELECT * FROM person WHERE scopeId=:scope ORDER BY displayName, personId") suspend fun people(scope: String): List<PersonRow>
@@ -333,8 +459,9 @@ internal interface ProtectedStoreDao {
     AgentConversationMessageRow::class,
     DomainObjectRow::class, DomainRevisionRow::class, DomainLinkRow::class, UserTableRow::class, TableColumnRow::class,
     TableDataRow::class, MoneyAdjustmentRow::class, LocalCalendarEventRow::class, TableSchemaRevisionRow::class,
-    LocalProfileRow::class],
-    version = 9, exportSchema = true)
+    LocalProfileRow::class, PersonIdentityLinkRow::class, CaseRecordRow::class, CaseRevisionRow::class,
+    CaseParticipantRow::class, CaseEvidenceRow::class],
+    version = 10, exportSchema = true)
 internal abstract class AgentDatabase : RoomDatabase() {
     abstract fun protectedStoreDao(): ProtectedStoreDao
     companion object {
@@ -443,7 +570,7 @@ internal abstract class AgentDatabase : RoomDatabase() {
             try {
                 database = Room.databaseBuilder(context.applicationContext, AgentDatabase::class.java, databaseName)
                     .addMigrations(AGENT_DB_1_TO_2, AGENT_DB_2_TO_3, AGENT_DB_3_TO_4, AGENT_DB_4_TO_5,
-                        AGENT_DB_5_TO_6, AGENT_DB_6_TO_7, AGENT_DB_7_TO_8, AGENT_DB_8_TO_9)
+                        AGENT_DB_5_TO_6, AGENT_DB_6_TO_7, AGENT_DB_7_TO_8, AGENT_DB_8_TO_9, AGENT_DB_9_TO_10)
                     .setJournalMode(RoomDatabase.JournalMode.TRUNCATE)
                     // WAL remains disabled until P1 WAL/SHM privacy and recovery gates pass.
                     .openHelperFactory(SupportOpenHelperFactory(databaseKey, null, false))

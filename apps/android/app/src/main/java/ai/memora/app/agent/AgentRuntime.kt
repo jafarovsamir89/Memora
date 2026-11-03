@@ -18,7 +18,8 @@ internal val AGENT_PERSISTED_WRITE_TOOLS = setOf("save_note", "record_money_even
     "delete_memory_object", "restore_memory_object", "create_table", "add_table_row", "update_table_row",
     "delete_table_row", "restore_table_row", "rename_table", "delete_table", "restore_table", "create_task",
     "set_task_completion", "edit_task", "create_calendar_event", "edit_calendar_event", "cancel_calendar_event",
-    "settle_debt", "reverse_money_event", "annotate_money_event")
+    "settle_debt", "reverse_money_event", "annotate_money_event", "create_case", "update_case",
+    "add_case_participant", "link_case_source")
 private val WRITE_FAILURES = setOf(ToolObservationStatus.REJECTED, ToolObservationStatus.CONFLICT, ToolObservationStatus.FAILED)
 
 internal fun unresolvedAgentWriteFailures(observations: List<AgentToolObservation>): List<AgentToolObservation> =

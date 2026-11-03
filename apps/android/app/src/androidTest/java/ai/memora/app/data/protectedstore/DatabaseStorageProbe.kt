@@ -430,7 +430,7 @@ object DatabaseStorageProbe {
             val key = DatabaseKeyProvider(context, databaseFile, envelope, store, alias).loadOrCreate()
             db = Room.databaseBuilder(context, AgentDatabase::class.java, dbName)
                 .addMigrations(AGENT_DB_1_TO_2, AGENT_DB_2_TO_3, AGENT_DB_3_TO_4, AGENT_DB_4_TO_5,
-                    AGENT_DB_5_TO_6, AGENT_DB_6_TO_7, AGENT_DB_7_TO_8, AGENT_DB_8_TO_9)
+                    AGENT_DB_5_TO_6, AGENT_DB_6_TO_7, AGENT_DB_7_TO_8, AGENT_DB_8_TO_9, AGENT_DB_9_TO_10)
                 .setJournalMode(androidx.room.RoomDatabase.JournalMode.TRUNCATE)
                 .openHelperFactory(SupportOpenHelperFactory(key, null, false))
                 .build()
@@ -484,7 +484,7 @@ object DatabaseStorageProbe {
             val reopenedKey = DatabaseKeyProvider(context, databaseFile, envelope, store, alias).loadOrCreate()
             db = Room.databaseBuilder(context, AgentDatabase::class.java, dbName)
                 .addMigrations(AGENT_DB_1_TO_2, AGENT_DB_2_TO_3, AGENT_DB_3_TO_4, AGENT_DB_4_TO_5,
-                    AGENT_DB_5_TO_6, AGENT_DB_6_TO_7, AGENT_DB_7_TO_8, AGENT_DB_8_TO_9)
+                    AGENT_DB_5_TO_6, AGENT_DB_6_TO_7, AGENT_DB_7_TO_8, AGENT_DB_8_TO_9, AGENT_DB_9_TO_10)
                 .setJournalMode(androidx.room.RoomDatabase.JournalMode.TRUNCATE)
                 .openHelperFactory(SupportOpenHelperFactory(reopenedKey, null, false)).build()
             db.openHelper.writableDatabase
@@ -778,7 +778,7 @@ object DatabaseStorageProbe {
             val upgradedKey = DatabaseKeyProvider(context, file, envelope, keyStore, alias).loadOrCreate()
             val upgraded = Room.databaseBuilder(context, AgentDatabase::class.java, dbName)
                 .addMigrations(AGENT_DB_1_TO_2, AGENT_DB_2_TO_3, AGENT_DB_3_TO_4, AGENT_DB_4_TO_5,
-                    AGENT_DB_5_TO_6, AGENT_DB_6_TO_7, AGENT_DB_7_TO_8, AGENT_DB_8_TO_9)
+                    AGENT_DB_5_TO_6, AGENT_DB_6_TO_7, AGENT_DB_7_TO_8, AGENT_DB_8_TO_9, AGENT_DB_9_TO_10)
                 .setJournalMode(androidx.room.RoomDatabase.JournalMode.TRUNCATE)
                 .openHelperFactory(SupportOpenHelperFactory(upgradedKey, null, false)).build()
             upgraded.openHelper.writableDatabase
@@ -791,6 +791,11 @@ object DatabaseStorageProbe {
                 check(migratedProfile.onboardingCompleted && migratedProfile.onboardingVersion == 1)
                 check(migratedProfile.remoteAccountId == null && migratedProfile.displayName == null)
                 check(upgraded.openHelper.readableDatabase.query("SELECT name FROM sqlite_master WHERE type='table' AND name='agent_turn_journal'").use { it.moveToFirst() })
+                for (table in listOf("person_identity_link", "case_record", "case_revision", "case_participant", "case_evidence")) {
+                    check(upgraded.openHelper.readableDatabase.query(
+                        "SELECT name FROM sqlite_master WHERE type='table' AND name=?", arrayOf(table),
+                    ).use { it.moveToFirst() })
+                }
             }
             upgraded.close(); upgradedKey.fill(0)
         } finally {

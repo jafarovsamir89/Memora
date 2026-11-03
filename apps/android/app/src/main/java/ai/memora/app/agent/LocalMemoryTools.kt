@@ -31,6 +31,7 @@ internal class LocalMemoryTools(private val repository: ProtectedDomainRepositor
         SearchConversationHistory(), ListTasks(), CreateTask(), EditTask(), SetTaskCompletion(), ListCalendarEvents(), CreateCalendarEvent(),
         EditCalendarEvent(), CancelCalendarEvent(),
         SearchMoney(), RecordMoneyEvent(), SettleDebt(), ReverseMoneyEvent(), CorrectMoneyEvent(), AnnotateMoneyEvent(),
+        CreateCase(), SearchCases(), UpdateCase(), AddCaseParticipant(), LinkCaseSource(),
     )
 
     private inner class SearchMemory : AgentToolHandler {
@@ -218,6 +219,133 @@ internal class LocalMemoryTools(private val repository: ProtectedDomainRepositor
                 repository.link(payload.scope, payload.id, payload.from, payload.to, payload.relation)
                 ToolCommitResult(ToolObservationStatus.APPLIED, "objects_linked", mapOf("relation" to payload.relation))
             } catch (_: Exception) { ToolCommitResult(ToolObservationStatus.FAILED, "link_failed") }
+        }
+    }
+
+    private val cases by lazy { repository.caseRepository() }
+
+    private inner class CreateCase : AgentToolHandler {
+        override val descriptor = AgentToolDescriptor("create_case", 1, ToolAccess.PERSISTED_MEMORY, ToolEffect.WRITE, runtimeEnabled = true)
+        override suspend fun prepare(call: AgentModelToolCall, turn: AgentTurnRequest, commandId: String): ToolPreparation {
+            val title = call.arguments["title"] as? String ?: return ToolPreparation.Rejected("invalid_title")
+            val summary = call.arguments["summary"] as? String
+            val nextAction = call.arguments["next_action"] as? String
+            if (title.isBlank() || title.length > 200 || summary?.length?.let { it > 4_000 } == true ||
+                nextAction?.length?.let { it > 500 } == true) return ToolPreparation.Rejected("invalid_case")
+            val digest = sha256("case_create\u0000${turn.scopeId}\u0000$title\u0000${summary.orEmpty()}\u0000${nextAction.orEmpty()}\u0000${turn.turnId}")
+            return ToolPreparation.Prepared(PreparedAgentCommand(commandId, digest, emptyMap(), false,
+                CreateCasePayload(turn.scopeId, commandId, title.trim(), summary?.trim()?.ifEmpty { null },
+                    nextAction?.trim()?.ifEmpty { null }, turn.turnId)))
+        }
+        override suspend fun commit(command: PreparedAgentCommand): ToolCommitResult {
+            val payload = command.opaquePayload as? CreateCasePayload ?: return rejected()
+            return try {
+                val saved = cases.createCase(payload.scope, payload.caseId, payload.title, payload.summary,
+                    nextAction = payload.nextAction, sourceTurnId = payload.sourceTurnId)
+                ToolCommitResult(ToolObservationStatus.APPLIED, "case_created", mapOf("case_id" to saved.caseId,
+                    "title" to saved.title, "status" to saved.status, "version" to saved.version,
+                    "next_action" to saved.nextAction))
+            } catch (_: Exception) { ToolCommitResult(ToolObservationStatus.FAILED, "case_create_failed") }
+        }
+    }
+
+    private inner class SearchCases : AgentToolHandler {
+        override val descriptor = AgentToolDescriptor("search_cases", 1, ToolAccess.PERSISTED_MEMORY, ToolEffect.READ, runtimeEnabled = true)
+        override suspend fun read(call: AgentModelToolCall, turn: AgentTurnRequest): ToolCommitResult {
+            val query = call.arguments["query"] as? String ?: ""
+            if (query.length > 200) return rejected()
+            val matches = cases.searchCases(turn.scopeId, query, limit = 8)
+            val items = matches.mapNotNull { row -> cases.caseSnapshot(turn.scopeId, row.caseId)?.let { snapshot ->
+                mapOf("case_id" to row.caseId, "title" to row.title, "summary" to row.summary,
+                    "status" to row.status, "next_action" to row.nextAction, "version" to row.version,
+                    "participants" to snapshot.participants.map { mapOf("person_object_id" to it.objectId, "name" to it.title) }.take(8),
+                    "sources" to snapshot.evidence.take(10).map { source -> mapOf("kind" to source.evidence.sourceKind,
+                        "id" to source.evidence.sourceId, "revision_id" to source.evidence.sourceRevisionId,
+                        "relation" to source.evidence.relation, "title" to source.title,
+                        "detail" to source.detail?.take(300), "available" to source.sourceAvailable) },
+                    "timeline" to snapshot.timeline.takeLast(12).map { entry -> mapOf("at" to entry.at,
+                        "kind" to entry.sourceKind, "source_id" to entry.sourceId, "revision_id" to entry.sourceRevisionId,
+                        "title" to entry.title, "detail" to entry.detail?.take(300)) })
+            } }
+            return ToolCommitResult(ToolObservationStatus.APPLIED, "cases_loaded", mapOf(
+                "count" to items.size, "truncated" to (matches.size > items.size || items.size >= 8), "cases" to items))
+        }
+        override suspend fun prepare(call: AgentModelToolCall, turn: AgentTurnRequest, commandId: String) = ToolPreparation.Rejected("read_only_tool")
+        override suspend fun commit(command: PreparedAgentCommand) = rejected()
+    }
+
+    private inner class UpdateCase : AgentToolHandler {
+        override val descriptor = AgentToolDescriptor("update_case", 1, ToolAccess.PERSISTED_MEMORY, ToolEffect.WRITE, runtimeEnabled = true)
+        override suspend fun prepare(call: AgentModelToolCall, turn: AgentTurnRequest, commandId: String): ToolPreparation {
+            val id = call.arguments["case_id"] as? String ?: return ToolPreparation.Rejected("invalid_case_id")
+            val current = cases.caseSnapshot(turn.scopeId, id)?.record ?: return ToolPreparation.Rejected("case_not_found")
+            val title = (call.arguments["title"] as? String)?.trim()?.takeIf(String::isNotEmpty) ?: current.title
+            val summary = (call.arguments["summary"] as? String)?.trim()?.ifEmpty { null } ?: current.summary
+            val status = (call.arguments["status"] as? String) ?: current.status
+            val clearNext = call.arguments["clear_next_action"] as? Boolean ?: false
+            val next = if (clearNext) null else (call.arguments["next_action"] as? String)?.trim()?.ifEmpty { null } ?: current.nextAction
+            val hasUpdate = title != current.title || summary != current.summary || status != current.status || next != current.nextAction
+            if (!hasUpdate || title.length > 200 || summary?.length?.let { it > 4_000 } == true || next?.length?.let { it > 500 } == true ||
+                status !in setOf("open", "waiting", "completed", "cancelled")) return ToolPreparation.Rejected("invalid_case_update")
+            val digest = sha256("case_update\u0000${turn.scopeId}\u0000$id\u0000${current.version}\u0000$title\u0000${summary.orEmpty()}\u0000$status\u0000${next.orEmpty()}")
+            return ToolPreparation.Prepared(PreparedAgentCommand(commandId, digest, mapOf(id to current.version), false,
+                UpdateCasePayload(turn.scopeId, id, current.version, title, summary, status, next, turn.turnId)))
+        }
+        override suspend fun commit(command: PreparedAgentCommand): ToolCommitResult {
+            val payload = command.opaquePayload as? UpdateCasePayload ?: return rejected()
+            return try {
+                val updated = cases.updateCase(payload.scope, payload.caseId, payload.version, payload.title, payload.summary,
+                    payload.status, payload.nextAction, payload.sourceTurnId)
+                ToolCommitResult(ToolObservationStatus.APPLIED, "case_updated", mapOf("case_id" to updated.caseId,
+                    "status" to updated.status, "version" to updated.version, "next_action" to updated.nextAction))
+            } catch (_: Exception) { ToolCommitResult(ToolObservationStatus.CONFLICT, "case_update_conflict") }
+        }
+    }
+
+    private inner class AddCaseParticipant : AgentToolHandler {
+        override val descriptor = AgentToolDescriptor("add_case_participant", 1, ToolAccess.PERSISTED_MEMORY, ToolEffect.WRITE, runtimeEnabled = true)
+        override suspend fun prepare(call: AgentModelToolCall, turn: AgentTurnRequest, commandId: String): ToolPreparation {
+            val caseId = call.arguments["case_id"] as? String ?: return ToolPreparation.Rejected("invalid_case_id")
+            val personId = call.arguments["person_object_id"] as? String ?: return ToolPreparation.Rejected("invalid_person_id")
+            val role = call.arguments["role"] as? String ?: "participant"
+            if (role.isBlank() || role.length > 80 || role.any(Char::isISOControl)) return ToolPreparation.Rejected("invalid_role")
+            val digest = sha256("case_participant\u0000${turn.scopeId}\u0000$caseId\u0000$personId\u0000$role")
+            return ToolPreparation.Prepared(PreparedAgentCommand(commandId, digest, emptyMap(), false,
+                AddCaseParticipantPayload(turn.scopeId, caseId, personId, role.trim(), commandId)))
+        }
+        override suspend fun commit(command: PreparedAgentCommand): ToolCommitResult {
+            val payload = command.opaquePayload as? AddCaseParticipantPayload ?: return rejected()
+            return try {
+                val row = cases.addParticipant(payload.scope, payload.caseId, payload.personId, payload.role, payload.id)
+                ToolCommitResult(ToolObservationStatus.APPLIED, "case_participant_added", mapOf("case_id" to row.caseId,
+                    "person_object_id" to row.domainPersonId, "role" to row.role))
+            } catch (_: Exception) { ToolCommitResult(ToolObservationStatus.FAILED, "case_participant_failed") }
+        }
+    }
+
+    private inner class LinkCaseSource : AgentToolHandler {
+        override val descriptor = AgentToolDescriptor("link_case_source", 1, ToolAccess.PERSISTED_MEMORY, ToolEffect.WRITE, runtimeEnabled = true)
+        override suspend fun prepare(call: AgentModelToolCall, turn: AgentTurnRequest, commandId: String): ToolPreparation {
+            val caseId = call.arguments["case_id"] as? String ?: return ToolPreparation.Rejected("invalid_case_id")
+            val kind = call.arguments["source_kind"] as? String ?: return ToolPreparation.Rejected("invalid_source_kind")
+            val sourceId = call.arguments["source_id"] as? String ?: return ToolPreparation.Rejected("invalid_source_id")
+            val relation = call.arguments["relation"] as? String ?: "related_to"
+            val revisionId = call.arguments["source_revision_id"] as? String
+            if (kind !in setOf("money_event", "domain_object", "calendar_event", "task", "memory_revision") ||
+                sourceId.isBlank() || sourceId.length > 120 || relation.isBlank() || relation.length > 80 ||
+                relation.any(Char::isISOControl) || revisionId?.length?.let { it > 120 } == true) return ToolPreparation.Rejected("invalid_case_source")
+            val digest = sha256("case_source\u0000${turn.scopeId}\u0000$caseId\u0000$kind\u0000$sourceId\u0000$relation\u0000${revisionId.orEmpty()}")
+            return ToolPreparation.Prepared(PreparedAgentCommand(commandId, digest, emptyMap(), false,
+                LinkCaseSourcePayload(turn.scopeId, caseId, kind, sourceId, relation, revisionId, commandId)))
+        }
+        override suspend fun commit(command: PreparedAgentCommand): ToolCommitResult {
+            val payload = command.opaquePayload as? LinkCaseSourcePayload ?: return rejected()
+            return try {
+                val row = cases.addEvidence(payload.scope, payload.caseId, payload.kind, payload.sourceId,
+                    payload.relation, payload.revisionId, payload.id)
+                ToolCommitResult(ToolObservationStatus.APPLIED, "case_source_linked", mapOf("case_id" to row.caseId,
+                    "source_kind" to row.sourceKind, "source_id" to row.sourceId, "revision_id" to row.sourceRevisionId))
+            } catch (_: Exception) { ToolCommitResult(ToolObservationStatus.FAILED, "case_source_failed") }
         }
     }
 
@@ -971,6 +1099,14 @@ internal class LocalMemoryTools(private val repository: ProtectedDomainRepositor
         val commandId: String, val title: String, val dueLocal: String?, val dueZone: String?, val remind: Boolean,
         val person: String?, val project: String?)
     private data class LinkPayload(val scope: String, val id: String, val from: String, val to: String, val relation: String)
+    private data class CreateCasePayload(val scope: String, val caseId: String, val title: String, val summary: String?,
+        val nextAction: String?, val sourceTurnId: String)
+    private data class UpdateCasePayload(val scope: String, val caseId: String, val version: Long, val title: String,
+        val summary: String?, val status: String, val nextAction: String?, val sourceTurnId: String)
+    private data class AddCaseParticipantPayload(val scope: String, val caseId: String, val personId: String,
+        val role: String, val id: String)
+    private data class LinkCaseSourcePayload(val scope: String, val caseId: String, val kind: String, val sourceId: String,
+        val relation: String, val revisionId: String?, val id: String)
     private data class CompletionPayload(val id: String, val scope: String, val actor: String, val commandId: String,
         val version: Long, val completed: Boolean)
     private data class CalendarPayload(val input: CalendarInput)

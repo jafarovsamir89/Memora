@@ -76,6 +76,8 @@ fun MoreScreen(navigate: (String) -> Unit, about: () -> Unit) {
             HorizontalDivider(color = colors.line)
             MenuRow(Glyph.Person, s(R.string.people), s(R.string.people_hint)) { navigate("people") }
             HorizontalDivider(color = colors.line)
+            MenuRow(Glyph.Folder, s(R.string.cases), s(R.string.cases_hint), 2) { navigate("cases") }
+            HorizontalDivider(color = colors.line)
             MenuRow(Glyph.Folder, s(R.string.projects), s(R.string.projects_hint), 2) { navigate("projects") }
             HorizontalDivider(color = colors.line)
             MenuRow(Glyph.Grid, s(R.string.tables_title), s(R.string.tables_subtitle)) { navigate("tables") }

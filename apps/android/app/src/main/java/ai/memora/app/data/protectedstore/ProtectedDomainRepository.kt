@@ -41,6 +41,7 @@ internal data class FinanceCorrectionResult(val event: MoneyEventRow, val adjust
 /** Shared protected local domain store used by agent tools and visible Android data screens. */
 internal class ProtectedDomainRepository(private val db: AgentDatabase) {
     private val dao get() = db.protectedStoreDao()
+    internal fun caseRepository() = ProtectedCaseRepository(db)
 
     suspend fun hasVerifiedLegacyFinance(scope: String): Boolean {
         val marker = dao.migration("voice-money-to-ledger-v1") ?: return false
@@ -142,7 +143,12 @@ internal class ProtectedDomainRepository(private val db: AgentDatabase) {
     suspend fun financeHistory(scope: String, name: String): FinanceHistory? {
         val matches = matchingFinancePeople(scope, name)
         check(matches.size <= 1) { "person_name_ambiguous" }
-        val person = matches.singleOrNull() ?: return null
+        return matches.singleOrNull()?.let { financeHistoryByPersonId(scope, it.personId) }
+    }
+
+    suspend fun financeHistoryByPersonId(scope: String, personId: String): FinanceHistory? {
+        require(scope.isNotBlank() && personId.isNotBlank())
+        val person = dao.person(scope, personId) ?: return null
         val events = dao.moneyEventsForPerson(scope, person.personId).map { effectiveMoneyEvent(scope, it) }
         val remaining = events.filter { it.kind == "debt" }.associate { debt -> debt.eventId to outstandingDebtMinor(scope, debt.eventId) }
         val voided = events.filter { isFinanceEventVoided(scope, it.eventId) }.map { it.eventId }.toSet()

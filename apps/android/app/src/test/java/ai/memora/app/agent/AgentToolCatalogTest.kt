@@ -17,7 +17,7 @@ class AgentToolCatalogTest {
             "create_table", "add_table_row", "update_table_row", "delete_table_row", "restore_table_row",
             "rename_table", "delete_table", "restore_table", "list_tasks", "create_task", "edit_task",
             "set_task_completion", "list_calendar_events", "create_calendar_event", "edit_calendar_event",
-            "cancel_calendar_event",
+            "cancel_calendar_event", "create_case", "search_cases", "update_case", "add_case_participant", "link_case_source",
         )
         val contracts = AgentToolCatalog.all()
 
@@ -47,6 +47,13 @@ class AgentToolCatalogTest {
 
         val readMoney = requireNotNull(AgentToolCatalog.find("search_money", 1))
         assertTrue(readMoney.parameters.all { it.optional })
+
+        val createCase = requireNotNull(AgentToolCatalog.find("create_case", 1))
+        assertEquals(setOf("title"), createCase.parameters.filterNot { it.optional }.map { it.name }.toSet())
+        val linkSource = requireNotNull(AgentToolCatalog.find("link_case_source", 1))
+        assertEquals(setOf("case_id", "source_kind", "source_id"), linkSource.parameters.filterNot { it.optional }.map { it.name }.toSet())
+        assertEquals(setOf("money_event", "domain_object", "calendar_event", "task", "memory_revision"),
+            linkSource.parameters.single { it.name == "source_kind" }.enumValues.toSet())
     }
 
     @Test fun alternateProviderUsesTheSameRuntimeToolAndTypedResultEnvelope() = runBlocking {
