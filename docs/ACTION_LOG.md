@@ -1,5 +1,11 @@
 # Memora — лог действий
 
+## ACT-0107 · 2026-11-03 · M20-06 локальная финансовая аналитика
+
+Добавлены точный месячный агрегатор ledger и read-only tool `analyze_finance_period`, подключённый к существующему provider-neutral catalog и защищённым memory/finance policy gates. Учтены append-only корректировки, void/reversal и погашения; разные валюты и одинаковые имена разделены по currency/person ID. В Reports UI AZ/RU/EN отображаются поступления, расходы/погашения, движение средств, отдельно долги, открытый остаток, сравнение прошлого месяца и coverage caveats. Движение средств не называется прибылью; неизвестные начальные балансы, неполное покрытие, категории и проектные связи не маскируются. Room schema 12 не менялась.
+
+Проверки: полный `:app:testDebugUnitTest :app:assembleDebug :app:assembleDebugAndroidTest :app:compileDebugAndroidTestKotlin :app:lintDebug --no-daemon --console=plain --max-workers=2` — `BUILD SUCCESSFUL`; 46 JUnit suites / 249 tests, failures/errors/skipped = 0; lint 0 errors, 55 warnings, 3 hints. Синтетические UI screenshots `16-finance-reports-top.png`, `17-finance-reports-tools.png` сгенерированы и просмотрены; APK debug и AndroidTest собраны; AndroidTest Kotlin скомпилирован. APK v32 `1.1.10-reports`: 29,362,011 bytes, SHA-256 `59727E8D76EE33756E178D90D2ED1B016545D5C6DFD171DAA85D6435D1C974D2`; резервная копия `C:\memora-backups\Memora-v32-1.1.10-reports-2026-11-03.apk` проверена совпадением SHA. Schema migration не нужна. `adb devices -l` пуст; нет установки, device SQLCipher/TalkBack, live Gemini API или owner acceptance; личная база не трогалась. Код и документация ожидают финальный review/commit/push.
+
 ## ACT-0105 · 2026-11-03 · M20-05 persistent action-result cards
 
 Добавлены Room 11→12 result attachments, транзакционная запись с разговором, scope/read validation, retention/delete propagation и безопасное сопоставление write observations. Secretary рисует локализованную карточку исхода, открывает source turn и связанные finance/case/task/calendar/table/memory destinations; correction path готовит только редактируемый draft и не вызывает AI или инструменты до явной отправки пользователем. Добавлены repo/mapper/Compose tests, migration probe, схема 12 и AZ/RU/EN строки. Поведение consent и tool gates не расширялось.

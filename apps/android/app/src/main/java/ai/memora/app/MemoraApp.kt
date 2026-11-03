@@ -243,7 +243,7 @@ fun MemoraApp(initialRoute: String = "home", initialTheme: String = "system", ca
                             }
                             "memory" -> WorkingMemoryScreen(captureState, { detailId = it }, { openCapture(false) }, { navigate("inbox") })
                             "tasks" -> ScreenColumn { ScreenHeading(s(R.string.tasks_title), s(R.string.working_tasks_hint)); TaskPrototype(taskStore) }
-                            "more" -> MoreScreen(navigate, { about = true }, { openCapture(true) })
+                            "more" -> MoreScreen(navigate, { about = true }, { openCapture(true) }, language)
                             "voice_memory" -> VoiceMemoryScreen()
                             "notes" -> SavedObjectsScreen(DomainKind.NOTE)
                             "tables" -> TablesScreen()

@@ -131,9 +131,9 @@ class UiShellTest {
         screenshot("13-secretary-light")
         compose.onNodeWithTag("chat_input").performScrollTo().assertIsDisplayed()
         compose.onNodeWithTag("nav_more").performClick()
-        compose.onNodeWithTag("more_tasks").assertIsDisplayed()
-        compose.onNodeWithTag("more_voice_memory").assertIsDisplayed()
-        compose.onNodeWithTag("more_people").assertExists()
+        compose.onNodeWithTag("more_tasks").performScrollTo().assertIsDisplayed()
+        compose.onNodeWithTag("more_voice_memory").performScrollTo().assertIsDisplayed()
+        compose.onNodeWithTag("more_people").performScrollTo().assertExists()
         compose.onNodeWithTag("nav_cases").performClick()
         compose.onNodeWithTag("nav_cases").assertIsDisplayed()
         compose.onNodeWithTag("nav_memory").performClick()
@@ -143,6 +143,45 @@ class UiShellTest {
         compose.onNodeWithTag("memory_synthetic-source").performScrollTo().performClick()
         compose.onNodeWithTag("stored_source_text").assertTextContains("İlqar, yaddaş yoxlaması")
         screenshot("03-source-light")
+    }
+
+    @Test fun reportsScreenReadsAndLabelsSyntheticLedgerWithoutClaimingProfit() = kotlinx.coroutines.runBlocking {
+        val context = ApplicationProvider.getApplicationContext<Context>()
+        appearanceStore = AtomicAppearanceStore(File(context.cacheDir, "ui-report-settings-${UUID.randomUUID()}"),
+            AppearanceSettings("az", "light"))
+        val database = agentDatabase.database
+        val processor = ai.memora.app.voice.AgentVoiceTurnProcessor(context, database)
+        val scope = processor.conversationScopeId()
+        val instant = java.time.Instant.now().toString()
+        val repository = ProtectedDomainRepository(database)
+        repository.recordFinanceEvent(scope, "Synthetic Report Client", "receipt", 8_125, "AZN",
+            "Synthetic UI fixture", null, "synthetic-report-person", "synthetic-report-receipt", "synthetic-report-receipt-command", instant, instant)
+        repository.recordFinanceEvent(scope, "Synthetic Report Client", "expense", 2_500, "AZN",
+            "Synthetic UI fixture", null, "synthetic-report-person", "synthetic-report-expense", "synthetic-report-expense-command", instant, instant)
+        repository.recordFinanceEvent(scope, "Synthetic Report Client", "debt", 35_000, "AZN",
+            "Synthetic UI fixture", null, "synthetic-report-person", "synthetic-report-debt", "synthetic-report-debt-command", instant, instant)
+
+        compose.setContent {
+            CompositionLocalProvider(LocalAgentDatabaseOverride provides database) {
+                TestMemoraApp(initialTheme = "light", initialLanguage = "az",
+                    capturePersistenceOverride = captureStore, appearanceStoreOverride = appearanceStore)
+            }
+        }
+        compose.onNodeWithTag("nav_more").performClick()
+        compose.waitUntil(10_000) {
+            compose.onAllNodesWithTag("finance_report_received_AZN").fetchSemanticsNodes().isNotEmpty()
+        }
+        compose.onNodeWithTag("finance_reports_section").assertExists()
+        compose.onNodeWithTag("finance_report_received_AZN").assertTextContains("81,25 AZN", substring = true)
+        compose.onNodeWithTag("finance_report_spent_AZN").assertTextContains("25,00 AZN", substring = true)
+        compose.onNodeWithTag("finance_report_debt_originated_AZN").assertTextContains("350,00 AZN", substring = true)
+        compose.onNodeWithTag("finance_report_not_profit").assertExists()
+        compose.onNodeWithTag("finance_report_open_debt_AZN").assertExists()
+        compose.onNodeWithTag("finance_report_counterparties").assertExists()
+        compose.onNodeWithTag("finance_report_coverage").assertExists()
+        screenshot("16-finance-reports-top")
+        compose.onNodeWithTag("more_tasks").performScrollTo().assertExists()
+        screenshot("17-finance-reports-tools")
     }
 
     @Test fun todayDashboardUsesSavedTasksCasesAndCalendarEvents() = kotlinx.coroutines.runBlocking {
@@ -333,9 +372,13 @@ class UiShellTest {
     }
 
     @Test fun voiceInputRequiresAnExplicitStart() {
-        compose.setContent { TestMemoraApp(initialTheme = "light", capturePersistenceOverride = captureStore, appearanceStoreOverride = appearanceStore) }
+        compose.setContent {
+            CompositionLocalProvider(LocalAgentDatabaseOverride provides agentDatabase.database) {
+                TestMemoraApp(initialTheme = "light", capturePersistenceOverride = captureStore, appearanceStoreOverride = appearanceStore)
+            }
+        }
         compose.onNodeWithTag("nav_more").performClick()
-        compose.onNodeWithTag("more_voice_capture").performClick()
+        compose.onNodeWithTag("more_voice_capture").performScrollTo().performClick()
         compose.onNodeWithTag("audio_note_start").assertExists()
         compose.onNodeWithTag("audio_note_review").assertDoesNotExist()
         compose.onNodeWithTag("audio_note_processing").assertDoesNotExist()

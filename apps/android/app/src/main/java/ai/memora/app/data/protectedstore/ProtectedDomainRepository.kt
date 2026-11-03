@@ -5,6 +5,7 @@ import java.math.BigDecimal
 import java.text.Normalizer
 import java.time.LocalDateTime
 import java.time.ZoneId
+import java.time.YearMonth
 import java.util.Currency
 import java.util.Locale
 import java.util.UUID
@@ -249,6 +250,15 @@ internal class ProtectedDomainRepository(private val db: AgentDatabase) {
     suspend fun allFinanceEvents(scope: String): List<MoneyEventRow> = dao.moneyEvents(scope).map { effectiveMoneyEvent(scope, it) }
     suspend fun financePeople(scope: String): List<PersonRow> = dao.people(scope)
     suspend fun financeAdjustments(scope: String): List<MoneyAdjustmentRow> = dao.adjustments(scope)
+
+    /** Exact month comparison over the canonical ledger; debt originations and outstanding debt stay separate. */
+    suspend fun financeAnalytics(scope: String, month: YearMonth, zone: ZoneId = FinanceAnalytics.bakuZone): FinanceAnalyticsSnapshot {
+        require(scope.isNotBlank())
+        val events = dao.financeEventsForAnalysis(scope)
+        val adjustments = dao.financeAdjustmentsForAnalysis(scope)
+        val people = dao.people(scope).associate { it.personId to it.displayName }
+        return FinanceAnalytics.fromLedger(month, events, adjustments, people, zone)
+    }
 
     /** Appends the user's verbatim follow-up to one existing ledger event without changing its amount. */
     suspend fun annotateFinanceEvent(scope: String, eventId: String, commandId: String, annotation: String,

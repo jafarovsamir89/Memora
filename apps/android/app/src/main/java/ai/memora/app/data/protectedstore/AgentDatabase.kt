@@ -437,6 +437,7 @@ internal interface ProtectedStoreDao {
     @androidx.room.Query("SELECT * FROM person WHERE scopeId=:scope ORDER BY displayName, personId") suspend fun people(scope: String): List<PersonRow>
     @androidx.room.Query("SELECT * FROM money_event ORDER BY eventId") suspend fun moneyEvents(): List<MoneyEventRow>
     @androidx.room.Query("SELECT * FROM money_event WHERE scopeId=:scope ORDER BY recordedAt, eventId") suspend fun moneyEvents(scope: String): List<MoneyEventRow>
+    @androidx.room.Query("SELECT * FROM money_event WHERE scopeId=:scope ORDER BY recordedAt, eventId LIMIT 100001") suspend fun financeEventsForAnalysis(scope: String): List<MoneyEventRow>
     @androidx.room.Query("SELECT * FROM money_event WHERE scopeId=:scope AND personId=:person ORDER BY recordedAt, eventId") suspend fun moneyEventsForPerson(scope: String, person: String): List<MoneyEventRow>
     @androidx.room.Query("SELECT * FROM money_event WHERE scopeId=:scope AND commandId=:command") suspend fun moneyEventForCommand(scope: String, command: String): MoneyEventRow?
     @androidx.room.Query("SELECT * FROM money_event WHERE scopeId=:scope AND eventId=:id") suspend fun scopedMoneyEvent(scope: String, id: String): MoneyEventRow?
@@ -499,6 +500,7 @@ internal interface ProtectedStoreDao {
     @androidx.room.Query("UPDATE table_row SET deletedAt=NULL, version=:next WHERE rowId=:row AND tableId=:table AND scopeId=:scope AND version=:expected AND deletedAt IS NOT NULL") suspend fun restoreTableRow(row: String, table: String, scope: String, expected: Long, next: Long): Int
     @androidx.room.Query("SELECT * FROM money_adjustment WHERE scopeId=:scope AND obligationId=:id ORDER BY eventId") suspend fun adjustments(scope: String, id: String): List<MoneyAdjustmentRow>
     @androidx.room.Query("SELECT * FROM money_adjustment WHERE scopeId=:scope ORDER BY occurredAt, eventId") suspend fun adjustments(scope: String): List<MoneyAdjustmentRow>
+    @androidx.room.Query("SELECT * FROM money_adjustment WHERE scopeId=:scope ORDER BY occurredAt, eventId LIMIT 200001") suspend fun financeAdjustmentsForAnalysis(scope: String): List<MoneyAdjustmentRow>
     @androidx.room.Query("SELECT * FROM money_adjustment WHERE commandId=:id") suspend fun adjustmentForCommand(id: String): MoneyAdjustmentRow?
     @androidx.room.Insert(onConflict = androidx.room.OnConflictStrategy.ABORT) suspend fun insertAdjustment(row: MoneyAdjustmentRow)
     @androidx.room.Query("SELECT * FROM money_event WHERE scopeId=:scope AND eventId=:id") suspend fun moneyEvent(scope: String, id: String): MoneyEventRow?

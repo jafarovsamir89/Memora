@@ -3,6 +3,7 @@ package ai.memora.app.agent
 import ai.memora.app.data.protectedstore.DomainKind
 import ai.memora.app.data.protectedstore.ColumnSpec
 import ai.memora.app.data.protectedstore.ColumnType
+import ai.memora.app.data.protectedstore.FinanceAnalytics
 import ai.memora.app.data.protectedstore.TableColumnRow
 import ai.memora.app.data.protectedstore.CalendarInput
 import ai.memora.app.data.protectedstore.ProtectedConversationRepository
@@ -30,7 +31,7 @@ internal class LocalMemoryTools(private val repository: ProtectedDomainRepositor
         UpdateTableRow(), DeleteTableRow(), RestoreTableRow(), RenameTable(), DeleteTable(), RestoreTable(),
         SearchConversationHistory(), ListTasks(), CreateTask(), EditTask(), SetTaskCompletion(), ListCalendarEvents(), CreateCalendarEvent(),
         EditCalendarEvent(), CancelCalendarEvent(),
-        SearchMoney(), RecordMoneyEvent(), SettleDebt(), ReverseMoneyEvent(), CorrectMoneyEvent(), AnnotateMoneyEvent(),
+        SearchMoney(), AnalyzeFinancePeriod(), RecordMoneyEvent(), SettleDebt(), ReverseMoneyEvent(), CorrectMoneyEvent(), AnnotateMoneyEvent(),
         CreateCase(), SearchCases(), UpdateCase(), AddCaseParticipant(), LinkCaseSource(),
     )
 
@@ -861,6 +862,32 @@ internal class LocalMemoryTools(private val repository: ProtectedDomainRepositor
             ), eventData, matchingEvents.size))
         }
         override suspend fun prepare(call: AgentModelToolCall, turn: AgentTurnRequest, commandId: String) = ToolPreparation.Rejected("read_only_tool")
+        override suspend fun commit(command: PreparedAgentCommand) = rejected()
+    }
+
+    private inner class AnalyzeFinancePeriod : AgentToolHandler {
+        override val descriptor = AgentToolDescriptor("analyze_finance_period", 1, ToolAccess.PERSISTED_MEMORY,
+            ToolEffect.READ, runtimeEnabled = financeEnabled)
+
+        override suspend fun read(call: AgentModelToolCall, turn: AgentTurnRequest): ToolCommitResult {
+            if (call.arguments.containsKey("month") && call.arguments["month"] != null && call.arguments["month"] !is String)
+                return ToolCommitResult(ToolObservationStatus.REJECTED, "invalid_period")
+            val requested = call.arguments["month"] as? String
+            val month = FinanceAnalytics.requestedMonth(requested)
+                ?: return ToolCommitResult(ToolObservationStatus.REJECTED, "invalid_period")
+            return try {
+                val report = repository.financeAnalytics(turn.scopeId, month)
+                ToolCommitResult(ToolObservationStatus.APPLIED, "finance_report_ready", report.toToolData())
+            } catch (cancelled: kotlinx.coroutines.CancellationException) {
+                throw cancelled
+            } catch (_: Exception) {
+                ToolCommitResult(ToolObservationStatus.FAILED, "finance_report_unavailable")
+            }
+        }
+
+        override suspend fun prepare(call: AgentModelToolCall, turn: AgentTurnRequest, commandId: String) =
+            ToolPreparation.Rejected("read_only_tool")
+
         override suspend fun commit(command: PreparedAgentCommand) = rejected()
     }
 

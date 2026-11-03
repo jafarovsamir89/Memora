@@ -60,9 +60,11 @@ fun Filters(options: List<Pair<String, String>>, selected: String, onSelect: (St
 
 
 @Composable
-fun MoreScreen(navigate: (String) -> Unit, about: () -> Unit, captureVoice: (() -> Unit)? = null) {
+fun MoreScreen(navigate: (String) -> Unit, about: () -> Unit, captureVoice: (() -> Unit)? = null, language: String = "az") {
     ScreenColumn {
         ScreenHeading(s(R.string.more_title), s(R.string.more_subtitle))
+        FinanceReportsSection(language)
+        SectionHeading(s(R.string.more_tools_title))
         MemoraCard {
             MenuRow(Glyph.Tasks, s(R.string.nav_tasks), s(R.string.working_tasks_hint),
                 onClick = { navigate("tasks") }, testTag = "more_tasks")
