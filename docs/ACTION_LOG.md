@@ -8,6 +8,8 @@ Added a synthetic Compose scenario with linked and unlinked projects. It verifie
 
 APK v39 / `1.1.17-person-links`, versionCode 39, Room schema 15, SHA-256 `A9799059B7A3C4042BFD636A578D96EABCBD8E0FAAD835CA852701B15F0E29FC`; matching backup `C:\memora-backups\Memora-v39-1.1.17-person-links-2026-11-03.apk`. ADB listed no devices; v39 was not installed. User database was not opened/read/cleared. No live Gemini test was run; second-device App Check remains unverified. M20-03/05/08 and overall release remain partial.
 
+Git handoff: commit c12b2a536ce2d95f5c3e9a518697d4a6ea2f5dc1 (feat(android): surface explicit person relationships) was pushed to origin/main. git fetch, local HEAD and remote HEAD matched; worktree was clean at verification. This documentation update records the handoff.
+
 ## ACT-0123 - 2026-11-03 - Git handoff ACT-0122
 
 Implementation and synchronized status were committed as 1671ce257e06ca5cbaa35fd531026eec506d5506 (feat(android): unify scoped memory retrieval) and pushed to origin/main. git fetch, local HEAD, git ls-remote and the remote branch all matched; worktree was clean at handoff. v38 remains installed over v37 without clearing data; backup and validation evidence are recorded in ACT-0122. The owner cannot connect the second phone right now, so its debug App Check token and Gemini call remain unverified. Continue M20-04/08 and independent UI/product acceptance work.
