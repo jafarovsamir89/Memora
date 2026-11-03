@@ -60,11 +60,20 @@ fun Filters(options: List<Pair<String, String>>, selected: String, onSelect: (St
 
 
 @Composable
-fun MoreScreen(navigate: (String) -> Unit, about: () -> Unit) {
+fun MoreScreen(navigate: (String) -> Unit, about: () -> Unit, captureVoice: (() -> Unit)? = null) {
     ScreenColumn {
         ScreenHeading(s(R.string.more_title), s(R.string.more_subtitle))
         MemoraCard {
-            MenuRow(Glyph.Mic, s(R.string.voice_memory_title), s(R.string.voice_memory_help)) { navigate("voice_memory") }
+            MenuRow(Glyph.Tasks, s(R.string.nav_tasks), s(R.string.working_tasks_hint),
+                onClick = { navigate("tasks") }, testTag = "more_tasks")
+            HorizontalDivider(color = colors.line)
+            if (captureVoice != null) {
+                MenuRow(Glyph.Mic, s(R.string.nav_capture), s(R.string.working_capture_hint),
+                    onClick = captureVoice, testTag = "more_voice_capture")
+                HorizontalDivider(color = colors.line)
+            }
+            MenuRow(Glyph.Mic, s(R.string.voice_memory_title), s(R.string.voice_memory_help),
+                onClick = { navigate("voice_memory") }, testTag = "more_voice_memory")
             HorizontalDivider(color = colors.line)
             MenuRow(Glyph.Inbox, s(R.string.inbox), s(R.string.inbox_hint)) { navigate("inbox") }
             HorizontalDivider(color = colors.line)
@@ -74,7 +83,7 @@ fun MoreScreen(navigate: (String) -> Unit, about: () -> Unit) {
             HorizontalDivider(color = colors.line)
             MenuRow(Glyph.Calendar, s(R.string.calendar_title), s(R.string.calendar_hint)) { navigate("calendar") }
             HorizontalDivider(color = colors.line)
-            MenuRow(Glyph.Person, s(R.string.people), s(R.string.people_hint)) { navigate("people") }
+            MenuRow(Glyph.Person, s(R.string.people), s(R.string.people_hint), testTag = "more_people") { navigate("people") }
             HorizontalDivider(color = colors.line)
             MenuRow(Glyph.Folder, s(R.string.cases), s(R.string.cases_hint), 2) { navigate("cases") }
             HorizontalDivider(color = colors.line)
@@ -246,7 +255,7 @@ fun SettingsScreen(theme: String, changeTheme: (String) -> Unit, language: Strin
         if (granted) OutlinedButton(onClick = {
             if (voiceConsent.edit().clear().commit()) granted = false
         }, modifier = Modifier.testTag("voice_revoke_consent")) { Text(s(R.string.voice_revoke_consent)) }
-        MemoraCard { MenuRow(Glyph.Shield, s(R.string.privacy), s(R.string.privacy_hint), 1, about) }
+        MemoraCard { MenuRow(Glyph.Shield, s(R.string.privacy), s(R.string.privacy_hint), 1, onClick = about) }
         MemoraCard { MenuRow(Glyph.Spark, s(R.string.about), s(R.string.version), onClick = about) }
     }
 }

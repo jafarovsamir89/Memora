@@ -20,6 +20,7 @@ import java.util.UUID
 internal class AgentVoiceTurnProcessor(context: Context, private val databaseOverride: AgentDatabase? = null) : VoiceTurnProcessor {
     private val appContext = context.applicationContext
     private val preferences = appContext.getSharedPreferences("voice-first-consent", Context.MODE_PRIVATE)
+    private val identityPreferences = appContext.getSharedPreferences("agent-runtime-identity", Context.MODE_PRIVATE)
     private val financeStore = VoiceMoneyStore(File(appContext.filesDir, "voice-memory.bin"), VoiceMoneyKey::get)
     private val database by lazy { databaseOverride ?: AgentDatabase.open(appContext) }
     private val conversations by lazy { ProtectedConversationRepository(database) }
@@ -100,16 +101,31 @@ internal class AgentVoiceTurnProcessor(context: Context, private val databaseOve
     }
 
     private fun stableId(key: String): String {
-        val existing = preferences.getString(key, null)?.takeIf { runCatching { UUID.fromString(it) }.isSuccess }
-        if (existing != null) return existing
-        val created = UUID.randomUUID().toString()
-        check(preferences.edit().putString(key, created).commit())
-        return created
+        return synchronized(identityLock) {
+            val existing = identityPreferences.getString(key, null)?.takeIf { runCatching { UUID.fromString(it) }.isSuccess }
+            if (existing != null) return@synchronized existing
+
+            // Preserve IDs written by earlier versions before consent and identity had separate stores.
+            val legacy = preferences.getString(key, null)?.takeIf { runCatching { UUID.fromString(it) }.isSuccess }
+            if (legacy != null) {
+                check(identityPreferences.edit().putString(key, legacy).commit())
+                preferences.edit().remove(key).commit()
+                return@synchronized legacy
+            }
+
+            UUID.randomUUID().toString().also { created ->
+                check(identityPreferences.edit().putString(key, created).commit())
+            }
+        }
     }
 
     private fun languageTag(language: String): String = when (language) {
         "ru" -> "ru-RU"
         "en" -> "en-US"
         else -> "az-AZ"
+    }
+
+    private companion object {
+        val identityLock = Any()
     }
 }

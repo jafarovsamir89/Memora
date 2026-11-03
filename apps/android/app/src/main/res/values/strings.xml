@@ -369,4 +369,20 @@
     <string name="memory_delete_turn_confirmation">Bu dialoqun hər iki mesajı cihazdakı tarixçədən həmişəlik silinəcək. Bu əməliyyatı geri qaytarmaq mümkün deyil.</string>
     <string name="memory_source_saved">Yaddaşda saxlanmış məlumat</string>
     <string name="memory_source_linked">Saxlanmış mənbə və versiya ilə əlaqəlidir</string>
+    <string name="nav_secretary">Katibə</string>
+    <string name="secretary_voice_title">Danışaraq kömək edin</string>
+    <string name="secretary_voice_hint">Düyməni basıb saxlayın, danışın, sonra buraxın. Mətnlə də davam edə bilərsiniz.</string>
+    <string name="chat_speaker_user">Siz</string>
+    <string name="chat_speaker_secretary">Memora</string>
+    <string name="today_priorities">Bu gün diqqət yetirək</string>
+    <string name="today_due_tasks">Vaxtı çatan və yaxınlaşan işlər</string>
+    <string name="today_open_cases">Açıq işlər</string>
+    <string name="today_upcoming">Yaxın tədbirlər</string>
+    <string name="today_loading">Bu gün üçün məlumatlar yüklənir…</string>
+    <string name="today_partial_error">Bəzi məlumatları yükləmək mümkün olmadı. Göstərilən nəticələr tam olmaya bilər.</string>
+    <string name="today_clear_title">Bu gün üçün açıq prioritet yoxdur</string>
+    <string name="today_clear_body">Vaxtı çatan tapşırıq, açıq iş və ya yaxın tədbir yoxdur.</string>
+    <string name="today_tasks_count">Tapşırıq</string>
+    <string name="today_cases_count">Açıq iş</string>
+    <string name="today_events_count">Tədbir</string>
 </resources>

@@ -12,10 +12,13 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
 import ai.memora.app.data.CaptureEntry
 import ai.memora.app.data.CaptureSessionState
+import ai.memora.app.data.EncryptedTaskStore
+import ai.memora.app.data.StoreRead
 import ai.memora.app.data.protectedstore.ConversationTurnEvidence
 import ai.memora.app.data.protectedstore.DomainHit
 import ai.memora.app.data.protectedstore.DomainKind
 import ai.memora.app.data.protectedstore.DomainObjectRow
+import ai.memora.app.data.protectedstore.ProtectedCaseRepository
 import ai.memora.app.data.protectedstore.ProtectedConversationRepository
 import ai.memora.app.data.protectedstore.ProtectedDomainRepository
 import ai.memora.app.domain.LocalMemoryIndex
@@ -24,15 +27,53 @@ import ai.memora.app.voice.AgentVoiceTurnProcessor
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import java.time.LocalDate
+import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 import java.util.Date
 import java.util.Locale
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 
 @Composable
 fun WorkingHomeScreen(language: String, state: CaptureSessionState, navigate: (String) -> Unit,
-    capture: (Boolean) -> Unit, detail: (String) -> Unit, voiceContent: @Composable () -> Unit) {
+    capture: (Boolean) -> Unit, detail: (String) -> Unit, taskStore: EncryptedTaskStore? = null,
+    voiceContent: @Composable () -> Unit) {
+    val context = LocalContext.current
+    val database = rememberOptionalUiAgentDatabase()
+    val processor = remember(context) { AgentVoiceTurnProcessor(context) }
+    val scopeId = remember(processor) { processor.conversationScopeId() }
+    val caseRepository = remember(database) { database?.let(::ProtectedCaseRepository) }
+    val domainRepository = remember(database) { database?.let(::ProtectedDomainRepository) }
+    var dueTasks by remember { mutableStateOf<List<ai.memora.app.domain.Task>>(emptyList()) }
+    var activeCases by remember { mutableStateOf<List<ai.memora.app.data.protectedstore.CaseRecordRow>>(emptyList()) }
+    var openCaseCount by remember { mutableIntStateOf(0) }
+    var upcomingEvents by remember { mutableStateOf<List<ai.memora.app.data.protectedstore.LocalCalendarEventRow>>(emptyList()) }
+    var overviewLoading by remember { mutableStateOf(true) }
+    var overviewError by remember { mutableStateOf(false) }
+    LaunchedEffect(scopeId, taskStore, database) {
+        overviewLoading = true
+        overviewError = false
+        try {
+            val today = LocalDate.now(ZoneId.of("Asia/Baku"))
+            val through = today.plusDays(7)
+            val taskRead = taskStore?.let { withContext(Dispatchers.IO) { it.load() } }
+            if (taskRead == null || taskRead == StoreRead.Unavailable) overviewError = true
+            dueTasks = (taskRead as? StoreRead.Ready)?.tasks.orEmpty()
+                .filter { task -> !task.completed && task.dueLocal?.substringBefore('T')?.let { it <= through.toString() } == true }
+                .sortedBy { it.dueLocal }
+            val cases = caseRepository ?: error("protected_overview_unavailable")
+            val domains = domainRepository ?: error("protected_overview_unavailable")
+            openCaseCount = cases.openCaseCount(scopeId)
+            activeCases = cases.openCases(scopeId, limit = 4)
+            upcomingEvents = domains.calendarBetween(scopeId, today.atStartOfDay().toString(), today.plusDays(8).atStartOfDay().toString())
+        } catch (_: Exception) {
+            overviewError = true
+        } finally {
+            overviewLoading = false
+        }
+    }
     ScreenColumn {
-        Text(LocalDate.now().format(DateTimeFormatter.ofPattern("EEEE, d MMMM", Locale.forLanguageTag(language))),
+        Text(LocalDate.now(ZoneId.of("Asia/Baku")).format(DateTimeFormatter.ofPattern("EEEE, d MMMM", Locale.forLanguageTag(language))),
             style = MaterialTheme.typography.labelSmall, color = colors.muted)
         ScreenHeading(s(R.string.home_title), s(R.string.working_home_hint))
         MemoraCard(tint = colors.hero) {
@@ -42,12 +83,54 @@ fun WorkingHomeScreen(language: String, state: CaptureSessionState, navigate: (S
             Button(onClick = { capture(true) }, modifier = Modifier.fillMaxWidth().testTag("capture_voice")) { Text(s(R.string.tell)) }
             OutlinedButton(onClick = { capture(false) }, modifier = Modifier.fillMaxWidth().testTag("capture_text")) { Text(s(R.string.write)) }
         }
+        SectionHeading(s(R.string.today_priorities))
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            TodayMetricCard(dueTasks.size, R.string.today_tasks_count, Modifier.weight(1f).testTag("today_tasks_metric")) { navigate("tasks") }
+            TodayMetricCard(openCaseCount, R.string.today_cases_count, Modifier.weight(1f).testTag("today_cases_metric")) { navigate("cases") }
+            TodayMetricCard(upcomingEvents.size, R.string.today_events_count, Modifier.weight(1f).testTag("today_events_metric")) { navigate("calendar") }
+        }
+        if (overviewLoading) Text(s(R.string.today_loading), color = colors.muted, modifier = Modifier.testTag("today_loading"))
+        if (overviewError) Text(s(R.string.today_partial_error), color = MaterialTheme.colorScheme.error,
+            modifier = Modifier.testTag("today_data_error"))
+        if (!overviewLoading && !overviewError && dueTasks.isEmpty() && openCaseCount == 0 && upcomingEvents.isEmpty()) {
+            EmptyState(s(R.string.today_clear_title), s(R.string.today_clear_body), Glyph.Calendar)
+        }
+        dueTasks.take(4).forEach { task ->
+            MemoraCard(onClick = { navigate("tasks") }, modifier = Modifier.testTag("today_task_${task.id}")) {
+                Text(s(R.string.today_due_tasks), style = MaterialTheme.typography.labelSmall, color = colors.accent)
+                Text(task.title, style = MaterialTheme.typography.titleMedium, color = colors.ink)
+                task.dueLocal?.let { Text(it.replace('T', ' '), style = MaterialTheme.typography.bodySmall, color = colors.muted) }
+            }
+        }
+        activeCases.take(4).forEach { case ->
+            MemoraCard(onClick = { navigate("cases") }, modifier = Modifier.testTag("today_case_${case.caseId}")) {
+                Text(s(R.string.today_open_cases), style = MaterialTheme.typography.labelSmall, color = colors.accent)
+                Text(case.title, style = MaterialTheme.typography.titleMedium, color = colors.ink)
+                case.nextAction?.takeIf(String::isNotBlank)?.let { Text(it, color = colors.muted) }
+            }
+        }
+        upcomingEvents.take(4).forEach { event ->
+            MemoraCard(onClick = { navigate("calendar") }, modifier = Modifier.testTag("today_event_${event.eventId}")) {
+                Text(s(R.string.today_upcoming), style = MaterialTheme.typography.labelSmall, color = colors.accent)
+                Text(event.title, style = MaterialTheme.typography.titleMedium, color = colors.ink)
+                Text(event.startLocal.replace('T', ' '), style = MaterialTheme.typography.bodySmall, color = colors.muted)
+            }
+        }
         OutlinedButton(onClick = { navigate("chat") }, modifier = Modifier.fillMaxWidth().testTag("open_chat")) { Text(s(R.string.ask_memory)) }
         OutlinedButton(onClick = { navigate("tasks") }, modifier = Modifier.fillMaxWidth()) { Text(s(R.string.tasks_title)) }
         SectionHeading(s(R.string.recent), { navigate("memory") })
         MemoryLoadState(state)
         if (state.ready && state.captures.none { !it.archived }) EmptyState(s(R.string.working_memory_empty), s(R.string.working_capture_hint))
         state.captures.asReversed().filter { !it.archived }.take(3).forEach { StoredMemoryCard(it) { detail(it.source.id) } }
+    }
+}
+
+@Composable
+private fun TodayMetricCard(count: Int, label: Int, modifier: Modifier = Modifier, onClick: () -> Unit) {
+    MemoraCard(tint = colors.softAccent, modifier = modifier.heightIn(min = 76.dp), onClick = onClick, contentPadding = 12.dp) {
+        Text(count.toString(), style = MaterialTheme.typography.titleLarge, color = colors.accent)
+        Text(s(label), style = MaterialTheme.typography.labelSmall, color = colors.muted, maxLines = 2,
+            overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis)
     }
 }
 

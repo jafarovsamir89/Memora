@@ -337,6 +337,10 @@ internal interface ProtectedStoreDao {
     @androidx.room.Query("SELECT * FROM case_record WHERE scopeId=:scope AND caseId=:id") suspend fun caseRecord(scope: String, id: String): CaseRecordRow?
     @androidx.room.Query("SELECT * FROM case_record WHERE scopeId=:scope AND deletedAt IS NULL ORDER BY updatedAt DESC, caseId LIMIT :limit")
     suspend fun activeCases(scope: String, limit: Int): List<CaseRecordRow>
+    @androidx.room.Query("SELECT * FROM case_record WHERE scopeId=:scope AND deletedAt IS NULL AND status NOT IN ('completed','archived','cancelled') ORDER BY updatedAt DESC, caseId LIMIT :limit")
+    suspend fun openCases(scope: String, limit: Int): List<CaseRecordRow>
+    @androidx.room.Query("SELECT COUNT(*) FROM case_record WHERE scopeId=:scope AND deletedAt IS NULL AND status NOT IN ('completed','archived','cancelled')")
+    suspend fun openCaseCount(scope: String): Int
     @androidx.room.Insert(onConflict = androidx.room.OnConflictStrategy.ABORT) suspend fun insertCase(row: CaseRecordRow)
     @androidx.room.Query("UPDATE case_record SET title=:title, summary=:summary, status=:status, nextAction=:nextAction, version=:nextVersion, updatedAt=:now WHERE scopeId=:scope AND caseId=:id AND version=:expected AND deletedAt IS NULL")
     suspend fun updateCase(scope: String, id: String, expected: Long, nextVersion: Long, title: String, summary: String?, status: String, nextAction: String?, now: String): Int

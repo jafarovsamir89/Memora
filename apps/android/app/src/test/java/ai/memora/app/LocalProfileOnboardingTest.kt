@@ -13,6 +13,8 @@ import ai.memora.app.data.ProtectedLocalProfileStore
 import ai.memora.app.data.InstallDisposition
 import ai.memora.app.data.LocalInstallMarker
 import ai.memora.app.data.protectedstore.DatabaseKeyProvider
+import ai.memora.app.agent.AgentCloudConsentKeys
+import ai.memora.app.voice.AgentVoiceTurnProcessor
 import java.io.File
 import java.util.UUID
 import kotlinx.coroutines.runBlocking
@@ -137,6 +139,24 @@ class LocalProfileOnboardingTest {
                 dao.recentConversationMessages("synthetic-scope", 100))
         }
         assertEquals(emptySet<String>(), consent.all.keys)
+    }
+
+    @Test fun revokingCloudConsentKeepsTheExistingLocalConversationScope() {
+        val context = ApplicationProvider.getApplicationContext<Context>()
+        val consent = context.getSharedPreferences("voice-first-consent", Context.MODE_PRIVATE)
+        val identity = context.getSharedPreferences("agent-runtime-identity", Context.MODE_PRIVATE)
+        val legacyScopeId = UUID.randomUUID().toString()
+        consent.edit().clear().putString("scope-id", legacyScopeId).putBoolean(AgentCloudConsentKeys.VOICE, true).commit()
+        identity.edit().clear().commit()
+
+        val processor = AgentVoiceTurnProcessor(context, agentDatabase.database)
+        assertEquals(legacyScopeId, processor.conversationScopeId())
+        assertEquals(legacyScopeId, identity.getString("scope-id", null))
+        assertNull(consent.getString("scope-id", null))
+
+        consent.edit().clear().commit()
+        assertEquals(legacyScopeId, processor.conversationScopeId())
+        assertTrue(consent.all.isEmpty())
     }
 
     @Test fun encryptedProfileStorePersistsPreferencesWithoutSeedingDomainFacts() = runBlocking {

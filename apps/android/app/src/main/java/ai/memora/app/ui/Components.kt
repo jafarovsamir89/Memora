@@ -23,6 +23,7 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
 import ai.memora.app.R
 
@@ -72,13 +73,14 @@ fun MemoraCard(
     modifier: Modifier = Modifier,
     tint: Color = colors.card,
     onClick: (() -> Unit)? = null,
+    contentPadding: androidx.compose.ui.unit.Dp = 20.dp,
     content: @Composable ColumnScope.() -> Unit,
 ) {
     Surface(
         modifier.fillMaxWidth().clip(RoundedCornerShape(24.dp))
             .then(if (onClick != null) Modifier.clickable(onClick = onClick) else Modifier),
         color = tint, shape = RoundedCornerShape(24.dp),
-    ) { Column(Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(12.dp), content = content) }
+    ) { Column(Modifier.padding(contentPadding), verticalArrangement = Arrangement.spacedBy(12.dp), content = content) }
 }
 
 @Composable
@@ -111,10 +113,10 @@ fun SectionHeading(title: String, action: (() -> Unit)? = null, badge: String? =
 }
 
 @Composable
-fun MenuRow(icon: ImageVector, title: String, subtitle: String, tone: Int = 0, onClick: () -> Unit) {
+fun MenuRow(icon: ImageVector, title: String, subtitle: String, tone: Int = 0, testTag: String? = null, onClick: () -> Unit) {
     Row(
         Modifier.fillMaxWidth().clip(RoundedCornerShape(18.dp)).clickable(onClick = onClick)
-            .padding(vertical = 12.dp, horizontal = 4.dp),
+            .padding(vertical = 12.dp, horizontal = 4.dp).then(if (testTag == null) Modifier else Modifier.testTag(testTag)),
         horizontalArrangement = Arrangement.spacedBy(14.dp), verticalAlignment = Alignment.CenterVertically,
     ) {
         IconBubble(icon, tone)

@@ -160,7 +160,7 @@ fun MemoraApp(initialRoute: String = "home", initialTheme: String = "system", ca
                 }
             }
             val navigate: (String) -> Unit = { destination -> parent = route; route = destination }
-            val topRoutes = setOf("home", "memory", "tasks", "more")
+            val topRoutes = setOf("home", "chat", "cases", "memory", "more")
             val goBack: () -> Unit = { route = if (route in topRoutes) "home" else parent.takeIf { it != route } ?: "home"; parent = "home" }
             val added = s(R.string.draft_added)
             LaunchedEffect(captureState.captures, pendingCommand) {
@@ -179,13 +179,14 @@ fun MemoraApp(initialRoute: String = "home", initialTheme: String = "system", ca
             val openCapture: (Boolean) -> Unit = { showVoice ->
                 voice = showVoice; capture = true
             }
-            val routes = listOf("home", "memory", "capture", "tasks", "more")
-            val labels = listOf(R.string.nav_home, R.string.nav_memory, R.string.nav_capture, R.string.nav_tasks, R.string.nav_more)
-            val icons = listOf(Glyph.Home, Glyph.Memory, Glyph.Mic, Glyph.Tasks, Glyph.Grid)
+            val routes = listOf("home", "chat", "cases", "memory", "more")
+            val labels = listOf(R.string.nav_home, R.string.nav_secretary, R.string.cases, R.string.nav_memory, R.string.nav_more)
+            val icons = listOf(Glyph.Home, Glyph.Chat, Glyph.Folder, Glyph.Memory, Glyph.Grid)
             val titleId = when (route) {
                 "memory" -> R.string.nav_memory; "tasks" -> R.string.nav_tasks; "more" -> R.string.nav_more
+                "cases" -> R.string.cases
                 "inbox" -> R.string.inbox; "notes" -> R.string.notes_title; "finance" -> R.string.finance; "calendar" -> R.string.calendar_title; "people" -> R.string.people
-                "projects" -> R.string.projects; "settings" -> R.string.settings; "chat" -> R.string.chat
+                "projects" -> R.string.projects; "settings" -> R.string.settings; "chat" -> R.string.nav_secretary
                 "voice_memory" -> R.string.voice_memory_title; "tables" -> R.string.tables_title
                 "licenses" -> R.string.open_source_licenses
                 else -> R.string.app_name
@@ -216,16 +217,11 @@ fun MemoraApp(initialRoute: String = "home", initialTheme: String = "system", ca
                 bottomBar = {
                     NavigationBar(containerColor = colors.card, tonalElevation = 0.dp) {
                         routes.forEachIndexed { index, destination ->
-                            val isCapture = destination == "capture"
                             NavigationBarItem(
-                                selected = !isCapture && (route == destination || (destination == "more" && route !in topRoutes)),
-                                onClick = { if (isCapture) openCapture(true) else { route = destination; parent = "home" } },
+                                selected = route == destination || (destination == "more" && route !in topRoutes),
+                                onClick = { route = destination; parent = "home" },
                                 modifier = Modifier.testTag("nav_$destination"),
-                                icon = {
-                                    if (isCapture) Box(Modifier.size(46.dp).background(MaterialTheme.colorScheme.primary, CircleShape), contentAlignment = Alignment.Center) {
-                                        Icon(Glyph.Plus, null, tint = MaterialTheme.colorScheme.onPrimary, modifier = Modifier.size(25.dp))
-                                    } else Icon(icons[index], null, Modifier.size(22.dp))
-                                },
+                                icon = { Icon(icons[index], null, Modifier.size(22.dp)) },
                                 label = { Text(s(labels[index]), fontSize = 11.sp, fontWeight = FontWeight.Medium, maxLines = 1) },
                                 colors = NavigationBarItemDefaults.colors(
                                     selectedIconColor = colors.accent, selectedTextColor = colors.accent,
@@ -242,12 +238,12 @@ fun MemoraApp(initialRoute: String = "home", initialTheme: String = "system", ca
                     Box(Modifier.widthIn(max = 720.dp).fillMaxSize()) {
                       screens.SaveableStateProvider(route) {
                         when (route) {
-                            "home" -> WorkingHomeScreen(language, captureState, navigate, openCapture, { detailId = it }) {
+                            "home" -> WorkingHomeScreen(language, captureState, navigate, openCapture, { detailId = it }, taskStore) {
                                 VoiceFirstScreen()
                             }
                             "memory" -> WorkingMemoryScreen(captureState, { detailId = it }, { openCapture(false) }, { navigate("inbox") })
                             "tasks" -> ScreenColumn { ScreenHeading(s(R.string.tasks_title), s(R.string.working_tasks_hint)); TaskPrototype(taskStore) }
-                            "more" -> MoreScreen(navigate, { about = true })
+                            "more" -> MoreScreen(navigate, { about = true }, { openCapture(true) })
                             "voice_memory" -> VoiceMemoryScreen()
                             "notes" -> SavedObjectsScreen(DomainKind.NOTE)
                             "tables" -> TablesScreen()
@@ -272,7 +268,7 @@ fun MemoraApp(initialRoute: String = "home", initialTheme: String = "system", ca
                                 appearanceModel.change(language = it)
                                 (profileState as? LocalProfileState.Ready)?.profile?.let { profile -> profileModel.syncLanguage(it) }
                             }, appearance.ready && !appearance.busy, appearance.error, { appearanceModel.load() }, { about = true })
-                            "chat" -> AgentChatScreen(language)
+                            "chat" -> AgentChatScreen(language, showVoiceControl = true)
                         }
                       }
                     }

@@ -369,4 +369,20 @@
     <string name="memory_delete_turn_confirmation">Обе реплики этого разговора будут навсегда удалены из истории на устройстве. Это действие нельзя отменить.</string>
     <string name="memory_source_saved">Сохранённые данные памяти</string>
     <string name="memory_source_linked">Связано с сохранённым источником и его версией</string>
+    <string name="nav_secretary">Секретарь</string>
+    <string name="secretary_voice_title">Поговорите с Memora</string>
+    <string name="secretary_voice_hint">Нажмите и удерживайте кнопку, говорите, затем отпустите. Можно продолжить текстом.</string>
+    <string name="chat_speaker_user">Вы</string>
+    <string name="chat_speaker_secretary">Memora</string>
+    <string name="today_priorities">На что обратить внимание сегодня</string>
+    <string name="today_due_tasks">Просроченные и ближайшие дела</string>
+    <string name="today_open_cases">Открытые дела</string>
+    <string name="today_upcoming">Ближайшие события</string>
+    <string name="today_loading">Загружаем данные на сегодня…</string>
+    <string name="today_partial_error">Не удалось загрузить часть данных. Список может быть неполным.</string>
+    <string name="today_clear_title">На сегодня открытых приоритетов нет</string>
+    <string name="today_clear_body">Нет просроченных или ближайших дел, открытых ситуаций и событий.</string>
+    <string name="today_tasks_count">Задачи</string>
+    <string name="today_cases_count">Дела</string>
+    <string name="today_events_count">События</string>
 </resources>

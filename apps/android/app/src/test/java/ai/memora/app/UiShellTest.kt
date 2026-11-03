@@ -27,6 +27,10 @@ import ai.memora.app.data.AtomicAppearanceStore
 import ai.memora.app.data.CapturePersistence
 import ai.memora.app.data.EncryptedCaptureStore
 import ai.memora.app.data.LocalCapturePersistence
+import ai.memora.app.data.protectedstore.CalendarInput
+import ai.memora.app.data.protectedstore.ProtectedCaseRepository
+import ai.memora.app.data.protectedstore.ProtectedDomainRepository
+import org.junit.Assert
 import org.junit.Before
 
 /** Runs Android 13 UI semantics and native rasterization on the JVM, not a phone. */
@@ -108,14 +112,29 @@ class UiShellTest {
         val now = java.time.Instant.parse("2026-01-01T12:00:00Z")
         captureStore.saveDraft(0, "İlqar, yaddaş yoxlaması")
         captureStore.submit("cmd", 1, "synthetic-source", "r1", "İlqar, yaddaş yoxlaması", now, "Asia/Baku")
-        compose.setContent { TestMemoraApp(initialTheme = "light", capturePersistenceOverride = captureStore, appearanceStoreOverride = appearanceStore) }
+        compose.setContent {
+            CompositionLocalProvider(LocalAgentDatabaseOverride provides agentDatabase.database) {
+                TestMemoraApp(initialTheme = "light", capturePersistenceOverride = captureStore, appearanceStoreOverride = appearanceStore)
+            }
+        }
         compose.onNodeWithTag("voice_first_button").assertIsDisplayed()
         compose.onNodeWithTag("nav_home").assertIsDisplayed()
+        compose.onNodeWithTag("nav_chat").assertIsDisplayed()
+        compose.onNodeWithTag("nav_cases").assertIsDisplayed()
         compose.onNodeWithTag("nav_memory").assertIsDisplayed()
-        compose.onNodeWithTag("nav_tasks").assertIsDisplayed()
         compose.onNodeWithTag("nav_more").assertIsDisplayed()
         compose.onNodeWithTag("open_settings").assertIsDisplayed()
         screenshot("01-home-light")
+        compose.onNodeWithTag("nav_chat").performClick()
+        compose.onNodeWithTag("secretary_voice_card").assertIsDisplayed()
+        screenshot("13-secretary-light")
+        compose.onNodeWithTag("chat_input").performScrollTo().assertIsDisplayed()
+        compose.onNodeWithTag("nav_more").performClick()
+        compose.onNodeWithTag("more_tasks").assertIsDisplayed()
+        compose.onNodeWithTag("more_voice_memory").assertIsDisplayed()
+        compose.onNodeWithTag("more_people").assertExists()
+        compose.onNodeWithTag("nav_cases").performClick()
+        compose.onNodeWithTag("nav_cases").assertIsDisplayed()
         compose.onNodeWithTag("nav_memory").performClick()
         screenshot("02-memory-light")
         compose.onNodeWithTag("memory_search").performTextInput("İLQAR")
@@ -123,6 +142,39 @@ class UiShellTest {
         compose.onNodeWithTag("memory_synthetic-source").performScrollTo().performClick()
         compose.onNodeWithTag("stored_source_text").assertTextContains("İlqar, yaddaş yoxlaması")
         screenshot("03-source-light")
+    }
+
+    @Test fun todayDashboardUsesSavedTasksCasesAndCalendarEvents() = kotlinx.coroutines.runBlocking {
+        val context = ApplicationProvider.getApplicationContext<Context>()
+        val scope = ai.memora.app.voice.AgentVoiceTurnProcessor(context).conversationScopeId()
+        val today = java.time.LocalDate.now(java.time.ZoneId.of("Asia/Baku"))
+        val due = today.plusDays(1)
+        taskStore.append(ai.memora.app.domain.TaskEvent.Created("synthetic-priority", scope, "owner", "synthetic-create",
+            "Synthetic priority task"))
+        taskStore.append(ai.memora.app.domain.TaskEvent.Updated("synthetic-priority", scope, "owner", "synthetic-due", 1,
+            "Synthetic priority task", due.atTime(9, 0).toString(), "Asia/Baku", false, null, null))
+        val cases = ProtectedCaseRepository(agentDatabase.database)
+        val domains = ProtectedDomainRepository(agentDatabase.database)
+        cases.createCase(scope, "synthetic-open-case", "Synthetic open case", null, nextAction = "Review synthetic item",
+            sourceTurnId = "00000000-0000-4000-8000-000000000301", now = java.time.Instant.now().toString())
+        domains.createCalendarEvent(CalendarInput("synthetic-upcoming-event", scope, "Synthetic upcoming event",
+            due.toString(), null, "Asia/Baku", "date"))
+
+        compose.setContent {
+            CompositionLocalProvider(LocalAgentDatabaseOverride provides agentDatabase.database) {
+                TestMemoraApp(capturePersistenceOverride = captureStore, appearanceStoreOverride = appearanceStore, taskStoreOverride = taskStore)
+            }
+        }
+        compose.waitUntil(10_000) {
+            compose.onAllNodesWithTag("today_task_synthetic-priority").fetchSemanticsNodes().isNotEmpty() &&
+                compose.onAllNodesWithTag("today_case_synthetic-open-case").fetchSemanticsNodes().isNotEmpty() &&
+                compose.onAllNodesWithTag("today_event_synthetic-upcoming-event").fetchSemanticsNodes().isNotEmpty()
+        }
+        compose.onNodeWithTag("today_task_synthetic-priority").performScrollTo().assertIsDisplayed()
+        compose.onNodeWithTag("today_case_synthetic-open-case").performScrollTo().assertIsDisplayed()
+        compose.onNodeWithTag("today_event_synthetic-upcoming-event").performScrollTo().assertIsDisplayed()
+        Assert.assertEquals(1, cases.openCaseCount(scope))
+        screenshot("14-today-with-local-data")
     }
 
     @Test fun textDraftGoesToInboxWithoutAi() {
@@ -164,11 +216,14 @@ class UiShellTest {
         compose.onNodeWithTag("filter_en").performClick()
         awaitAppearance("en", "dark")
         compose.onNodeWithText("Appearance").assertExists()
+        compose.onNodeWithTag("nav_chat").assertTextContains("Secretary")
         compose.onNodeWithTag("filter_az").performClick()
         awaitAppearance("az", "dark")
         compose.onNodeWithText("Görünüş").assertExists()
+        compose.onNodeWithTag("nav_chat").assertTextContains("Katibə")
         compose.onNodeWithTag("filter_ru").performClick()
         awaitAppearance("ru", "dark")
+        compose.onNodeWithTag("nav_chat").assertTextContains("Секретарь")
         compose.onNodeWithTag("nav_home").performClick()
         screenshot("07-home-dark")
     }
@@ -232,7 +287,8 @@ class UiShellTest {
 
     @Test fun voiceInputRequiresAnExplicitStart() {
         compose.setContent { TestMemoraApp(initialTheme = "light", capturePersistenceOverride = captureStore, appearanceStoreOverride = appearanceStore) }
-        compose.onNodeWithTag("nav_capture").performClick()
+        compose.onNodeWithTag("nav_more").performClick()
+        compose.onNodeWithTag("more_voice_capture").performClick()
         compose.onNodeWithTag("audio_note_start").assertExists()
         compose.onNodeWithTag("audio_note_review").assertDoesNotExist()
         compose.onNodeWithTag("audio_note_processing").assertDoesNotExist()

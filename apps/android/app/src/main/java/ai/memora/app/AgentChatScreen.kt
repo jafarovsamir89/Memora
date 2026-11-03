@@ -40,6 +40,7 @@ import ai.memora.app.ui.ScreenColumn
 import ai.memora.app.ui.colors
 import ai.memora.app.ui.s
 import ai.memora.app.voice.AgentVoiceTurnProcessor
+import ai.memora.app.voice.VoiceFirstScreen
 import ai.memora.app.voice.VoiceFirstResult
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.launch
@@ -47,11 +48,12 @@ import kotlinx.coroutines.withTimeout
 
 /** Text chat and push-to-talk share the same agent, encrypted memory, and bounded dialogue context. */
 @Composable
-fun AgentChatScreen(language: String = "az") {
+fun AgentChatScreen(language: String = "az", showVoiceControl: Boolean = false) {
     val context = LocalContext.current
     val settings = remember(context) { context.getSharedPreferences("voice-first-consent", 0) }
     val processor = remember(context) { AgentVoiceTurnProcessor(context) }
-    val repository = remember(context) { ProtectedConversationRepository(AgentDatabase.open(context)) }
+    val database = rememberUiAgentDatabase()
+    val repository = remember(database) { ProtectedConversationRepository(database) }
     val scopeId = remember(processor) { processor.conversationScopeId() }
     val coroutineScope = rememberCoroutineScope()
     var messages by remember { mutableStateOf<List<AgentConversationMessageRow>>(emptyList()) }
@@ -139,6 +141,13 @@ fun AgentChatScreen(language: String = "az") {
             color = colors.ink, textAlign = TextAlign.Center)
         Text(s(ai.memora.app.R.string.agent_chat_intro), Modifier.fillMaxWidth(), style = androidx.compose.material3.MaterialTheme.typography.bodyMedium,
             color = colors.muted, textAlign = TextAlign.Center)
+        if (showVoiceControl) MemoraCard(tint = colors.hero, modifier = Modifier.testTag("secretary_voice_card")) {
+            Text(s(ai.memora.app.R.string.secretary_voice_title), style = androidx.compose.material3.MaterialTheme.typography.titleMedium,
+                color = colors.ink)
+            Text(s(ai.memora.app.R.string.secretary_voice_hint), style = androidx.compose.material3.MaterialTheme.typography.bodySmall,
+                color = colors.muted)
+            VoiceFirstScreen()
+        }
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
             TextButton(onClick = {
                 if (memoryConsent) {
@@ -155,8 +164,14 @@ fun AgentChatScreen(language: String = "az") {
         if (messages.isEmpty()) Text(s(ai.memora.app.R.string.agent_chat_empty), Modifier.fillMaxWidth().padding(vertical = 20.dp),
             color = colors.muted, textAlign = TextAlign.Center)
         messages.forEach { message ->
-            MemoraCard(tint = if (message.role == "user") colors.softAccent else colors.card) {
-                Text(message.message, color = colors.ink, style = androidx.compose.material3.MaterialTheme.typography.bodyLarge)
+            Row(Modifier.fillMaxWidth(), horizontalArrangement =
+                if (message.role == "user") Arrangement.End else Arrangement.Start) {
+                MemoraCard(tint = if (message.role == "user") colors.softAccent else colors.card,
+                    modifier = Modifier.fillMaxWidth(.88f).testTag("chat_turn_${message.turnId}_${message.role}")) {
+                    Text(s(if (message.role == "user") ai.memora.app.R.string.chat_speaker_user else ai.memora.app.R.string.chat_speaker_secretary),
+                        style = androidx.compose.material3.MaterialTheme.typography.labelSmall, color = colors.accent)
+                    Text(message.message, color = colors.ink, style = androidx.compose.material3.MaterialTheme.typography.bodyLarge)
+                }
             }
         }
         if (busy) MemoraCard { Text(s(ai.memora.app.R.string.ai_loading), color = colors.muted) }

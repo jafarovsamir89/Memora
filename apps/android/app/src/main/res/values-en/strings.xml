@@ -369,4 +369,20 @@
     <string name="memory_delete_turn_confirmation">Both messages in this conversation will be permanently deleted from this device. This action cannot be undone.</string>
     <string name="memory_source_saved">Saved memory data</string>
     <string name="memory_source_linked">Linked to a saved source and revision</string>
+    <string name="nav_secretary">Secretary</string>
+    <string name="secretary_voice_title">Talk with Memora</string>
+    <string name="secretary_voice_hint">Press and hold to speak, then release. You can continue by text too.</string>
+    <string name="chat_speaker_user">You</string>
+    <string name="chat_speaker_secretary">Memora</string>
+    <string name="today_priorities">What needs your attention today</string>
+    <string name="today_due_tasks">Overdue and upcoming tasks</string>
+    <string name="today_open_cases">Open cases</string>
+    <string name="today_upcoming">Upcoming events</string>
+    <string name="today_loading">Loading today’s information…</string>
+    <string name="today_partial_error">Some information could not be loaded. These results may be incomplete.</string>
+    <string name="today_clear_title">Nothing urgent is scheduled today</string>
+    <string name="today_clear_body">There are no due tasks, open cases, or upcoming events.</string>
+    <string name="today_tasks_count">Tasks</string>
+    <string name="today_cases_count">Cases</string>
+    <string name="today_events_count">Events</string>
 </resources>
