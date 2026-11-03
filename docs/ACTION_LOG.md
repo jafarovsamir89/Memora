@@ -8,6 +8,8 @@
 
 До изменения сохранена предыдущая версия APK v43: `C:\memora-backups\Memora-v43-1.1.21-appcheck-token-input-before-reminders-2026-11-03.apk`, SHA-256 `178C25BE3464BD5E23CFC9D4E32BF73F2885EDB4F008DF86B1735D7AE72101A4`. Реализация закоммичена в `cc130d026ec984cd4681d222d3008e020c2dde8e` (`feat(android): support relative task reminders`); синхронизация документов входит в текущий Git handoff.
 
+Git handoff: implementation commit `cc130d026ec984cd4681d222d3008e020c2dde8e` и documentation commit `175f4a4d1f1ccd4bc94e5a3c206cf882a2bb36ed` отправлены в `origin/main`. После `git fetch` local `HEAD`, `origin/main` и `git ls-remote origin refs/heads/main` совпали; рабочее дерево было чистым.
+
 Открыта field-проверка: одна синтетическая фраза с явным 15-минутным интервалом, task write/status, затем доставка уведомления с названием задачи. Gemini зависит от настроенного debug App Check token и включённого согласия на сохранение памяти; не заявлять полный acceptance до опыта владельца.
 
 ## ACT-0128 - 2026-11-03 - Firebase App Check token input for debug APK

@@ -20,6 +20,8 @@
 
 Реализация закоммичена в `cc130d026ec984cd4681d222d3008e020c2dde8e` (`feat(android): support relative task reminders`); статус синхронизации Git проверяется в текущем handoff.
 
+Подтверждённый handoff: implementation commit `cc130d026ec984cd4681d222d3008e020c2dde8e` и documentation commit `175f4a4d1f1ccd4bc94e5a3c206cf882a2bb36ed` находятся в `origin/main`; после fetch local HEAD, tracking branch и remote `ls-remote` совпали, дерево было чистым.
+
 **Предыдущий проверенный срез ACT-0128, 2026-11-03:** APK v43 / 1.1.21-appcheck-token-input, Room schema 16. В debug APK появился экран Settings для ввода Firebase Console App Check debug token. Значение скрывается в поле, хранится локально в private preferences, не журналируется и проверяется вызовом официального Firebase App Check exchangeDebugToken; пустое поле сохраняет прежнее поведение стандартного Debug App Check provider. Функция и экран существуют только в debug source set; release source set использует Play Integrity.
 
 :app:compileDebugKotlin, :app:assembleDebug и :app:compileReleaseKotlin прошли; общий Gradle build завершился BUILD SUCCESSFUL (7m27s, 2 существующих warning о TablesScreen.kt:148). Unit tests, lint и реальный Firebase exchange не запускались: владелец ещё не создал и не передал debug token. APK SHA-256 178C25BE3464BD5E23CFC9D4E32BF73F2885EDB4F008DF86B1735D7AE72101A4; matching backup C:/memora-backups/Memora-v43-1.1.21-appcheck-token-input-2026-11-03.apk. Устройство владельца не менялось, пользовательская БД не открывалась.
