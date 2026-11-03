@@ -34,6 +34,9 @@ import ai.memora.app.data.protectedstore.PersonAliasRepository
 import ai.memora.app.data.protectedstore.PersonAliasRow
 import ai.memora.app.data.protectedstore.ProtectedCaseRepository
 import ai.memora.app.data.protectedstore.ProtectedDomainRepository
+import ai.memora.app.data.protectedstore.ProtectedMemoryRepository
+import ai.memora.app.data.protectedstore.TaskPersonLinkRow
+import ai.memora.app.domain.Task
 import ai.memora.app.ui.EmptyState
 import ai.memora.app.ui.MemoraCard
 import ai.memora.app.ui.ScreenColumn
@@ -50,6 +53,7 @@ private data class PersonStoryEntry(
     val title: String,
     val detail: String?,
     val source: CaseEvidenceView? = null,
+    val task: Task? = null,
 )
 
 /** Read-only view of the same encrypted people/projects written through the agent tool registry. */
@@ -67,6 +71,7 @@ internal fun SavedObjectsScreen(kind: DomainKind) {
     var selected by remember { mutableStateOf<DomainObjectRow?>(null) }
     var selectedCaseSource by remember { mutableStateOf<CaseEvidenceView?>(null) }
     var selectedCaseDetails by remember { mutableStateOf<CaseSnapshot?>(null) }
+    var selectedTask by remember { mutableStateOf<Task?>(null) }
     var detailStack by remember { mutableStateOf<List<DomainObjectRow>>(emptyList()) }
     var loading by remember(kind) { mutableStateOf(true) }
     var failed by remember(kind) { mutableStateOf(false) }
@@ -157,6 +162,7 @@ internal fun SavedObjectsScreen(kind: DomainKind) {
                 Column(Modifier.heightIn(max = 420.dp).verticalScroll(detailScrollState)) {
                     val source = selectedCaseSource
                     val caseDetails = selectedCaseDetails
+                    val taskDetails = selectedTask
                     if (source != null) {
                         Text(personCaseSourceKindLabel(source), color = colors.accent,
                             style = androidx.compose.material3.MaterialTheme.typography.labelMedium)
@@ -169,13 +175,21 @@ internal fun SavedObjectsScreen(kind: DomainKind) {
                             modifier = Modifier.padding(top = 8.dp), color = colors.amber)
                     } else if (caseDetails != null) {
                         PersonCaseDetails(caseDetails, onOpenSource = { selectedCaseSource = it })
+                    } else if (taskDetails != null) {
+                        Text(s(ai.memora.app.R.string.person_task_detail_heading), color = colors.accent,
+                            style = androidx.compose.material3.MaterialTheme.typography.labelMedium)
+                        Text(taskDetails.title, modifier = Modifier.testTag("saved_object_task_title"), color = colors.ink,
+                            style = androidx.compose.material3.MaterialTheme.typography.titleMedium)
+                        Text(s(if (taskDetails.completed) ai.memora.app.R.string.task_completed
+                            else ai.memora.app.R.string.task_open), color = colors.muted)
+                        taskDetails.dueLocal?.let { Text("${s(ai.memora.app.R.string.task_due)}: $it", color = colors.muted) }
                     } else {
                         val body = record.body?.takeIf(String::isNotBlank)
                         Text(body?.take(20_000) ?: s(ai.memora.app.R.string.saved_objects_no_details), color = colors.ink)
                         if (body != null && body.length > 20_000) {
                             Text(s(ai.memora.app.R.string.saved_objects_details_truncated), modifier = Modifier.padding(top = 8.dp), color = colors.muted)
                         }
-                        if (record.kind == DomainKind.PERSON.name) PersonCardSections(record, scopeId, repository, aliasRepository,
+                        if (record.kind == DomainKind.PERSON.name) PersonCardSections(record, scopeId, database, repository, aliasRepository,
                             remember(database) { ProtectedCaseRepository(database) },
                             onOpenLinkedObject = { linked ->
                                 detailStack = detailStack + record
@@ -184,17 +198,20 @@ internal fun SavedObjectsScreen(kind: DomainKind) {
                                 selected = linked
                             },
                             onOpenCaseSource = { source -> selectedCaseSource = source },
-                            onOpenCaseDetails = { snapshot -> selectedCaseDetails = snapshot })
+                            onOpenCaseDetails = { snapshot -> selectedCaseDetails = snapshot },
+                            onOpenTask = { task -> selectedTask = task })
                     }
                 }
             },
             confirmButton = {
-                if (selectedCaseSource != null || selectedCaseDetails != null || detailStack.isNotEmpty()) {
+                if (selectedCaseSource != null || selectedCaseDetails != null || selectedTask != null || detailStack.isNotEmpty()) {
                     TextButton(modifier = Modifier.testTag("saved_object_detail_back"), onClick = {
                         if (selectedCaseSource != null) {
                             selectedCaseSource = null
                         } else if (selectedCaseDetails != null) {
                             selectedCaseDetails = null
+                        } else if (selectedTask != null) {
+                            selectedTask = null
                         } else {
                             selected = detailStack.last()
                             detailStack = detailStack.dropLast(1)
@@ -203,6 +220,7 @@ internal fun SavedObjectsScreen(kind: DomainKind) {
                 } else {
                     TextButton(modifier = Modifier.testTag("saved_object_detail_close"), onClick = {
                         selected = null
+                        selectedTask = null
                         detailStack = emptyList()
                     }) {
                         Text(s(ai.memora.app.R.string.close))
@@ -217,16 +235,20 @@ internal fun SavedObjectsScreen(kind: DomainKind) {
 private fun PersonCardSections(
     person: DomainObjectRow,
     scopeId: String,
+    database: ai.memora.app.data.protectedstore.AgentDatabase,
     domainRepository: ProtectedDomainRepository,
     aliasRepository: PersonAliasRepository,
     caseRepository: ProtectedCaseRepository,
     onOpenLinkedObject: (DomainObjectRow) -> Unit,
     onOpenCaseSource: (CaseEvidenceView) -> Unit,
     onOpenCaseDetails: (CaseSnapshot) -> Unit,
+    onOpenTask: (Task) -> Unit,
 ) {
     val coroutineScope = rememberCoroutineScope()
     var refreshVersion by remember(person.objectId) { mutableIntStateOf(0) }
     var candidates by remember(person.objectId) { mutableStateOf<List<FinancePersonIdentityChoices>>(emptyList()) }
+    var tasks by remember(person.objectId) { mutableStateOf<List<Task>>(emptyList()) }
+    var taskLinks by remember(person.objectId) { mutableStateOf<List<TaskPersonLinkRow>>(emptyList()) }
     var historyByPersonId by remember(person.objectId) { mutableStateOf<Map<String, ai.memora.app.data.protectedstore.FinanceHistory>>(emptyMap()) }
     var relatedCases by remember(person.objectId) { mutableStateOf<List<CaseSnapshot>>(emptyList()) }
     var relatedObjects by remember(person.objectId) { mutableStateOf<List<LinkedDomainObject>>(emptyList()) }
@@ -236,6 +258,9 @@ private fun PersonCardSections(
     var loading by remember(person.objectId) { mutableStateOf(true) }
     var pendingLink by remember { mutableStateOf<FinancePersonIdentityChoices?>(null) }
     var pendingUnlink by remember { mutableStateOf<PersonIdentityLinkRow?>(null) }
+    var taskPickerVisible by remember { mutableStateOf(false) }
+    var pendingTask by remember { mutableStateOf<Task?>(null) }
+    var pendingTaskUnlink by remember { mutableStateOf<TaskPersonLinkRow?>(null) }
     var actionFailed by remember { mutableStateOf(false) }
     var aliasActionFailed by remember { mutableStateOf(false) }
 
@@ -248,6 +273,8 @@ private fun PersonCardSections(
                 caseRepository.financePersonIdentityChoices(scopeId, it.personId)
             }
             candidates = matched
+            tasks = ProtectedMemoryRepository(database).tasks().tasks
+            taskLinks = database.protectedStoreDao().activeTaskPersonLinks(scopeId, person.objectId)
             historyByPersonId = matched.filter { it.confirmedLink?.domainPersonId == person.objectId }
                 .mapNotNull { choice -> domainRepository.financeHistoryByPersonId(scopeId, choice.financePerson.personId)
                     ?.let { choice.financePerson.personId to it } }.toMap()
@@ -343,6 +370,101 @@ private fun PersonCardSections(
         }
     }
 
+    val taskById = tasks.associateBy { it.id }
+    val linkedTaskIds = taskLinks.map { it.taskId }.toSet()
+    Text(s(ai.memora.app.R.string.person_tasks), modifier = Modifier.padding(top = 18.dp),
+        style = androidx.compose.material3.MaterialTheme.typography.titleSmall, color = colors.ink)
+    Text(s(ai.memora.app.R.string.person_tasks_help), color = colors.muted,
+        style = androidx.compose.material3.MaterialTheme.typography.bodySmall)
+    TextButton(modifier = Modifier.testTag("person_task_link_open"), enabled = !loading,
+        onClick = { taskPickerVisible = true }) { Text(s(ai.memora.app.R.string.person_task_link_add)) }
+    if (taskLinks.isEmpty() && !loading) Text(s(ai.memora.app.R.string.person_task_link_empty),
+        modifier = Modifier.padding(top = 4.dp), color = colors.muted)
+    taskLinks.forEach { link ->
+        val task = taskById[link.taskId] ?: return@forEach
+        androidx.compose.material3.Surface(
+            modifier = Modifier.fillMaxWidth().padding(top = 6.dp).testTag("person_task_link_${link.taskId}"),
+            color = colors.card, shape = androidx.compose.foundation.shape.RoundedCornerShape(12.dp),
+            border = androidx.compose.foundation.BorderStroke(1.dp, colors.line),
+        ) {
+            androidx.compose.foundation.layout.Row(
+                modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 4.dp),
+                horizontalArrangement = androidx.compose.foundation.layout.Arrangement.SpaceBetween,
+                verticalAlignment = androidx.compose.ui.Alignment.CenterVertically,
+            ) {
+                Column(Modifier.weight(1f)) {
+                    Text(task.title, color = colors.ink)
+                    Text(personRelatedRelationLabel(link.relation), color = colors.muted,
+                        style = androidx.compose.material3.MaterialTheme.typography.bodySmall)
+                }
+                TextButton(modifier = Modifier.testTag("person_task_open_${task.id}"), onClick = { onOpenTask(task) }) {
+                    Text(s(ai.memora.app.R.string.case_source_open_details))
+                }
+                TextButton(modifier = Modifier.testTag("person_task_unlink_${link.linkId}"),
+                    onClick = { pendingTaskUnlink = link }) { Text(s(ai.memora.app.R.string.person_task_link_remove)) }
+            }
+        }
+    }
+    if (taskPickerVisible) {
+        val availableTasks = tasks.filter { it.id !in linkedTaskIds }
+        androidx.compose.material3.AlertDialog(
+            onDismissRequest = { taskPickerVisible = false },
+            title = { Text(s(ai.memora.app.R.string.person_task_link_add)) },
+            text = {
+                Column(Modifier.heightIn(max = 360.dp).verticalScroll(remember { ScrollState(0) })) {
+                    if (availableTasks.isEmpty()) Text(s(ai.memora.app.R.string.person_task_link_empty), color = colors.muted)
+                    availableTasks.forEach { task ->
+                        TextButton(modifier = Modifier.fillMaxWidth().testTag("person_task_candidate_${task.id}"),
+                            onClick = { taskPickerVisible = false; pendingTask = task }) {
+                            Text(task.title, color = colors.ink)
+                        }
+                    }
+                }
+            },
+            confirmButton = { TextButton(onClick = { taskPickerVisible = false }) { Text(s(ai.memora.app.R.string.close)) } },
+        )
+    }
+    pendingTask?.let { task ->
+        androidx.compose.material3.AlertDialog(
+            onDismissRequest = { pendingTask = null },
+            title = { Text(s(ai.memora.app.R.string.person_task_link_add)) },
+            text = { Text(stringResource(ai.memora.app.R.string.person_task_link_confirm, task.title, person.title)) },
+            confirmButton = {
+                TextButton(modifier = Modifier.testTag("person_task_link_confirm"), onClick = {
+                    coroutineScope.launch {
+                        try {
+                            caseRepository.confirmTaskPersonLink(scopeId, task.id, person.objectId,
+                                confirmedBy = "owner")
+                            pendingTask = null
+                            refreshVersion++
+                        } catch (_: Exception) { actionFailed = true; pendingTask = null }
+                    }
+                }) { Text(s(ai.memora.app.R.string.person_task_link_add)) }
+            },
+            dismissButton = { TextButton(onClick = { pendingTask = null }) { Text(s(ai.memora.app.R.string.close)) } },
+        )
+    }
+    pendingTaskUnlink?.let { link ->
+        val taskTitle = taskById[link.taskId]?.title.orEmpty()
+        androidx.compose.material3.AlertDialog(
+            onDismissRequest = { pendingTaskUnlink = null },
+            title = { Text(s(ai.memora.app.R.string.person_task_link_remove)) },
+            text = { Text(stringResource(ai.memora.app.R.string.person_task_unlink_confirm, taskTitle, person.title)) },
+            confirmButton = {
+                TextButton(modifier = Modifier.testTag("person_task_unlink_confirm"), onClick = {
+                    coroutineScope.launch {
+                        try {
+                            caseRepository.unlinkTaskPerson(scopeId, link.linkId, confirmedBy = "owner")
+                            pendingTaskUnlink = null
+                            refreshVersion++
+                        } catch (_: Exception) { actionFailed = true; pendingTaskUnlink = null }
+                    }
+                }) { Text(s(ai.memora.app.R.string.person_task_link_remove)) }
+            },
+            dismissButton = { TextButton(onClick = { pendingTaskUnlink = null }) { Text(s(ai.memora.app.R.string.close)) } },
+        )
+    }
+
     Text(s(ai.memora.app.R.string.person_finance_identity), modifier = Modifier.padding(top = 18.dp),
         style = androidx.compose.material3.MaterialTheme.typography.titleSmall, color = colors.ink)
     Text(s(ai.memora.app.R.string.person_finance_identity_help), color = colors.muted,
@@ -403,6 +525,11 @@ private fun PersonCardSections(
                 add(PersonStoryEntry(event.eventId, occurredAt, personTimelineOrder(occurredAt), label, detail))
             }
         }
+        taskLinks.forEach { link ->
+            val task = taskById[link.taskId] ?: return@forEach
+            add(PersonStoryEntry("source-task-${task.id}-", link.createdAt, personTimelineOrder(link.createdAt),
+                task.title, s(ai.memora.app.R.string.person_task_linked_story), task = task))
+        }
         relatedCases.forEach { snapshot ->
             snapshot.timeline.filterNot { it.sourceKind == "money_event" && it.sourceId in financeEventIds }
                 .forEach { event ->
@@ -448,11 +575,11 @@ private fun PersonCardSections(
             style = androidx.compose.material3.MaterialTheme.typography.titleSmall, color = colors.ink)
         personStory.forEach { entry ->
             MemoraCard(modifier = Modifier.padding(top = 8.dp).testTag("person_story_${entry.id}"),
-                onClick = entry.source?.let { { onOpenCaseSource(it) } }) {
+                onClick = entry.source?.let { { onOpenCaseSource(it) } } ?: entry.task?.let { { onOpenTask(it) } }) {
                 Text(entry.title, color = colors.ink, style = androidx.compose.material3.MaterialTheme.typography.titleSmall)
                 entry.detail?.takeIf(String::isNotBlank)?.let { Text(it.take(500), color = colors.muted) }
                 Text(entry.at, color = colors.muted, style = androidx.compose.material3.MaterialTheme.typography.labelSmall)
-                if (entry.source != null) Text(s(ai.memora.app.R.string.case_source_open_details), color = colors.accent,
+                if (entry.source != null || entry.task != null) Text(s(ai.memora.app.R.string.case_source_open_details), color = colors.accent,
                     style = androidx.compose.material3.MaterialTheme.typography.labelMedium)
             }
         }
@@ -528,6 +655,7 @@ private fun personRelatedKindLabel(kind: String): String = s(when (kind) {
 
 @Composable
 private fun personRelatedRelationLabel(relation: String): String = s(when (relation) {
+    "assigned_to" -> ai.memora.app.R.string.person_related_relation_assigned_to
     "works_on" -> ai.memora.app.R.string.person_related_relation_works_on
     "owes" -> ai.memora.app.R.string.person_related_relation_owes
     "family_of" -> ai.memora.app.R.string.person_related_relation_family

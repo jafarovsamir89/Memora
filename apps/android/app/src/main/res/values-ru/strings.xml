@@ -338,6 +338,17 @@
     <string name="person_identity_unlink_question">Удалится только связь; финансовая запись и карточка человека останутся. Продолжить?</string>
     <string name="person_aliases">Другие имена</string>
     <string name="person_aliases_help">Используются только точные имена, добавленные вами. Похожие имена не объединяют людей.</string>
+    <string name="person_tasks">Задачи</string>
+    <string name="person_tasks_help">Выберите задачу по её записи и явно свяжите с человеком. Совпадение имён не создаёт связь.</string>
+    <string name="person_task_link_add">Связать задачу</string>
+    <string name="person_task_link_remove">Убрать связь</string>
+    <string name="person_task_link_empty">Нет задач для связи.</string>
+    <string name="person_task_linked_story">Задача явно связана с карточкой человека</string>
+    <string name="person_task_detail_heading">Задача</string>
+    <string name="task_completed">Завершена</string>
+    <string name="task_open">Открыта</string>
+    <string name="person_task_link_confirm">Связать задачу «%1$s» с карточкой человека «%2$s»?</string>
+    <string name="person_task_unlink_confirm">Убрать связь задачи «%1$s» с «%2$s»? Сама задача останется.</string>
     <string name="person_alias_add">Добавить имя</string>
     <string name="person_alias_retire">Удалить</string>
     <string name="person_alias_restore">Восстановить</string>
@@ -362,6 +373,7 @@
     <string name="person_related_kind_note">Заметка</string>
     <string name="person_related_back">Назад</string>
     <string name="person_related_relation_related">связано</string>
+    <string name="person_related_relation_assigned_to">назначено</string>
     <string name="person_related_relation_works_on">работает над</string>
     <string name="person_related_relation_owes">должен</string>
     <string name="person_related_relation_family">родственная связь</string>

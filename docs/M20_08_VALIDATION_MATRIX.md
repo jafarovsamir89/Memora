@@ -1,6 +1,12 @@
 # M20-08 Native validation matrix
 
-Status as of 2026-11-03, APK v42 / 1.1.20-person-aliases, Room schema 16. This matrix records existing evidence and remaining work; it does not turn host tests into device or live-provider acceptance.
+Status as of 2026-11-03, APK v53 / 1.1.31-canonical-task-person-links, Room schema 17. This matrix records existing evidence and remaining work; it does not turn host tests into device or live-provider acceptance.
+
+## ACT-0138 update
+
+Added `task_person_link` and `task_person_link_revision` in additive migration 16→17. A person card lists existing scoped tasks and lets the owner choose, confirm, retire or restore a direct canonical task/person association; no text-label or name matching is used. Repository validation checks that the task exists in the selected scope and the PERSON object remains active. Tests verify owner-only mutation, missing-task rejection, idempotent repeat, revision history and the Compose selection/confirmation/unlink path.
+
+Fresh XML reports: 57 suites / 287 tests, 0 failures/errors/skips. Debug and AndroidTest APKs assembled; AndroidTest Kotlin compiled; lint 0 errors / 60 warnings / 3 hints. APK SHA-256 `2f20754357f4678a454a2e0a6d0512dfc60fd1c81a521e92e5b1d7db7a3a2322`. No device was connected, so APK install and real SQLCipher 16→17 migration/readback were not run. User database was not opened or changed. Host evidence does not close M20-03 or M20-08.
 
 ## ACT-0127 update
 

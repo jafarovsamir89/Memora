@@ -203,6 +203,8 @@ class CasesAndPersonCardTest {
             "2026-11-03T10:00:00Z")
         repository.appendTaskEvent(TaskEvent.Created("synthetic-linked-task", scope, "synthetic-test-owner",
             "synthetic-linked-task-create", "Synthetic follow-up task"))
+        assertEquals(listOf("synthetic-linked-task"), ai.memora.app.data.protectedstore.ProtectedMemoryRepository(databaseRule.database)
+            .tasks().tasks.map { it.id })
         repository.recordFinanceEvent(scope, "Synthetic Planner", "receipt", 5_000, "AZN", "Synthetic advance", null,
             "synthetic-planner-finance", "synthetic-planner-receipt", "synthetic-planner-receipt-command",
             "2026-11-03T10:01:00Z", "2026-11-03T10:01:00Z")
@@ -237,6 +239,35 @@ class CasesAndPersonCardTest {
             compose.onAllNodesWithTag("saved_object_synthetic-source-person").fetchSemanticsNodes().isNotEmpty()
         }
         compose.onNodeWithTag("saved_object_synthetic-source-person").performScrollTo().performClick()
+        compose.waitUntil(10_000) {
+            compose.onAllNodes(hasTestTag("person_task_link_open") and androidx.compose.ui.test.isEnabled())
+                .fetchSemanticsNodes().isNotEmpty()
+        }
+        compose.onNodeWithTag("person_task_link_open").performScrollTo().performClick()
+        compose.waitUntil(10_000) { compose.onAllNodesWithTag("person_task_candidate_synthetic-linked-task").fetchSemanticsNodes().isNotEmpty() }
+        compose.onNodeWithTag("person_task_candidate_synthetic-linked-task").performClick()
+        compose.onNodeWithTag("person_task_link_confirm").performClick()
+        val directTaskLinkTag = "person_task_link_synthetic-linked-task"
+        compose.waitUntil(10_000) { compose.onAllNodesWithTag(directTaskLinkTag).fetchSemanticsNodes().isNotEmpty() }
+        compose.onNodeWithTag(directTaskLinkTag).assertExists()
+        compose.onNodeWithTag("person_task_open_synthetic-linked-task").performClick()
+        compose.onNodeWithTag("saved_object_task_title").assertTextEquals("Synthetic follow-up task")
+        screenshot("26-person-direct-task-detail")
+        compose.onNodeWithTag("saved_object_detail_back").performClick()
+        compose.onNodeWithTag("saved_object_detail_title").assertTextEquals("Synthetic Planner")
+        val taskPersonLink = runBlocking {
+            databaseRule.database.protectedStoreDao().taskPersonLink(scope, "synthetic-linked-task", "synthetic-source-person")
+        }
+        requireNotNull(taskPersonLink)
+        compose.waitUntil(10_000) {
+            compose.onAllNodesWithTag("person_task_unlink_${taskPersonLink.linkId}").fetchSemanticsNodes().isNotEmpty()
+        }
+        compose.onNodeWithTag("person_task_unlink_${taskPersonLink.linkId}").performClick()
+        compose.onNodeWithTag("person_task_unlink_confirm").performClick()
+        compose.waitUntil(10_000) { compose.onAllNodesWithTag(directTaskLinkTag).fetchSemanticsNodes().isEmpty() }
+        assertEquals(listOf("linked", "retired"), runBlocking {
+            databaseRule.database.protectedStoreDao().taskPersonLinkRevisions(scope, taskPersonLink.linkId).map { it.action }
+        })
         val taskStoryTag = "person_story_source-task-synthetic-linked-task-"
         val calendarStoryTag = "person_story_source-calendar_event-synthetic-linked-calendar-"
         val receiptStoryTag = "person_story_source-money_event-synthetic-planner-receipt-"

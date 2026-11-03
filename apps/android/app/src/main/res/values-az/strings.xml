@@ -338,6 +338,17 @@
     <string name="person_identity_unlink_question">Yalnız əlaqə silinəcək; maliyyə və şəxs qeydləri qalacaq. Davam edək?</string>
     <string name="person_aliases">Başqa adlar</string>
     <string name="person_aliases_help">Yalnız sizin əlavə etdiyiniz dəqiq ad uyğunluğu istifadə olunur. Şəxslər ad oxşarlığına görə birləşdirilmir.</string>
+    <string name="person_tasks">Tapşırıqlar</string>
+    <string name="person_tasks_help">Tapşırığı ID ilə seçib bu şəxsə açıq şəkildə bağlayın. Ad oxşarlığı əlaqə yaratmır.</string>
+    <string name="person_task_link_add">Tapşırıq bağla</string>
+    <string name="person_task_link_remove">Əlaqəni ləğv et</string>
+    <string name="person_task_link_empty">Bağlamaq üçün tapşırıq yoxdur.</string>
+    <string name="person_task_linked_story">Şəxs kartına açıq şəkildə bağlanmış tapşırıq</string>
+    <string name="person_task_detail_heading">Tapşırıq</string>
+    <string name="task_completed">Tamamlandı</string>
+    <string name="task_open">Açıq</string>
+    <string name="person_task_link_confirm">“%1$s” tapşırığını “%2$s” şəxs kartına bağlamağı təsdiqləyirsiniz?</string>
+    <string name="person_task_unlink_confirm">“%1$s” tapşırığının “%2$s” ilə əlaqəsi silinsin? Tapşırıq özü qalacaq.</string>
     <string name="person_alias_add">Ad əlavə et</string>
     <string name="person_alias_retire">Sil</string>
     <string name="person_alias_restore">Bərpa et</string>
@@ -362,6 +373,7 @@
     <string name="person_related_kind_note">Qeyd</string>
     <string name="person_related_back">Geri</string>
     <string name="person_related_relation_related">əlaqəlidir</string>
+    <string name="person_related_relation_assigned_to">təyin edilib</string>
     <string name="person_related_relation_works_on">üzərində işləyir</string>
     <string name="person_related_relation_owes">borcludur</string>
     <string name="person_related_relation_family">ailə əlaqəsi</string>

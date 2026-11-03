@@ -104,6 +104,74 @@ internal class ProtectedCaseRepository(private val db: AgentDatabase) {
             dao.activeIdentityLinkForDomainPerson(scope, current.domainPersonId) == null) { "identity_unlink_readback_mismatch" }
     }
 
+    /** Persist a direct task/person identity only after explicit owner confirmation; labels are ignored. */
+    suspend fun confirmTaskPersonLink(
+        scope: String,
+        taskId: String,
+        domainPersonId: String,
+        relation: String = "related_to",
+        linkId: String = UUID.randomUUID().toString(),
+        confirmedBy: String,
+        now: String = Instant.now().toString(),
+    ): TaskPersonLinkRow = db.withTransaction {
+        require(scope.isNotBlank() && taskId.isNotBlank() && domainPersonId.isNotBlank())
+        require(confirmedBy == "owner") { "task_person_link_requires_owner" }
+        require(linkId.isNotBlank() && linkId.length <= 100)
+        require(relation.matches(Regex("[a-z][a-z0-9_]{0,39}")))
+        Instant.parse(now)
+        val taskEvents = dao.taskEvents(taskId, scope)
+        check(taskEvents.isNotEmpty() && !dao.taskDeleted(taskId)) { "task_not_found" }
+        val person = dao.domainObject(scope, domainPersonId)
+        check(person?.kind == DomainKind.PERSON.name && person.deletedAt == null) { "domain_person_not_found" }
+
+        val existing = dao.taskPersonLink(scope, taskId, domainPersonId)
+        if (existing?.deletedAt == null && existing != null) {
+            check(existing.relation == relation) { "task_person_link_conflict" }
+            return@withTransaction existing
+        }
+        val row = if (existing == null) {
+            TaskPersonLinkRow(linkId, scope, taskId, domainPersonId, relation, 1, "owner", now, now, null).also {
+                dao.insertTaskPersonLink(it)
+                dao.insertTaskPersonLinkRevision(TaskPersonLinkRevisionRow(
+                    it.linkId, it.version, scope, taskId, domainPersonId, "linked", relation, "owner", now,
+                ))
+            }
+        } else {
+            val nextVersion = Math.addExact(existing.version, 1L)
+            check(dao.restoreTaskPersonLink(scope, existing.linkId, existing.version, nextVersion, relation, now) == 1) {
+                "task_person_link_conflict"
+            }
+            existing.copy(relation = relation, version = nextVersion, updatedAt = now, deletedAt = null).also {
+                dao.insertTaskPersonLinkRevision(TaskPersonLinkRevisionRow(
+                    it.linkId, it.version, scope, taskId, domainPersonId, "restored", relation, "owner", now,
+                ))
+            }
+        }
+        check(dao.taskPersonLink(scope, taskId, domainPersonId) == row &&
+            dao.taskPersonLinkRevisions(scope, row.linkId).lastOrNull()?.let { it.version == row.version } == true) {
+            "task_person_link_readback_mismatch"
+        }
+        row
+    }
+
+    suspend fun unlinkTaskPerson(scope: String, linkId: String, confirmedBy: String, now: String = Instant.now().toString()) = db.withTransaction {
+        require(confirmedBy == "owner") { "task_person_unlink_requires_owner" }
+        Instant.parse(now)
+        val current = dao.taskPersonLinkById(scope, linkId)?.takeIf { it.deletedAt == null }
+            ?: error("task_person_link_not_found")
+        check(dao.retireTaskPersonLink(scope, linkId, current.version, Math.addExact(current.version, 1L), now) == 1) {
+            "task_person_link_conflict"
+        }
+        val retired = current.copy(version = current.version + 1, updatedAt = now, deletedAt = now)
+        dao.insertTaskPersonLinkRevision(TaskPersonLinkRevisionRow(
+            linkId, retired.version, scope, current.taskId, current.domainPersonId, "retired", current.relation, "owner", now,
+        ))
+        check(dao.taskPersonLink(scope, current.taskId, current.domainPersonId) == retired &&
+            dao.taskPersonLinkRevisions(scope, linkId).lastOrNull()?.let { it.action == "retired" } == true) {
+            "task_person_unlink_readback_mismatch"
+        }
+    }
+
     suspend fun createCase(
         scope: String,
         caseId: String,

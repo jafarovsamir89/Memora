@@ -338,6 +338,17 @@
     <string name="person_identity_unlink_question">Only the link will be removed; the finance record and person card will stay. Continue?</string>
     <string name="person_aliases">Other names</string>
     <string name="person_aliases_help">Only exact names you add are used. Similar names never merge people.</string>
+    <string name="person_tasks">Tasks</string>
+    <string name="person_tasks_help">Choose a task and explicitly link it to this person. Similar names never create a link.</string>
+    <string name="person_task_link_add">Link a task</string>
+    <string name="person_task_link_remove">Remove link</string>
+    <string name="person_task_link_empty">There are no tasks available to link.</string>
+    <string name="person_task_linked_story">Task explicitly linked to this person</string>
+    <string name="person_task_detail_heading">Task</string>
+    <string name="task_completed">Completed</string>
+    <string name="task_open">Open</string>
+    <string name="person_task_link_confirm">Link “%1$s” to the person card “%2$s”?</string>
+    <string name="person_task_unlink_confirm">Remove the link between “%1$s” and “%2$s”? The task will remain.</string>
     <string name="person_alias_add">Add name</string>
     <string name="person_alias_retire">Remove</string>
     <string name="person_alias_restore">Restore</string>
@@ -362,6 +373,7 @@
     <string name="person_related_kind_note">Note</string>
     <string name="person_related_back">Back</string>
     <string name="person_related_relation_related">related to</string>
+    <string name="person_related_relation_assigned_to">assigned to</string>
     <string name="person_related_relation_works_on">works on</string>
     <string name="person_related_relation_owes">owes</string>
     <string name="person_related_relation_family">family of</string>

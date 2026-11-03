@@ -1114,3 +1114,12 @@ ACT-0095 зафиксирован коммитом fc2e21bd55e5f209f604a191d72f6
 Изменён `CasesAndPersonCardTest.kt` и синхронизированы чек-лист, инженерный план, дневник и этот лог. Product code, APK и schema не менялись; личная БД не открывалась.
 
 Коммит `a2d78262def81713cb958420e1a7a8af2b6665f9` (`test(android): verify finance source dedup on person card`) отправлен в `origin/main`; после `git fetch` local HEAD и `git ls-remote origin refs/heads/main` совпали. Единственный незатронутый untracked-файл — `docs/adr/ADR-012-keystore-wrapping-key-rotation.md`.
+## ACT-0138 - 2026-11-03 - Прямая подтверждаемая связь задачи с человеком
+
+Добавлена scoped canonical association таблица `task_person_link` и append-only revision table `task_person_link_revision`; additive Room migration 16→17 не преобразует и не переписывает старые текстовые подписи. Защищённый repository требует owner confirmation, существующую задачу в том же scope и активный PERSON; поддерживает idempotent повтор, retire/restore и локальный readback. На карточке человека пользователь выбирает сохранённую задачу, подтверждает связь и может снять её с отдельным подтверждением. Удалённая задача исключается из active associations; canonical identity по похожему имени не строится.
+
+`TaskPersonLinkRepositoryTest` и расширенный `personTimelineOpensExplicitTaskAndCalendarSourcesAndReturnsToCard` прошли. Свежий полный Gradle rerun завершился BUILD SUCCESSFUL за 55 секунд: JUnit XML 57 suites / 287 tests, 0 failures/errors/skips; debug/AndroidTest APK и AndroidTest Kotlin compile прошли, lint 0 errors / 60 warnings / 3 hints. APK v53 / `1.1.31-canonical-task-person-links`, schema 17, SHA-256 `2f20754357f4678a454a2e0a6d0512dfc60fd1c81a521e92e5b1d7db7a3a2322`. Просмотр host screenshot показал несколько слоёв Robolectric dialogs; это не device visual acceptance. `adb devices -l` пуст; APK не устанавливался, device SQLCipher migration и user acceptance не подтверждены, пользовательская БД не открывалась.
+
+Обновлены AgentDatabase и schema17, ProtectedCaseRepository, SavedObjectsScreen, AZ/RU/EN strings, DatabaseStorageProbe migration chain, tests, versionCode 53, `docs/DOMAIN_AND_DATA.md`, `docs/SCENARIOS.md` S41, TODO, plan/spec checkpoints, validation matrix, дневник и этот лог. M20-03 остаётся частичным; миграция требует isolated Android SQLCipher run, а экран — owner/device acceptance.
+
+Изменения и документация подготовлены к коммиту; push не заявляется до проверки удалённой ветки.
