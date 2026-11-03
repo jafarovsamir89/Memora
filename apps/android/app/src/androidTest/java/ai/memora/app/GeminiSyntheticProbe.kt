@@ -53,6 +53,7 @@ class GeminiSyntheticProbe : Instrumentation() {
     private var appCheckTokenOnly = false
     private var syntheticModelName = "gemini-3.5-flash-lite"
     private var agentE2ePhase: String? = null
+    private var agentE2eScenario = "finance"
     private var syntheticAgentE2eAllowed = false
     private var syntheticRunId: String? = null
     private var processDeathProbe: String? = null
@@ -77,6 +78,7 @@ class GeminiSyntheticProbe : Instrumentation() {
             ?.takeIf { it in setOf("gemini-3.1-flash-lite", "gemini-3.5-flash-lite", "gemini-3.8-flash") }
             ?: "gemini-3.5-flash-lite"
         agentE2ePhase = arguments?.getString("agentE2ePhase")?.takeIf { it in setOf("mutate", "verify", "cleanup") }
+        agentE2eScenario = arguments?.getString("agentE2eScenario")?.takeIf { it in setOf("finance", "episode") } ?: "finance"
         syntheticAgentE2eAllowed = arguments?.getString("allowSyntheticAgentE2E") == "true"
         syntheticRunId = arguments?.getString("syntheticRunId")?.takeIf {
             it.matches(Regex("[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}"))
@@ -402,6 +404,7 @@ class GeminiSyntheticProbe : Instrumentation() {
         val databaseName = "memora_synthetic_e2e_${runId.replace("-", "")}.db"
         require(databaseName.matches(Regex("memora_synthetic_e2e_[0-9a-f]{32}\\.db")))
         results.putString("trace_id", runId)
+        results.putString("scenario", agentE2eScenario)
         if (phase == "cleanup") {
             results.putString("status", if (targetContext.deleteDatabase(databaseName)) "synthetic_database_cleaned" else "synthetic_database_cleanup_failed")
             finish(if (results.getString("status") == "synthetic_database_cleaned") Activity.RESULT_OK else Activity.RESULT_CANCELED, results)
@@ -423,7 +426,26 @@ class GeminiSyntheticProbe : Instrumentation() {
                 val policy = ConsentAgentRuntimePolicy(cloudConsent = { true }, memoryConsent = { memoryConsent })
                 val languages = onlyCase?.takeIf { it in setOf("az", "ru") }?.let { listOf(it) } ?: listOf("az", "ru")
 
-                if (phase == "mutate") {
+                if (agentE2eScenario == "episode" && phase == "mutate") {
+                    runSyntheticEpisodeFlow(runId, db, repository, conversations, journal, policy, results)
+                    results.putString("active_stage", "episode_consent_revoked_gate")
+                    memoryConsent = false
+                    val scope = syntheticUuid("$runId:episode:scope")
+                    val history = conversations.recentContext(scope, 12).map { AgentDialogueMessage(it.role, it.message.takeLast(4_000)) }
+                    val result = AgentOrchestrator(GeminiAgentModelGateway(), DefaultAgentToolRegistry(
+                        LocalMemoryTools(repository, ProtectedMemoryRepository(db), conversations = conversations).handlers()),
+                        policy, journal).run(AgentTurnRequest(UUID.randomUUID().toString(), scope,
+                        syntheticUuid("$runId:episode:actor"), null, "az-AZ", "synthetic revoked-consent probe",
+                        AgentInputChannel.TEXT, history))
+                    check(result.status == AgentRunResultStatus.FAILED && result.code == "memory_consent_required" && result.toolResults.isEmpty()) {
+                        "synthetic_episode_revoked_consent_gate_failed"
+                    }
+                    results.putString("revoked_consent", "blocked_before_model_and_tools")
+                } else if (agentE2eScenario == "episode") {
+                    verifySyntheticEpisodeFlow(runId, db, repository, conversations, journal, policy, results)
+                    results.putString("restart_readback", "verified")
+                    results.putString("restart_search", "passed")
+                } else if (phase == "mutate") {
                     languages.forEach { language ->
                         check(repository.allFinanceEvents(syntheticUuid("$runId:$language:scope")).isEmpty())
                         runSyntheticFinanceFlow(language, runId, db, repository, conversations, journal, policy, results)
@@ -470,6 +492,68 @@ class GeminiSyntheticProbe : Instrumentation() {
         finish(if (passed) Activity.RESULT_OK else Activity.RESULT_CANCELED, results)
     }
 
+    private suspend fun runSyntheticEpisodeFlow(runId: String, db: AgentDatabase, repository: ProtectedDomainRepository,
+        conversations: ProtectedConversationRepository, journal: RoomAgentRunJournal,
+        policy: ConsentAgentRuntimePolicy, results: Bundle) {
+        val scope = syntheticUuid("$runId:episode:scope")
+        val actor = syntheticUuid("$runId:episode:actor")
+        val firstTurn = syntheticUuid("$runId:episode:source:one")
+        val secondTurn = syntheticUuid("$runId:episode:source:two")
+        conversations.appendTurn(scope, firstTurn,
+            "Bu sintetik sınaqda Orxan üçün BMW təmiri üzrə 300 manat qiymət razılaşdırıldı.",
+            "Sintetik razılaşmanı qeydə aldım.", 1_800_000_000_000L)
+        conversations.appendTurn(scope, secondTurn,
+            "Orxan 100 manat avans verdi; ehtiyat hissələri cümə günü gələcək, qalan 200 manat yalnız gözlənilən məbləğdir.",
+            "Sintetik gözləntini qeydə aldım.", 1_800_000_060_000L)
+        results.putString("active_stage", "episode_live_summary_selection")
+        val save = runSyntheticTurn("az", 0,
+            "Orxanla BMW təmiri barədə razılaşdığımız əsas məlumatları əvvəlki söhbətdən tap və qısa xülasə kimi yadda saxla.",
+            setOf("search_conversation_history", "save_memory_episode"),
+            scope, actor, "az-AZ", db, repository, conversations, journal, policy, AgentInputChannel.TEXT, results)
+        check(save.toolResults.any { it.name == "save_memory_episode" && it.status == ToolObservationStatus.APPLIED }) {
+            "synthetic_episode_save_not_applied"
+        }
+        val episode = conversations.searchEpisodes(scope, "Orxan BMW təmiri ehtiyat hissələri", limit = 5).singleOrNull()
+            ?: error("synthetic_episode_save_readback_failed")
+        check(episode.sourceTurnIds.sorted() == listOf(firstTurn, secondTurn).sorted() && episode.revision == 1L) {
+            "synthetic_episode_provenance_readback_failed"
+        }
+        val normalized = episode.summary.lowercase(java.util.Locale.forLanguageTag("az-AZ"))
+        check(listOf("bmw", "300", "100", "200").all(normalized::contains)) {
+            "synthetic_episode_summary_semantics_failed"
+        }
+        results.putString("episode_save_readback", "verified")
+        results.putString("episode_source_count", episode.sourceTurnIds.size.toString())
+    }
+
+    private suspend fun verifySyntheticEpisodeFlow(runId: String, db: AgentDatabase, repository: ProtectedDomainRepository,
+        conversations: ProtectedConversationRepository, journal: RoomAgentRunJournal,
+        policy: ConsentAgentRuntimePolicy, results: Bundle) {
+        val scope = syntheticUuid("$runId:episode:scope")
+        val actor = syntheticUuid("$runId:episode:actor")
+        results.putString("active_stage", "episode_restart_readback")
+        val episode = conversations.searchEpisodes(scope, "Orxan BMW təmiri", limit = 5).singleOrNull()
+            ?: error("synthetic_episode_restart_readback_failed")
+        check(episode.sourceTurnIds.size == 2 && episode.revision == 1L) { "synthetic_episode_restart_provenance_failed" }
+        results.putString("episode_restart_readback", "verified")
+        results.putString("active_stage", "episode_live_retrieval")
+        val result = runSyntheticTurn("az", 0,
+            "Yadda saxladığımız Orxan BMW təmiri xülasəsində nə razılaşdırılmışdı? Mənbəni də yoxla.",
+            setOf("search_memory", "read_conversation_turn"), scope, actor, "az-AZ", db, repository,
+            conversations, journal, policy, AgentInputChannel.TEXT, results)
+        check(result.toolResults.any { it.name == "search_memory" && it.status == ToolObservationStatus.APPLIED }) {
+            "synthetic_episode_live_search_not_applied"
+        }
+        check(result.toolResults.any { it.name == "read_conversation_turn" && it.status == ToolObservationStatus.APPLIED }) {
+            "synthetic_episode_live_source_read_not_applied"
+        }
+        val answer = result.answer.orEmpty().lowercase(java.util.Locale.forLanguageTag("az-AZ"))
+        check(listOf("bmw", "300", "100", "200").all(answer::contains)) {
+            "synthetic_episode_answer_semantics_failed"
+        }
+        results.putString("episode_live_retrieval", "passed")
+    }
+
     private suspend fun runSyntheticFinanceFlow(language: String, runId: String, db: AgentDatabase, repository: ProtectedDomainRepository,
         conversations: ProtectedConversationRepository, journal: RoomAgentRunJournal, policy: ConsentAgentRuntimePolicy,
         results: Bundle) {
@@ -491,6 +575,7 @@ class GeminiSyntheticProbe : Instrumentation() {
             "Сколько осталось?" to setOf("search_money"),
         )
         steps.forEachIndexed { index, (utterance, expectedTools) ->
+            if (index > 0) kotlinx.coroutines.delay(12_000)
             results.putString("active_stage", "${language}_step_${index + 1}")
             val channel = if ((index + if (az) 0 else 1) % 2 == 0) AgentInputChannel.VOICE else AgentInputChannel.TEXT
             val result = runSyntheticTurn(language, index, utterance, expectedTools, scope, actor, locale, db,

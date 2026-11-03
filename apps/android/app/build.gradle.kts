@@ -19,8 +19,8 @@ android {
         applicationId = "ai.memora.app"
         minSdk = 26
         targetSdk = 36
-        versionCode = 34
-        versionName = "1.1.12-attention"
+        versionCode = 35
+        versionName = "1.1.13-episodic-memory"
         testInstrumentationRunner = "ai.memora.app.GeminiSyntheticProbe"
     }
     buildFeatures { compose = true }

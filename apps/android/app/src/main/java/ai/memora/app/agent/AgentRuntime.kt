@@ -14,7 +14,7 @@ import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeout
 import kotlinx.coroutines.withTimeoutOrNull
 
-internal val AGENT_PERSISTED_WRITE_TOOLS = setOf("save_note", "record_money_event", "correct_money_event", "link_objects", "edit_memory_object",
+internal val AGENT_PERSISTED_WRITE_TOOLS = setOf("save_note", "save_memory_episode", "delete_memory_episode", "record_money_event", "correct_money_event", "link_objects", "edit_memory_object",
     "delete_memory_object", "restore_memory_object", "create_table", "add_table_row", "update_table_row",
     "delete_table_row", "restore_table_row", "rename_table", "delete_table", "restore_table", "create_task",
     "set_task_completion", "edit_task", "create_calendar_event", "edit_calendar_event", "cancel_calendar_event",

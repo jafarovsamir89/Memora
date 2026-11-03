@@ -1,7 +1,7 @@
 package ai.memora.app.agent
 
 /** Provider-neutral JSON-compatible argument types used by every model adapter. */
-internal enum class AgentToolValueType { STRING, INTEGER, BOOLEAN, ENUM }
+internal enum class AgentToolValueType { STRING, INTEGER, BOOLEAN, STRING_ARRAY, ENUM }
 
 internal data class AgentToolParameter(
     val name: String,
@@ -50,6 +50,9 @@ internal object AgentToolCatalog {
         tool("search_conversation_history",
             "Search encrypted local conversation history for relevant prior discussion. Use query terms when known or days_back for a time-only question. Returns at most eight snippets; assistant messages are not proof of personal facts.",
             optional = mapOf("query" to str, "days_back" to int, "max_results" to int)),
+        tool("read_conversation_turn",
+            "Read the exact retained USER message for one turn_id returned by search_conversation_history or search_memory. Use to verify the source of an episode summary before making a personal-history claim. Does not return the assistant reply.",
+            required = mapOf("turn_id" to str)),
         tool("search_memory",
             "Search protected local notes, people and projects for evidence needed to answer.",
             required = mapOf("query" to str)),
@@ -78,9 +81,15 @@ internal object AgentToolCatalog {
         tool("annotate_money_event",
             "Append a later explanation to one exact existing financial event without changing its amount or creating another transaction. Search first.",
             required = mapOf("event_id" to str)),
+        tool("save_memory_episode",
+            "Use this for a concise durable summary, decision, agreement, commitment, or unresolved loop discussed across earlier conversation turns. First call search_conversation_history and use only its returned user turn_id values; never cite assistant turns, current unarchived speech, or invented IDs. Preserve uncertainty and keep the original turns as the source of truth. Do not infer sensitive traits. Do not use save_note as a substitute for a summary of previous conversation.",
+            version = 2, required = mapOf("title" to str, "summary" to str, "source_turn_ids" to stringArray)),
         tool("save_note",
-            "Save a clearly requested note or fact in protected local memory.",
+            "Save one explicitly requested standalone note or fact from the current user message. Do not use for summaries, decisions, agreements, commitments, or unresolved loops from earlier conversation; use save_memory_episode with archived user turn IDs instead.",
             required = mapOf("title" to str, "body" to str, "kind" to enumeration("note", "person", "project"))),
+        tool("delete_memory_episode",
+            "Delete one exact derived conversation summary when the user asks. This leaves its source conversation turns unchanged.",
+            required = mapOf("episode_id" to str)),
         tool("edit_memory_object",
             "Edit an existing note, person or project. Search first; omit fields the user did not ask to change.",
             required = mapOf("object_id" to str), optional = mapOf("title" to str, "body" to str)),
@@ -177,16 +186,18 @@ internal object AgentToolCatalog {
     private fun tool(
         name: String,
         description: String,
+        version: Int = 1,
         required: Map<String, AgentToolParameter> = emptyMap(),
         optional: Map<String, AgentToolParameter> = emptyMap(),
     ): AgentToolContract {
         check(required.keys.intersect(optional.keys).isEmpty()) { "duplicate_tool_parameter" }
-        return AgentToolContract(name, 1, description,
+        return AgentToolContract(name, version, description,
             required.map { (key, parameter) -> parameter.copy(name = key, optional = false) } +
                 optional.map { (key, parameter) -> parameter.copy(name = key, optional = true) })
     }
 
     private val str get() = AgentToolParameter("", AgentToolValueType.STRING)
+    private val stringArray get() = AgentToolParameter("", AgentToolValueType.STRING_ARRAY)
     private val int get() = AgentToolParameter("", AgentToolValueType.INTEGER)
     private val bool get() = AgentToolParameter("", AgentToolValueType.BOOLEAN)
     private fun enumeration(vararg values: String) = AgentToolParameter("", AgentToolValueType.ENUM, enumValues = values.toList())

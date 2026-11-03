@@ -82,4 +82,32 @@ class MemoryArchiveScreenTest {
         compose.onNodeWithTag("memory_retention_confirm").performClick()
         compose.waitUntil(10_000) { runBlocking { repository.turn(scopeId, "synthetic-old-retention-turn").isEmpty() } }
     }
+
+    @Test fun memoryShowsAndDeletesDerivedEpisodeWithoutDeletingItsSourceTurn() = runBlocking<Unit> {
+        val context = ApplicationProvider.getApplicationContext<Context>()
+        val scopeId = AgentVoiceTurnProcessor(context).conversationScopeId()
+        val repository = ProtectedConversationRepository(databaseRule.database)
+        repository.appendTurn(scopeId, "synthetic-episode-ui-turn", "Synthetic source: request a repair invoice next week.",
+            "Synthetic reply.")
+        val episode = repository.saveEpisode(scopeId, "Synthetic repair follow-up",
+            "Request the repair invoice next week.", listOf("synthetic-episode-ui-turn"))
+
+        compose.setContent {
+            CompositionLocalProvider(LocalAgentDatabaseOverride provides databaseRule.database) {
+                CompositionLocalProvider(LocalStrings provides context.resources) {
+                    MemoraTheme("light") {
+                        WorkingMemoryScreen(CaptureSessionState(ready = true, loading = false), {}, {}, {})
+                    }
+                }
+            }
+        }
+        compose.waitUntil(10_000) {
+            compose.onAllNodesWithTag("memory_episode_0").fetchSemanticsNodes().isNotEmpty()
+        }
+        compose.onNodeWithTag("memory_episode_0").performScrollTo().performClick()
+        compose.onNodeWithTag("memory_episode_delete").assertIsDisplayed().performClick()
+        compose.onNodeWithTag("memory_episode_delete_confirm").assertIsDisplayed().performClick()
+        compose.waitUntil(10_000) { runBlocking { repository.episode(scopeId, episode.episodeId) == null } }
+        assertTrue(repository.turn(scopeId, "synthetic-episode-ui-turn").isNotEmpty())
+    }
 }

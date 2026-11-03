@@ -11,8 +11,9 @@ import org.junit.Test
 class AgentToolCatalogTest {
     @Test fun everyExistingGeminiToolHasOneVersionedProviderNeutralContract() {
         val expected = setOf(
-            "search_conversation_history", "search_memory", "search_money", "analyze_finance_period", "summarize_work_status", "record_money_event", "settle_debt",
+            "search_conversation_history", "read_conversation_turn", "search_memory", "search_money", "analyze_finance_period", "summarize_work_status", "record_money_event", "settle_debt",
             "reverse_money_event", "correct_money_event", "annotate_money_event", "save_note", "edit_memory_object",
+            "save_memory_episode", "delete_memory_episode",
             "delete_memory_object", "restore_memory_object", "link_objects", "list_tables", "read_table_rows",
             "create_table", "add_table_row", "update_table_row", "delete_table_row", "restore_table_row",
             "rename_table", "delete_table", "restore_table", "list_tasks", "create_task", "edit_task",
@@ -24,7 +25,7 @@ class AgentToolCatalogTest {
         assertEquals(expected, contracts.map { it.name }.toSet())
         assertEquals(contracts.size, contracts.map { it.name to it.version }.distinct().size)
         contracts.forEach { contract ->
-            assertEquals(1, contract.version)
+            assertEquals(if (contract.name == "save_memory_episode") 2 else 1, contract.version)
             assertEquals(1, contract.result.version)
             assertNotNull(contract.description.takeIf(String::isNotBlank))
             assertEquals(contract.parameters.size, contract.parameters.map { it.name }.distinct().size)
@@ -51,6 +52,9 @@ class AgentToolCatalogTest {
         val analyzeFinance = requireNotNull(AgentToolCatalog.find("analyze_finance_period", 1))
         assertEquals(listOf("month"), analyzeFinance.optionalParameters)
         assertTrue(analyzeFinance.parameters.all { it.optional })
+
+        val episode = requireNotNull(AgentToolCatalog.find("save_memory_episode", 2))
+        assertEquals(AgentToolValueType.STRING_ARRAY, episode.parameters.single { it.name == "source_turn_ids" }.type)
 
         val workStatus = requireNotNull(AgentToolCatalog.find("summarize_work_status", 1))
         assertTrue(workStatus.parameters.isEmpty())

@@ -11,6 +11,10 @@ import androidx.room.Room
 import androidx.room.RoomDatabase
 import androidx.test.core.app.ApplicationProvider
 import ai.memora.app.data.protectedstore.AGENT_DB_12_TO_13
+import ai.memora.app.data.protectedstore.AGENT_DB_13_TO_14
+import ai.memora.app.data.protectedstore.ConversationEpisodeRow
+import ai.memora.app.data.protectedstore.ConversationEpisodeSourceRow
+import ai.memora.app.data.protectedstore.ConversationEpisodeRevisionRow
 import ai.memora.app.data.protectedstore.AttentionSettingsRepository
 import ai.memora.app.data.protectedstore.AttentionSettingsRow
 import ai.memora.app.data.protectedstore.CaseRecordRow
@@ -174,6 +178,36 @@ class AttentionEngineTest {
         }
     }
 
+    @Test fun versionThirteenMigrationPreservesExistingRowsAndAddsEpisodeTables() {
+        val context = ApplicationProvider.getApplicationContext<Context>()
+        val name = "episode-migration-${UUID.randomUUID()}"
+        val marker = "existing-row-before-episode-migration"
+        val v13 = Room.databaseBuilder(context, AttentionMigrationV13::class.java, name).allowMainThreadQueries().build()
+        try { runBlocking { v13.markerDao().insert(MigrationMarker(marker)) } } finally { v13.close() }
+
+        val v14 = Room.databaseBuilder(context, EpisodeMigrationV14::class.java, name)
+            .addMigrations(AGENT_DB_13_TO_14).allowMainThreadQueries().build()
+        try {
+            runBlocking {
+                assertEquals(marker, v14.markerDao().read().single().value)
+                assertTrue(v14.episodeDao().episodes().isEmpty())
+                val episode = ConversationEpisodeRow("synthetic-episode-id", "synthetic-scope", "Synthetic title",
+                    "Synthetic summary", 1, 1, 1)
+                v14.episodeDao().insert(episode)
+                v14.episodeDao().insertSource(ConversationEpisodeSourceRow("synthetic-scope", episode.episodeId, "synthetic-turn"))
+                val revision = ConversationEpisodeRevisionRow("synthetic-scope", episode.episodeId, 1,
+                    episode.title, episode.summary, episode.updatedAtMillis)
+                v14.episodeDao().insertRevision(revision)
+                assertEquals(episode, v14.episodeDao().episodes().single())
+                assertEquals(listOf("synthetic-turn"), v14.episodeDao().sourceTurns(episode.episodeId))
+                assertEquals(listOf(revision), v14.episodeDao().revisions(episode.episodeId))
+            }
+        } finally {
+            v14.close()
+            context.deleteDatabase(name)
+        }
+    }
+
     private fun case(id: String, scope: String, title: String, nextAction: String?, status: String = "open") =
         CaseRecordRow(id, scope, title, null, status, nextAction, 1, "source-$id",
             "2026-11-03T00:00:00Z", "2026-11-03T00:00:00Z", null)
@@ -207,4 +241,21 @@ internal interface AttentionMigrationDao {
 internal abstract class AttentionMigrationV13 : RoomDatabase() {
     abstract fun markerDao(): MigrationMarkerDao
     abstract fun attentionDao(): AttentionMigrationDao
+}
+
+@Dao
+internal interface EpisodeMigrationDao {
+    @Query("SELECT * FROM conversation_episode") suspend fun episodes(): List<ConversationEpisodeRow>
+    @Insert suspend fun insert(row: ConversationEpisodeRow)
+    @Insert suspend fun insertSource(row: ConversationEpisodeSourceRow)
+    @Query("SELECT turnId FROM conversation_episode_source WHERE episodeId=:episodeId") suspend fun sourceTurns(episodeId: String): List<String>
+    @Insert suspend fun insertRevision(row: ConversationEpisodeRevisionRow)
+    @Query("SELECT * FROM conversation_episode_revision WHERE episodeId=:episodeId") suspend fun revisions(episodeId: String): List<ConversationEpisodeRevisionRow>
+}
+
+@Database(entities = [MigrationMarker::class, AttentionSettingsRow::class, ConversationEpisodeRow::class,
+    ConversationEpisodeSourceRow::class, ConversationEpisodeRevisionRow::class], version = 14, exportSchema = false)
+internal abstract class EpisodeMigrationV14 : RoomDatabase() {
+    abstract fun markerDao(): MigrationMarkerDao
+    abstract fun episodeDao(): EpisodeMigrationDao
 }

@@ -1,6 +1,7 @@
 package ai.memora.app.data.protectedstore
 
 import androidx.room.withTransaction
+import java.security.MessageDigest
 
 internal data class ConversationEvidence(
     val turnId: String,
@@ -16,6 +17,25 @@ internal data class ConversationTurnEvidence(
     val userMessage: String,
     val assistantMessage: String,
     val matchedSnippet: String?,
+)
+
+internal data class ConversationEpisodeEvidence(
+    val episodeId: String,
+    val title: String,
+    val summary: String,
+    val sourceTurnIds: List<String>,
+    val createdAtMillis: Long,
+    val updatedAtMillis: Long,
+    val revision: Long,
+    val revisions: List<ConversationEpisodeRevisionEvidence> = emptyList(),
+    val score: Int = 0,
+)
+
+internal data class ConversationEpisodeRevisionEvidence(
+    val revision: Long,
+    val title: String,
+    val summary: String,
+    val recordedAtMillis: Long,
 )
 
 /** A single owner-scoped conversation shared by voice and text, stored only in the encrypted Room database. */
@@ -56,6 +76,18 @@ internal class ProtectedConversationRepository(private val db: AgentDatabase) {
         return dao.conversationMessagesForTurn(scopeId, turnId).filter { it.scopeId == scopeId }
     }
 
+    suspend fun turnEvidence(scopeId: String, turnId: String): ConversationTurnEvidence? {
+        require(scopeId.isNotBlank() && turnId.isNotBlank())
+        return toTurnEvidence(dao.conversationMessagesForTurn(scopeId, turnId)
+            .filter { it.scopeId == scopeId && it.turnId == turnId })
+    }
+
+    suspend fun sourceUserTurn(scopeId: String, turnId: String): AgentConversationMessageRow? {
+        require(scopeId.isNotBlank() && turnId.isNotBlank())
+        return dao.conversationMessagesForTurn(scopeId, turnId)
+            .firstOrNull { it.scopeId == scopeId && it.turnId == turnId && it.role == "user" }
+    }
+
     suspend fun actionResults(scopeId: String, turnId: String): List<AgentActionResultRow> {
         require(scopeId.isNotBlank() && turnId.isNotBlank())
         return dao.actionResultsForTurn(scopeId, turnId).filter { it.scopeId == scopeId && it.turnId == turnId }
@@ -72,6 +104,7 @@ internal class ProtectedConversationRepository(private val db: AgentDatabase) {
     suspend fun deleteTurn(scopeId: String, turnId: String): Boolean {
         require(scopeId.isNotBlank() && turnId.isNotBlank())
         return db.withTransaction {
+            dao.deleteEpisodesForConversationTurn(scopeId, turnId)
             dao.deleteActionResultsForTurn(scopeId, turnId)
             dao.deleteConversationTurn(scopeId, turnId) > 0
         }
@@ -138,6 +171,135 @@ internal class ProtectedConversationRepository(private val db: AgentDatabase) {
             .thenByDescending { it.createdAtMillis }.thenBy { it.turnId }).take(limit)
     }
 
+    /** Store a derived summary only when each linked source is a retained user turn in this owner scope. */
+    suspend fun saveEpisode(scopeId: String, title: String, summary: String, sourceTurnIds: List<String>,
+        nowMillis: Long = System.currentTimeMillis()): ConversationEpisodeEvidence {
+        require(scopeId.isNotBlank() && title.isNotBlank() && title.length <= 160)
+        require(summary.isNotBlank() && summary.length <= 1_200)
+        val sources = sourceTurnIds.distinct().sorted()
+        require(sources.size in 1..8 && sources.all { it.isNotBlank() && it.length <= 100 })
+        require(nowMillis >= 0)
+        return db.withTransaction {
+            val sourceRows = sources.map { sourceId ->
+                val rows = dao.conversationMessagesForTurn(scopeId, sourceId)
+                check(rows.any { it.scopeId == scopeId && it.turnId == sourceId && it.role == "user" }) {
+                    "episode_source_unavailable"
+                }
+                ConversationEpisodeSourceRow(scopeId, episodeId(scopeId, sources), sourceId)
+            }
+            val id = episodeId(scopeId, sources)
+            val existing = dao.conversationEpisode(scopeId, id)
+            val normalizedTitle = title.trim()
+            val normalizedSummary = summary.trim()
+            val next = when {
+                existing == null -> ConversationEpisodeRow(id, scopeId, normalizedTitle, normalizedSummary,
+                    nowMillis, nowMillis, 1)
+                existing.title == normalizedTitle && existing.summary == normalizedSummary -> existing
+                else -> existing.copy(title = normalizedTitle, summary = normalizedSummary,
+                    updatedAtMillis = maxOf(nowMillis, existing.updatedAtMillis), revision = Math.addExact(existing.revision, 1))
+            }
+            if (existing == null) {
+                dao.putConversationEpisode(next)
+                dao.putConversationEpisodeSources(sourceRows)
+                dao.putConversationEpisodeRevision(ConversationEpisodeRevisionRow(scopeId, id, next.revision,
+                    next.title, next.summary, next.updatedAtMillis))
+            } else if (next != existing) {
+                check(dao.updateConversationEpisode(next) == 1) { "episode_revision_update_failed" }
+                dao.putConversationEpisodeRevision(ConversationEpisodeRevisionRow(scopeId, id, next.revision,
+                    next.title, next.summary, next.updatedAtMillis))
+            }
+            val storedSources = dao.conversationEpisodeSources(scopeId, id).map { it.turnId }.sorted()
+            check(storedSources == sources) { "episode_source_readback_mismatch" }
+            val storedRevisions = dao.conversationEpisodeRevisions(scopeId, id).map(::toEpisodeRevision)
+            check(storedRevisions.lastOrNull()?.revision == next.revision &&
+                storedRevisions.lastOrNull()?.summary == next.summary) { "episode_revision_readback_mismatch" }
+            ConversationEpisodeEvidence(next.episodeId, next.title, next.summary, storedSources,
+                next.createdAtMillis, next.updatedAtMillis, next.revision, storedRevisions)
+        }
+    }
+
+    suspend fun episodeSourcesAvailable(scopeId: String, sourceTurnIds: List<String>): Boolean {
+        require(scopeId.isNotBlank() && sourceTurnIds.size in 1..8 && sourceTurnIds.distinct().size == sourceTurnIds.size)
+        return sourceTurnIds.all { sourceId ->
+            sourceId.isNotBlank() && sourceId.length <= 100 &&
+                dao.conversationMessagesForTurn(scopeId, sourceId).any { it.scopeId == scopeId && it.turnId == sourceId && it.role == "user" }
+        }
+    }
+
+    /** Search the local derived layer, verifying every source link before returning a summary to the model/UI. */
+    suspend fun searchEpisodes(scopeId: String, query: String, limit: Int = 8): List<ConversationEpisodeEvidence> {
+        require(scopeId.isNotBlank() && query.length <= 300 && limit in 1..30)
+        val terms = TOKEN.findAll(fold(query)).map { it.value }.filter { it.length > 1 && it !in STOP_WORDS }.distinct().take(12).toList()
+        return db.withTransaction {
+            val hits = mutableListOf<ConversationEpisodeEvidence>()
+            var beforeUpdatedAt: Long? = null
+            var beforeEpisodeId: String? = null
+            while (true) {
+                val page = dao.conversationEpisodePage(scopeId, beforeUpdatedAt, beforeEpisodeId, EPISODE_PAGE_SIZE)
+                if (page.isEmpty()) break
+                for (row in page) {
+                    val episode = verifyEpisode(scopeId, row) ?: continue
+                    if (terms.isEmpty()) {
+                        hits += episode
+                        if (hits.size >= limit) break
+                    } else {
+                        val contentTokens = TOKEN.findAll(fold("${episode.title} ${episode.summary}")).map { it.value }.toList()
+                        val score = terms.count { term -> contentTokens.any { token -> token == term ||
+                            (minOf(token.length, term.length) >= 4 && (token.startsWith(term) || term.startsWith(token))) } }
+                        if (score > 0) hits += episode.copy(score = score * 10 + episode.revision.coerceAtMost(9).toInt())
+                    }
+                }
+                beforeUpdatedAt = page.last().updatedAtMillis
+                beforeEpisodeId = page.last().episodeId
+                if (terms.isEmpty() && hits.size >= limit) break
+                if (page.size < EPISODE_PAGE_SIZE) break
+                if (terms.isNotEmpty() && hits.size > MAX_EPISODE_SEARCH_HITS) {
+                    hits.sortWith(compareByDescending<ConversationEpisodeEvidence> { it.score }
+                        .thenByDescending { it.updatedAtMillis }.thenBy { it.episodeId })
+                    while (hits.size > MAX_EPISODE_SEARCH_HITS) hits.removeAt(hits.lastIndex)
+                }
+            }
+            hits.sortedWith(compareByDescending<ConversationEpisodeEvidence> { it.score }
+                .thenByDescending { it.updatedAtMillis }.thenBy { it.episodeId }).take(limit)
+        }
+    }
+
+    suspend fun episode(scopeId: String, episodeId: String): ConversationEpisodeEvidence? {
+        require(scopeId.isNotBlank() && episodeId.isNotBlank())
+        return db.withTransaction { dao.conversationEpisode(scopeId, episodeId)?.let { verifyEpisode(scopeId, it) } }
+    }
+
+    /** Deleting a derived episode leaves its source dialogue intact. */
+    suspend fun deleteEpisode(scopeId: String, episodeId: String): Boolean {
+        require(scopeId.isNotBlank() && episodeId.isNotBlank())
+        return db.withTransaction { dao.deleteConversationEpisode(scopeId, episodeId) > 0 }
+    }
+
+    private suspend fun verifyEpisode(scopeId: String, row: ConversationEpisodeRow): ConversationEpisodeEvidence? {
+        val sources = dao.conversationEpisodeSources(scopeId, row.episodeId).map { it.turnId }.distinct().sorted()
+        val valid = sources.isNotEmpty() && sources.size <= 8 && sources.all { sourceId ->
+            dao.conversationMessagesForTurn(scopeId, sourceId).any { it.scopeId == scopeId && it.turnId == sourceId && it.role == "user" }
+        }
+        if (!valid) {
+            dao.deleteConversationEpisode(scopeId, row.episodeId)
+            return null
+        }
+        val revisions = dao.conversationEpisodeRevisions(scopeId, row.episodeId).map(::toEpisodeRevision)
+        val latestRevision = revisions.lastOrNull()
+        val completeHistory = revisions.size.toLong() == row.revision &&
+            revisions.withIndex().all { (index, revision) -> revision.revision == index + 1L }
+        if (!completeHistory || latestRevision == null || latestRevision.revision != row.revision ||
+            latestRevision.title != row.title || latestRevision.summary != row.summary) {
+            dao.deleteConversationEpisode(scopeId, row.episodeId)
+            return null
+        }
+        return ConversationEpisodeEvidence(row.episodeId, row.title, row.summary, sources,
+            row.createdAtMillis, row.updatedAtMillis, row.revision, revisions)
+    }
+
+    private fun toEpisodeRevision(row: ConversationEpisodeRevisionRow) = ConversationEpisodeRevisionEvidence(
+        row.revision, row.title, row.summary, row.recordedAtMillis)
+
     suspend fun appendTurn(scopeId: String, turnId: String, userMessage: String, assistantMessage: String,
         createdAtMillis: Long = System.currentTimeMillis(), actionResults: List<AgentActionResultRow> = emptyList()) {
         require(scopeId.isNotBlank() && turnId.isNotBlank() && turnId.length <= 100)
@@ -172,6 +334,7 @@ internal class ProtectedConversationRepository(private val db: AgentDatabase) {
     suspend fun clear(scopeId: String) {
         require(scopeId.isNotBlank())
         db.withTransaction {
+            dao.clearConversationEpisodes(scopeId)
             dao.clearActionResults(scopeId)
             dao.clearConversation(scopeId)
         }
@@ -180,9 +343,13 @@ internal class ProtectedConversationRepository(private val db: AgentDatabase) {
     private suspend fun pruneExpired(scopeId: String, days: Int, nowMillis: Long): Int =
         if (days == RETENTION_FOREVER) 0 else {
             val cutoff = nowMillis - days.toLong() * DAY_MILLIS
+            dao.pruneEpisodesForConversationTurnsBefore(scopeId, cutoff)
             dao.pruneActionResultsBefore(scopeId, cutoff)
             dao.pruneConversationTurnsBefore(scopeId, cutoff)
         }
+
+    private fun episodeId(scopeId: String, sourceTurnIds: List<String>): String = sha256(
+        "memora_episode_v1\u0000$scopeId\u0000${sourceTurnIds.sorted().joinToString("\u0000")}")
 
     private fun toTurnEvidence(rows: List<AgentConversationMessageRow>): ConversationTurnEvidence? {
         val user = rows.firstOrNull { it.role == "user" } ?: return null
@@ -196,11 +363,16 @@ internal class ProtectedConversationRepository(private val db: AgentDatabase) {
 
     private fun isUuid(value: String) = runCatching { java.util.UUID.fromString(value) }.isSuccess
 
+        private fun sha256(value: String) = MessageDigest.getInstance("SHA-256").digest(value.toByteArray(Charsets.UTF_8))
+            .joinToString("") { "%02x".format(it.toInt() and 0xff) }
+
     private companion object {
         const val RETENTION_FOREVER = 0
         const val DAY_MILLIS = 86_400_000L
         const val PAGE_SIZE = 160
         const val MAX_SEARCH_HITS = 120
+        const val EPISODE_PAGE_SIZE = 100
+        const val MAX_EPISODE_SEARCH_HITS = 120
         val ACTION_STATUSES = setOf("APPLIED", "REJECTED", "CONFLICT", "FAILED", "UNKNOWN", "NEEDS_CONFIRMATION")
         val ACTION_TARGET_KINDS = setOf("memory", "finance", "case", "task", "calendar", "table")
         val ALLOWED_RETENTION_DAYS = setOf(RETENTION_FOREVER, 30, 90, 365)

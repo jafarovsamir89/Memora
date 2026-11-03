@@ -58,7 +58,7 @@ class CaptureUiIntegrationTest {
                 }
             }
         }
-        compose.onNodeWithTag("capture_text").performClick()
+        compose.onNodeWithTag("capture_text").performScrollTo().performClick()
         awaitReady()
         compose.onNodeWithTag("capture_input").performTextInput("synthetic durable text")
         compose.waitUntil(10_000) {
@@ -67,7 +67,7 @@ class CaptureUiIntegrationTest {
         }
         compose.waitForIdle()
         compose.runOnIdle { owner.value.viewModelStore.clear(); owner.value = Owner() }
-        compose.onNodeWithTag("capture_text").performClick()
+        compose.onNodeWithTag("capture_text").performScrollTo().performClick()
         awaitReady()
         compose.onNodeWithTag("capture_input").assertTextContains("synthetic durable text")
         compose.onNodeWithTag("save_draft").performScrollTo().performClick()
@@ -90,7 +90,7 @@ class CaptureUiIntegrationTest {
         compose.setContent {
             CompositionLocalProvider(LocalViewModelStoreOwner provides owner) { TestMemoraApp(initialLanguage = "ru", initialRoute = "memory", capturePersistenceOverride = unreliable) }
         }
-        compose.onNodeWithTag("capture_text").performClick()
+        compose.onNodeWithTag("capture_text").performScrollTo().performClick()
         awaitReady()
         compose.onNodeWithTag("capture_input").performTextInput("synthetic unsaved text")
         compose.waitUntil(10_000) { compose.onAllNodesWithTag("capture_error").fetchSemanticsNodes().isNotEmpty() }
@@ -117,7 +117,7 @@ class CaptureUiIntegrationTest {
             }
         }
         compose.setContent { TestMemoraApp(initialLanguage = "ru", initialRoute = "memory", capturePersistenceOverride = unreliable) }
-        compose.onNodeWithTag("capture_text").performClick()
+        compose.onNodeWithTag("capture_text").performScrollTo().performClick()
         awaitReady()
         compose.onNodeWithTag("capture_input").performTextInput("synthetic one")
         compose.onNodeWithTag("save_draft").performScrollTo().performClick()
@@ -133,7 +133,7 @@ class CaptureUiIntegrationTest {
     @Test fun deleteNeedsConfirmationAndExportExplainsPlaintext() {
         val disk = disk()
         compose.setContent { TestMemoraApp(initialLanguage = "ru", initialRoute = "memory", capturePersistenceOverride = disk) }
-        compose.onNodeWithTag("capture_text").performClick()
+        compose.onNodeWithTag("capture_text").performScrollTo().performClick()
         awaitReady()
         compose.onNodeWithTag("capture_input").performTextInput("synthetic removal")
         compose.onNodeWithTag("save_draft").performScrollTo().performClick()

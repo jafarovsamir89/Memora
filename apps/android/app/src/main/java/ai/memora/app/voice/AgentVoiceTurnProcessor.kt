@@ -193,7 +193,8 @@ internal object AgentActionResultMapper {
 
     private fun actionTarget(observation: AgentToolObservation): Pair<String?, String?> {
         val (kind, keys) = when (observation.name) {
-            "save_note", "edit_memory_object", "delete_memory_object", "restore_memory_object" -> "memory" to listOf("object_id", "id")
+            "save_note", "save_memory_episode", "delete_memory_episode", "edit_memory_object", "delete_memory_object", "restore_memory_object" ->
+                "memory" to listOf("object_id", "episode_id", "id")
             "record_money_event", "correct_money_event", "reverse_money_event", "annotate_money_event" -> "finance" to listOf("event_id", "id")
             "settle_debt" -> "finance" to listOf("payment_event_id", "obligation_id")
             "create_case", "update_case", "add_case_participant", "link_case_source" -> "case" to listOf("case_id", "id")

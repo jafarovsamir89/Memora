@@ -21,15 +21,16 @@ import java.time.LocalDate
 import java.time.ZoneId
 import java.util.UUID
 import org.json.JSONObject
+import org.json.JSONArray
 
 /** First production tool slice: bounded evidence search and explicit local memory writes. */
 internal class LocalMemoryTools(private val repository: ProtectedDomainRepository, private val memory: ProtectedMemoryRepository,
     private val financeEnabled: Boolean = true, private val onTaskChanged: (Task) -> String = { "not_scheduled" },
     private val conversations: ProtectedConversationRepository? = null) {
     fun handlers(): List<AgentToolHandler> = listOf(
-        SearchMemory(), SaveNote(), EditMemoryObject(), DeleteMemoryObject(), RestoreMemoryObject(), LinkObjects(), ListTables(), ReadTableRows(), CreateTable(), AddTableRow(),
+        SearchMemory(), SaveNote(), SaveMemoryEpisode(), DeleteMemoryEpisode(), EditMemoryObject(), DeleteMemoryObject(), RestoreMemoryObject(), LinkObjects(), ListTables(), ReadTableRows(), CreateTable(), AddTableRow(),
         UpdateTableRow(), DeleteTableRow(), RestoreTableRow(), RenameTable(), DeleteTable(), RestoreTable(),
-        SearchConversationHistory(), ListTasks(), SummarizeWorkStatus(), CreateTask(), EditTask(), SetTaskCompletion(), ListCalendarEvents(), CreateCalendarEvent(),
+        SearchConversationHistory(), ReadConversationTurn(), ListTasks(), SummarizeWorkStatus(), CreateTask(), EditTask(), SetTaskCompletion(), ListCalendarEvents(), CreateCalendarEvent(),
         EditCalendarEvent(), CancelCalendarEvent(),
         SearchMoney(), AnalyzeFinancePeriod(), RecordMoneyEvent(), SettleDebt(), ReverseMoneyEvent(), CorrectMoneyEvent(), AnnotateMoneyEvent(),
         CreateCase(), SearchCases(), UpdateCase(), AddCaseParticipant(), LinkCaseSource(),
@@ -43,17 +44,84 @@ internal class LocalMemoryTools(private val repository: ProtectedDomainRepositor
             val query = call.arguments["query"] as? String ?: return rejected()
             if (query.isBlank() || query.length > 200) return rejected()
             val hits = repository.search(turn.scopeId, query, limit = 8)
+            val episodes = conversations?.searchEpisodes(turn.scopeId, query, limit = 5).orEmpty()
             return ToolCommitResult(ToolObservationStatus.APPLIED, "evidence_found", mapOf(
-                "count" to hits.size,
+                "count" to (hits.size + episodes.size),
                 "evidence" to hits.map { hit -> mapOf("id" to hit.objectId, "kind" to hit.kind.name.lowercase(),
                     "title" to hit.title, "text" to hit.evidenceText.take(500),
                     "text_truncated" to (hit.evidenceText.length > 500), "revision" to hit.evidenceRevisionId) },
+                "episodes" to episodes.map { episode -> mapOf("id" to episode.episodeId, "kind" to "episode_summary",
+                    "title" to episode.title, "summary" to episode.summary, "source_turn_ids" to episode.sourceTurnIds,
+                    "revision" to episode.revision, "derived_not_canonical" to true) },
             ))
         }
 
         override suspend fun prepare(call: AgentModelToolCall, turn: AgentTurnRequest, commandId: String) =
             ToolPreparation.Rejected("read_only_tool")
         override suspend fun commit(command: PreparedAgentCommand) = rejected()
+    }
+
+    private inner class SaveMemoryEpisode : AgentToolHandler {
+        override val descriptor = AgentToolDescriptor("save_memory_episode", 2, ToolAccess.PERSISTED_MEMORY,
+            ToolEffect.WRITE, runtimeEnabled = conversations != null)
+
+        override suspend fun prepare(call: AgentModelToolCall, turn: AgentTurnRequest, commandId: String): ToolPreparation {
+            val title = call.arguments["title"] as? String ?: return ToolPreparation.Rejected("invalid_episode_title")
+            val summary = call.arguments["summary"] as? String ?: return ToolPreparation.Rejected("invalid_episode_summary")
+            val rawSources = call.arguments["source_turn_ids"] as? List<*> ?: return ToolPreparation.Rejected("invalid_episode_sources")
+            if (title.isBlank() || title.length > 160 || summary.isBlank() || summary.length > 1_200 || rawSources.size !in 1..8)
+                return ToolPreparation.Rejected("invalid_episode")
+            val sources = rawSources.map { source ->
+                (source as? String)?.takeIf { it.isNotBlank() && it.length <= 100 }
+                    ?: return ToolPreparation.Rejected("invalid_episode_sources")
+            }
+            if (sources.distinct().size != sources.size) return ToolPreparation.Rejected("invalid_episode_sources")
+            val repository = conversations ?: return ToolPreparation.Rejected("episode_memory_unavailable")
+            if (!repository.episodeSourcesAvailable(turn.scopeId, sources))
+                return ToolPreparation.Rejected("episode_source_unavailable")
+            val digest = sha256("episode_save\u0000${turn.scopeId}\u0000${sources.sorted().joinToString("\u0000")}\u0000$title\u0000$summary")
+            return ToolPreparation.Prepared(PreparedAgentCommand(commandId, digest, emptyMap(), false,
+                SaveEpisodePayload(turn.scopeId, title.trim(), summary.trim(), sources)))
+        }
+
+        override suspend fun commit(command: PreparedAgentCommand): ToolCommitResult {
+            val payload = command.opaquePayload as? SaveEpisodePayload ?: return rejected()
+            return try {
+                val episode = conversations?.saveEpisode(payload.scope, payload.title, payload.summary, payload.sources)
+                    ?: return ToolCommitResult(ToolObservationStatus.FAILED, "episode_memory_unavailable")
+                ToolCommitResult(ToolObservationStatus.APPLIED, "episode_saved", mapOf("episode_id" to episode.episodeId,
+                    "revision" to episode.revision, "source_turn_ids" to episode.sourceTurnIds))
+            } catch (error: Exception) {
+                when (error.message) {
+                    "episode_source_unavailable" -> ToolCommitResult(ToolObservationStatus.CONFLICT, "episode_source_unavailable")
+                    else -> ToolCommitResult(ToolObservationStatus.FAILED, "episode_save_failed")
+                }
+            }
+        }
+    }
+
+    private inner class DeleteMemoryEpisode : AgentToolHandler {
+        override val descriptor = AgentToolDescriptor("delete_memory_episode", 1, ToolAccess.PERSISTED_MEMORY,
+            ToolEffect.WRITE, runtimeEnabled = conversations != null)
+
+        override suspend fun prepare(call: AgentModelToolCall, turn: AgentTurnRequest, commandId: String): ToolPreparation {
+            val id = call.arguments["episode_id"] as? String ?: return ToolPreparation.Rejected("invalid_episode_id")
+            if (id.isBlank() || id.length > 100) return ToolPreparation.Rejected("invalid_episode_id")
+            val repository = conversations ?: return ToolPreparation.Rejected("episode_memory_unavailable")
+            val episode = repository.episode(turn.scopeId, id) ?: return ToolPreparation.Conflict("episode_not_found")
+            return ToolPreparation.Prepared(PreparedAgentCommand(commandId,
+                sha256("episode_delete\u0000${turn.scopeId}\u0000${episode.episodeId}\u0000${episode.revision}"),
+                emptyMap(), false, DeleteEpisodePayload(turn.scopeId, episode.episodeId)))
+        }
+
+        override suspend fun commit(command: PreparedAgentCommand): ToolCommitResult {
+            val payload = command.opaquePayload as? DeleteEpisodePayload ?: return rejected()
+            return try {
+                if (conversations?.deleteEpisode(payload.scope, payload.episodeId) == true)
+                    ToolCommitResult(ToolObservationStatus.APPLIED, "episode_deleted", mapOf("episode_id" to payload.episodeId))
+                else ToolCommitResult(ToolObservationStatus.CONFLICT, "episode_not_found")
+            } catch (_: Exception) { ToolCommitResult(ToolObservationStatus.FAILED, "episode_delete_failed") }
+        }
     }
 
     private inner class SaveNote : AgentToolHandler {
@@ -740,6 +808,24 @@ internal class LocalMemoryTools(private val repository: ProtectedDomainRepositor
         override suspend fun commit(command: PreparedAgentCommand) = rejected()
     }
 
+    private inner class ReadConversationTurn : AgentToolHandler {
+        override val descriptor = AgentToolDescriptor("read_conversation_turn", 1, ToolAccess.PERSISTED_MEMORY,
+            ToolEffect.READ, runtimeEnabled = conversations != null)
+        override suspend fun read(call: AgentModelToolCall, turn: AgentTurnRequest): ToolCommitResult {
+            val turnId = call.arguments["turn_id"] as? String ?: return rejected()
+            if (turnId.isBlank() || turnId.length > 100) return rejected()
+            return try {
+                val source = conversations?.sourceUserTurn(turn.scopeId, turnId)
+                    ?: return ToolCommitResult(ToolObservationStatus.CONFLICT, "conversation_source_not_found")
+                ToolCommitResult(ToolObservationStatus.APPLIED, "conversation_source_loaded", mapOf(
+                    "turn_id" to source.turnId, "time_epoch_ms" to source.createdAtMillis,
+                    "user_message" to source.message.take(4_000), "truncated" to (source.message.length > 4_000)))
+            } catch (_: Exception) { ToolCommitResult(ToolObservationStatus.FAILED, "conversation_source_read_failed") }
+        }
+        override suspend fun prepare(call: AgentModelToolCall, turn: AgentTurnRequest, commandId: String) = ToolPreparation.Rejected("read_only_tool")
+        override suspend fun commit(command: PreparedAgentCommand) = rejected()
+    }
+
     private inner class CreateCalendarEvent : AgentToolHandler {
         override val descriptor = AgentToolDescriptor("create_calendar_event", 1, ToolAccess.PERSISTED_MEMORY,
             ToolEffect.WRITE, runtimeEnabled = true)
@@ -1176,6 +1262,8 @@ internal class LocalMemoryTools(private val repository: ProtectedDomainRepositor
 
     private data class SavePayload(val scope: String, val objectId: String,
         val kind: DomainKind, val title: String, val body: String)
+    private data class SaveEpisodePayload(val scope: String, val title: String, val summary: String, val sources: List<String>)
+    private data class DeleteEpisodePayload(val scope: String, val episodeId: String)
     private data class EditObjectPayload(val scope: String, val id: String, val version: Long, val title: String,
         val body: String, val status: String)
     private data class DeleteObjectPayload(val scope: String, val preview: ai.memora.app.data.protectedstore.DeletePreview)

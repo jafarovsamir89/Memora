@@ -388,6 +388,15 @@
     <string name="memory_saved_sources">Сохранённые заметки и факты</string>
     <string name="memory_no_saved_sources">Подходящих заметок или фактов не найдено.</string>
     <string name="memory_conversation_archive">История разговоров</string>
+    <string name="memory_episodes">Эпизодическая память</string>
+    <string name="memory_no_episodes">Сохранённых эпизодов пока нет.</string>
+    <string name="memory_episode_sources">Исходные разговоры</string>
+    <string name="memory_episode_sources_count">Источников: %1$d</string>
+    <string name="memory_episode_revision">Версия памяти %1$d · с указанием источников</string>
+    <string name="memory_episode_previous_versions">Предыдущие версии</string>
+    <string name="memory_episode_revision_entry">v%1$d: %2$s</string>
+    <string name="memory_episode_delete">Удалить сводку</string>
+    <string name="memory_episode_delete_confirmation">Будет удалена только эта сводка. Исходные разговоры останутся.</string>
     <string name="memory_no_conversation_results">Подходящих разговоров не найдено.</string>
     <string name="memory_archive_error">Не удалось открыть память. Данные не изменены.</string>
     <string name="memory_conversation_detail">Разговор</string>

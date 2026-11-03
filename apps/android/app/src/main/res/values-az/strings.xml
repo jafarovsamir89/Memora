@@ -388,6 +388,15 @@
     <string name="memory_saved_sources">Saxlanmış qeydlər və faktlar</string>
     <string name="memory_no_saved_sources">Uyğun saxlanmış qeyd və ya fakt tapılmadı.</string>
     <string name="memory_conversation_archive">Söhbət tarixçəsi</string>
+    <string name="memory_episodes">Epizodik yaddaş</string>
+    <string name="memory_no_episodes">Saxlanmış epizod yoxdur.</string>
+    <string name="memory_episode_sources">Mənbə söhbətləri</string>
+    <string name="memory_episode_sources_count">Mənbə sayı: %1$d</string>
+    <string name="memory_episode_revision">Yaddaş versiyası %1$d · mənbələrə əsaslanır</string>
+    <string name="memory_episode_previous_versions">Əvvəlki versiyalar</string>
+    <string name="memory_episode_revision_entry">v%1$d: %2$s</string>
+    <string name="memory_episode_delete">Epizodu sil</string>
+    <string name="memory_episode_delete_confirmation">Yalnız bu xülasə silinəcək. Mənbə söhbətləri dəyişməyəcək.</string>
     <string name="memory_no_conversation_results">Uyğun söhbət tapılmadı.</string>
     <string name="memory_archive_error">Yaddaşı açmaq mümkün olmadı. Heç bir məlumat dəyişdirilmədi.</string>
     <string name="memory_conversation_detail">Söhbət</string>

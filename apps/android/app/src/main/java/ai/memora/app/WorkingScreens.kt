@@ -15,6 +15,7 @@ import ai.memora.app.data.CaptureSessionState
 import ai.memora.app.data.EncryptedTaskStore
 import ai.memora.app.data.StoreRead
 import ai.memora.app.data.protectedstore.ConversationTurnEvidence
+import ai.memora.app.data.protectedstore.ConversationEpisodeEvidence
 import ai.memora.app.data.protectedstore.DomainHit
 import ai.memora.app.data.protectedstore.DomainKind
 import ai.memora.app.data.protectedstore.DomainObjectRow
@@ -172,6 +173,7 @@ fun WorkingMemoryScreen(state: CaptureSessionState, detail: (String) -> Unit, ca
     val domainRepository = remember(database) { database?.let(::ProtectedDomainRepository) }
     val coroutineScope = rememberCoroutineScope()
     var conversationTurns by remember { mutableStateOf<List<ConversationTurnEvidence>>(emptyList()) }
+    var conversationEpisodes by remember { mutableStateOf<List<ConversationEpisodeEvidence>>(emptyList()) }
     var domainFacts by remember { mutableStateOf<List<MemoryDomainFact>>(emptyList()) }
     var archiveReady by remember { mutableStateOf(false) }
     var archiveLoading by remember { mutableStateOf(false) }
@@ -181,7 +183,9 @@ fun WorkingMemoryScreen(state: CaptureSessionState, detail: (String) -> Unit, ca
     var showRetention by remember { mutableStateOf(false) }
     var pendingRetentionDays by remember { mutableIntStateOf(-1) }
     var selectedTurn by remember { mutableStateOf<ConversationTurnEvidence?>(null) }
+    var selectedEpisode by remember { mutableStateOf<ConversationEpisodeEvidence?>(null) }
     var pendingDeleteTurn by remember { mutableStateOf<ConversationTurnEvidence?>(null) }
+    var pendingDeleteEpisode by remember { mutableStateOf<ConversationEpisodeEvidence?>(null) }
     var selectedFact by remember { mutableStateOf<MemoryDomainFact?>(null) }
 
     LaunchedEffect(scopeId) {
@@ -202,6 +206,7 @@ fun WorkingMemoryScreen(state: CaptureSessionState, detail: (String) -> Unit, ca
             val conversations = conversationRepository ?: error("protected_memory_unavailable")
             val domain = domainRepository ?: error("protected_memory_unavailable")
             conversationTurns = conversations.searchTurns(scopeId, query.trim(), limit = 30)
+            conversationEpisodes = conversations.searchEpisodes(scopeId, query.trim(), limit = 30)
             domainFacts = if (query.isBlank()) {
                 DomainKind.entries.flatMap { kind -> domain.domainObjects(scopeId, kind, 12).map(::MemoryDomainFact) }
             } else {
@@ -253,6 +258,56 @@ fun WorkingMemoryScreen(state: CaptureSessionState, detail: (String) -> Unit, ca
             modifier = Modifier.testTag("memory_retention_confirm")) { Text(s(R.string.memory_retention_confirm)) } },
         dismissButton = { TextButton(onClick = { pendingRetentionDays = -1 }) { Text(s(R.string.task_cancel)) } },
     )
+    selectedEpisode?.let { episode -> AlertDialog(
+        onDismissRequest = { selectedEpisode = null },
+        title = { Text(episode.title) },
+        text = {
+            Column(Modifier.heightIn(max = 420.dp).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Text(episode.summary, color = colors.ink)
+                Text(LocalStrings.current.getString(R.string.memory_episode_revision, episode.revision),
+                    style = MaterialTheme.typography.bodySmall, color = colors.muted)
+                Text(s(R.string.memory_episode_sources), style = MaterialTheme.typography.labelLarge, color = colors.accent)
+                episode.sourceTurnIds.forEachIndexed { index, turnId ->
+                    TextButton(onClick = {
+                        coroutineScope.launch {
+                            val source = conversationRepository?.turnEvidence(scopeId, turnId)
+                            if (source != null) { selectedEpisode = null; selectedTurn = source }
+                            else archiveError = true
+                        }
+                    }, modifier = Modifier.fillMaxWidth().testTag("memory_episode_source_$index")) {
+                        Text(s(R.string.memory_open_dialogue), modifier = Modifier.fillMaxWidth())
+                    }
+                }
+                val olderRevisions = episode.revisions.dropLast(1).takeLast(5).asReversed()
+                if (olderRevisions.isNotEmpty()) {
+                    Text(s(R.string.memory_episode_previous_versions), style = MaterialTheme.typography.labelLarge, color = colors.accent)
+                    olderRevisions.forEach { revision ->
+                        Text(LocalStrings.current.getString(R.string.memory_episode_revision_entry, revision.revision,
+                            revision.summary), color = colors.muted, style = MaterialTheme.typography.bodySmall)
+                    }
+                }
+                Text(DateFormatters.memoryDate(episode.updatedAtMillis), style = MaterialTheme.typography.bodySmall, color = colors.muted)
+            }
+        },
+        confirmButton = { TextButton(onClick = { pendingDeleteEpisode = episode; selectedEpisode = null },
+            modifier = Modifier.testTag("memory_episode_delete")) { Text(s(R.string.memory_episode_delete)) } },
+        dismissButton = { TextButton(onClick = { selectedEpisode = null }) { Text(s(R.string.close)) } },
+    ) }
+    pendingDeleteEpisode?.let { episode -> AlertDialog(
+        onDismissRequest = { pendingDeleteEpisode = null },
+        title = { Text(s(R.string.memory_episode_delete)) },
+        text = { Text(s(R.string.memory_episode_delete_confirmation)) },
+        confirmButton = { TextButton(onClick = {
+            pendingDeleteEpisode = null
+            coroutineScope.launch {
+                try {
+                    val conversations = conversationRepository ?: error("protected_memory_unavailable")
+                    conversations.deleteEpisode(scopeId, episode.episodeId); refreshVersion++; archiveError = false
+                } catch (_: Exception) { archiveError = true }
+            }
+        }, modifier = Modifier.testTag("memory_episode_delete_confirm")) { Text(s(R.string.memory_episode_delete)) } },
+        dismissButton = { TextButton(onClick = { pendingDeleteEpisode = null }) { Text(s(R.string.task_cancel)) } },
+    ) }
     selectedTurn?.let { turn -> AlertDialog(
         onDismissRequest = { selectedTurn = null },
         title = { Text(s(R.string.memory_conversation_detail)) },
@@ -323,6 +378,17 @@ fun WorkingMemoryScreen(state: CaptureSessionState, detail: (String) -> Unit, ca
         SectionHeading(s(R.string.memory_conversation_archive))
         if (archiveLoading) Text(s(R.string.capture_loading), color = colors.muted)
         if (archiveError) Text(s(R.string.memory_archive_error), color = MaterialTheme.colorScheme.error, modifier = Modifier.testTag("memory_archive_error"))
+        SectionHeading(s(R.string.memory_episodes))
+        if (archiveReady && !archiveLoading && !archiveError && conversationEpisodes.isEmpty()) Text(s(R.string.memory_no_episodes), color = colors.muted)
+        conversationEpisodes.forEachIndexed { index, episode ->
+            MemoraCard(onClick = { selectedEpisode = episode }, modifier = Modifier.testTag("memory_episode_$index")) {
+                Text(episode.title, color = colors.ink, style = MaterialTheme.typography.titleMedium)
+                Text(episode.summary.take(360) + if (episode.summary.length > 360) "…" else "", color = colors.muted)
+                Text(LocalStrings.current.getString(R.string.memory_episode_sources_count, episode.sourceTurnIds.size),
+                    style = MaterialTheme.typography.labelSmall, color = colors.accent)
+                Text(DateFormatters.memoryDate(episode.updatedAtMillis), style = MaterialTheme.typography.bodySmall, color = colors.muted)
+            }
+        }
         if (archiveReady && !archiveLoading && !archiveError && conversationTurns.isEmpty()) Text(s(R.string.memory_no_conversation_results), color = colors.muted)
         conversationTurns.forEach { turn ->
             MemoraCard(onClick = { selectedTurn = turn }, modifier = Modifier.testTag("memory_turn_${turn.turnId}")) {

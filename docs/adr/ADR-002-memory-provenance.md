@@ -49,3 +49,11 @@
 | Перестроение | Две перестройки из одного разрешённого набора событий и версий дают одинаковую проекцию; AI повторно не вызывается для восстановления фактов. |
 
 Это контракты будущих тестов, а не свидетельство выполнения. Конкретные схемы, разрешения, retention, транзакции и тестовые фикстуры остаются задачами MEM-01.03–MEM-01.13.
+
+## Implementation addendum ACT-0115 · source-backed episodic summaries
+
+Room schema 14 adds a derived episode, a complete revision history and owner-scoped links to 1–8 retained **user** conversation turns. Saving rejects missing, foreign-scope and assistant-only sources; repeated content is idempotent, while changed content creates a new revision. Search returns summaries only after source links and revision history are checked, labels them `derived_not_canonical`, and remains local lexical search. The Memory screen shows source turns and prior revisions; users can delete a derived summary without deleting its source. Removing a source turn, clearing the archive, or pruning expired turns removes dependent episodes and their revision history in the same transaction. This does not implement profile memory, automatic summarization, semantic/hybrid retrieval, or cross-domain aggregation. Host tests pass; device SQLCipher migration/readback and live Gemini behavior remain unverified.
+
+## Implementation addendum ACT-0116 · typed source IDs and live Gemini evidence
+
+`save_memory_episode` contract v2 declares `source_turn_ids` as a string array instead of JSON embedded in a string. This matches Firebase's OpenAPI-compatible array schema and removes a provider-format mismatch observed in live testing; the local repository continues to validate each retained USER turn and owner scope. Live synthetic Gemini created an episode, the separate SQLCipher DB survived process restart, and a prior retrieval verify selected `search_memory` and read the exact sources. A later final-answer retry timed out after source reads. This proves a working path but not stable model response, automatic profile memory or complete acceptance.

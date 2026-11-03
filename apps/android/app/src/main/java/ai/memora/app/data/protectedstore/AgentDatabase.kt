@@ -108,6 +108,19 @@ internal val AGENT_DB_12_TO_13 = androidx.room.migration.Migration(12, 13) { db 
     db.execSQL("CREATE TABLE IF NOT EXISTS attention_settings (scopeId TEXT NOT NULL, enabled INTEGER NOT NULL, briefingTimeLocal TEXT NOT NULL, quietStartMinute INTEGER NOT NULL, quietEndMinute INTEGER NOT NULL, lastNotificationDate TEXT, dismissedDate TEXT, snoozedUntilMillis INTEGER, snoozedForDate TEXT, updatedAtMillis INTEGER NOT NULL, PRIMARY KEY(scopeId))")
 }
 
+/** Derived conversation summaries with links to retained user turns; no source text is copied. */
+internal val AGENT_DB_13_TO_14 = androidx.room.migration.Migration(13, 14) { db ->
+    db.execSQL("CREATE TABLE IF NOT EXISTS conversation_episode (episodeId TEXT NOT NULL, scopeId TEXT NOT NULL, title TEXT NOT NULL, summary TEXT NOT NULL, createdAtMillis INTEGER NOT NULL, updatedAtMillis INTEGER NOT NULL, revision INTEGER NOT NULL, PRIMARY KEY(episodeId))")
+    db.execSQL("CREATE INDEX IF NOT EXISTS index_conversation_episode_scopeId_updatedAtMillis ON conversation_episode(scopeId, updatedAtMillis)")
+    db.execSQL("CREATE TABLE IF NOT EXISTS conversation_episode_revision (scopeId TEXT NOT NULL, episodeId TEXT NOT NULL, revision INTEGER NOT NULL, title TEXT NOT NULL, summary TEXT NOT NULL, recordedAtMillis INTEGER NOT NULL, PRIMARY KEY(episodeId, revision), FOREIGN KEY(episodeId) REFERENCES conversation_episode(episodeId) ON UPDATE NO ACTION ON DELETE CASCADE)")
+    db.execSQL("CREATE INDEX IF NOT EXISTS index_conversation_episode_revision_episodeId ON conversation_episode_revision(episodeId)")
+    db.execSQL("CREATE INDEX IF NOT EXISTS index_conversation_episode_revision_scopeId_episodeId_revision ON conversation_episode_revision(scopeId, episodeId, revision)")
+    db.execSQL("CREATE TABLE IF NOT EXISTS conversation_episode_source (scopeId TEXT NOT NULL, episodeId TEXT NOT NULL, turnId TEXT NOT NULL, PRIMARY KEY(scopeId, episodeId, turnId), FOREIGN KEY(episodeId) REFERENCES conversation_episode(episodeId) ON UPDATE NO ACTION ON DELETE CASCADE)")
+    db.execSQL("CREATE INDEX IF NOT EXISTS index_conversation_episode_source_episodeId ON conversation_episode_source(episodeId)")
+    db.execSQL("CREATE INDEX IF NOT EXISTS index_conversation_episode_source_scopeId_turnId ON conversation_episode_source(scopeId, turnId)")
+    db.execSQL("CREATE INDEX IF NOT EXISTS index_conversation_episode_source_scopeId_episodeId ON conversation_episode_source(scopeId, episodeId)")
+}
+
 /** Minimal command journal. Only identifiers, digest, status and recovery versions are retained. */
 @Entity(tableName = "agent_command_journal")
 internal data class AgentCommandJournalRow(
@@ -175,6 +188,54 @@ internal data class AttentionSettingsRow(
     val snoozedUntilMillis: Long?,
     val snoozedForDate: String?,
     val updatedAtMillis: Long,
+)
+
+@Entity(tableName = "conversation_episode", indices = [
+    androidx.room.Index(value = ["scopeId", "updatedAtMillis"]),
+])
+internal data class ConversationEpisodeRow(
+    @PrimaryKey val episodeId: String,
+    val scopeId: String,
+    val title: String,
+    val summary: String,
+    val createdAtMillis: Long,
+    val updatedAtMillis: Long,
+    val revision: Long,
+)
+
+@Entity(tableName = "conversation_episode_source", primaryKeys = ["scopeId", "episodeId", "turnId"],
+    indices = [
+        androidx.room.Index(value = ["episodeId"]),
+        androidx.room.Index(value = ["scopeId", "turnId"]),
+        androidx.room.Index(value = ["scopeId", "episodeId"]),
+    ], foreignKeys = [androidx.room.ForeignKey(
+        entity = ConversationEpisodeRow::class,
+        parentColumns = ["episodeId"],
+        childColumns = ["episodeId"],
+        onDelete = androidx.room.ForeignKey.CASCADE,
+    )])
+internal data class ConversationEpisodeSourceRow(
+    val scopeId: String,
+    val episodeId: String,
+    val turnId: String,
+)
+
+@Entity(tableName = "conversation_episode_revision", primaryKeys = ["episodeId", "revision"],
+    indices = [androidx.room.Index(value = ["scopeId", "episodeId", "revision"]),
+        androidx.room.Index(value = ["episodeId"])],
+    foreignKeys = [androidx.room.ForeignKey(
+        entity = ConversationEpisodeRow::class,
+        parentColumns = ["episodeId"],
+        childColumns = ["episodeId"],
+        onDelete = androidx.room.ForeignKey.CASCADE,
+    )])
+internal data class ConversationEpisodeRevisionRow(
+    val scopeId: String,
+    val episodeId: String,
+    val revision: Long,
+    val title: String,
+    val summary: String,
+    val recordedAtMillis: Long,
 )
 
 @Entity(tableName = "domain_object", indices = [androidx.room.Index(value = ["scopeId", "kind", "deletedAt"])])
@@ -436,6 +497,32 @@ internal interface ProtectedStoreDao {
     suspend fun deleteConversationTurn(scope: String, turn: String): Int
     @androidx.room.Query("DELETE FROM agent_conversation_message WHERE scopeId=:scope AND turnId IN (SELECT turnId FROM agent_conversation_message WHERE scopeId=:scope AND createdAtMillis < :cutoff)")
     suspend fun pruneConversationTurnsBefore(scope: String, cutoff: Long): Int
+    @androidx.room.Insert(onConflict = androidx.room.OnConflictStrategy.REPLACE)
+    suspend fun putConversationEpisode(row: ConversationEpisodeRow)
+    @androidx.room.Update
+    suspend fun updateConversationEpisode(row: ConversationEpisodeRow): Int
+    @androidx.room.Insert(onConflict = androidx.room.OnConflictStrategy.ABORT)
+    suspend fun putConversationEpisodeRevision(row: ConversationEpisodeRevisionRow)
+    @androidx.room.Insert(onConflict = androidx.room.OnConflictStrategy.ABORT)
+    suspend fun putConversationEpisodeRevisions(rows: List<ConversationEpisodeRevisionRow>)
+    @androidx.room.Query("SELECT * FROM conversation_episode_revision WHERE scopeId=:scope AND episodeId=:id ORDER BY revision")
+    suspend fun conversationEpisodeRevisions(scope: String, id: String): List<ConversationEpisodeRevisionRow>
+    @androidx.room.Insert(onConflict = androidx.room.OnConflictStrategy.ABORT)
+    suspend fun putConversationEpisodeSources(rows: List<ConversationEpisodeSourceRow>)
+    @androidx.room.Query("SELECT * FROM conversation_episode WHERE scopeId=:scope AND episodeId=:id")
+    suspend fun conversationEpisode(scope: String, id: String): ConversationEpisodeRow?
+    @androidx.room.Query("SELECT * FROM conversation_episode WHERE scopeId=:scope AND (:beforeUpdatedAt IS NULL OR updatedAtMillis < :beforeUpdatedAt OR (updatedAtMillis = :beforeUpdatedAt AND episodeId < :beforeEpisodeId)) ORDER BY updatedAtMillis DESC, episodeId DESC LIMIT :limit")
+    suspend fun conversationEpisodePage(scope: String, beforeUpdatedAt: Long?, beforeEpisodeId: String?, limit: Int): List<ConversationEpisodeRow>
+    @androidx.room.Query("SELECT * FROM conversation_episode_source WHERE scopeId=:scope AND episodeId=:id ORDER BY turnId")
+    suspend fun conversationEpisodeSources(scope: String, id: String): List<ConversationEpisodeSourceRow>
+    @androidx.room.Query("DELETE FROM conversation_episode WHERE scopeId=:scope AND episodeId=:id")
+    suspend fun deleteConversationEpisode(scope: String, id: String): Int
+    @androidx.room.Query("DELETE FROM conversation_episode WHERE scopeId=:scope AND episodeId IN (SELECT episodeId FROM conversation_episode_source WHERE scopeId=:scope AND turnId=:turn)")
+    suspend fun deleteEpisodesForConversationTurn(scope: String, turn: String): Int
+    @androidx.room.Query("DELETE FROM conversation_episode WHERE scopeId=:scope AND episodeId IN (SELECT source.episodeId FROM conversation_episode_source AS source LEFT JOIN agent_conversation_message AS message ON message.scopeId=source.scopeId AND message.turnId=source.turnId AND message.role='user' WHERE source.scopeId=:scope AND (message.sequence IS NULL OR message.createdAtMillis < :cutoff))")
+    suspend fun pruneEpisodesForConversationTurnsBefore(scope: String, cutoff: Long): Int
+    @androidx.room.Query("DELETE FROM conversation_episode WHERE scopeId=:scope AND episodeId NOT IN (SELECT episodeId FROM conversation_episode_source WHERE scopeId=:scope)")
+    suspend fun deleteOrphanConversationEpisodes(scope: String): Int
     @androidx.room.Query("SELECT * FROM conversation_retention WHERE scopeId=:scope")
     suspend fun conversationRetention(scope: String): ConversationRetentionRow?
     @androidx.room.Insert(onConflict = androidx.room.OnConflictStrategy.REPLACE)
@@ -446,6 +533,8 @@ internal interface ProtectedStoreDao {
     suspend fun putAttentionSettings(row: AttentionSettingsRow)
     @androidx.room.Query("DELETE FROM agent_conversation_message WHERE scopeId=:scope")
     suspend fun clearConversation(scope: String)
+    @androidx.room.Query("DELETE FROM conversation_episode WHERE scopeId=:scope")
+    suspend fun clearConversationEpisodes(scope: String)
 
     @androidx.room.Query("SELECT * FROM memory_draft WHERE id = 1") suspend fun draft(): MemoryDraftRow?
     @androidx.room.Insert(onConflict = androidx.room.OnConflictStrategy.REPLACE) suspend fun putDraft(row: MemoryDraftRow)
@@ -546,11 +635,12 @@ internal interface ProtectedStoreDao {
     MemoryRevisionRow::class, MemoryTombstoneRow::class, TaskEventRow::class, DeletedTaskRow::class,
     PersonRow::class, MoneyEventRow::class, LegacyMigrationRow::class, AgentOutboxRow::class, AgentTurnJournalRow::class,
     AgentConversationMessageRow::class, AgentActionResultRow::class, ConversationRetentionRow::class, AttentionSettingsRow::class,
+    ConversationEpisodeRow::class, ConversationEpisodeSourceRow::class, ConversationEpisodeRevisionRow::class,
     DomainObjectRow::class, DomainRevisionRow::class, DomainLinkRow::class, UserTableRow::class, TableColumnRow::class,
     TableDataRow::class, MoneyAdjustmentRow::class, LocalCalendarEventRow::class, TableSchemaRevisionRow::class,
     LocalProfileRow::class, PersonIdentityLinkRow::class, CaseRecordRow::class, CaseRevisionRow::class,
     CaseParticipantRow::class, CaseEvidenceRow::class],
-    version = 13, exportSchema = true)
+    version = 14, exportSchema = true)
 internal abstract class AgentDatabase : RoomDatabase() {
     abstract fun protectedStoreDao(): ProtectedStoreDao
     companion object {
@@ -660,7 +750,7 @@ internal abstract class AgentDatabase : RoomDatabase() {
                 database = Room.databaseBuilder(context.applicationContext, AgentDatabase::class.java, databaseName)
                     .addMigrations(AGENT_DB_1_TO_2, AGENT_DB_2_TO_3, AGENT_DB_3_TO_4, AGENT_DB_4_TO_5,
                         AGENT_DB_5_TO_6, AGENT_DB_6_TO_7, AGENT_DB_7_TO_8, AGENT_DB_8_TO_9, AGENT_DB_9_TO_10,
-                        AGENT_DB_10_TO_11, AGENT_DB_11_TO_12, AGENT_DB_12_TO_13)
+                        AGENT_DB_10_TO_11, AGENT_DB_11_TO_12, AGENT_DB_12_TO_13, AGENT_DB_13_TO_14)
                     .setJournalMode(RoomDatabase.JournalMode.TRUNCATE)
                     // WAL remains disabled until P1 WAL/SHM privacy and recovery gates pass.
                     .openHelperFactory(SupportOpenHelperFactory(databaseKey, null, false))

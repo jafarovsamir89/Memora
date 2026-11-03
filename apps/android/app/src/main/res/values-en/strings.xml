@@ -388,6 +388,15 @@
     <string name="memory_saved_sources">Saved notes and facts</string>
     <string name="memory_no_saved_sources">No matching saved notes or facts.</string>
     <string name="memory_conversation_archive">Conversation history</string>
+    <string name="memory_episodes">Episodic memory</string>
+    <string name="memory_no_episodes">No saved episodes yet.</string>
+    <string name="memory_episode_sources">Source conversations</string>
+    <string name="memory_episode_sources_count">Sources: %1$d</string>
+    <string name="memory_episode_revision">Memory revision %1$d · source-linked</string>
+    <string name="memory_episode_previous_versions">Previous versions</string>
+    <string name="memory_episode_revision_entry">v%1$d: %2$s</string>
+    <string name="memory_episode_delete">Delete summary</string>
+    <string name="memory_episode_delete_confirmation">Only this summary will be deleted. Its source conversations will remain.</string>
     <string name="memory_no_conversation_results">No matching conversations.</string>
     <string name="memory_archive_error">Could not open memory. No data was changed.</string>
     <string name="memory_conversation_detail">Conversation</string>

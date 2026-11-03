@@ -431,7 +431,7 @@ object DatabaseStorageProbe {
             db = Room.databaseBuilder(context, AgentDatabase::class.java, dbName)
                 .addMigrations(AGENT_DB_1_TO_2, AGENT_DB_2_TO_3, AGENT_DB_3_TO_4, AGENT_DB_4_TO_5,
                     AGENT_DB_5_TO_6, AGENT_DB_6_TO_7, AGENT_DB_7_TO_8, AGENT_DB_8_TO_9, AGENT_DB_9_TO_10, AGENT_DB_10_TO_11,
-                    AGENT_DB_11_TO_12)
+                    AGENT_DB_11_TO_12, AGENT_DB_12_TO_13, AGENT_DB_13_TO_14)
                 .setJournalMode(androidx.room.RoomDatabase.JournalMode.TRUNCATE)
                 .openHelperFactory(SupportOpenHelperFactory(key, null, false))
                 .build()
@@ -502,7 +502,7 @@ object DatabaseStorageProbe {
             db = Room.databaseBuilder(context, AgentDatabase::class.java, dbName)
                 .addMigrations(AGENT_DB_1_TO_2, AGENT_DB_2_TO_3, AGENT_DB_3_TO_4, AGENT_DB_4_TO_5,
                     AGENT_DB_5_TO_6, AGENT_DB_6_TO_7, AGENT_DB_7_TO_8, AGENT_DB_8_TO_9, AGENT_DB_9_TO_10, AGENT_DB_10_TO_11,
-                    AGENT_DB_11_TO_12)
+                    AGENT_DB_11_TO_12, AGENT_DB_12_TO_13, AGENT_DB_13_TO_14)
                 .setJournalMode(androidx.room.RoomDatabase.JournalMode.TRUNCATE)
                 .openHelperFactory(SupportOpenHelperFactory(reopenedKey, null, false)).build()
             db.openHelper.writableDatabase
@@ -802,11 +802,16 @@ object DatabaseStorageProbe {
             val upgraded = Room.databaseBuilder(context, AgentDatabase::class.java, dbName)
                 .addMigrations(AGENT_DB_1_TO_2, AGENT_DB_2_TO_3, AGENT_DB_3_TO_4, AGENT_DB_4_TO_5,
                     AGENT_DB_5_TO_6, AGENT_DB_6_TO_7, AGENT_DB_7_TO_8, AGENT_DB_8_TO_9, AGENT_DB_9_TO_10, AGENT_DB_10_TO_11,
-                    AGENT_DB_11_TO_12)
+                    AGENT_DB_11_TO_12, AGENT_DB_12_TO_13, AGENT_DB_13_TO_14)
                 .setJournalMode(androidx.room.RoomDatabase.JournalMode.TRUNCATE)
                 .openHelperFactory(SupportOpenHelperFactory(upgradedKey, null, false)).build()
             upgraded.openHelper.writableDatabase
             runBlocking {
+                val schemaVersion = upgraded.openHelper.readableDatabase.query("PRAGMA user_version").use { cursor ->
+                    check(cursor.moveToFirst())
+                    cursor.getInt(0)
+                }
+                check(schemaVersion == 14)
                 check(upgraded.protectedStoreDao().command("synthetic-v1-command")?.status == "pending")
                 check(upgraded.protectedStoreDao().migrations().isEmpty())
                 val migratedProfile = requireNotNull(upgraded.protectedStoreDao().localProfile())
@@ -815,7 +820,9 @@ object DatabaseStorageProbe {
                 check(migratedProfile.onboardingCompleted && migratedProfile.onboardingVersion == 1)
                 check(migratedProfile.remoteAccountId == null && migratedProfile.displayName == null)
                 check(upgraded.openHelper.readableDatabase.query("SELECT name FROM sqlite_master WHERE type='table' AND name='agent_turn_journal'").use { it.moveToFirst() })
-                for (table in listOf("person_identity_link", "case_record", "case_revision", "case_participant", "case_evidence", "conversation_retention", "agent_action_result")) {
+                for (table in listOf("person_identity_link", "case_record", "case_revision", "case_participant",
+                        "case_evidence", "conversation_retention", "agent_action_result", "conversation_episode",
+                        "conversation_episode_revision", "conversation_episode_source")) {
                     check(upgraded.openHelper.readableDatabase.query(
                         "SELECT name FROM sqlite_master WHERE type='table' AND name=?", arrayOf(table),
                     ).use { it.moveToFirst() })
