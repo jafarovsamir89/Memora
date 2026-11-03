@@ -14,6 +14,7 @@ import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.FilledIconButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -33,6 +34,7 @@ import androidx.compose.ui.unit.dp
 import ai.memora.app.data.protectedstore.AgentDatabase
 import ai.memora.app.data.protectedstore.ProtectedConversationRepository
 import ai.memora.app.data.protectedstore.AgentConversationMessageRow
+import ai.memora.app.data.protectedstore.AgentActionResultRow
 import ai.memora.app.agent.AgentCloudConsentKeys
 import ai.memora.app.ui.Glyph
 import ai.memora.app.ui.MemoraCard
@@ -48,16 +50,19 @@ import kotlinx.coroutines.withTimeout
 
 /** Text chat and push-to-talk share the same agent, encrypted memory, and bounded dialogue context. */
 @Composable
-fun AgentChatScreen(language: String = "az", showVoiceControl: Boolean = false) {
+fun AgentChatScreen(language: String = "az", showVoiceControl: Boolean = false, onOpenArea: (String) -> Unit = {}) {
     val context = LocalContext.current
     val settings = remember(context) { context.getSharedPreferences("voice-first-consent", 0) }
-    val processor = remember(context) { AgentVoiceTurnProcessor(context) }
     val database = rememberUiAgentDatabase()
+    val processor = remember(context, database) { AgentVoiceTurnProcessor(context, database) }
     val repository = remember(database) { ProtectedConversationRepository(database) }
     val scopeId = remember(processor) { processor.conversationScopeId() }
     val coroutineScope = rememberCoroutineScope()
     var messages by remember { mutableStateOf<List<AgentConversationMessageRow>>(emptyList()) }
+    var actionResults by remember { mutableStateOf<Map<String, List<AgentActionResultRow>>>(emptyMap()) }
+    var sourceTurnId by remember { mutableStateOf<String?>(null) }
     var input by rememberSaveable { mutableStateOf("") }
+    var correctionDraftPrepared by rememberSaveable { mutableStateOf(false) }
     var pendingMessage by rememberSaveable { mutableStateOf("") }
     var textConsent by remember { mutableStateOf(settings.getBoolean(AgentCloudConsentKeys.TEXT, false)) }
     var memoryConsent by remember { mutableStateOf(settings.getBoolean("gemini-persisted-memory-v1", false)) }
@@ -67,7 +72,11 @@ fun AgentChatScreen(language: String = "az", showVoiceControl: Boolean = false) 
     var busy by remember { mutableStateOf(false) }
     var failed by remember { mutableStateOf(false) }
 
-    suspend fun refreshMessages() { messages = repository.recent(scopeId, 80) }
+    suspend fun refreshMessages() {
+        val recent = repository.recent(scopeId, 80)
+        messages = recent
+        actionResults = repository.actionResultsForTurns(scopeId, recent.map { it.turnId }.distinct())
+    }
     LaunchedEffect(scopeId) { refreshMessages() }
 
     fun send(text: String) {
@@ -79,6 +88,7 @@ fun AgentChatScreen(language: String = "az", showVoiceControl: Boolean = false) 
             return
         }
         input = ""
+        correctionDraftPrepared = false
         failed = false
         busy = true
         coroutineScope.launch {
@@ -136,6 +146,28 @@ fun AgentChatScreen(language: String = "az", showVoiceControl: Boolean = false) 
         dismissButton = { TextButton(onClick = { clearDialog = false }) { Text(s(ai.memora.app.R.string.task_cancel)) } },
     )
 
+    sourceTurnId?.let { turnId ->
+        val source = messages.filter { it.turnId == turnId }
+        AlertDialog(
+            onDismissRequest = { sourceTurnId = null },
+            title = { Text(s(ai.memora.app.R.string.action_source_title)) },
+            text = {
+                androidx.compose.foundation.layout.Column(Modifier.verticalScroll(rememberScrollState())) {
+                    source.firstOrNull { it.role == "user" }?.let {
+                        Text(s(ai.memora.app.R.string.chat_speaker_user), color = colors.accent)
+                        Text(it.message, color = colors.ink, modifier = Modifier.padding(bottom = 12.dp)
+                            .testTag("action_source_user_message"))
+                    }
+                    source.firstOrNull { it.role == "model" }?.let {
+                        Text(s(ai.memora.app.R.string.chat_speaker_secretary), color = colors.accent)
+                        Text(it.message, color = colors.ink, modifier = Modifier.testTag("action_source_assistant_message"))
+                    }
+                }
+            },
+            confirmButton = { TextButton(onClick = { sourceTurnId = null }) { Text(s(ai.memora.app.R.string.close)) } },
+        )
+    }
+
     ScreenColumn {
         Text(s(ai.memora.app.R.string.chat_title), Modifier.fillMaxWidth(), style = androidx.compose.material3.MaterialTheme.typography.headlineMedium,
             color = colors.ink, textAlign = TextAlign.Center)
@@ -173,6 +205,16 @@ fun AgentChatScreen(language: String = "az", showVoiceControl: Boolean = false) 
                     Text(message.message, color = colors.ink, style = androidx.compose.material3.MaterialTheme.typography.bodyLarge)
                 }
             }
+            if (message.role == "model") actionResults[message.turnId].orEmpty().forEachIndexed { index, result ->
+                ActionResultCard(
+                    result = result,
+                    onOpenArea = { route -> onOpenArea(route) },
+                    onOpenSource = { sourceTurnId = message.turnId },
+                sourceMessage = messages.firstOrNull { it.turnId == message.turnId && it.role == "user" }?.message.orEmpty(),
+                onPrepareCorrection = { prompt -> input = prompt.take(20_000); correctionDraftPrepared = true },
+                    modifier = Modifier.testTag("action_result_${message.turnId}_$index"),
+                )
+            }
         }
         if (busy) MemoraCard { Text(s(ai.memora.app.R.string.ai_loading), color = colors.muted) }
         if (failed) MemoraCard { Text(s(ai.memora.app.R.string.ai_failed), color = colors.muted) }
@@ -185,9 +227,82 @@ fun AgentChatScreen(language: String = "az", showVoiceControl: Boolean = false) 
                 Icon(Glyph.Arrow, s(ai.memora.app.R.string.send))
             }
         }
+        if (correctionDraftPrepared) Text(s(ai.memora.app.R.string.action_correction_draft_note),
+            color = colors.muted, style = androidx.compose.material3.MaterialTheme.typography.bodySmall,
+            modifier = Modifier.testTag("action_correction_draft_note"))
         if (textConsent) TextButton(onClick = {
             if (settings.edit().putBoolean(AgentCloudConsentKeys.TEXT, false).commit()) textConsent = false
             else failed = true
         }, modifier = Modifier.testTag("agent_text_consent_toggle")) { Text(s(ai.memora.app.R.string.agent_text_revoke)) }
+    }
+}
+
+@Composable
+private fun ActionResultCard(result: AgentActionResultRow, onOpenArea: (String) -> Unit,
+    onOpenSource: () -> Unit, sourceMessage: String, onPrepareCorrection: (String) -> Unit,
+    modifier: Modifier = Modifier) {
+    val statusLabel = when (result.status) {
+        "APPLIED" -> ai.memora.app.R.string.action_status_applied
+        "NEEDS_CONFIRMATION" -> ai.memora.app.R.string.action_status_confirmation
+        "UNKNOWN" -> ai.memora.app.R.string.action_status_unknown
+        else -> ai.memora.app.R.string.action_status_failed
+    }
+    val statusColor = when (result.status) {
+        "APPLIED" -> colors.green
+        "NEEDS_CONFIRMATION", "UNKNOWN" -> colors.amber
+        else -> androidx.compose.material3.MaterialTheme.colorScheme.error
+    }
+    val areaLabel = when (result.targetKind) {
+        "finance" -> ai.memora.app.R.string.action_area_finance
+        "case" -> ai.memora.app.R.string.action_area_cases
+        "task" -> ai.memora.app.R.string.action_area_tasks
+        "calendar" -> ai.memora.app.R.string.action_area_calendar
+        "table" -> ai.memora.app.R.string.action_area_tables
+        "memory" -> ai.memora.app.R.string.action_area_memory
+        else -> null
+    }
+    val areaRoute = when (result.targetKind) {
+        "finance" -> "finance"
+        "case" -> "cases"
+        "task" -> "tasks"
+        "calendar" -> "calendar"
+        "table" -> "tables"
+        "memory" -> "memory"
+        else -> null
+    }
+    val correctionTemplate = s(ai.memora.app.R.string.action_correction_draft_template)
+    val targetId = result.targetId
+    MemoraCard(tint = if (result.status == "APPLIED") colors.softAccent else colors.card,
+        modifier = modifier.testTag("action_card_${result.status.lowercase()}")) {
+        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            Icon(if (result.status == "APPLIED") Glyph.Check else Glyph.Folder, null, tint = statusColor)
+            androidx.compose.foundation.layout.Column(Modifier.weight(1f)) {
+                Text(s(ai.memora.app.R.string.action_result_title), style = androidx.compose.material3.MaterialTheme.typography.labelSmall,
+                    color = colors.muted)
+                Text(s(statusLabel), style = androidx.compose.material3.MaterialTheme.typography.titleSmall,
+                    color = statusColor, modifier = Modifier.testTag("action_status_label"))
+            }
+        }
+        if (result.status == "NEEDS_CONFIRMATION")
+            Text(s(ai.memora.app.R.string.action_not_applied), style = androidx.compose.material3.MaterialTheme.typography.bodySmall,
+                color = colors.muted)
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+            areaLabel?.let { label ->
+                OutlinedButton(onClick = { areaRoute?.let(onOpenArea) }, modifier = Modifier.testTag("action_open_related")) {
+                    Text("${s(ai.memora.app.R.string.action_open_related)} ${s(label)}")
+                }
+            }
+            TextButton(onClick = onOpenSource, modifier = Modifier.testTag("action_open_source")) {
+                Text(s(ai.memora.app.R.string.action_open_source))
+            }
+        }
+        if (result.status == "APPLIED" && targetId != null) {
+            OutlinedButton(onClick = {
+                val prompt = String.format(java.util.Locale.ROOT, correctionTemplate, sourceMessage.take(12_000), targetId)
+                onPrepareCorrection(prompt)
+            }, modifier = Modifier.testTag("action_prepare_correction")) {
+                Text(s(ai.memora.app.R.string.action_prepare_correction))
+            }
+        }
     }
 }

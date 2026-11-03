@@ -430,7 +430,8 @@ object DatabaseStorageProbe {
             val key = DatabaseKeyProvider(context, databaseFile, envelope, store, alias).loadOrCreate()
             db = Room.databaseBuilder(context, AgentDatabase::class.java, dbName)
                 .addMigrations(AGENT_DB_1_TO_2, AGENT_DB_2_TO_3, AGENT_DB_3_TO_4, AGENT_DB_4_TO_5,
-                    AGENT_DB_5_TO_6, AGENT_DB_6_TO_7, AGENT_DB_7_TO_8, AGENT_DB_8_TO_9, AGENT_DB_9_TO_10, AGENT_DB_10_TO_11)
+                    AGENT_DB_5_TO_6, AGENT_DB_6_TO_7, AGENT_DB_7_TO_8, AGENT_DB_8_TO_9, AGENT_DB_9_TO_10, AGENT_DB_10_TO_11,
+                    AGENT_DB_11_TO_12)
                 .setJournalMode(androidx.room.RoomDatabase.JournalMode.TRUNCATE)
                 .openHelperFactory(SupportOpenHelperFactory(key, null, false))
                 .build()
@@ -486,15 +487,22 @@ object DatabaseStorageProbe {
                 archive.appendTurn("synthetic-retention", "synthetic-old-turn", "synthetic expired utterance", "synthetic expired answer",
                     now - 31L * 86_400_000L)
                 archive.appendTurn("synthetic-retention", "synthetic-kept-turn", "synthetic retained utterance", "synthetic retained answer", now)
+                archive.appendTurn("synthetic-retention", "synthetic-kept-turn", "synthetic retained utterance",
+                    "synthetic retained answer", now, listOf(AgentActionResultRow(
+                        "00000000-0000-4000-8000-000000000091", "synthetic-retention", "synthetic-kept-turn",
+                        "record_money_event", "APPLIED", "receipt_recorded", "finance",
+                        "00000000-0000-4000-8000-000000000092", now)))
                 check(archive.setRetentionDays("synthetic-retention", 30, now) == 2)
                 check(archive.turn("synthetic-retention", "synthetic-old-turn").isEmpty())
                 check(archive.turn("synthetic-retention", "synthetic-kept-turn").size == 2)
+                check(archive.actionResults("synthetic-retention", "synthetic-kept-turn").single().status == "APPLIED")
             }
             db.close(); db = null
             val reopenedKey = DatabaseKeyProvider(context, databaseFile, envelope, store, alias).loadOrCreate()
             db = Room.databaseBuilder(context, AgentDatabase::class.java, dbName)
                 .addMigrations(AGENT_DB_1_TO_2, AGENT_DB_2_TO_3, AGENT_DB_3_TO_4, AGENT_DB_4_TO_5,
-                    AGENT_DB_5_TO_6, AGENT_DB_6_TO_7, AGENT_DB_7_TO_8, AGENT_DB_8_TO_9, AGENT_DB_9_TO_10, AGENT_DB_10_TO_11)
+                    AGENT_DB_5_TO_6, AGENT_DB_6_TO_7, AGENT_DB_7_TO_8, AGENT_DB_8_TO_9, AGENT_DB_9_TO_10, AGENT_DB_10_TO_11,
+                    AGENT_DB_11_TO_12)
                 .setJournalMode(androidx.room.RoomDatabase.JournalMode.TRUNCATE)
                 .openHelperFactory(SupportOpenHelperFactory(reopenedKey, null, false)).build()
             db.openHelper.writableDatabase
@@ -512,6 +520,8 @@ object DatabaseStorageProbe {
                 val archive = ProtectedConversationRepository(db!!)
                 check(archive.retentionDays("synthetic-retention") == 30)
                 check(archive.turn("synthetic-retention", "synthetic-kept-turn").size == 2)
+                check(archive.actionResults("synthetic-retention", "synthetic-kept-turn").single().targetId ==
+                    "00000000-0000-4000-8000-000000000092")
                 val domain = ProtectedDomainRepository(db!!)
                 check(domain.search("synthetic-scope", "FILTER").single().version == 4L)
                 check(db!!.protectedStoreDao().rows("synthetic-table-p4", "synthetic-scope").size == 2)
@@ -791,7 +801,8 @@ object DatabaseStorageProbe {
             val upgradedKey = DatabaseKeyProvider(context, file, envelope, keyStore, alias).loadOrCreate()
             val upgraded = Room.databaseBuilder(context, AgentDatabase::class.java, dbName)
                 .addMigrations(AGENT_DB_1_TO_2, AGENT_DB_2_TO_3, AGENT_DB_3_TO_4, AGENT_DB_4_TO_5,
-                    AGENT_DB_5_TO_6, AGENT_DB_6_TO_7, AGENT_DB_7_TO_8, AGENT_DB_8_TO_9, AGENT_DB_9_TO_10, AGENT_DB_10_TO_11)
+                    AGENT_DB_5_TO_6, AGENT_DB_6_TO_7, AGENT_DB_7_TO_8, AGENT_DB_8_TO_9, AGENT_DB_9_TO_10, AGENT_DB_10_TO_11,
+                    AGENT_DB_11_TO_12)
                 .setJournalMode(androidx.room.RoomDatabase.JournalMode.TRUNCATE)
                 .openHelperFactory(SupportOpenHelperFactory(upgradedKey, null, false)).build()
             upgraded.openHelper.writableDatabase
@@ -804,7 +815,7 @@ object DatabaseStorageProbe {
                 check(migratedProfile.onboardingCompleted && migratedProfile.onboardingVersion == 1)
                 check(migratedProfile.remoteAccountId == null && migratedProfile.displayName == null)
                 check(upgraded.openHelper.readableDatabase.query("SELECT name FROM sqlite_master WHERE type='table' AND name='agent_turn_journal'").use { it.moveToFirst() })
-                for (table in listOf("person_identity_link", "case_record", "case_revision", "case_participant", "case_evidence", "conversation_retention")) {
+                for (table in listOf("person_identity_link", "case_record", "case_revision", "case_participant", "case_evidence", "conversation_retention", "agent_action_result")) {
                     check(upgraded.openHelper.readableDatabase.query(
                         "SELECT name FROM sqlite_master WHERE type='table' AND name=?", arrayOf(table),
                     ).use { it.moveToFirst() })

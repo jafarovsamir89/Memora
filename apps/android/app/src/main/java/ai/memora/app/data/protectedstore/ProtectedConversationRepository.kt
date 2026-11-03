@@ -56,10 +56,25 @@ internal class ProtectedConversationRepository(private val db: AgentDatabase) {
         return dao.conversationMessagesForTurn(scopeId, turnId).filter { it.scopeId == scopeId }
     }
 
+    suspend fun actionResults(scopeId: String, turnId: String): List<AgentActionResultRow> {
+        require(scopeId.isNotBlank() && turnId.isNotBlank())
+        return dao.actionResultsForTurn(scopeId, turnId).filter { it.scopeId == scopeId && it.turnId == turnId }
+    }
+
+    suspend fun actionResultsForTurns(scopeId: String, turnIds: List<String>): Map<String, List<AgentActionResultRow>> {
+        require(scopeId.isNotBlank() && turnIds.size <= 120 && turnIds.all(String::isNotBlank))
+        if (turnIds.isEmpty()) return emptyMap()
+        return dao.actionResultsForTurns(scopeId, turnIds.distinct()).filter { it.scopeId == scopeId && it.turnId in turnIds }
+            .groupBy { it.turnId }
+    }
+
     /** A whole user/assistant turn is the smallest deletion unit, so search can never show an orphan reply. */
     suspend fun deleteTurn(scopeId: String, turnId: String): Boolean {
         require(scopeId.isNotBlank() && turnId.isNotBlank())
-        return db.withTransaction { dao.deleteConversationTurn(scopeId, turnId) > 0 }
+        return db.withTransaction {
+            dao.deleteActionResultsForTurn(scopeId, turnId)
+            dao.deleteConversationTurn(scopeId, turnId) > 0
+        }
     }
 
     suspend fun retentionDays(scopeId: String): Int {
@@ -124,14 +139,22 @@ internal class ProtectedConversationRepository(private val db: AgentDatabase) {
     }
 
     suspend fun appendTurn(scopeId: String, turnId: String, userMessage: String, assistantMessage: String,
-        createdAtMillis: Long = System.currentTimeMillis()) {
+        createdAtMillis: Long = System.currentTimeMillis(), actionResults: List<AgentActionResultRow> = emptyList()) {
         require(scopeId.isNotBlank() && turnId.isNotBlank() && turnId.length <= 100)
         require(userMessage.isNotBlank() && userMessage.length <= 20_000)
         require(assistantMessage.isNotBlank() && assistantMessage.length <= 20_000)
+        require(actionResults.size <= 32 && actionResults.all { row ->
+            row.scopeId == scopeId && row.turnId == turnId && isUuid(row.resultId) &&
+                row.toolName.matches(Regex("[a-z][a-z0-9_]{0,63}")) &&
+                row.status in ACTION_STATUSES && row.code.matches(Regex("[a-z0-9_]{1,64}")) &&
+                (row.targetKind == null || row.targetKind in ACTION_TARGET_KINDS) &&
+                (row.targetId == null || isUuid(row.targetId)) && row.createdAtMillis >= 0
+        })
         db.withTransaction {
             val existing = dao.conversationMessagesForTurn(scopeId, turnId)
             if (existing.isNotEmpty()) {
                 check(existing.map { it.role to it.message } == listOf("user" to userMessage, "model" to assistantMessage))
+                if (actionResults.isNotEmpty()) dao.putActionResults(actionResults)
                 return@withTransaction
             }
             dao.putConversationMessages(listOf(
@@ -140,6 +163,7 @@ internal class ProtectedConversationRepository(private val db: AgentDatabase) {
                 AgentConversationMessageRow(scopeId = scopeId, turnId = turnId, role = "model", message = assistantMessage,
                     createdAtMillis = createdAtMillis),
             ))
+            if (actionResults.isNotEmpty()) dao.putActionResults(actionResults)
             val days = dao.conversationRetention(scopeId)?.retentionDays ?: RETENTION_FOREVER
             pruneExpired(scopeId, days, System.currentTimeMillis())
         }
@@ -147,12 +171,16 @@ internal class ProtectedConversationRepository(private val db: AgentDatabase) {
 
     suspend fun clear(scopeId: String) {
         require(scopeId.isNotBlank())
-        dao.clearConversation(scopeId)
+        db.withTransaction {
+            dao.clearActionResults(scopeId)
+            dao.clearConversation(scopeId)
+        }
     }
 
     private suspend fun pruneExpired(scopeId: String, days: Int, nowMillis: Long): Int =
         if (days == RETENTION_FOREVER) 0 else {
             val cutoff = nowMillis - days.toLong() * DAY_MILLIS
+            dao.pruneActionResultsBefore(scopeId, cutoff)
             dao.pruneConversationTurnsBefore(scopeId, cutoff)
         }
 
@@ -166,11 +194,15 @@ internal class ProtectedConversationRepository(private val db: AgentDatabase) {
     private fun fold(value: String) = value.lowercase(java.util.Locale.ROOT)
         .replace('ı', 'i').replace('İ', 'i').replace('ё', 'е')
 
+    private fun isUuid(value: String) = runCatching { java.util.UUID.fromString(value) }.isSuccess
+
     private companion object {
         const val RETENTION_FOREVER = 0
         const val DAY_MILLIS = 86_400_000L
         const val PAGE_SIZE = 160
         const val MAX_SEARCH_HITS = 120
+        val ACTION_STATUSES = setOf("APPLIED", "REJECTED", "CONFLICT", "FAILED", "UNKNOWN", "NEEDS_CONFIRMATION")
+        val ACTION_TARGET_KINDS = setOf("memory", "finance", "case", "task", "calendar", "table")
         val ALLOWED_RETENTION_DAYS = setOf(RETENTION_FOREVER, 30, 90, 365)
         val TOKEN = Regex("[\\p{L}\\p{N}]+")
         val STOP_WORDS = setOf("and", "the", "that", "what", "when", "were", "was", "with", "about", "from", "this", "have", "did", "we",

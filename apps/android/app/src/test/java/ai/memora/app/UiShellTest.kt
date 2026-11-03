@@ -8,6 +8,7 @@ import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.junit4.StateRestorationTester
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.unit.Density
 import org.junit.Rule
 import org.junit.Test
@@ -175,6 +176,52 @@ class UiShellTest {
         compose.onNodeWithTag("today_event_synthetic-upcoming-event").performScrollTo().assertIsDisplayed()
         Assert.assertEquals(1, cases.openCaseCount(scope))
         screenshot("14-today-with-local-data")
+    }
+
+    @Test fun secretaryShowsPersistedActionStatusSourceAndRelatedArea() = kotlinx.coroutines.runBlocking {
+        val context = ApplicationProvider.getApplicationContext<Context>()
+        val processor = ai.memora.app.voice.AgentVoiceTurnProcessor(context, agentDatabase.database)
+        val scopeId = processor.conversationScopeId()
+        val turnId = UUID.randomUUID().toString()
+        val targetId = UUID.randomUUID().toString()
+        ai.memora.app.data.protectedstore.ProtectedConversationRepository(agentDatabase.database).appendTurn(
+            scopeId, turnId, "Synthetic request about a saved receipt", "Synthetic action confirmed.",
+            1_800_000_000_000L,
+            listOf(ai.memora.app.data.protectedstore.AgentActionResultRow(
+                UUID.randomUUID().toString(), scopeId, turnId, "record_money_event", "APPLIED", "receipt_recorded",
+                "finance", targetId, 1_800_000_000_000L,
+            )),
+        )
+        val repository = ai.memora.app.data.protectedstore.ProtectedConversationRepository(agentDatabase.database)
+        Assert.assertEquals(listOf("Synthetic request about a saved receipt", "Synthetic action confirmed."),
+            repository.recent(scopeId, 80).map { it.message })
+        Assert.assertEquals(1, repository.actionResults(scopeId, turnId).size)
+        Assert.assertEquals(1, repository.actionResultsForTurns(scopeId, listOf(turnId))[turnId]?.size)
+        compose.setContent {
+            CompositionLocalProvider(LocalAgentDatabaseOverride provides agentDatabase.database) {
+                TestMemoraApp(initialRoute = "chat", capturePersistenceOverride = captureStore,
+                    appearanceStoreOverride = AtomicAppearanceStore(
+                        File(ApplicationProvider.getApplicationContext<Context>().cacheDir, "ui-action-card-${UUID.randomUUID()}"),
+                        AppearanceSettings("az", "light"),
+                    ))
+            }
+        }
+        compose.waitUntil(10_000) { compose.onAllNodesWithTag("chat_turn_${turnId}_model").fetchSemanticsNodes().isNotEmpty() }
+        compose.onNodeWithTag("action_result_${turnId}_0").performScrollTo().assertIsDisplayed()
+        compose.onNodeWithText("Yadda saxlanıldı").assertIsDisplayed()
+        screenshot("15-secretary-action-card")
+        compose.onNodeWithTag("action_open_source").performScrollTo().performClick()
+        compose.onNodeWithTag("action_source_user_message").assertExists()
+        compose.onNodeWithTag("action_source_assistant_message").assertExists()
+        compose.onNodeWithText("Bağla").performClick()
+        compose.onNodeWithTag("action_prepare_correction").performScrollTo().performClick()
+        val correctionDraft = compose.onNodeWithTag("chat_input").fetchSemanticsNode().config[SemanticsProperties.EditableText].text
+        Assert.assertTrue(correctionDraft.contains(targetId))
+        compose.onNodeWithTag("action_correction_draft_note").assertExists()
+        compose.onNodeWithTag("action_open_related").performScrollTo().performClick()
+        compose.onNodeWithTag("nav_more").assertIsSelected()
+        compose.onNodeWithTag("finance_screen").assertExists()
+        Unit
     }
 
     @Test fun textDraftGoesToInboxWithoutAi() {

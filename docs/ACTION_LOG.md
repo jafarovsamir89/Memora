@@ -1,5 +1,10 @@
 # Memora — лог действий
 
+## ACT-0105 · 2026-11-03 · M20-05 persistent action-result cards
+
+Добавлены Room 11→12 result attachments, транзакционная запись с разговором, scope/read validation, retention/delete propagation и безопасное сопоставление write observations. Secretary рисует локализованную карточку исхода, открывает source turn и связанные finance/case/task/calendar/table/memory destinations; correction path готовит только редактируемый draft и не вызывает AI или инструменты до явной отправки пользователем. Добавлены repo/mapper/Compose tests, migration probe, схема 12 и AZ/RU/EN строки. Поведение consent и tool gates не расширялось.
+
+Проверки `:app:testDebugUnitTest :app:assembleDebug :app:assembleDebugAndroidTest :app:compileDebugAndroidTestKotlin :app:lintDebug --no-daemon --console=plain --max-workers=2`: BUILD SUCCESSFUL; 242 JVM tests, failures/errors/skipped = 0; lint 0 errors, 53 warnings, 2 hints. Debug APK v31 `1.1.9-action-cards`: 29,295,371 bytes, SHA-256 `8256998301647B0260BA67DAD5A8AAE3E24EB84A8DD72FE76CEE6D06B0E0856E`; `C:\memora-backups\Memora-v31-1.1.9-action-cards-2026-11-03.apk` hash matched. Host screenshot `15-secretary-action-card.png` reviewed. ADB empty; real Android SQLCipher migration/install/TalkBack/owner acceptance remain open. `git diff --check` passed before documentation; Git handoff follows separately after final review.
 ## ACT-0104 · 2026-11-03 · Git handoff ACT-0103
 
 Проверенный M20-05 UI-срез v30 вместе с TODO, дневником, audit и инженерным планом зафиксирован коммитом `ac708f7eeae25411ae33488a6f519bfb4367eba0` (`feat(android): add secretary navigation and Today dashboard`) и отправлен в `origin/main`. `git ls-remote origin refs/heads/main` вернул тот же полный SHA; после push `git status -sb` показал чистую `main...origin/main`. Следующее действие — persistent structured result cards в SQLCipher для секретаря; M20-05, device acceptance и последующие этапы остаются открытыми.

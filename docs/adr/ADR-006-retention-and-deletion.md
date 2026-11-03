@@ -30,3 +30,7 @@
 | Экспорт | Повторное чтение экспорта показывает разрешённые связи и историю без чужих источников и секретов. |
 
 Это будущие тесты. Конкретные сроки, криптография, контракты отмены и системного бэкапа остаются открыты.
+
+## Implementation addendum ACT-0105 · scoped conversation action attachments
+
+Room schema 12 adds `agent_action_result` as a private attachment to a conversation turn. It stores only scope ID, turn ID, allowlisted write-tool name, outcome status, sanitized code, optional app-owned UUID target and timestamp. It stores no model/tool arguments, source utterance, person name, amount, prompt or provider response. The attachment shares the conversation retention choice and is transactionally removed by whole-turn delete, clear and expiry prune. `appendTurn` commits messages and attachments atomically and validates scope, turn, status, code, target kind and UUID before write. Correction UI only prepares an editable draft; it does not bypass ADR-008 consent, policy, version, or confirmation requirements. Android runtime migration/readback remains pending until a non-personal test device is available.

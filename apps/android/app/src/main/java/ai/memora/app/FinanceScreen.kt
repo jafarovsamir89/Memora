@@ -6,7 +6,9 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.testTag
 import ai.memora.app.data.protectedstore.MoneyEventRow
 import ai.memora.app.data.protectedstore.MoneyAdjustmentRow
 import ai.memora.app.data.protectedstore.ProtectedDomainRepository
@@ -53,7 +55,7 @@ fun FinanceScreen() {
         } catch (_: Exception) { unavailable = true }
     }
 
-    ScreenColumn {
+    ScreenColumn(Modifier.testTag("finance_screen")) {
         ScreenHeading(s(R.string.finance), s(R.string.finance_hint))
         if (unavailable) {
             MemoraCard { androidx.compose.material3.Text(s(R.string.capture_storage_error)) }

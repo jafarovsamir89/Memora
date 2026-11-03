@@ -97,6 +97,12 @@ internal val AGENT_DB_10_TO_11 = androidx.room.migration.Migration(10, 11) { db 
     db.execSQL("CREATE TABLE IF NOT EXISTS conversation_retention (scopeId TEXT NOT NULL, retentionDays INTEGER NOT NULL, updatedAtMillis INTEGER NOT NULL, PRIMARY KEY(scopeId))")
 }
 
+/** Structured write outcomes are private conversation attachments and follow the turn retention policy. */
+internal val AGENT_DB_11_TO_12 = androidx.room.migration.Migration(11, 12) { db ->
+    db.execSQL("CREATE TABLE IF NOT EXISTS agent_action_result (resultId TEXT NOT NULL, scopeId TEXT NOT NULL, turnId TEXT NOT NULL, toolName TEXT NOT NULL, status TEXT NOT NULL, code TEXT NOT NULL, targetKind TEXT, targetId TEXT, createdAtMillis INTEGER NOT NULL, PRIMARY KEY(resultId))")
+    db.execSQL("CREATE INDEX IF NOT EXISTS index_agent_action_result_scopeId_turnId_createdAtMillis ON agent_action_result(scopeId, turnId, createdAtMillis)")
+}
+
 /** Minimal command journal. Only identifiers, digest, status and recovery versions are retained. */
 @Entity(tableName = "agent_command_journal")
 internal data class AgentCommandJournalRow(
@@ -125,6 +131,22 @@ internal data class AgentConversationMessageRow(
     val turnId: String,
     val role: String,
     val message: String,
+    val createdAtMillis: Long,
+)
+
+/** Minimal, local-only action card metadata. User/model text remains solely in the linked conversation rows. */
+@Entity(tableName = "agent_action_result", indices = [
+    androidx.room.Index(value = ["scopeId", "turnId", "createdAtMillis"]),
+])
+internal data class AgentActionResultRow(
+    @PrimaryKey val resultId: String,
+    val scopeId: String,
+    val turnId: String,
+    val toolName: String,
+    val status: String,
+    val code: String,
+    val targetKind: String?,
+    val targetId: String?,
     val createdAtMillis: Long,
 )
 
@@ -373,6 +395,18 @@ internal interface ProtectedStoreDao {
     suspend fun conversationPage(scope: String, beforeSequence: Long?, limit: Int): List<AgentConversationMessageRow>
     @androidx.room.Query("SELECT * FROM agent_conversation_message WHERE scopeId=:scope AND turnId=:turn ORDER BY sequence")
     suspend fun conversationMessagesForTurn(scope: String, turn: String): List<AgentConversationMessageRow>
+    @androidx.room.Insert(onConflict = androidx.room.OnConflictStrategy.REPLACE)
+    suspend fun putActionResults(rows: List<AgentActionResultRow>)
+    @androidx.room.Query("SELECT * FROM agent_action_result WHERE scopeId=:scope AND turnId=:turn ORDER BY createdAtMillis, resultId")
+    suspend fun actionResultsForTurn(scope: String, turn: String): List<AgentActionResultRow>
+    @androidx.room.Query("SELECT * FROM agent_action_result WHERE scopeId=:scope AND turnId IN (:turnIds) ORDER BY createdAtMillis, resultId")
+    suspend fun actionResultsForTurns(scope: String, turnIds: List<String>): List<AgentActionResultRow>
+    @androidx.room.Query("DELETE FROM agent_action_result WHERE scopeId=:scope AND turnId=:turn")
+    suspend fun deleteActionResultsForTurn(scope: String, turn: String): Int
+    @androidx.room.Query("DELETE FROM agent_action_result WHERE scopeId=:scope AND turnId IN (SELECT turnId FROM agent_conversation_message WHERE scopeId=:scope AND createdAtMillis < :cutoff)")
+    suspend fun pruneActionResultsBefore(scope: String, cutoff: Long): Int
+    @androidx.room.Query("DELETE FROM agent_action_result WHERE scopeId=:scope")
+    suspend fun clearActionResults(scope: String)
     @androidx.room.Query("DELETE FROM agent_conversation_message WHERE scopeId=:scope AND turnId=:turn")
     suspend fun deleteConversationTurn(scope: String, turn: String): Int
     @androidx.room.Query("DELETE FROM agent_conversation_message WHERE scopeId=:scope AND turnId IN (SELECT turnId FROM agent_conversation_message WHERE scopeId=:scope AND createdAtMillis < :cutoff)")
@@ -480,12 +514,12 @@ internal interface ProtectedStoreDao {
 @Database(entities = [AgentCommandJournalRow::class, MemoryDraftRow::class, MemorySourceRow::class,
     MemoryRevisionRow::class, MemoryTombstoneRow::class, TaskEventRow::class, DeletedTaskRow::class,
     PersonRow::class, MoneyEventRow::class, LegacyMigrationRow::class, AgentOutboxRow::class, AgentTurnJournalRow::class,
-    AgentConversationMessageRow::class, ConversationRetentionRow::class,
+    AgentConversationMessageRow::class, AgentActionResultRow::class, ConversationRetentionRow::class,
     DomainObjectRow::class, DomainRevisionRow::class, DomainLinkRow::class, UserTableRow::class, TableColumnRow::class,
     TableDataRow::class, MoneyAdjustmentRow::class, LocalCalendarEventRow::class, TableSchemaRevisionRow::class,
     LocalProfileRow::class, PersonIdentityLinkRow::class, CaseRecordRow::class, CaseRevisionRow::class,
     CaseParticipantRow::class, CaseEvidenceRow::class],
-    version = 11, exportSchema = true)
+    version = 12, exportSchema = true)
 internal abstract class AgentDatabase : RoomDatabase() {
     abstract fun protectedStoreDao(): ProtectedStoreDao
     companion object {
@@ -595,7 +629,7 @@ internal abstract class AgentDatabase : RoomDatabase() {
                 database = Room.databaseBuilder(context.applicationContext, AgentDatabase::class.java, databaseName)
                     .addMigrations(AGENT_DB_1_TO_2, AGENT_DB_2_TO_3, AGENT_DB_3_TO_4, AGENT_DB_4_TO_5,
                         AGENT_DB_5_TO_6, AGENT_DB_6_TO_7, AGENT_DB_7_TO_8, AGENT_DB_8_TO_9, AGENT_DB_9_TO_10,
-                        AGENT_DB_10_TO_11)
+                        AGENT_DB_10_TO_11, AGENT_DB_11_TO_12)
                     .setJournalMode(RoomDatabase.JournalMode.TRUNCATE)
                     // WAL remains disabled until P1 WAL/SHM privacy and recovery gates pass.
                     .openHelperFactory(SupportOpenHelperFactory(databaseKey, null, false))

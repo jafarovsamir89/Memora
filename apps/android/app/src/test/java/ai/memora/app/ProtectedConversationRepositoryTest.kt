@@ -1,6 +1,7 @@
 package ai.memora.app
 
 import ai.memora.app.data.protectedstore.ProtectedConversationRepository
+import ai.memora.app.data.protectedstore.AgentActionResultRow
 import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -44,12 +45,36 @@ class ProtectedConversationRepositoryTest {
         assertFalse(repository.deleteTurn("scope-a", "same-turn-id"))
     }
 
+    @Test fun actionCardsPersistWithTheirSourceTurnAndDeleteWithThatTurn() = runBlocking {
+        val repository = ProtectedConversationRepository(databaseRule.database)
+        val turnId = java.util.UUID.randomUUID().toString()
+        val targetId = java.util.UUID.randomUUID().toString()
+        val applied = AgentActionResultRow(java.util.UUID.randomUUID().toString(), "scope-actions", turnId,
+            "record_money_event", "APPLIED", "receipt_recorded", "finance", targetId, 1_800_000_000_000L)
+        val pending = AgentActionResultRow(java.util.UUID.randomUUID().toString(), "scope-actions", turnId,
+            "delete_memory_object", "NEEDS_CONFIRMATION", "confirmation_required", "memory", null, 1_800_000_000_001L)
+        repository.appendTurn("scope-actions", turnId, "synthetic source statement", "synthetic answer",
+            1_800_000_000_000L, listOf(applied, pending))
+
+        assertEquals(listOf(applied, pending), repository.actionResults("scope-actions", turnId))
+        assertEquals(listOf(applied, pending), repository.actionResultsForTurns("scope-actions", listOf(turnId))[turnId])
+        assertTrue(repository.deleteTurn("scope-actions", turnId))
+        assertTrue(repository.actionResults("scope-actions", turnId).isEmpty())
+        assertTrue(repository.turn("scope-actions", turnId).isEmpty())
+    }
+
     @Test fun retentionIsPersistedAndPrunesExpiredWholeTurnsOnlyAfterExplicitSelection() = runBlocking {
         val repository = ProtectedConversationRepository(databaseRule.database)
         val now = System.currentTimeMillis()
         val old = now - 31L * 86_400_000L
-        repository.appendTurn("scope-retention", "old-turn", "synthetic old user", "synthetic old answer", old)
-        repository.appendTurn("scope-retention", "current-turn", "synthetic current user", "synthetic current answer", now)
+        val oldId = java.util.UUID.randomUUID().toString()
+        val currentId = java.util.UUID.randomUUID().toString()
+        repository.appendTurn("scope-retention", "old-turn", "synthetic old user", "synthetic old answer", old,
+            listOf(AgentActionResultRow(oldId, "scope-retention", "old-turn", "create_task", "APPLIED", "task_created",
+                "task", java.util.UUID.randomUUID().toString(), old)))
+        repository.appendTurn("scope-retention", "current-turn", "synthetic current user", "synthetic current answer", now,
+            listOf(AgentActionResultRow(currentId, "scope-retention", "current-turn", "create_task", "APPLIED", "task_created",
+                "task", java.util.UUID.randomUUID().toString(), now)))
         assertEquals(0, repository.retentionDays("scope-retention"))
         assertEquals(0, repository.applyRetention("scope-retention", now))
         assertEquals(2, repository.turn("scope-retention", "old-turn").size)
@@ -57,7 +82,9 @@ class ProtectedConversationRepositoryTest {
         assertTrue(repository.setRetentionDays("scope-retention", 30, now) > 0)
         assertEquals(30, repository.retentionDays("scope-retention"))
         assertTrue(repository.turn("scope-retention", "old-turn").isEmpty())
+        assertTrue(repository.actionResults("scope-retention", "old-turn").isEmpty())
         assertEquals(2, repository.turn("scope-retention", "current-turn").size)
+        assertEquals(1, repository.actionResults("scope-retention", "current-turn").size)
         assertTrue(runCatching { repository.setRetentionDays("scope-retention", 7, now) }.isFailure)
     }
 }

@@ -28,3 +28,7 @@
 | Отмена | До исполнения команда не применяется; после внешней отправки исход выясняется, а не объявляется отменённым. |
 
 Перечень инструментов, окончательная матрица прав и отдельные UX-сценарии остаются в MEM-01.10–01.13; эта таблица не является результатом тестов.
+
+## Implementation addendum ACT-0105 · displayed local outcomes
+
+Secretary now displays an encrypted local result card for allowlisted write-tool observations, with applied/failed/needs-confirmation/unknown status, safe code and an optional validated app UUID. Opening the source shows the stored user/assistant turn; opening a related route is navigation only. “Prepare correction” fills an editable draft and leaves submission to the user, so existing cloud consent, tool policy, version checks and confirmation behavior still run. The card is not an Undo implementation and does not expand model authority. UI and persistence tests cover the synthetic applied path; the migration probe compiles, but real SQLCipher Android migration and TalkBack remain unverified.
