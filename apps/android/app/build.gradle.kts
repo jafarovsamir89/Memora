@@ -19,8 +19,8 @@ android {
         applicationId = "ai.memora.app"
         minSdk = 26
         targetSdk = 36
-        versionCode = 43
-        versionName = "1.1.21-appcheck-token-input"
+        versionCode = 45
+        versionName = "1.1.23-voice-task-reminders"
         testInstrumentationRunner = "ai.memora.app.GeminiSyntheticProbe"
     }
     buildFeatures { compose = true }

@@ -935,14 +935,26 @@ internal class LocalMemoryTools(private val repository: ProtectedDomainRepositor
     }
 
     private inner class CreateTask : AgentToolHandler {
-        override val descriptor = AgentToolDescriptor("create_task", 1, ToolAccess.PERSISTED_MEMORY,
+        override val descriptor = AgentToolDescriptor("create_task", 2, ToolAccess.PERSISTED_MEMORY,
             ToolEffect.WRITE, runtimeEnabled = true)
         override suspend fun prepare(call: AgentModelToolCall, turn: AgentTurnRequest, commandId: String): ToolPreparation {
             val title = call.arguments["title"] as? String ?: return ToolPreparation.Rejected("invalid_title")
             if (title.isBlank() || title.length > 200) return ToolPreparation.Rejected("invalid_task")
-            val dueLocal = (call.arguments["due_local"] as? String)?.trim()?.takeIf { it.isNotEmpty() }
             val dueZone = (call.arguments["zone_id"] as? String)?.trim()?.takeIf { it.isNotEmpty() } ?: "Asia/Baku"
-            val remind = call.arguments["remind"] as? Boolean ?: false
+            val reminderMinutes = call.arguments["remind_in_minutes"]?.let { raw ->
+                val number = raw as? Number ?: return ToolPreparation.Rejected("invalid_reminder_interval")
+                val exact = runCatching { java.math.BigDecimal(number.toString()).intValueExact() }.getOrNull()
+                    ?: return ToolPreparation.Rejected("invalid_reminder_interval")
+                if (exact !in 1..525_600) return ToolPreparation.Rejected("invalid_reminder_interval")
+                exact
+            }
+            val absoluteDueLocal = (call.arguments["due_local"] as? String)?.trim()?.takeIf { it.isNotEmpty() }
+            if (reminderMinutes != null && absoluteDueLocal != null) return ToolPreparation.Rejected("conflicting_reminder_time")
+            val dueLocal = reminderMinutes?.let {
+                ai.memora.app.domain.TaskReminderTime.resolveRelative(it, dueZone, java.time.Instant.now())
+                    ?: return ToolPreparation.Rejected("invalid_reminder_interval")
+            } ?: absoluteDueLocal
+            val remind = reminderMinutes != null || (call.arguments["remind"] as? Boolean ?: false)
             val person = (call.arguments["person_label"] as? String)?.trim()?.takeIf { it.isNotEmpty() }
             val project = (call.arguments["project_label"] as? String)?.trim()?.takeIf { it.isNotEmpty() }
             if (remind && dueLocal == null) return ToolPreparation.Rejected("reminder_requires_due_time")

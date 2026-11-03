@@ -78,7 +78,7 @@ object TaskReminders {
         val notification = Notification.Builder(context, CHANNEL)
             .setSmallIcon(R.drawable.ic_memora)
             .setContentTitle(context.getString(R.string.reminder_title))
-            .setContentText(context.getString(R.string.reminder_body))
+            .setContentText(task.title.take(180))
             .setVisibility(Notification.VISIBILITY_PRIVATE)
             .setContentIntent(open).setAutoCancel(true).build()
         manager.notify(task.id, 0, notification)

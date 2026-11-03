@@ -26,7 +26,7 @@ class AgentToolCatalogTest {
         assertEquals(expected, contracts.map { it.name }.toSet())
         assertEquals(contracts.size, contracts.map { it.name to it.version }.distinct().size)
         contracts.forEach { contract ->
-            assertEquals(if (contract.name == "save_memory_episode") 2 else 1, contract.version)
+            assertEquals(if (contract.name in setOf("save_memory_episode", "create_task")) 2 else 1, contract.version)
             assertEquals(1, contract.result.version)
             assertNotNull(contract.description.takeIf(String::isNotBlank))
             assertEquals(contract.parameters.size, contract.parameters.map { it.name }.distinct().size)
@@ -53,6 +53,10 @@ class AgentToolCatalogTest {
         val editTask = requireNotNull(AgentToolCatalog.find("edit_task", 1))
         assertEquals(setOf("task_id"), editTask.parameters.filterNot { it.optional }.map { it.name }.toSet())
         assertEquals(7, editTask.optionalParameters.size)
+
+        val createTask = requireNotNull(AgentToolCatalog.find("create_task", 2))
+        assertTrue(createTask.optionalParameters.contains("remind_in_minutes"))
+        assertEquals(AgentToolValueType.INTEGER, createTask.parameters.single { it.name == "remind_in_minutes" }.type)
 
         val readMoney = requireNotNull(AgentToolCatalog.find("search_money", 1))
         assertTrue(readMoney.parameters.all { it.optional })
