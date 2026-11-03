@@ -20,7 +20,7 @@ APK v40 / `1.1.18-person-sources`, versionCode 40, Room schema 15; SHA-256 `A892
 
 Владелец сообщил, что сейчас не может выполнить live Gemini-проверку. API-вызов не делался; App Check на втором устройстве остаётся неподтверждённой причиной отказа. Нативная/owner acceptance, real DB migration/restart readback, TalkBack, semantic retrieval, remaining M20 scenarios и release readiness открыты.
 
-Код/документы ACT-0125 подготовлены к Git handoff; следующий шаг после этой записи — зафиксировать и отправить пакет, сверить remote HEAD, затем продолжать следующий доступный M20-03/04/05 срез без касания пользовательской БД.
+Код и синхронизированные статусные документы ACT-0125 зафиксированы коммитом `266adc309b5949a61ff99f80e3a67308e438ec9d` (`feat(android): open case sources from person timeline`) и отправлены в `origin/main`. После `git fetch` local HEAD, `origin/main` и `git ls-remote origin refs/heads/main` совпали; рабочее дерево было чистым до этой итоговой handoff-записи. Следующий шаг — продолжать доступный M20-03/04/05 срез без касания пользовательской БД.
 
 **Архивный срез ACT-0124:** v39/schema 15 показывал persisted same-scope `domain_link` associations к людям/проектам/заметкам с навигацией в том же dialog. Тогда полный прогон дал 54 suites / 273 tests; APK SHA `A9799059B7A3C4042BFD636A578D96EABCBD8E0FAAD835CA852701B15F0E29FC`. Устройство при первой проверке было недоступно, поэтому v39 не устанавливался; эти сведения относятся к состоянию до ACT-0125.
 
