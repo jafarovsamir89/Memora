@@ -695,6 +695,8 @@ internal interface ProtectedStoreDao {
     @androidx.room.Insert(onConflict = androidx.room.OnConflictStrategy.ABORT) suspend fun insertDomainRevision(row: DomainRevisionRow)
     @androidx.room.Query("SELECT * FROM domain_revision WHERE objectId=:id ORDER BY version") suspend fun domainRevisions(id: String): List<DomainRevisionRow>
     @androidx.room.Query("SELECT l.* FROM domain_link l INNER JOIN domain_object f ON f.objectId=l.fromId AND f.scopeId=l.scopeId INNER JOIN domain_object t ON t.objectId=l.toId AND t.scopeId=l.scopeId WHERE l.scopeId=:scope AND l.deletedAt IS NULL AND f.deletedAt IS NULL AND t.deletedAt IS NULL ORDER BY l.linkId") suspend fun activeLinks(scope: String): List<DomainLinkRow>
+    @androidx.room.Query("SELECT l.* FROM domain_link l INNER JOIN domain_object f ON f.objectId=l.fromId AND f.scopeId=l.scopeId INNER JOIN domain_object t ON t.objectId=l.toId AND t.scopeId=l.scopeId WHERE l.scopeId=:scope AND (l.fromId=:objectId OR l.toId=:objectId) AND l.deletedAt IS NULL AND f.deletedAt IS NULL AND t.deletedAt IS NULL ORDER BY l.linkId LIMIT :limit")
+    suspend fun activeLinksForObject(scope: String, objectId: String, limit: Int): List<DomainLinkRow>
     @androidx.room.Insert(onConflict = androidx.room.OnConflictStrategy.ABORT) suspend fun insertDomainLink(row: DomainLinkRow)
     @androidx.room.Query("SELECT * FROM user_table WHERE scopeId=:scope AND tableId=:id") suspend fun userTable(scope: String, id: String): UserTableRow?
     @androidx.room.Query("SELECT * FROM user_table WHERE scopeId=:scope AND deletedAt IS NULL ORDER BY title, tableId") suspend fun activeUserTables(scope: String): List<UserTableRow>

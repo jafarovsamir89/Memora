@@ -29,6 +29,7 @@ internal data class DomainHit(val objectId: String, val kind: DomainKind, val ti
     val sourceRevisionId: String?, val evidenceRevisionId: String, val evidenceStartUtf16: Int,
     val evidenceEndUtf16: Int, val evidenceText: String)
 internal data class DeletePreview(val objectId: String, val expectedVersion: Long, val linkedIds: List<String>)
+internal data class LinkedDomainObject(val link: DomainLinkRow, val objectRecord: DomainObjectRow)
 internal data class ImportPreview(val tableId: String, val schemaVersion: Long, val rows: List<Pair<String, Map<String, Any?>>>)
 internal data class TableSnapshot(val table: UserTableRow, val columns: List<TableColumnRow>, val rows: List<TableDataRow>)
 internal data class CalendarInput(val eventId: String, val scopeId: String, val title: String, val startLocal: String, val endLocal: String?, val zoneId: String, val precision: String)
@@ -344,6 +345,17 @@ internal class ProtectedDomainRepository(private val db: AgentDatabase) {
     suspend fun domainObjects(scope: String, kind: DomainKind, limit: Int = 200): List<DomainObjectRow> {
         require(scope.isNotBlank() && limit in 1..500)
         return dao.activeDomainObjects(scope, kind.name, limit)
+    }
+
+    /** Returns only persisted, active, same-scope links. It never infers identity from a matching name. */
+    suspend fun linkedObjects(scope: String, objectId: String, limit: Int = 50): List<LinkedDomainObject> {
+        require(scope.isNotBlank() && objectId.isNotBlank() && limit in 1..100)
+        val source = dao.domainObject(scope, objectId)?.takeIf { it.deletedAt == null } ?: return emptyList()
+        return dao.activeLinksForObject(scope, source.objectId, limit).mapNotNull { link ->
+            val linkedId = if (link.fromId == source.objectId) link.toId else link.fromId
+            dao.domainObject(scope, linkedId)?.takeIf { it.deletedAt == null }
+                ?.let { LinkedDomainObject(link, it) }
+        }
     }
 
     suspend fun createObject(scope: String, id: String, kind: DomainKind, title: String, body: String?,

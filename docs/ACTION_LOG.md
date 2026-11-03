@@ -1,5 +1,13 @@
 # Memora — лог действий
 
+## ACT-0124 - 2026-11-03 - Explicit relationships in the person card
+
+Added a scope-filtered DAO query and read-only `ProtectedDomainRepository.linkedObjects` projection over existing active `domain_link` rows. Person detail now shows only explicitly persisted connections to people/projects/notes, with localized kind/relation labels. Opening a connected object replaces the current detail content in the same dialog; a local detail stack restores the person when the user presses Back. No same-name matching or schema migration was introduced; task/calendar person labels remain unlinked strings and are not presented as canonical relations.
+
+Added a synthetic Compose scenario with linked and unlinked projects. It verifies only the linked record appears, opens its title/body, and returns to the person card. Screenshot iteration exposed an initial nested-dialog overlay; that implementation was removed in favor of the single-dialog navigation. The test initially asserted before the person section's async refresh; it now waits for the scoped readback. Full combined Gradle command passed with 54 suites / 273 JVM tests, 0 failures/errors/skips; `assembleDebug`, `assembleDebugAndroidTest`, `compileDebugAndroidTestKotlin` and `lintDebug` passed; lint 0 errors / 57 warnings / 0 informational. After adding only an additional screenshot invocation, the full JVM suite was rerun and again passed 273/273; focused `CasesAndPersonCardTest` passed 3/3. Production sources/resources did not change after the combined build. Synthetic screenshots were generated; Robolectric's renderer shows underlying windows without system dim, so no device visual acceptance is claimed.
+
+APK v39 / `1.1.17-person-links`, versionCode 39, Room schema 15, SHA-256 `A9799059B7A3C4042BFD636A578D96EABCBD8E0FAAD835CA852701B15F0E29FC`; matching backup `C:\memora-backups\Memora-v39-1.1.17-person-links-2026-11-03.apk`. ADB listed no devices; v39 was not installed. User database was not opened/read/cleared. No live Gemini test was run; second-device App Check remains unverified. M20-03/05/08 and overall release remain partial.
+
 ## ACT-0123 - 2026-11-03 - Git handoff ACT-0122
 
 Implementation and synchronized status were committed as 1671ce257e06ca5cbaa35fd531026eec506d5506 (feat(android): unify scoped memory retrieval) and pushed to origin/main. git fetch, local HEAD, git ls-remote and the remote branch all matched; worktree was clean at handoff. v38 remains installed over v37 without clearing data; backup and validation evidence are recorded in ACT-0122. The owner cannot connect the second phone right now, so its debug App Check token and Gemini call remain unverified. Continue M20-04/08 and independent UI/product acceptance work.

@@ -345,6 +345,16 @@
     <string name="case_update_error">Dəyişiklik saxlanmadı. Yenidən yükləyin.</string>
     <string name="case_timeline_update">İş yeniləndi</string>
     <string name="person_timeline">Şəxsin tarixçəsi</string>
+    <string name="person_related_records">Bağlı qeydlər</string>
+    <string name="person_related_kind_person">Şəxs</string>
+    <string name="person_related_kind_project">Layihə</string>
+    <string name="person_related_kind_note">Qeyd</string>
+    <string name="person_related_back">Geri</string>
+    <string name="person_related_relation_related">əlaqəlidir</string>
+    <string name="person_related_relation_works_on">üzərində işləyir</string>
+    <string name="person_related_relation_owes">borcludur</string>
+    <string name="person_related_relation_family">ailə əlaqəsi</string>
+    <string name="person_related_relation_part_of">hissəsidir</string>
     <string name="finance_event_reversed">Ləğv edilib</string>
     <string name="case_source_calendar">Təqvim qeydi</string>
     <string name="notes_title">Qeydlər</string>

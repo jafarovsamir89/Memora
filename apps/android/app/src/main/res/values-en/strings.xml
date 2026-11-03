@@ -345,6 +345,16 @@
     <string name="case_update_error">The change could not be saved. Reload the case.</string>
     <string name="case_timeline_update">Case updated</string>
     <string name="person_timeline">Person timeline</string>
+    <string name="person_related_records">Linked records</string>
+    <string name="person_related_kind_person">Person</string>
+    <string name="person_related_kind_project">Project</string>
+    <string name="person_related_kind_note">Note</string>
+    <string name="person_related_back">Back</string>
+    <string name="person_related_relation_related">related to</string>
+    <string name="person_related_relation_works_on">works on</string>
+    <string name="person_related_relation_owes">owes</string>
+    <string name="person_related_relation_family">family of</string>
+    <string name="person_related_relation_part_of">part of</string>
     <string name="finance_event_reversed">Reversed</string>
     <string name="case_source_calendar">Calendar event</string>
     <string name="notes_title">Notes</string>

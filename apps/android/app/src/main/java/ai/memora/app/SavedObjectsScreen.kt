@@ -27,6 +27,7 @@ import ai.memora.app.data.protectedstore.CaseSnapshot
 import ai.memora.app.data.protectedstore.DomainKind
 import ai.memora.app.data.protectedstore.DomainObjectRow
 import ai.memora.app.data.protectedstore.FinancePersonIdentityChoices
+import ai.memora.app.data.protectedstore.LinkedDomainObject
 import ai.memora.app.data.protectedstore.PersonIdentityLinkRow
 import ai.memora.app.data.protectedstore.ProtectedCaseRepository
 import ai.memora.app.data.protectedstore.ProtectedDomainRepository
@@ -53,6 +54,7 @@ internal fun SavedObjectsScreen(kind: DomainKind) {
     var records by remember(kind) { mutableStateOf<List<DomainObjectRow>>(emptyList()) }
     var query by remember(kind) { mutableStateOf("") }
     var selected by remember { mutableStateOf<DomainObjectRow?>(null) }
+    var detailStack by remember { mutableStateOf<List<DomainObjectRow>>(emptyList()) }
     var loading by remember(kind) { mutableStateOf(true) }
     var failed by remember(kind) { mutableStateOf(false) }
 
@@ -99,7 +101,7 @@ internal fun SavedObjectsScreen(kind: DomainKind) {
             filtered.isEmpty() -> EmptyState(s(ai.memora.app.R.string.working_no_data), s(ai.memora.app.R.string.saved_objects_no_matches))
             else -> filtered.forEach { record ->
                 MemoraCard(
-                    onClick = { selected = record },
+                    onClick = { selected = record; detailStack = emptyList() },
                     modifier = Modifier.testTag("saved_object_${record.objectId}"),
                 ) {
                     Text(record.title, color = colors.ink, style = androidx.compose.material3.MaterialTheme.typography.titleMedium)
@@ -116,8 +118,8 @@ internal fun SavedObjectsScreen(kind: DomainKind) {
 
     selected?.let { record ->
         AlertDialog(
-            onDismissRequest = { selected = null },
-            title = { Text(record.title) },
+            onDismissRequest = { selected = null; detailStack = emptyList() },
+            title = { Text(record.title, modifier = Modifier.testTag("saved_object_detail_title")) },
             text = {
                 Column(Modifier.heightIn(max = 420.dp).verticalScroll(rememberScrollState())) {
                     val body = record.body?.takeIf(String::isNotBlank)
@@ -125,11 +127,23 @@ internal fun SavedObjectsScreen(kind: DomainKind) {
                     if (body != null && body.length > 20_000) {
                         Text(s(ai.memora.app.R.string.saved_objects_details_truncated), modifier = Modifier.padding(top = 8.dp), color = colors.muted)
                     }
-                    if (kind == DomainKind.PERSON) PersonCardSections(record, scopeId, repository,
-                        remember(database) { ProtectedCaseRepository(database) })
+                    if (record.kind == DomainKind.PERSON.name) PersonCardSections(record, scopeId, repository,
+                        remember(database) { ProtectedCaseRepository(database) },
+                        onOpenLinkedObject = { linked -> detailStack = detailStack + record; selected = linked })
                 }
             },
-            confirmButton = { TextButton(onClick = { selected = null }) { Text(s(ai.memora.app.R.string.close)) } },
+            confirmButton = {
+                if (detailStack.isNotEmpty()) {
+                    TextButton(modifier = Modifier.testTag("saved_object_detail_back"), onClick = {
+                        selected = detailStack.last()
+                        detailStack = detailStack.dropLast(1)
+                    }) { Text(s(ai.memora.app.R.string.person_related_back)) }
+                } else {
+                    TextButton(modifier = Modifier.testTag("saved_object_detail_close"), onClick = { selected = null }) {
+                        Text(s(ai.memora.app.R.string.close))
+                    }
+                }
+            },
         )
     }
 }
@@ -140,12 +154,14 @@ private fun PersonCardSections(
     scopeId: String,
     domainRepository: ProtectedDomainRepository,
     caseRepository: ProtectedCaseRepository,
+    onOpenLinkedObject: (DomainObjectRow) -> Unit,
 ) {
     val coroutineScope = rememberCoroutineScope()
     var refreshVersion by remember(person.objectId) { mutableIntStateOf(0) }
     var candidates by remember(person.objectId) { mutableStateOf<List<FinancePersonIdentityChoices>>(emptyList()) }
     var historyByPersonId by remember(person.objectId) { mutableStateOf<Map<String, ai.memora.app.data.protectedstore.FinanceHistory>>(emptyMap()) }
     var relatedCases by remember(person.objectId) { mutableStateOf<List<CaseSnapshot>>(emptyList()) }
+    var relatedObjects by remember(person.objectId) { mutableStateOf<List<LinkedDomainObject>>(emptyList()) }
     var loading by remember(person.objectId) { mutableStateOf(true) }
     var pendingLink by remember { mutableStateOf<FinancePersonIdentityChoices?>(null) }
     var pendingUnlink by remember { mutableStateOf<PersonIdentityLinkRow?>(null) }
@@ -167,6 +183,7 @@ private fun PersonCardSections(
                     snapshot.participants.any { it.objectId == person.objectId }
                 }
             }
+            relatedObjects = domainRepository.linkedObjects(scopeId, person.objectId)
         } catch (_: Exception) {
             actionFailed = true
         } finally {
@@ -247,6 +264,24 @@ private fun PersonCardSections(
         }
     }.distinctBy { it.id }.sortedWith(compareByDescending<PersonStoryEntry> { it.sortOrder }.thenBy { it.id }).take(40)
 
+    if (relatedObjects.isNotEmpty()) {
+        Text(s(ai.memora.app.R.string.person_related_records), modifier = Modifier.padding(top = 18.dp),
+            style = androidx.compose.material3.MaterialTheme.typography.titleSmall, color = colors.ink)
+        relatedObjects.forEach { linked ->
+            val target = linked.objectRecord
+            MemoraCard(
+                modifier = Modifier.padding(top = 8.dp).testTag("person_linked_object_${target.objectId}"),
+                onClick = { onOpenLinkedObject(target) },
+                contentPadding = 16.dp,
+            ) {
+                Text(target.title, color = colors.ink,
+                    style = androidx.compose.material3.MaterialTheme.typography.titleSmall)
+                Text("${personRelatedKindLabel(target.kind)} · ${personRelatedRelationLabel(linked.link.relation)}",
+                    color = colors.muted, style = androidx.compose.material3.MaterialTheme.typography.bodySmall)
+            }
+        }
+    }
+
     if (personStory.isNotEmpty()) {
         Text(s(ai.memora.app.R.string.person_timeline), modifier = Modifier.padding(top = 18.dp),
             style = androidx.compose.material3.MaterialTheme.typography.titleSmall, color = colors.ink)
@@ -317,6 +352,22 @@ private fun PersonCardSections(
         )
     }
 }
+
+@Composable
+private fun personRelatedKindLabel(kind: String): String = s(when (kind) {
+    DomainKind.PERSON.name -> ai.memora.app.R.string.person_related_kind_person
+    DomainKind.PROJECT.name -> ai.memora.app.R.string.person_related_kind_project
+    else -> ai.memora.app.R.string.person_related_kind_note
+})
+
+@Composable
+private fun personRelatedRelationLabel(relation: String): String = s(when (relation) {
+    "works_on" -> ai.memora.app.R.string.person_related_relation_works_on
+    "owes" -> ai.memora.app.R.string.person_related_relation_owes
+    "family_of" -> ai.memora.app.R.string.person_related_relation_family
+    "part_of" -> ai.memora.app.R.string.person_related_relation_part_of
+    else -> ai.memora.app.R.string.person_related_relation_related
+})
 
 @Composable
 private fun caseStatusLabelForPerson(status: String): String = s(when (status) {

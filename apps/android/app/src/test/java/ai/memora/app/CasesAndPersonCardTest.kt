@@ -1,6 +1,9 @@
 package ai.memora.app
 
+import android.graphics.Bitmap
+import android.graphics.Canvas
 import android.content.Context
+import android.view.inspector.WindowInspector
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.ui.test.*
 import androidx.compose.ui.test.junit4.v2.createComposeRule
@@ -18,9 +21,14 @@ import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
+import org.robolectric.annotation.GraphicsMode
+import org.robolectric.annotation.LooperMode
+import java.io.File
 
 @RunWith(RobolectricTestRunner::class)
-@Config(sdk = [33])
+@Config(sdk = [33], qualifiers = "w412dp-h915dp-xhdpi")
+@GraphicsMode(GraphicsMode.Mode.NATIVE)
+@LooperMode(LooperMode.Mode.PAUSED)
 class CasesAndPersonCardTest {
     @get:Rule(order = 0) val databaseRule = UiAgentDatabaseRule()
     @get:Rule(order = 1) val compose = createComposeRule()
@@ -106,5 +114,63 @@ class CasesAndPersonCardTest {
         compose.waitUntil(10_000) { compose.onAllNodesWithTag("person_story_synthetic-samir-receipt").fetchSemanticsNodes().isNotEmpty() }
         compose.onNodeWithTag("person_story_synthetic-samir-receipt").performScrollTo().assertIsDisplayed()
         compose.onNodeWithText("100 AZN").assertExists()
+    }
+
+    @Test fun personCardShowsOnlyExplicitlyLinkedRecordsAndOpensTheirSource() = runBlocking<Unit> {
+        val context = ApplicationProvider.getApplicationContext<Context>()
+        val scope = AgentVoiceTurnProcessor(context).conversationScopeId()
+        val repository = ProtectedDomainRepository(databaseRule.database)
+        repository.createObject(scope, "synthetic-linked-person", DomainKind.PERSON, "Synthetic Samir", null, null,
+            "2026-11-03T10:00:00Z")
+        repository.createObject(scope, "synthetic-linked-project", DomainKind.PROJECT, "Synthetic Workshop", "Fictional project details", null,
+            "2026-11-03T10:01:00Z")
+        repository.createObject(scope, "synthetic-unlinked-project", DomainKind.PROJECT, "Unlinked Workshop", null, null,
+            "2026-11-03T10:02:00Z")
+        repository.link(scope, "synthetic-person-project-link", "synthetic-linked-person", "synthetic-linked-project", "works_on")
+
+        compose.setContent {
+            CompositionLocalProvider(LocalAgentDatabaseOverride provides databaseRule.database) {
+                CompositionLocalProvider(LocalStrings provides context.resources) {
+                    MemoraTheme("light") { SavedObjectsScreen(DomainKind.PERSON) }
+                }
+            }
+        }
+        compose.waitUntil(10_000) {
+            compose.onAllNodesWithTag("saved_object_synthetic-linked-person").fetchSemanticsNodes().isNotEmpty()
+        }
+        compose.onNodeWithTag("saved_object_synthetic-linked-person").performScrollTo().performClick()
+        compose.waitUntil(10_000) {
+            compose.onAllNodesWithTag("person_linked_object_synthetic-linked-project").fetchSemanticsNodes().isNotEmpty()
+        }
+        compose.onNodeWithTag("person_linked_object_synthetic-linked-project").assertExists()
+        compose.onNodeWithText("Unlinked Workshop").assertDoesNotExist()
+        compose.onNodeWithTag("person_linked_object_synthetic-linked-project").performScrollTo()
+        screenshot("18-person-card-linked-records")
+        compose.onNodeWithTag("person_linked_object_synthetic-linked-project").performScrollTo().performClick()
+        compose.onNodeWithTag("saved_object_detail_title").assertTextEquals("Synthetic Workshop")
+        compose.onNodeWithText("Fictional project details").assertExists()
+        screenshot("19-person-linked-project-detail")
+        compose.onNodeWithTag("saved_object_detail_back").performClick()
+        compose.onNodeWithTag("saved_object_detail_title").assertTextEquals("Synthetic Samir")
+        compose.waitUntil(10_000) {
+            compose.onAllNodesWithTag("person_linked_object_synthetic-linked-project").fetchSemanticsNodes().isNotEmpty()
+        }
+        compose.onNodeWithTag("saved_object_detail_close").performClick()
+    }
+
+    private fun screenshot(name: String) {
+        compose.waitForIdle()
+        val root = System.getProperty("memora.screenshots") ?: error("Screenshot output path is missing")
+        val output = File(root, "$name.png")
+        output.parentFile?.mkdirs()
+        compose.runOnIdle {
+            val views = WindowInspector.getGlobalWindowViews().filter { it.isShown && it.width > 0 && it.height > 0 }
+            check(views.isNotEmpty()) { "No visible Android window to render" }
+            val bitmap = Bitmap.createBitmap(views.maxOf { it.width }, views.maxOf { it.height }, Bitmap.Config.ARGB_8888)
+            val canvas = Canvas(bitmap)
+            views.forEach { it.draw(canvas) }
+            output.outputStream().use { bitmap.compress(Bitmap.CompressFormat.PNG, 100, it) }
+            bitmap.recycle()
+        }
     }
 }

@@ -1,6 +1,16 @@
 # M20-08 Native validation matrix
 
-Status as of 2026-11-03, APK v38 / 1.1.16-unified-memory, Room schema 15. This matrix records existing evidence and remaining work; it does not turn host tests into device or live-provider acceptance.
+Status as of 2026-11-03, APK v39 / 1.1.17-person-links, Room schema 15. This matrix records existing evidence and remaining work; it does not turn host tests into device or live-provider acceptance.
+
+## ACT-0124 update
+
+Person-card relationships now come from persisted, active `domain_link` rows in the current scope. The query excludes deleted/cross-scope endpoints and is bounded; the card does not infer links from matching names or treat task/calendar labels as canonical identity. Explicitly linked people/projects/notes are shown with localized labels. Selecting one replaces the detail content in the existing dialog and a back stack returns to the prior person. No schema or finance ledger change.
+
+A synthetic Compose test creates a linked and an unlinked project, checks that only the explicit same-scope link is shown, opens the linked record and returns. Full host command:
+
+    .\gradlew.bat :app:testDebugUnitTest :app:assembleDebug :app:assembleDebugAndroidTest :app:compileDebugAndroidTestKotlin :app:lintDebug --no-daemon --console=plain --max-workers=2
+
+Combined command result (the full JVM suite was rerun after the final screenshot-only test edit): 54 suites / 273 tests, 0 failures/errors/skips; app and AndroidTest APKs assembled, AndroidTest Kotlin compiled, lint 0 errors / 57 warnings / 0 informational. The focused `CasesAndPersonCardTest` also passed 3/3. Synthetic Compose renders were reviewed; Robolectric composites underlying windows without the system dim layer, so this is host visual/navigation evidence only. APK v39 SHA-256 `A9799059B7A3C4042BFD636A578D96EABCBD8E0FAAD835CA852701B15F0E29FC`; matching backup `C:\memora-backups\Memora-v39-1.1.17-person-links-2026-11-03.apk`. `adb devices -l` was empty, so install/device/TalkBack/owner acceptance remain open. No live Gemini request or app database access.
 
 ## ACT-0122 update
 

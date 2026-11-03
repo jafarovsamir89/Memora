@@ -345,6 +345,16 @@
     <string name="case_update_error">Не удалось сохранить изменение. Обновите дело.</string>
     <string name="case_timeline_update">Дело обновлено</string>
     <string name="person_timeline">История человека</string>
+    <string name="person_related_records">Связанные записи</string>
+    <string name="person_related_kind_person">Человек</string>
+    <string name="person_related_kind_project">Проект</string>
+    <string name="person_related_kind_note">Заметка</string>
+    <string name="person_related_back">Назад</string>
+    <string name="person_related_relation_related">связано</string>
+    <string name="person_related_relation_works_on">работает над</string>
+    <string name="person_related_relation_owes">должен</string>
+    <string name="person_related_relation_family">родственная связь</string>
+    <string name="person_related_relation_part_of">часть</string>
     <string name="finance_event_reversed">Отменено</string>
     <string name="case_source_calendar">Событие календаря</string>
     <string name="notes_title">Заметки</string>
