@@ -12,7 +12,15 @@
 
 ## Актуальное состояние
 
-**Текущий этап ACT-0110, 2026-11-03:** APK v33 / `1.1.11-work-analytics`, Room schema 12, содержит частичный M20-06 с finance и work-status read-only tools. Полный host suite: 250/250 JVM tests; debug/AndroidTest APK, AndroidTest Kotlin compile и lint (0 errors, 55 warnings, 3 hints). Backup совпадает по SHA. Код и инженерные документы отправлены в `origin/main` коммитом `16bd87aad24a0442817e41e16f1a03b882c9d18c`; `git fetch`, локальный HEAD и `git ls-remote` совпали, дерево чистое на handoff. ADB пуст: устройство, SQLCipher Android runtime, live Gemini, TalkBack и полевая приёмка не проверялись; пользовательская БД не тронута. M20-05/06 частичны; следующий независимый кодовый этап — opt-in local attention/follow-through M20-07. Recovery/export, identity aliases, cross-domain episodic memory и native gates остаются открыты.
+**Текущий этап ACT-0111, 2026-11-03:** APK v34 / 1.1.12-attention, Room schema 13; M20-07 реализован частично: opt-in локальные подсказки из задач с реальными сроками, календарных событий и открытых дел; quiet hours, snooze/dismiss, date dedupe и восстановление расписания. Источники не содержат сроков долгов и незакрытых вопросов. Полный host baseline: 257/257 JVM tests, debug/AndroidTest builds, AndroidTest Kotlin compile; lint 0 errors/56 warnings. APK и backup C:\memora-backups\Memora-v34-1.1.12-attention-verified-2026-11-03.apk совпадают по SHA-256 7BA970ACF774128817BF3B6006B025D9BA22A5FD1DE76A9F30864169CF632503; synthetic screenshots проверены. adb.exe найден в Android SDK, но adb devices -l пуст, поэтому device install, SQLCipher migration 12 to 13, notification delivery, TalkBack, live Gemini и owner acceptance открыты; пользовательская БД не трогалась. Следующий этап - M20-08 host validation; device/native/release gates остаются открыты.
+
+### ACT-0111 - 2026-11-03 - M20-07 opt-in local attention
+
+Добавлен opt-in attention_settings в Room schema 13 и локальный engine: подсказки основаны на сроках задач, календарных событиях (включая all-day) и открытых делах; исходный текст источников не выводится. Добавлены quiet hours, generic notifications с нейтральным lock-screen текстом, dismiss today, snooze на час, date dedupe, расписание/reconcile при старте, reboot, обновлении приложения и смене времени/timezone. Home показывает не более трёх grounded подсказок. По умолчанию уведомления выключены; разрешение Android 13+ запрашивается только при включении. ADR-012 фиксирует решение.
+
+Ограничения: источники не содержат due date для финансовых долгов и модели незакрытых вопросов, поэтому такие напоминания не создаются. База пользователя не открывалась. Аппаратная доставка, SQLCipher migration 12 to 13, permission denial, TalkBack и field acceptance не проверены. В текущем shell adb не найден.
+
+Полный Gradle baseline :app:testDebugUnitTest :app:assembleDebug :app:assembleDebugAndroidTest :app:compileDebugAndroidTestKotlin :app:lintDebug --no-daemon --console=plain --max-workers=1 завершился BUILD SUCCESSFUL: 48 suites / 257 tests, failures/errors/skipped = 0; lint 0 errors, 56 warnings.
 
 ### ACT-0109 · 2026-11-03 · M20-06 cross-domain work status and consistent finance snapshot
 

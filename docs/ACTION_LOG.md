@@ -1,5 +1,11 @@
 # Memora — лог действий
 
+## ACT-0111 - 2026-11-03 - M20-07 opt-in local attention
+
+Добавлен opt-in локальный attention engine и Room migration 12 to 13. Подсказки используют сроки задач, календарные события и открытые дела; ограничены тремя grounded items. Добавлены quiet hours, generic notification/neutral lock screen, dismiss, snooze, date dedupe, lifecycle/time-change schedule reconcile и локализованные permission/error states. Финансовые сроки и pending questions не моделируются. Настройки выключены по умолчанию; пользовательская база не читалась и не очищалась.
+
+Проверки: полный Gradle baseline  BUILD SUCCESSFUL; 48 suites / 257 tests, failures/errors/skipped = 0; lint 0 errors/56 warnings; debug/AndroidTest APK builds и Kotlin compile прошли. Host screenshots 06-settings-dark.png и 14-today-with-local-data.png reviewed; schema 13 JSON validated. APK/backup: 31,354,049 bytes, SHA-256 7BA970ACF774128817BF3B6006B025D9BA22A5FD1DE76A9F30864169CF632503; backup C:\memora-backups\Memora-v34-1.1.12-attention-verified-2026-11-03.apk. Code commit bdc61cee2096afe7e65e880af9c9bb7a2eeb80e2; docs commit and push pending. adb.exe found in Android SDK; adb devices -l returned no devices; migration/notification delivery/Gemini/owner acceptance open; M20-07 and release readiness not complete.
+
 ## ACT-0109 · 2026-11-03 · M20-06 аналитика дел и задач
 
 В добавление к v32 месячной финансовой аналитике добавлены read-only `summarize_work_status` и согласованный finance snapshot. Инструмент возвращает scoped текущие counts protected tasks и case status с ограниченными списками открытых задач/последних дел; указывает отсутствие task completion timestamps и запрещает выводить доход/стоимость/ROI только из этой выборки. Gemini instruction совмещает finance+work evidence при business question и явно ищет подарок/occasion в сохранённой памяти и связанных источниках при разрешённом consent. Finance events, adjustments и people читаются в одной `Room.withTransaction`. Room schema остаётся 12; записей инструменты не создают.
