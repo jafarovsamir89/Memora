@@ -10,6 +10,7 @@ import ai.memora.app.data.protectedstore.AgentDatabase
 import ai.memora.app.data.protectedstore.ProtectedConversationRepository
 import ai.memora.app.data.protectedstore.ProtectedDomainRepository
 import ai.memora.app.data.protectedstore.ProtectedMemoryRepository
+import ai.memora.app.data.protectedstore.ProtectedProfileMemoryRepository
 import ai.memora.app.data.protectedstore.RoomAgentRunJournal
 import ai.memora.app.agent.*
 import ai.memora.app.ai.configureAppCheck
@@ -78,7 +79,7 @@ class GeminiSyntheticProbe : Instrumentation() {
             ?.takeIf { it in setOf("gemini-3.1-flash-lite", "gemini-3.5-flash-lite", "gemini-3.8-flash") }
             ?: "gemini-3.5-flash-lite"
         agentE2ePhase = arguments?.getString("agentE2ePhase")?.takeIf { it in setOf("mutate", "verify", "cleanup") }
-        agentE2eScenario = arguments?.getString("agentE2eScenario")?.takeIf { it in setOf("finance", "episode") } ?: "finance"
+        agentE2eScenario = arguments?.getString("agentE2eScenario")?.takeIf { it in setOf("finance", "episode", "profile") } ?: "finance"
         syntheticAgentE2eAllowed = arguments?.getString("allowSyntheticAgentE2E") == "true"
         syntheticRunId = arguments?.getString("syntheticRunId")?.takeIf {
             it.matches(Regex("[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}"))
@@ -425,8 +426,28 @@ class GeminiSyntheticProbe : Instrumentation() {
                 var memoryConsent = true
                 val policy = ConsentAgentRuntimePolicy(cloudConsent = { true }, memoryConsent = { memoryConsent })
                 val languages = onlyCase?.takeIf { it in setOf("az", "ru") }?.let { listOf(it) } ?: listOf("az", "ru")
+                val profileMemory = ProtectedProfileMemoryRepository(db)
 
-                if (agentE2eScenario == "episode" && phase == "mutate") {
+                if (agentE2eScenario == "profile" && phase == "mutate") {
+                    runSyntheticProfileFlow(runId, db, repository, conversations, journal, policy, profileMemory, results)
+                    results.putString("active_stage", "profile_consent_revoked_gate")
+                    memoryConsent = false
+                    val scope = syntheticUuid("$runId:profile:scope")
+                    val history = conversations.recentContext(scope, 12).map { AgentDialogueMessage(it.role, it.message.takeLast(4_000)) }
+                    val result = AgentOrchestrator(GeminiAgentModelGateway(), DefaultAgentToolRegistry(
+                        LocalMemoryTools(repository, ProtectedMemoryRepository(db), conversations = conversations,
+                            profileMemory = profileMemory).handlers()), policy, journal).run(AgentTurnRequest(
+                        syntheticUuid("$runId:profile:revoked-turn"), scope, syntheticUuid("$runId:profile:actor"), null,
+                        "az-AZ", "Yaddaşımda olan şəxsi seçimləri oxu.", AgentInputChannel.TEXT, history))
+                    check(result.status == AgentRunResultStatus.FAILED && result.code == "memory_consent_required" && result.toolResults.isEmpty()) {
+                        "synthetic_profile_revoked_consent_gate_failed"
+                    }
+                    results.putString("revoked_consent", "blocked_before_model_and_tools")
+                } else if (agentE2eScenario == "profile") {
+                    verifySyntheticProfileFlow(runId, db, repository, conversations, journal, policy, profileMemory, results)
+                    results.putString("restart_readback", "verified")
+                    results.putString("restart_search", "passed")
+                } else if (agentE2eScenario == "episode" && phase == "mutate") {
                     runSyntheticEpisodeFlow(runId, db, repository, conversations, journal, policy, results)
                     results.putString("active_stage", "episode_consent_revoked_gate")
                     memoryConsent = false
@@ -524,6 +545,61 @@ class GeminiSyntheticProbe : Instrumentation() {
         }
         results.putString("episode_save_readback", "verified")
         results.putString("episode_source_count", episode.sourceTurnIds.size.toString())
+    }
+
+    private suspend fun runSyntheticProfileFlow(runId: String, db: AgentDatabase,
+        repository: ProtectedDomainRepository, conversations: ProtectedConversationRepository,
+        journal: RoomAgentRunJournal, policy: ConsentAgentRuntimePolicy,
+        profileMemory: ProtectedProfileMemoryRepository, results: Bundle) {
+        val scope = syntheticUuid("$runId:profile:scope")
+        val actor = syntheticUuid("$runId:profile:actor")
+        val source = "Yadda saxla: gələcək cavablarında qısa və sadə izahları üstün tuturam."
+        results.putString("active_stage", "profile_live_save")
+        val save = runSyntheticTurn("az", 0, source, setOf("save_profile_fact"), scope, actor, "az-AZ", db,
+            repository, conversations, journal, policy, AgentInputChannel.TEXT, results, profileMemory)
+        check(save.toolResults.any { it.name == "save_profile_fact" && it.status == ToolObservationStatus.APPLIED }) {
+            "synthetic_profile_save_not_applied"
+        }
+        val stored = profileMemory.list(scope, "qısa sadə izah", 5).singleOrNull()
+            ?: error("synthetic_profile_save_readback_failed")
+        check(stored.sourceTurnIds.size == 1 && stored.revision == 1L && stored.category == "preference") {
+            "synthetic_profile_provenance_readback_failed"
+        }
+        results.putString("profile_save_readback", "verified")
+        results.putString("profile_source_count", stored.sourceTurnIds.size.toString())
+
+        results.putString("active_stage", "profile_live_search")
+        val lookup = runSyntheticTurn("az", 1,
+            "Mən gələcək cavablarında hansı üslubu üstün tuturam? Yaddaşındakı məlumatı yoxla.",
+            setOf("search_memory"), scope, actor, "az-AZ", db, repository, conversations, journal, policy,
+            AgentInputChannel.TEXT, results, profileMemory)
+        val answer = lookup.answer.orEmpty().lowercase(java.util.Locale.forLanguageTag("az-AZ"))
+        check(listOf("qısa", "sadə").all(answer::contains)) { "synthetic_profile_answer_semantics_failed" }
+        check(lookup.toolResults.any { it.name == "search_memory" && it.status == ToolObservationStatus.APPLIED }) {
+            "synthetic_profile_live_search_not_applied"
+        }
+        results.putString("profile_live_search", "passed")
+    }
+
+    private suspend fun verifySyntheticProfileFlow(runId: String, db: AgentDatabase,
+        repository: ProtectedDomainRepository, conversations: ProtectedConversationRepository,
+        journal: RoomAgentRunJournal, policy: ConsentAgentRuntimePolicy,
+        profileMemory: ProtectedProfileMemoryRepository, results: Bundle) {
+        val scope = syntheticUuid("$runId:profile:scope")
+        val actor = syntheticUuid("$runId:profile:actor")
+        results.putString("active_stage", "profile_restart_readback")
+        val stored = profileMemory.list(scope, "qısa sadə izah", 5).singleOrNull()
+            ?: error("synthetic_profile_restart_readback_failed")
+        check(stored.sourceTurnIds.size == 1 && stored.revision == 1L) { "synthetic_profile_restart_provenance_failed" }
+        results.putString("profile_restart_readback", "verified")
+        results.putString("active_stage", "profile_live_retrieval")
+        val result = runSyntheticTurn("az", 0,
+            "Əvvəl dediyim cavab tərcihimi xatırla və hansı olduğunu qısa de.",
+            setOf("search_memory"), scope, actor, "az-AZ", db, repository, conversations, journal, policy,
+            AgentInputChannel.TEXT, results, profileMemory)
+        val answer = result.answer.orEmpty().lowercase(java.util.Locale.forLanguageTag("az-AZ"))
+        check(listOf("qısa", "sadə").any(answer::contains)) { "synthetic_profile_restart_answer_semantics_failed" }
+        results.putString("profile_live_retrieval", "passed")
     }
 
     private suspend fun verifySyntheticEpisodeFlow(runId: String, db: AgentDatabase, repository: ProtectedDomainRepository,
@@ -625,9 +701,10 @@ class GeminiSyntheticProbe : Instrumentation() {
     private suspend fun runSyntheticTurn(language: String, index: Int, utterance: String, expectedTools: Set<String>,
         scope: String, actor: String, locale: String, db: AgentDatabase, repository: ProtectedDomainRepository,
         conversations: ProtectedConversationRepository, journal: RoomAgentRunJournal,
-        policy: ConsentAgentRuntimePolicy, channel: AgentInputChannel, results: Bundle): AgentRunResult {
+        policy: ConsentAgentRuntimePolicy, channel: AgentInputChannel, results: Bundle,
+        profileMemory: ProtectedProfileMemoryRepository? = null): AgentRunResult {
         val handlers = LocalMemoryTools(repository, ProtectedMemoryRepository(db),
-            conversations = conversations).handlers()
+            conversations = conversations, profileMemory = profileMemory).handlers()
         val history = conversations.recentContext(scope, 12).mapNotNull { row ->
             row.message.takeLast(4_000).takeIf(String::isNotBlank)?.let { AgentDialogueMessage(row.role, it) }
         }

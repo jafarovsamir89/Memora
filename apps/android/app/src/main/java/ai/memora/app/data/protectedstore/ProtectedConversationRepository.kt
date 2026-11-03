@@ -105,6 +105,7 @@ internal class ProtectedConversationRepository(private val db: AgentDatabase) {
         require(scopeId.isNotBlank() && turnId.isNotBlank())
         return db.withTransaction {
             dao.deleteEpisodesForConversationTurn(scopeId, turnId)
+            dao.deleteProfileFactsForConversationTurn(scopeId, turnId)
             dao.deleteActionResultsForTurn(scopeId, turnId)
             dao.deleteConversationTurn(scopeId, turnId) > 0
         }
@@ -315,8 +316,16 @@ internal class ProtectedConversationRepository(private val db: AgentDatabase) {
         db.withTransaction {
             val existing = dao.conversationMessagesForTurn(scopeId, turnId)
             if (existing.isNotEmpty()) {
-                check(existing.map { it.role to it.message } == listOf("user" to userMessage, "model" to assistantMessage))
+                val existingUser = existing.singleOrNull { it.role == "user" }
+                val existingModel = existing.singleOrNull { it.role == "model" }
+                check(existingUser?.message == userMessage && (existingModel == null || existingModel.message == assistantMessage) &&
+                    existing.all { it.role == "user" || it.role == "model" })
+                if (existingModel == null) dao.putConversationMessages(listOf(AgentConversationMessageRow(
+                    scopeId = scopeId, turnId = turnId, role = "model", message = assistantMessage,
+                    createdAtMillis = createdAtMillis)))
                 if (actionResults.isNotEmpty()) dao.putActionResults(actionResults)
+                val days = dao.conversationRetention(scopeId)?.retentionDays ?: RETENTION_FOREVER
+                pruneExpired(scopeId, days, System.currentTimeMillis())
                 return@withTransaction
             }
             dao.putConversationMessages(listOf(
@@ -335,6 +344,7 @@ internal class ProtectedConversationRepository(private val db: AgentDatabase) {
         require(scopeId.isNotBlank())
         db.withTransaction {
             dao.clearConversationEpisodes(scopeId)
+            dao.clearProfileFacts(scopeId)
             dao.clearActionResults(scopeId)
             dao.clearConversation(scopeId)
         }
@@ -344,6 +354,7 @@ internal class ProtectedConversationRepository(private val db: AgentDatabase) {
         if (days == RETENTION_FOREVER) 0 else {
             val cutoff = nowMillis - days.toLong() * DAY_MILLIS
             dao.pruneEpisodesForConversationTurnsBefore(scopeId, cutoff)
+            dao.pruneProfileFactsForConversationTurnsBefore(scopeId, cutoff)
             dao.pruneActionResultsBefore(scopeId, cutoff)
             dao.pruneConversationTurnsBefore(scopeId, cutoff)
         }

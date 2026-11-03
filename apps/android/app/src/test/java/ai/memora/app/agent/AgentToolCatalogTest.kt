@@ -11,7 +11,8 @@ import org.junit.Test
 class AgentToolCatalogTest {
     @Test fun everyExistingGeminiToolHasOneVersionedProviderNeutralContract() {
         val expected = setOf(
-            "search_conversation_history", "read_conversation_turn", "search_memory", "search_money", "analyze_finance_period", "summarize_work_status", "record_money_event", "settle_debt",
+            "search_conversation_history", "read_conversation_turn", "search_memory", "save_profile_fact", "edit_profile_fact", "delete_profile_fact",
+            "search_money", "analyze_finance_period", "summarize_work_status", "record_money_event", "settle_debt",
             "reverse_money_event", "correct_money_event", "annotate_money_event", "save_note", "edit_memory_object",
             "save_memory_episode", "delete_memory_episode",
             "delete_memory_object", "restore_memory_object", "link_objects", "list_tables", "read_table_rows",
@@ -34,6 +35,13 @@ class AgentToolCatalogTest {
                 else assertTrue(parameter.enumValues.isEmpty())
             }
         }
+        val saveProfileFact = requireNotNull(AgentToolCatalog.find("save_profile_fact", 1))
+        assertEquals(setOf("category", "fact"), saveProfileFact.parameters.filterNot { it.optional }.map { it.name }.toSet())
+        assertEquals(listOf("preference", "goal", "context", "other"),
+            saveProfileFact.parameters.single { it.name == "category" }.enumValues)
+        val editProfileFact = requireNotNull(AgentToolCatalog.find("edit_profile_fact", 1))
+        assertEquals(setOf("fact_id", "expected_revision", "fact"), editProfileFact.parameters.filterNot { it.optional }.map { it.name }.toSet())
+        assertEquals(AgentToolValueType.INTEGER, editProfileFact.parameters.single { it.name == "expected_revision" }.type)
     }
 
     @Test fun requiredAndOptionalFieldsMatchLocalHandlerContracts() {

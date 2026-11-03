@@ -68,6 +68,23 @@ class LocalProfileOnboardingTest {
         assertEquals(InstallDisposition.EXISTING, existingMarker.inspect())
     }
 
+    @Test fun completedLocalProfilePreferencesRemainEditableAndEncryptedInRoom() = runBlocking {
+        val store = ProtectedLocalProfileStore(agentDatabase.database)
+        val initial = store.complete(ai.memora.app.data.LocalProfileInput(null, "az", "friendly", "balanced", "Asia/Baku"))
+        val updated = store.updateProfile(initial.localProfileId,
+            ai.memora.app.data.LocalProfileInput("Synthetic User", "ru", "direct", "concise", "Europe/Moscow"))
+
+        assertEquals(initial.localProfileId, updated.localProfileId)
+        assertEquals("Synthetic User", updated.displayName)
+        assertEquals("ru", updated.language)
+        assertEquals("direct", updated.toneStyle)
+        assertEquals("concise", updated.responseStyle)
+        assertEquals("Europe/Moscow", updated.timeZoneId)
+        assertEquals(null, updated.remoteAccountId)
+        assertTrue(updated.onboardingCompleted)
+        assertEquals(updated, store.read())
+    }
+
     @Test fun cleanProfileStartsEmptyAndOnboardingWritesOnlyProfilePreferences() {
         val context = ApplicationProvider.getApplicationContext<Context>()
         val store = InMemoryLocalProfileStore()

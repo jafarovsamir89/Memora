@@ -11,6 +11,7 @@ import ai.memora.app.data.protectedstore.AgentActionResultRow
 import ai.memora.app.data.protectedstore.ProtectedConversationRepository
 import ai.memora.app.data.protectedstore.ProtectedDomainRepository
 import ai.memora.app.data.protectedstore.ProtectedMemoryRepository
+import ai.memora.app.data.protectedstore.ProtectedProfileMemoryRepository
 import ai.memora.app.data.protectedstore.RoomAgentRunJournal
 import ai.memora.app.reminders.TaskReminders
 import java.io.File
@@ -71,7 +72,7 @@ internal class AgentVoiceTurnProcessor(context: Context, private val databaseOve
             val handlers = if (preferences.getBoolean("gemini-persisted-memory-v1", false))
                 LocalMemoryTools(repo, ProtectedMemoryRepository(database), financeEnabled = migrateLegacyFinance(),
                     onTaskChanged = { task -> TaskReminders.schedule(appContext, task).name.lowercase() },
-                    conversations = conversations).handlers() else emptyList()
+                    conversations = conversations, profileMemory = ProtectedProfileMemoryRepository(database)).handlers() else emptyList()
             val orchestrator = AgentOrchestrator(GeminiAgentModelGateway(), DefaultAgentToolRegistry(handlers), policy,
                 RoomAgentRunJournal(database))
             val turnId = UUID.randomUUID().toString()
@@ -195,6 +196,7 @@ internal object AgentActionResultMapper {
         val (kind, keys) = when (observation.name) {
             "save_note", "save_memory_episode", "delete_memory_episode", "edit_memory_object", "delete_memory_object", "restore_memory_object" ->
                 "memory" to listOf("object_id", "episode_id", "id")
+            "save_profile_fact", "edit_profile_fact", "delete_profile_fact" -> "memory" to listOf("fact_id", "id")
             "record_money_event", "correct_money_event", "reverse_money_event", "annotate_money_event" -> "finance" to listOf("event_id", "id")
             "settle_debt" -> "finance" to listOf("payment_event_id", "obligation_id")
             "create_case", "update_case", "add_case_participant", "link_case_source" -> "case" to listOf("case_id", "id")

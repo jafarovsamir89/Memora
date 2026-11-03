@@ -1,6 +1,7 @@
 package ai.memora.app
 
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.*
@@ -13,9 +14,12 @@ import androidx.compose.ui.unit.dp
 import ai.memora.app.data.CaptureEntry
 import ai.memora.app.data.CaptureSessionState
 import ai.memora.app.data.EncryptedTaskStore
+import ai.memora.app.data.LocalProfileInput
 import ai.memora.app.data.StoreRead
+import ai.memora.app.data.protectedstore.LocalProfileRow
 import ai.memora.app.data.protectedstore.ConversationTurnEvidence
 import ai.memora.app.data.protectedstore.ConversationEpisodeEvidence
+import ai.memora.app.data.protectedstore.ProfileFactEvidence
 import ai.memora.app.data.protectedstore.DomainHit
 import ai.memora.app.data.protectedstore.DomainKind
 import ai.memora.app.data.protectedstore.DomainObjectRow
@@ -23,6 +27,7 @@ import ai.memora.app.data.protectedstore.ProtectedCaseRepository
 import ai.memora.app.data.protectedstore.ProtectedConversationRepository
 import ai.memora.app.data.protectedstore.ProtectedDomainRepository
 import ai.memora.app.data.protectedstore.ProtectedMemoryRepository
+import ai.memora.app.data.protectedstore.ProtectedProfileMemoryRepository
 import ai.memora.app.domain.LocalMemoryIndex
 import ai.memora.app.reminders.AttentionEngine
 import ai.memora.app.reminders.AttentionKind
@@ -161,7 +166,9 @@ fun StoredMemoryCard(entry: CaptureEntry, onClick: () -> Unit) {
 }
 
 @Composable
-fun WorkingMemoryScreen(state: CaptureSessionState, detail: (String) -> Unit, capture: () -> Unit, manage: () -> Unit) {
+internal fun WorkingMemoryScreen(state: CaptureSessionState, detail: (String) -> Unit, capture: () -> Unit, manage: () -> Unit,
+    localProfile: LocalProfileRow? = null,
+    updateLocalProfile: ((LocalProfileInput, (Boolean) -> Unit) -> Unit)? = null) {
     var query by rememberSaveable { mutableStateOf("") }
     var includeArchived by rememberSaveable { mutableStateOf(false) }
     val matches = LocalMemoryIndex.search(state.captures, query, includeArchived)
@@ -171,10 +178,12 @@ fun WorkingMemoryScreen(state: CaptureSessionState, detail: (String) -> Unit, ca
     val scopeId = remember(processor) { processor.conversationScopeId() }
     val conversationRepository = remember(database) { database?.let(::ProtectedConversationRepository) }
     val domainRepository = remember(database) { database?.let(::ProtectedDomainRepository) }
+    val profileMemoryRepository = remember(database) { database?.let(::ProtectedProfileMemoryRepository) }
     val coroutineScope = rememberCoroutineScope()
     var conversationTurns by remember { mutableStateOf<List<ConversationTurnEvidence>>(emptyList()) }
     var conversationEpisodes by remember { mutableStateOf<List<ConversationEpisodeEvidence>>(emptyList()) }
     var domainFacts by remember { mutableStateOf<List<MemoryDomainFact>>(emptyList()) }
+    var profileFacts by remember { mutableStateOf<List<ProfileFactEvidence>>(emptyList()) }
     var archiveReady by remember { mutableStateOf(false) }
     var archiveLoading by remember { mutableStateOf(false) }
     var archiveError by remember { mutableStateOf(false) }
@@ -187,6 +196,13 @@ fun WorkingMemoryScreen(state: CaptureSessionState, detail: (String) -> Unit, ca
     var pendingDeleteTurn by remember { mutableStateOf<ConversationTurnEvidence?>(null) }
     var pendingDeleteEpisode by remember { mutableStateOf<ConversationEpisodeEvidence?>(null) }
     var selectedFact by remember { mutableStateOf<MemoryDomainFact?>(null) }
+    var selectedProfileFact by remember { mutableStateOf<ProfileFactEvidence?>(null) }
+    var profileFactSources by remember { mutableStateOf<List<String>>(emptyList()) }
+    var editingProfileFact by remember { mutableStateOf<ProfileFactEvidence?>(null) }
+    var pendingDeleteProfileFact by remember { mutableStateOf<ProfileFactEvidence?>(null) }
+    var showLocalProfileEditor by remember { mutableStateOf(false) }
+    var localProfileSaveError by remember { mutableStateOf(false) }
+    var localProfileSaving by remember { mutableStateOf(false) }
 
     LaunchedEffect(scopeId) {
         try {
@@ -212,6 +228,7 @@ fun WorkingMemoryScreen(state: CaptureSessionState, detail: (String) -> Unit, ca
             } else {
                 domain.search(scopeId, query.trim(), limit = 30).map(::MemoryDomainFact)
             }
+            profileFacts = profileMemoryRepository?.list(scopeId, query.trim(), limit = 30).orEmpty()
             archiveError = false
         } catch (_: Exception) {
             archiveError = true
@@ -229,6 +246,35 @@ fun WorkingMemoryScreen(state: CaptureSessionState, detail: (String) -> Unit, ca
                 refreshVersion++
                 archiveError = false
             } catch (_: Exception) { archiveError = true }
+        }
+    }
+
+    fun openProfileFact(fact: ProfileFactEvidence) {
+        selectedProfileFact = fact
+        profileFactSources = emptyList()
+        coroutineScope.launch {
+            try {
+                val conversations = conversationRepository ?: return@launch
+                profileFactSources = fact.sourceTurnIds.mapNotNull { turnId ->
+                    conversations.turn(scopeId, turnId).firstOrNull { it.role == "user" }?.message
+                }
+            } catch (_: Exception) { archiveError = true }
+        }
+    }
+
+    fun saveLocalProfile(input: LocalProfileInput) {
+        localProfileSaveError = false
+        localProfileSaving = true
+        val updater = updateLocalProfile
+        if (updater == null) {
+            localProfileSaving = false
+            localProfileSaveError = true
+            return
+        }
+        updater(input) { succeeded ->
+            localProfileSaving = false
+            localProfileSaveError = !succeeded
+            if (succeeded) showLocalProfileEditor = false
         }
     }
 
@@ -352,9 +398,79 @@ fun WorkingMemoryScreen(state: CaptureSessionState, detail: (String) -> Unit, ca
         },
         confirmButton = { TextButton(onClick = { selectedFact = null }) { Text(s(R.string.close)) } },
     ) }
+    if (showLocalProfileEditor && localProfile != null) LocalProfileEditorDialog(
+        profile = localProfile,
+        saving = localProfileSaving,
+        saveError = localProfileSaveError,
+        onDismiss = { if (!localProfileSaving) showLocalProfileEditor = false },
+        onSave = ::saveLocalProfile,
+    )
+    selectedProfileFact?.let { fact -> AlertDialog(
+        onDismissRequest = { selectedProfileFact = null },
+        title = { Text(s(R.string.profile_memory_title)) },
+        text = {
+            Column(Modifier.heightIn(max = 460.dp).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Text(fact.fact, color = colors.ink, style = MaterialTheme.typography.bodyLarge)
+                Text(s(profileFactCategoryLabel(fact.category)), style = MaterialTheme.typography.labelMedium, color = colors.accent)
+                Text(LocalStrings.current.getString(R.string.profile_memory_revision, fact.revision),
+                    style = MaterialTheme.typography.bodySmall, color = colors.muted)
+                if (fact.revisions.lastOrNull()?.provenance == "user_edited")
+                    Text(s(R.string.profile_memory_manual_source), color = colors.muted, style = MaterialTheme.typography.bodySmall)
+                Text(s(R.string.profile_memory_sources), style = MaterialTheme.typography.labelLarge, color = colors.accent)
+                if (profileFactSources.isEmpty()) Text(s(R.string.profile_memory_manual_source), color = colors.muted)
+                profileFactSources.forEach { source -> Text(source, color = colors.muted, style = MaterialTheme.typography.bodySmall) }
+                val older = fact.revisions.dropLast(1).takeLast(5).asReversed()
+                if (older.isNotEmpty()) {
+                    Text(s(R.string.profile_memory_previous_versions), style = MaterialTheme.typography.labelLarge, color = colors.accent)
+                    older.forEach { revision ->
+                        Text(LocalStrings.current.getString(R.string.memory_episode_revision_entry, revision.revision, revision.fact),
+                            color = colors.muted, style = MaterialTheme.typography.bodySmall)
+                    }
+                }
+            }
+        },
+        confirmButton = { TextButton(onClick = { editingProfileFact = fact; selectedProfileFact = null },
+            modifier = Modifier.testTag("profile_fact_edit")) { Text(s(R.string.profile_memory_edit)) } },
+        dismissButton = { TextButton(onClick = { pendingDeleteProfileFact = fact; selectedProfileFact = null },
+            modifier = Modifier.testTag("profile_fact_delete")) { Text(s(R.string.profile_memory_forget)) } },
+    ) }
+    editingProfileFact?.let { fact -> ProfileFactEditorDialog(
+        fact = fact,
+        onDismiss = { editingProfileFact = null },
+        onSave = { category, value ->
+            editingProfileFact = null
+            coroutineScope.launch {
+                try {
+                    val repository = profileMemoryRepository ?: error("protected_profile_memory_unavailable")
+                    repository.editManually(scopeId, fact.factId, fact.revision, category, value)
+                    refreshVersion++
+                    archiveError = false
+                } catch (_: Exception) { archiveError = true }
+            }
+        },
+    ) }
+    pendingDeleteProfileFact?.let { fact -> AlertDialog(
+        onDismissRequest = { pendingDeleteProfileFact = null },
+        title = { Text(s(R.string.profile_memory_forget)) },
+        text = { Text(s(R.string.profile_memory_forget_confirmation)) },
+        confirmButton = { TextButton(onClick = {
+            pendingDeleteProfileFact = null
+            coroutineScope.launch {
+                try {
+                    val repository = profileMemoryRepository ?: error("protected_profile_memory_unavailable")
+                    check(repository.delete(scopeId, fact.factId, fact.revision))
+                    refreshVersion++
+                    archiveError = false
+                } catch (_: Exception) { archiveError = true }
+            }
+        }, modifier = Modifier.testTag("profile_fact_delete_confirm")) { Text(s(R.string.profile_memory_forget)) } },
+        dismissButton = { TextButton(onClick = { pendingDeleteProfileFact = null }) { Text(s(R.string.task_cancel)) } },
+    ) }
 
     ScreenColumn {
         ScreenHeading(s(R.string.memory_title), s(R.string.memory_unified_hint))
+        if (localProfile != null) OutlinedButton(onClick = { showLocalProfileEditor = true },
+            modifier = Modifier.fillMaxWidth().testTag("profile_preferences")) { Text(s(R.string.profile_preferences_title)) }
         OutlinedTextField(query, { query = it.take(200) }, modifier = Modifier.fillMaxWidth().testTag("memory_search"),
             label = { Text(s(R.string.memory_unified_search)) }, singleLine = true)
         Text(s(R.string.memory_archive_notice), style = MaterialTheme.typography.bodySmall, color = colors.muted)
@@ -364,6 +480,28 @@ fun WorkingMemoryScreen(state: CaptureSessionState, detail: (String) -> Unit, ca
         }
         FilterChip(selected = includeArchived, onClick = { includeArchived = !includeArchived },
             label = { Text(s(R.string.inbox_archived)) }, modifier = Modifier.testTag("memory_include_archived"))
+        SectionHeading(s(R.string.profile_memory_title))
+        Text(s(R.string.profile_memory_hint), style = MaterialTheme.typography.bodySmall, color = colors.muted)
+        if (archiveReady && !archiveLoading && !archiveError && profileFacts.isEmpty())
+            Text(s(R.string.profile_memory_empty), color = colors.muted)
+        profileFacts.forEachIndexed { index, fact ->
+            MemoraCard(onClick = { openProfileFact(fact) }, modifier = Modifier.testTag("profile_fact_$index")) {
+                Text(fact.fact, color = colors.ink, style = MaterialTheme.typography.bodyLarge)
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                    Text(s(profileFactCategoryLabel(fact.category)), style = MaterialTheme.typography.labelSmall, color = colors.accent)
+                    Text(LocalStrings.current.getString(R.string.profile_memory_sources_count, fact.sourceTurnIds.size),
+                        style = MaterialTheme.typography.labelSmall, color = colors.muted)
+                }
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
+                    TextButton(onClick = { editingProfileFact = fact }, modifier = Modifier.testTag("profile_fact_edit_$index")) {
+                        Text(s(R.string.profile_memory_edit))
+                    }
+                    TextButton(onClick = { pendingDeleteProfileFact = fact }, modifier = Modifier.testTag("profile_fact_forget_$index")) {
+                        Text(s(R.string.profile_memory_forget))
+                    }
+                }
+            }
+        }
         MemoryLoadState(state)
         SectionHeading(s(R.string.memory_saved_sources))
         if (state.ready && matches.isEmpty() && domainFacts.isEmpty()) Text(s(R.string.memory_no_saved_sources), color = colors.muted)
@@ -402,6 +540,96 @@ fun WorkingMemoryScreen(state: CaptureSessionState, detail: (String) -> Unit, ca
     }
 }
 
+@Composable
+private fun LocalProfileEditorDialog(
+    profile: LocalProfileRow,
+    saving: Boolean,
+    saveError: Boolean,
+    onDismiss: () -> Unit,
+    onSave: (LocalProfileInput) -> Unit,
+) {
+    var displayName by remember(profile.localProfileId, profile.updatedAtMillis) { mutableStateOf(profile.displayName.orEmpty()) }
+    var language by remember(profile.localProfileId, profile.updatedAtMillis) { mutableStateOf(profile.language) }
+    var tone by remember(profile.localProfileId, profile.updatedAtMillis) { mutableStateOf(profile.toneStyle) }
+    var style by remember(profile.localProfileId, profile.updatedAtMillis) { mutableStateOf(profile.responseStyle) }
+    var zone by remember(profile.localProfileId, profile.updatedAtMillis) { mutableStateOf(profile.timeZoneId) }
+    var invalid by remember { mutableStateOf(false) }
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(s(R.string.profile_preferences_title)) },
+        text = {
+            Column(Modifier.heightIn(max = 540.dp).verticalScroll(rememberScrollState()),
+                verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                OutlinedTextField(displayName, { displayName = it.take(60) }, label = { Text(s(R.string.onboarding_name)) },
+                    singleLine = true, enabled = !saving, modifier = Modifier.fillMaxWidth().testTag("profile_preferences_name"))
+                Text(s(R.string.onboarding_language), style = MaterialTheme.typography.labelLarge)
+                Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    listOf("az" to "Azərbaycanca", "ru" to "Русский", "en" to "English").forEach { (code, label) ->
+                        FilterChip(language == code, { language = code }, enabled = !saving, label = { Text(label) })
+                    }
+                }
+                Text(s(R.string.onboarding_tone), style = MaterialTheme.typography.labelLarge)
+                Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    listOf("friendly" to R.string.onboarding_tone_friendly, "direct" to R.string.onboarding_tone_direct).forEach { (value, label) ->
+                        FilterChip(tone == value, { tone = value }, enabled = !saving, label = { Text(s(label)) })
+                    }
+                }
+                Text(s(R.string.onboarding_style), style = MaterialTheme.typography.labelLarge)
+                Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    listOf("concise" to R.string.onboarding_style_concise, "balanced" to R.string.onboarding_style_balanced,
+                        "detailed" to R.string.onboarding_style_detailed).forEach { (value, label) ->
+                        FilterChip(style == value, { style = value }, enabled = !saving, label = { Text(s(label)) })
+                    }
+                }
+                Text(s(R.string.onboarding_timezone), style = MaterialTheme.typography.labelLarge)
+                Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    listOf("Asia/Baku", "Europe/Moscow", "UTC").forEach { value ->
+                        FilterChip(zone == value, { zone = value }, enabled = !saving, label = { Text(value) })
+                    }
+                }
+                if (saveError || invalid) Text(s(R.string.onboarding_save_error), color = MaterialTheme.colorScheme.error,
+                    modifier = Modifier.testTag("profile_preferences_error"))
+            }
+        },
+        confirmButton = { TextButton(enabled = !saving, onClick = {
+            val input = runCatching { LocalProfileInput(displayName.trim().takeIf(String::isNotEmpty), language, tone, style, zone) }.getOrNull()
+            if (input == null) invalid = true else { invalid = false; onSave(input) }
+        }, modifier = Modifier.testTag("profile_preferences_save")) {
+            Text(if (saving) s(R.string.onboarding_saving) else s(R.string.profile_memory_save))
+        } },
+        dismissButton = { TextButton(enabled = !saving, onClick = onDismiss) { Text(s(R.string.task_cancel)) } },
+    )
+}
+
+@Composable
+private fun ProfileFactEditorDialog(
+    fact: ProfileFactEvidence,
+    onDismiss: () -> Unit,
+    onSave: (category: String, fact: String) -> Unit,
+) {
+    var category by remember(fact.factId, fact.revision) { mutableStateOf(fact.category) }
+    var value by remember(fact.factId, fact.revision) { mutableStateOf(fact.fact) }
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(s(R.string.profile_memory_edit)) },
+        text = {
+            Column(Modifier.heightIn(max = 430.dp).verticalScroll(rememberScrollState()),
+                verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                OutlinedTextField(value, { value = it.take(600) }, label = { Text(s(R.string.profile_memory_fact)) },
+                    enabled = true, modifier = Modifier.fillMaxWidth().testTag("profile_fact_editor"))
+                Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    listOf("preference", "goal", "context", "other").forEach { item ->
+                        FilterChip(category == item, { category = item }, label = { Text(s(profileFactCategoryLabel(item))) })
+                    }
+                }
+            }
+        },
+        confirmButton = { TextButton(onClick = { onSave(category, value.trim()) },
+            enabled = value.isNotBlank(), modifier = Modifier.testTag("profile_fact_editor_save")) { Text(s(R.string.profile_memory_save)) } },
+        dismissButton = { TextButton(onClick = onDismiss) { Text(s(R.string.task_cancel)) } },
+    )
+}
+
 private data class MemoryDomainFact(val id: String, val title: String, val body: String?, val kindLabel: Int,
     val provenanceLabel: Int? = null) {
     constructor(row: DomainObjectRow) : this(row.objectId, row.title, row.body, domainKindResource(row.kind), R.string.memory_source_saved)
@@ -412,6 +640,13 @@ private fun domainKindResource(kind: String): Int = when (kind) {
     DomainKind.PERSON.name -> R.string.people
     DomainKind.PROJECT.name -> R.string.projects
     else -> R.string.notes_title
+}
+
+private fun profileFactCategoryLabel(category: String): Int = when (category) {
+    "preference" -> R.string.profile_memory_category_preference
+    "goal" -> R.string.profile_memory_category_goal
+    "context" -> R.string.profile_memory_category_context
+    else -> R.string.profile_memory_category_other
 }
 
 private fun memoryRetentionLabel(days: Int): Int = when (days) {

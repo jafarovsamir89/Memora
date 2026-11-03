@@ -121,6 +121,20 @@ internal val AGENT_DB_13_TO_14 = androidx.room.migration.Migration(13, 14) { db 
     db.execSQL("CREATE INDEX IF NOT EXISTS index_conversation_episode_source_scopeId_episodeId ON conversation_episode_source(scopeId, episodeId)")
 }
 
+/** Explicit, editable profile memory. Existing profile and archive rows are preserved unchanged. */
+internal val AGENT_DB_14_TO_15 = androidx.room.migration.Migration(14, 15) { db ->
+    db.execSQL("CREATE TABLE IF NOT EXISTS profile_fact (factId TEXT NOT NULL, scopeId TEXT NOT NULL, category TEXT NOT NULL, fact TEXT NOT NULL, normalizedDigest TEXT NOT NULL, revision INTEGER NOT NULL, createdAtMillis INTEGER NOT NULL, updatedAtMillis INTEGER NOT NULL, PRIMARY KEY(factId))")
+    db.execSQL("CREATE UNIQUE INDEX IF NOT EXISTS index_profile_fact_scopeId_normalizedDigest ON profile_fact(scopeId, normalizedDigest)")
+    db.execSQL("CREATE INDEX IF NOT EXISTS index_profile_fact_scopeId_updatedAtMillis ON profile_fact(scopeId, updatedAtMillis)")
+    db.execSQL("CREATE TABLE IF NOT EXISTS profile_fact_source (scopeId TEXT NOT NULL, factId TEXT NOT NULL, turnId TEXT NOT NULL, provenance TEXT NOT NULL, PRIMARY KEY(scopeId, factId, turnId), FOREIGN KEY(factId) REFERENCES profile_fact(factId) ON UPDATE NO ACTION ON DELETE CASCADE)")
+    db.execSQL("CREATE INDEX IF NOT EXISTS index_profile_fact_source_factId ON profile_fact_source(factId)")
+    db.execSQL("CREATE INDEX IF NOT EXISTS index_profile_fact_source_scopeId_turnId ON profile_fact_source(scopeId, turnId)")
+    db.execSQL("CREATE INDEX IF NOT EXISTS index_profile_fact_source_scopeId_factId ON profile_fact_source(scopeId, factId)")
+    db.execSQL("CREATE TABLE IF NOT EXISTS profile_fact_revision (scopeId TEXT NOT NULL, factId TEXT NOT NULL, revision INTEGER NOT NULL, category TEXT NOT NULL, fact TEXT NOT NULL, provenance TEXT NOT NULL, sourceTurnId TEXT, recordedAtMillis INTEGER NOT NULL, PRIMARY KEY(factId, revision), FOREIGN KEY(factId) REFERENCES profile_fact(factId) ON UPDATE NO ACTION ON DELETE CASCADE)")
+    db.execSQL("CREATE INDEX IF NOT EXISTS index_profile_fact_revision_scopeId_factId_revision ON profile_fact_revision(scopeId, factId, revision)")
+    db.execSQL("CREATE INDEX IF NOT EXISTS index_profile_fact_revision_factId ON profile_fact_revision(factId)")
+}
+
 /** Minimal command journal. Only identifiers, digest, status and recovery versions are retained. */
 @Entity(tableName = "agent_command_journal")
 internal data class AgentCommandJournalRow(
@@ -235,6 +249,59 @@ internal data class ConversationEpisodeRevisionRow(
     val revision: Long,
     val title: String,
     val summary: String,
+    val recordedAtMillis: Long,
+)
+
+/** A non-sensitive, user-stated profile fact. Inferred facts are never inserted into this table. */
+@Entity(tableName = "profile_fact", indices = [
+    androidx.room.Index(value = ["scopeId", "normalizedDigest"], unique = true),
+    androidx.room.Index(value = ["scopeId", "updatedAtMillis"]),
+])
+internal data class ProfileFactRow(
+    @PrimaryKey val factId: String,
+    val scopeId: String,
+    val category: String,
+    val fact: String,
+    val normalizedDigest: String,
+    val revision: Long,
+    val createdAtMillis: Long,
+    val updatedAtMillis: Long,
+)
+
+@Entity(tableName = "profile_fact_source", primaryKeys = ["scopeId", "factId", "turnId"], indices = [
+    androidx.room.Index(value = ["factId"]),
+    androidx.room.Index(value = ["scopeId", "turnId"]),
+    androidx.room.Index(value = ["scopeId", "factId"]),
+], foreignKeys = [androidx.room.ForeignKey(
+    entity = ProfileFactRow::class,
+    parentColumns = ["factId"],
+    childColumns = ["factId"],
+    onDelete = androidx.room.ForeignKey.CASCADE,
+)])
+internal data class ProfileFactSourceRow(
+    val scopeId: String,
+    val factId: String,
+    val turnId: String,
+    val provenance: String,
+)
+
+@Entity(tableName = "profile_fact_revision", primaryKeys = ["factId", "revision"], indices = [
+    androidx.room.Index(value = ["scopeId", "factId", "revision"]),
+    androidx.room.Index(value = ["factId"]),
+], foreignKeys = [androidx.room.ForeignKey(
+    entity = ProfileFactRow::class,
+    parentColumns = ["factId"],
+    childColumns = ["factId"],
+    onDelete = androidx.room.ForeignKey.CASCADE,
+)])
+internal data class ProfileFactRevisionRow(
+    val scopeId: String,
+    val factId: String,
+    val revision: Long,
+    val category: String,
+    val fact: String,
+    val provenance: String,
+    val sourceTurnId: String?,
     val recordedAtMillis: Long,
 )
 
@@ -429,6 +496,9 @@ internal interface ProtectedStoreDao {
         onboardingVersion: Int, updatedAt: Long): Int
     @androidx.room.Query("UPDATE local_profile SET language=:language, updatedAtMillis=:updatedAt WHERE localProfileId=:id")
     suspend fun updateLocalProfileLanguage(id: String, language: String, updatedAt: Long): Int
+    @androidx.room.Query("UPDATE local_profile SET displayName=:displayName, language=:language, toneStyle=:tone, responseStyle=:style, timeZoneId=:zone, updatedAtMillis=:updatedAt WHERE localProfileId=:id AND onboardingCompleted=1")
+    suspend fun updateLocalProfile(id: String, displayName: String?, language: String, tone: String, style: String,
+        zone: String, updatedAt: Long): Int
 
     @androidx.room.Query("SELECT * FROM person_identity_link WHERE scopeId=:scope AND deletedAt IS NULL ORDER BY createdAt, linkId")
     suspend fun activePersonIdentityLinks(scope: String): List<PersonIdentityLinkRow>
@@ -523,6 +593,35 @@ internal interface ProtectedStoreDao {
     suspend fun pruneEpisodesForConversationTurnsBefore(scope: String, cutoff: Long): Int
     @androidx.room.Query("DELETE FROM conversation_episode WHERE scopeId=:scope AND episodeId NOT IN (SELECT episodeId FROM conversation_episode_source WHERE scopeId=:scope)")
     suspend fun deleteOrphanConversationEpisodes(scope: String): Int
+    @androidx.room.Query("SELECT * FROM profile_fact WHERE scopeId=:scope ORDER BY updatedAtMillis DESC, factId DESC LIMIT :limit")
+    suspend fun profileFacts(scope: String, limit: Int): List<ProfileFactRow>
+    @androidx.room.Query("SELECT * FROM profile_fact WHERE scopeId=:scope AND factId=:id")
+    suspend fun profileFact(scope: String, id: String): ProfileFactRow?
+    @androidx.room.Query("SELECT * FROM profile_fact WHERE scopeId=:scope AND normalizedDigest=:digest")
+    suspend fun profileFactByDigest(scope: String, digest: String): ProfileFactRow?
+    @androidx.room.Query("SELECT COUNT(*) FROM profile_fact WHERE scopeId=:scope")
+    suspend fun profileFactCount(scope: String): Int
+    @androidx.room.Insert(onConflict = androidx.room.OnConflictStrategy.ABORT)
+    suspend fun insertProfileFact(row: ProfileFactRow)
+    @androidx.room.Query("UPDATE profile_fact SET category=:category, fact=:fact, normalizedDigest=:digest, revision=:nextRevision, updatedAtMillis=:updatedAt WHERE scopeId=:scope AND factId=:id AND revision=:expectedRevision")
+    suspend fun updateProfileFact(scope: String, id: String, expectedRevision: Long, category: String, fact: String,
+        digest: String, nextRevision: Long, updatedAt: Long): Int
+    @androidx.room.Query("DELETE FROM profile_fact WHERE scopeId=:scope AND factId=:id AND revision=:expectedRevision")
+    suspend fun deleteProfileFact(scope: String, id: String, expectedRevision: Long): Int
+    @androidx.room.Insert(onConflict = androidx.room.OnConflictStrategy.IGNORE)
+    suspend fun insertProfileFactSource(row: ProfileFactSourceRow): Long
+    @androidx.room.Query("SELECT * FROM profile_fact_source WHERE scopeId=:scope AND factId=:id ORDER BY turnId")
+    suspend fun profileFactSources(scope: String, id: String): List<ProfileFactSourceRow>
+    @androidx.room.Insert(onConflict = androidx.room.OnConflictStrategy.ABORT)
+    suspend fun insertProfileFactRevision(row: ProfileFactRevisionRow)
+    @androidx.room.Query("SELECT * FROM profile_fact_revision WHERE scopeId=:scope AND factId=:id ORDER BY revision")
+    suspend fun profileFactRevisions(scope: String, id: String): List<ProfileFactRevisionRow>
+    @androidx.room.Query("DELETE FROM profile_fact WHERE scopeId=:scope AND factId IN (SELECT factId FROM profile_fact_source WHERE scopeId=:scope AND turnId=:turn)")
+    suspend fun deleteProfileFactsForConversationTurn(scope: String, turn: String): Int
+    @androidx.room.Query("DELETE FROM profile_fact WHERE scopeId=:scope AND factId IN (SELECT source.factId FROM profile_fact_source AS source INNER JOIN agent_conversation_message AS message ON message.scopeId=source.scopeId AND message.turnId=source.turnId AND message.role='user' WHERE source.scopeId=:scope AND message.createdAtMillis < :cutoff)")
+    suspend fun pruneProfileFactsForConversationTurnsBefore(scope: String, cutoff: Long): Int
+    @androidx.room.Query("DELETE FROM profile_fact WHERE scopeId=:scope")
+    suspend fun clearProfileFacts(scope: String): Int
     @androidx.room.Query("SELECT * FROM conversation_retention WHERE scopeId=:scope")
     suspend fun conversationRetention(scope: String): ConversationRetentionRow?
     @androidx.room.Insert(onConflict = androidx.room.OnConflictStrategy.REPLACE)
@@ -636,11 +735,12 @@ internal interface ProtectedStoreDao {
     PersonRow::class, MoneyEventRow::class, LegacyMigrationRow::class, AgentOutboxRow::class, AgentTurnJournalRow::class,
     AgentConversationMessageRow::class, AgentActionResultRow::class, ConversationRetentionRow::class, AttentionSettingsRow::class,
     ConversationEpisodeRow::class, ConversationEpisodeSourceRow::class, ConversationEpisodeRevisionRow::class,
+    ProfileFactRow::class, ProfileFactSourceRow::class, ProfileFactRevisionRow::class,
     DomainObjectRow::class, DomainRevisionRow::class, DomainLinkRow::class, UserTableRow::class, TableColumnRow::class,
     TableDataRow::class, MoneyAdjustmentRow::class, LocalCalendarEventRow::class, TableSchemaRevisionRow::class,
     LocalProfileRow::class, PersonIdentityLinkRow::class, CaseRecordRow::class, CaseRevisionRow::class,
     CaseParticipantRow::class, CaseEvidenceRow::class],
-    version = 14, exportSchema = true)
+    version = 15, exportSchema = true)
 internal abstract class AgentDatabase : RoomDatabase() {
     abstract fun protectedStoreDao(): ProtectedStoreDao
     companion object {
@@ -750,7 +850,7 @@ internal abstract class AgentDatabase : RoomDatabase() {
                 database = Room.databaseBuilder(context.applicationContext, AgentDatabase::class.java, databaseName)
                     .addMigrations(AGENT_DB_1_TO_2, AGENT_DB_2_TO_3, AGENT_DB_3_TO_4, AGENT_DB_4_TO_5,
                         AGENT_DB_5_TO_6, AGENT_DB_6_TO_7, AGENT_DB_7_TO_8, AGENT_DB_8_TO_9, AGENT_DB_9_TO_10,
-                        AGENT_DB_10_TO_11, AGENT_DB_11_TO_12, AGENT_DB_12_TO_13, AGENT_DB_13_TO_14)
+                        AGENT_DB_10_TO_11, AGENT_DB_11_TO_12, AGENT_DB_12_TO_13, AGENT_DB_13_TO_14, AGENT_DB_14_TO_15)
                     .setJournalMode(RoomDatabase.JournalMode.TRUNCATE)
                     // WAL remains disabled until P1 WAL/SHM privacy and recovery gates pass.
                     .openHelperFactory(SupportOpenHelperFactory(databaseKey, null, false))

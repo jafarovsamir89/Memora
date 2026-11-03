@@ -241,7 +241,13 @@ fun MemoraApp(initialRoute: String = "home", initialTheme: String = "system", ca
                             "home" -> WorkingHomeScreen(language, captureState, navigate, openCapture, { detailId = it }, taskStore) {
                                 VoiceFirstScreen()
                             }
-                            "memory" -> WorkingMemoryScreen(captureState, { detailId = it }, { openCapture(false) }, { navigate("inbox") })
+                            "memory" -> WorkingMemoryScreen(captureState, { detailId = it }, { openCapture(false) }, { navigate("inbox") },
+                                localProfile = profile.profile, updateLocalProfile = { input, done ->
+                                    profileModel.updateProfile(input) { saved ->
+                                        if (saved) appearanceModel.change(language = input.language)
+                                        done(saved)
+                                    }
+                                })
                             "tasks" -> ScreenColumn { ScreenHeading(s(R.string.tasks_title), s(R.string.working_tasks_hint)); TaskPrototype(taskStore) }
                             "more" -> MoreScreen(navigate, { about = true }, { openCapture(true) }, language)
                             "voice_memory" -> VoiceMemoryScreen()

@@ -40,6 +40,7 @@ internal interface LocalProfileStore {
     suspend fun read(): LocalProfileRow?
     suspend fun complete(input: LocalProfileInput): LocalProfileRow
     suspend fun updateLanguage(profileId: String, language: String): LocalProfileRow
+    suspend fun updateProfile(profileId: String, input: LocalProfileInput): LocalProfileRow
 }
 
 internal class ProtectedLocalProfileStore(private val database: AgentDatabase) : LocalProfileStore {
@@ -81,6 +82,21 @@ internal class ProtectedLocalProfileStore(private val database: AgentDatabase) :
             check(dao.updateLocalProfileLanguage(profileId, language, System.currentTimeMillis()) == 1) { "profile_update_conflict" }
         }
         requireNotNull(dao.localProfile()).also { check(it.localProfileId == profileId && it.language == language) }
+    }
+
+    override suspend fun updateProfile(profileId: String, input: LocalProfileInput): LocalProfileRow = database.withTransaction {
+        val dao = database.protectedStoreDao()
+        val current = requireNotNull(dao.localProfile())
+        check(current.localProfileId == profileId && current.onboardingCompleted) { "profile_not_found" }
+        val displayName = input.displayName?.trim()?.takeIf(String::isNotEmpty)
+        check(dao.updateLocalProfile(profileId, displayName, input.language, input.toneStyle,
+            input.responseStyle, input.timeZoneId, System.currentTimeMillis()) == 1) { "profile_update_conflict" }
+        requireNotNull(dao.localProfile()).also { updated ->
+            check(updated.localProfileId == profileId && updated.displayName == displayName &&
+                updated.language == input.language && updated.toneStyle == input.toneStyle &&
+                updated.responseStyle == input.responseStyle && updated.timeZoneId == input.timeZoneId &&
+                updated.remoteAccountId == null) { "profile_readback_mismatch" }
+        }
     }
 }
 
@@ -217,6 +233,24 @@ internal class LocalProfileViewModel(
         viewModelScope.launch {
             runCatching { withContext(storageDispatcher) { requireNotNull(store).updateLanguage(ready.profile.localProfileId, language) } }
                 .onSuccess { mutable.value = LocalProfileState.Ready(it) }
+        }
+    }
+
+    fun updateProfile(input: LocalProfileInput, onComplete: (Boolean) -> Unit = {}) {
+        val ready = mutable.value as? LocalProfileState.Ready ?: return onComplete(false)
+        viewModelScope.launch {
+            try {
+                val updated = withContext(storageDispatcher) {
+                    requireNotNull(store).updateProfile(ready.profile.localProfileId, input)
+                }
+                mutable.value = LocalProfileState.Ready(updated)
+                onComplete(true)
+            } catch (cancelled: CancellationException) {
+                throw cancelled
+            } catch (error: Exception) {
+                Log.w("MemoraProfile", "profile_update_failed code=profile_update_failed type=${error.javaClass.simpleName.take(64)}")
+                onComplete(false)
+            }
         }
     }
 

@@ -54,4 +54,11 @@ internal class InMemoryLocalProfileStore(initial: LocalProfileRow? = null) : Loc
         require(existing.localProfileId == profileId)
         return existing.copy(language = language, updatedAtMillis = existing.updatedAtMillis + 1).also { current = it }
     }
+    override suspend fun updateProfile(profileId: String, input: LocalProfileInput): LocalProfileRow {
+        val existing = requireNotNull(current)
+        require(existing.localProfileId == profileId && existing.onboardingCompleted)
+        return existing.copy(displayName = input.displayName, language = input.language,
+            toneStyle = input.toneStyle, responseStyle = input.responseStyle, timeZoneId = input.timeZoneId,
+            updatedAtMillis = existing.updatedAtMillis + 1).also { current = it }
+    }
 }
