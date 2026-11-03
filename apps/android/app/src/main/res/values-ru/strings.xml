@@ -461,6 +461,7 @@
     <string name="action_status_unknown">Результат ещё не проверен</string>
     <string name="action_status_failed">Не выполнено</string>
     <string name="action_not_applied">Изменения не внесены: сначала требуется подтверждение.</string>
+    <string name="action_delete_not_confirmed">Удаление не подтверждено. Сначала проверьте память, не повторяйте действие сразу.</string>
     <string name="action_open_related">Открыть раздел</string>
     <string name="action_open_source">Показать источник</string>
     <string name="action_source_title">Источник этого действия</string>

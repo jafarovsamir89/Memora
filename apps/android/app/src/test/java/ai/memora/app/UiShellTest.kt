@@ -244,13 +244,16 @@ class UiShellTest {
             listOf(ai.memora.app.data.protectedstore.AgentActionResultRow(
                 UUID.randomUUID().toString(), scopeId, turnId, "record_money_event", "APPLIED", "receipt_recorded",
                 "finance", targetId, 1_800_000_000_000L,
+            ), ai.memora.app.data.protectedstore.AgentActionResultRow(
+                UUID.randomUUID().toString(), scopeId, turnId, "delete_profile_fact", "CONFLICT", "profile_fact_not_found",
+                "memory", null, 1_800_000_000_001L,
             )),
         )
         val repository = ai.memora.app.data.protectedstore.ProtectedConversationRepository(agentDatabase.database)
         Assert.assertEquals(listOf("Synthetic request about a saved receipt", "Synthetic action confirmed."),
             repository.recent(scopeId, 80).map { it.message })
-        Assert.assertEquals(1, repository.actionResults(scopeId, turnId).size)
-        Assert.assertEquals(1, repository.actionResultsForTurns(scopeId, listOf(turnId))[turnId]?.size)
+        Assert.assertEquals(2, repository.actionResults(scopeId, turnId).size)
+        Assert.assertEquals(2, repository.actionResultsForTurns(scopeId, listOf(turnId))[turnId]?.size)
         compose.setContent {
             CompositionLocalProvider(LocalAgentDatabaseOverride provides agentDatabase.database) {
                 TestMemoraApp(initialRoute = "chat", capturePersistenceOverride = captureStore,
@@ -263,8 +266,11 @@ class UiShellTest {
         compose.waitUntil(10_000) { compose.onAllNodesWithTag("chat_turn_${turnId}_model").fetchSemanticsNodes().isNotEmpty() }
         compose.onNodeWithTag("action_result_${turnId}_0").performScrollTo().assertIsDisplayed()
         compose.onNodeWithText("Yadda saxlanıldı").assertIsDisplayed()
+        compose.onNodeWithTag("action_result_${turnId}_1").performScrollTo().assertIsDisplayed()
+        compose.onNodeWithTag("action_delete_not_confirmed").assertTextEquals(
+            "Silinmə təsdiqlənməyib. Yaddaşı yoxlamadan əməliyyatı təkrarlamayın.")
         screenshot("15-secretary-action-card")
-        compose.onNodeWithTag("action_open_source").performScrollTo().performClick()
+        compose.onAllNodesWithTag("action_open_source").onFirst().performScrollTo().performClick()
         compose.onNodeWithTag("action_source_user_message").assertExists()
         compose.onNodeWithTag("action_source_assistant_message").assertExists()
         compose.onNodeWithText("Bağla").performClick()
@@ -272,7 +278,7 @@ class UiShellTest {
         val correctionDraft = compose.onNodeWithTag("chat_input").fetchSemanticsNode().config[SemanticsProperties.EditableText].text
         Assert.assertTrue(correctionDraft.contains(targetId))
         compose.onNodeWithTag("action_correction_draft_note").assertExists()
-        compose.onNodeWithTag("action_open_related").performScrollTo().performClick()
+        compose.onAllNodesWithTag("action_open_related").onFirst().performScrollTo().performClick()
         compose.onNodeWithTag("nav_more").assertIsSelected()
         compose.onNodeWithTag("finance_screen").assertExists()
         Unit

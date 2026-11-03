@@ -1,3 +1,11 @@
+## ACT-0135 - 2026-11-03 - Ясный статус отказа удаления в карточке действия
+
+Расширена persisted action result card Secretary: при FAILED/CONFLICT/UNKNOWN для удаления profile fact, memory episode/object или table/table row под общим статусом показывается локализованное предупреждение, что удаление не подтверждено и перед повтором нужно проверить память. Не отображаются внутренний tool code или содержимое памяти. S40 уточнён.
+
+`UiShellTest.secretaryShowsPersistedActionStatusSourceAndRelatedArea` теперь сохраняет synthetic APPLIED finance и CONFLICT delete result вместе в SQLCipher test DB, проверяет чтение двух карточек, AZ предупреждение, исходное сообщение, связанный раздел и безопасный correction draft для подтверждённой finance операции. Целевой Compose test прошёл; полный `:app:testDebugUnitTest`: 56 suites / 285 tests, 0 failures/errors/skips. `:app:assembleDebug`, `:app:assembleDebugAndroidTest`, `:app:compileDebugAndroidTestKotlin`, `:app:lintDebug` прошли; lint 0 errors / 60 warnings / 3 hints. Screenshot `apps/android/app/build/test-screenshots/15-secretary-action-card.png` просмотрен; содержит только синтетические данные. APK v51 / `1.1.29-safe-delete-result-cards`, SHA-256 `7f6a9fc7126f26d129cf0b123a07e83e84c272456e4dd6cbf1aa4f3e237e5eac`. Не устанавливался; пользовательская БД не открывалась.
+
+Изменены `AgentChatScreen.kt`, AZ/RU/EN string resources, `UiShellTest.kt`, Android version metadata, `docs/SCENARIOS.md`, `TODO.md`, дневник и этот лог. Delete readback/restart, provider quota, actual device/owner acceptance и остальные M20-05 gates остаются открытыми.
+
 ## ACT-0134 - 2026-11-03 - Не сообщать ложный успех при отказе удаления памяти
 
 При конфликте/отказе write tool runtime перехватывал ответ модели, но использовал общее сообщение «не удалось сохранить», которое плохо описывало запрос удаления; для `en-US` fallback также возвращал азербайджанский текст. Теперь чистая неудача удаления profile fact, memory episode/object или table/table row формирует локализованный AZ/RU/EN ответ: удаление не подтверждено, перед повтором проверьте память. Если ответ модели после failed delete говорит «удалено», он блокируется существующей проверкой unresolved writes. Остальные failed write получают английский fallback. S40 добавлен в `docs/SCENARIOS.md`.

@@ -461,6 +461,7 @@
     <string name="action_status_unknown">Nəticə hələ yoxlanmayıb</string>
     <string name="action_status_failed">İcra olunmadı</string>
     <string name="action_not_applied">Təsdiq verilməyənədək heç bir dəyişiklik edilməyib.</string>
+    <string name="action_delete_not_confirmed">Silinmə təsdiqlənməyib. Yaddaşı yoxlamadan əməliyyatı təkrarlamayın.</string>
     <string name="action_open_related">Bölməni aç</string>
     <string name="action_open_source">Mənbəyə bax</string>
     <string name="action_source_title">Bu əməliyyatın mənbəyi</string>

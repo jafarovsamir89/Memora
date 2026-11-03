@@ -461,6 +461,7 @@
     <string name="action_status_unknown">Outcome not verified</string>
     <string name="action_status_failed">Not completed</string>
     <string name="action_not_applied">No change was made; confirmation is required first.</string>
+    <string name="action_delete_not_confirmed">Deletion isn\'t confirmed. Check memory before trying again.</string>
     <string name="action_open_related">Open section</string>
     <string name="action_open_source">View source</string>
     <string name="action_source_title">Source for this action</string>

@@ -317,6 +317,12 @@ private fun ActionResultCard(result: AgentActionResultRow, onOpenArea: (String) 
         if (result.status == "NEEDS_CONFIRMATION")
             Text(s(ai.memora.app.R.string.action_not_applied), style = androidx.compose.material3.MaterialTheme.typography.bodySmall,
                 color = colors.muted)
+        if (result.status != "APPLIED" && result.toolName in setOf(
+                "delete_profile_fact", "delete_memory_episode", "delete_memory_object", "delete_table_row", "delete_table")) {
+            Text(s(ai.memora.app.R.string.action_delete_not_confirmed),
+                modifier = Modifier.testTag("action_delete_not_confirmed"),
+                style = androidx.compose.material3.MaterialTheme.typography.bodySmall, color = colors.muted)
+        }
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
             areaLabel?.let { label ->
                 OutlinedButton(onClick = { areaRoute?.let(onOpenArea) }, modifier = Modifier.testTag("action_open_related")) {
