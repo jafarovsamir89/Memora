@@ -171,7 +171,8 @@ class CasesAndPersonCardTest {
             "synthetic-linked-task-create", "Synthetic follow-up task"))
         repository.createCalendarEvent(CalendarInput("synthetic-linked-calendar", scope, "Synthetic appointment",
             "2026-11-07T11:00", "2026-11-07T11:30", "Asia/Baku", "minute"))
-        cases.createCase(scope, "synthetic-source-case", "Synthetic planning case", null,
+        cases.createCase(scope, "synthetic-source-case", "Synthetic planning case", "Fictional planning summary",
+            nextAction = "Wait for synthetic confirmation",
             sourceTurnId = "00000000-0000-4000-8000-000000000202", now = "2026-11-03T10:01:00Z")
         cases.addParticipant(scope, "synthetic-source-case", "synthetic-source-person", now = "2026-11-03T10:02:00Z")
         cases.addEvidence(scope, "synthetic-source-case", "task", "synthetic-linked-task", "follow_up",
@@ -201,6 +202,28 @@ class CasesAndPersonCardTest {
         compose.onNodeWithTag(taskStoryTag).performScrollTo()
         screenshot("20-person-card-explicit-sources")
 
+        compose.onNodeWithTag("person_related_case_synthetic-source-case").performScrollTo().performClick()
+        compose.onNodeWithTag("saved_object_detail_title").assertTextEquals("Synthetic planning case")
+        compose.onNodeWithTag("person_case_summary").assertTextEquals("Fictional planning summary")
+        compose.onNodeWithTag("person_case_next_action").assertTextEquals("Next step: Wait for synthetic confirmation")
+        check(compose.onAllNodesWithText("Synthetic Planner").fetchSemanticsNodes().isNotEmpty())
+        screenshot("22-person-case-details")
+
+        val caseTaskSourceTag = "person_case_detail_source_synthetic-task-evidence"
+        compose.waitUntil(10_000) {
+            compose.onAllNodesWithTag(caseTaskSourceTag).fetchSemanticsNodes().isNotEmpty()
+        }
+        compose.onNodeWithTag(caseTaskSourceTag).performScrollTo().performClick()
+        compose.onNodeWithTag("saved_object_detail_title").assertTextEquals("Synthetic follow-up task")
+        screenshot("23-person-case-task-source")
+        compose.onNodeWithTag("saved_object_detail_back").performClick()
+        compose.onNodeWithTag("saved_object_detail_title").assertTextEquals("Synthetic planning case")
+        compose.onNodeWithTag("saved_object_detail_back").performClick()
+        compose.onNodeWithTag("saved_object_detail_title").assertTextEquals("Synthetic Planner")
+
+        compose.waitUntil(10_000) {
+            compose.onAllNodesWithTag(taskStoryTag).fetchSemanticsNodes().isNotEmpty()
+        }
         compose.onNodeWithTag(taskStoryTag).performScrollTo().performClick()
         compose.onNodeWithTag("saved_object_detail_title").assertTextEquals("Synthetic follow-up task")
         compose.onNodeWithText("Relationship: Follow-up").assertExists()

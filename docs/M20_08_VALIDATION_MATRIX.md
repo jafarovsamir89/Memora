@@ -1,6 +1,18 @@
 # M20-08 Native validation matrix
 
-Status as of 2026-11-03, APK v40 / 1.1.18-person-sources, Room schema 15. This matrix records existing evidence and remaining work; it does not turn host tests into device or live-provider acceptance.
+Status as of 2026-11-03, APK v41 / 1.1.19-person-cases, Room schema 15. This matrix records existing evidence and remaining work; it does not turn host tests into device or live-provider acceptance.
+
+## ACT-0126 update
+
+The person card now opens a case detail view in the existing dialog. It shows the stored summary, status, next action, participants and the bounded chronological timeline. Explicitly linked, available task/calendar evidence opens source details from that timeline; Back returns to the case and then the person card. Dialog scroll state resets when the detail target changes, so case summary/next action cannot remain scrolled out of view. No identity inference, schema migration, or finance path changed.
+
+Synthetic Compose coverage checks the case summary/next-action tags, participant, timeline source detail, source-to-case-to-person Back flow, and the existing direct person-to-source flow. Screenshots `20-person-card-explicit-sources.png` through `23-person-case-task-source.png` were reviewed; these are Robolectric host renders, not device captures.
+
+Full host command:
+
+    .\gradlew.bat :app:testDebugUnitTest :app:assembleDebug :app:assembleDebugAndroidTest :app:compileDebugAndroidTestKotlin :app:lintDebug --no-daemon --console=plain --max-workers=2
+
+Result: `BUILD SUCCESSFUL`; 54 suites / 274 tests, 0 failures/errors/skips; debug and AndroidTest APKs assembled; AndroidTest Kotlin compiled; lint 0 errors / 57 warnings / 3 hints. APK v41 SHA-256 `5FD0E517FA86C8ED652FAFED143435258563E6CDB890A912E0182EBE8625F9C0`; backup `C:\memora-backups\Memora-v41-1.1.19-person-cases-2026-11-03.apk` matches. ADB was checked and its server restarted, but `adb devices -l` still reported no device; v41 was not installed. The last confirmed device install is v40 from ACT-0125. User app DB was not opened and app data were not cleared. No live Gemini request was made because the owner cannot perform it now. Device/owner acceptance, actual DB migration/readback, Gemini and remaining M20 gates remain open.
 
 ## ACT-0125 update
 
