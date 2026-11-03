@@ -1122,4 +1122,4 @@ ACT-0095 зафиксирован коммитом fc2e21bd55e5f209f604a191d72f6
 
 Обновлены AgentDatabase и schema17, ProtectedCaseRepository, SavedObjectsScreen, AZ/RU/EN strings, DatabaseStorageProbe migration chain, tests, versionCode 53, `docs/DOMAIN_AND_DATA.md`, `docs/SCENARIOS.md` S41, TODO, plan/spec checkpoints, validation matrix, дневник и этот лог. M20-03 остаётся частичным; миграция требует isolated Android SQLCipher run, а экран — owner/device acceptance.
 
-Изменения и документация подготовлены к коммиту; push не заявляется до проверки удалённой ветки.
+Реализация и синхронизированная документация зафиксированы коммитом `463d3b4f19955939e06e6a227f3bea676180e47f` (`feat(android): link tasks to canonical people`) и отправлены в `origin/main`. После push `git fetch origin main`, local HEAD, tracking HEAD и `git ls-remote origin refs/heads/main` совпали. В рабочем дереве остался только ранее существовавший незатронутый untracked `docs/adr/ADR-012-keystore-wrapping-key-rotation.md`.

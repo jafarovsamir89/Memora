@@ -26,7 +26,7 @@ Room schema 16→17 добавляет `task_person_link` и `task_person_link_r
 
 Изменены AgentDatabase/schema, ProtectedCaseRepository, карточка человека, AZ/RU/EN resources, AndroidTest migration chain, unit/Compose tests, version metadata, S41 и синхронизированные документы. Следующий срез: проверка Android SQLCipher migration 16→17 на изолированной synthetic БД, затем другие canonical relations. M20-03 не закрыт.
 
-Повторный full Gradle прогон после просмотра скриншота завершился BUILD SUCCESSFUL за 55 секунд: 57 suites / 287 tests, все сборки и lint прошли. Коммит и push этого среза ещё не выполнены; записать handoff после проверки удалённой ветки.
+Повторный full Gradle прогон после просмотра скриншота завершился BUILD SUCCESSFUL за 55 секунд: 57 suites / 287 tests, все сборки и lint прошли. APK после сборки: SHA-256 `2f20754357f4678a454a2e0a6d0512dfc60fd1c81a521e92e5b1d7db7a3a2322`. Реализация зафиксирована `463d3b4f19955939e06e6a227f3bea676180e47f` и отправлена в `origin/main`; fetch, local HEAD и `git ls-remote` совпали. Текущий рабочий срез включает только незатронутый untracked `docs/adr/ADR-012-keystore-wrapping-key-rotation.md` пользователя.
 
 **Предыдущий проверенный срез ACT-0137, 2026-11-03:** APK v52 / `1.1.30-delete-timeout-acknowledgement`, Room schema 16; в этом пакете менялись только synthetic UI-test и документы, поэтому APK не менялся. Расширен M20-03 сценарий карточки человека: одно каноническое финансовое событие связано с двумя делами, но появляется в истории человека единственной карточкой; ledger содержит одну запись. Из карточки открывается точный источник `Money received: Synthetic Planner`, сумма `50 AZN`, и возврат ведёт обратно к человеку. Никакого связывания по совпадению имён не добавлено.
 
