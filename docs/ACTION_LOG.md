@@ -10,6 +10,8 @@ Compose lint выявил три `LocalContextGetResourceValueCall`: текст�
 
 Текущий пункт относится к M20-01/05 reliability/result experience и не закрывает их приёмку. Следом — M20-03/04: выбрать ограниченную canonical-link slice с проверкой migration/revision/source semantics; полная device/AZ-RU/product acceptance остаётся открытой. ACT-0131 friend-device retry и фактическая доставка напоминания также остаются owner field checks.
 
+**Git handoff ACT-0132:** код, тесты, APK metadata, TODO и запись ACT-0132 закоммичены `5a9f8d701481c190c60a521aacc23d5cacff5073` и отправлены в `origin/main`. После `git fetch origin main` локальный `HEAD` и `origin/main` совпали. Предшествующий локальный файл `docs/adr/ADR-012-keystore-wrapping-key-rotation.md` оставлен вне коммита: на текущем remote уже существует другой ADR-012 (`ADR-012-local-attention`), поэтому его нельзя синхронизировать без согласованной перенумерации/проверки содержимого.
+
 ## ACT-0131 - 2026-11-03 - Тайм-аут голосового секретаря и диагностика отказов
 
 Разобран ответ UI `Alınmadı. Yenidən cəhd edin.` после корректной транскрибации. `VoiceFirstScreen` оборачивал весь agent turn тайм-аутом 30 с, хотя `AgentRuntime` допускает до 60 с и включает несколько модельных раундов с локальными инструментами. На подключённом Redmi изолированный synthetic Gemini text-запрос занял 14.2 с, а function-calling с возвратом результата и финальным ответом — 26.5 с; полноценный ход мог пересечь 30-секундный внешний лимит и быть отменён до результата. Увеличен внешний timeout voice/text до 65 с, чтобы дать runtime завершить собственный тайм-аут и вернуть конкретный статус.
