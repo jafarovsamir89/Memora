@@ -1,5 +1,9 @@
 # Memora — лог действий
 
+## ACT-0104 · 2026-11-03 · Git handoff ACT-0103
+
+Проверенный M20-05 UI-срез v30 вместе с TODO, дневником, audit и инженерным планом зафиксирован коммитом `ac708f7eeae25411ae33488a6f519bfb4367eba0` (`feat(android): add secretary navigation and Today dashboard`) и отправлен в `origin/main`. `git ls-remote origin refs/heads/main` вернул тот же полный SHA; после push `git status -sb` показал чистую `main...origin/main`. Следующее действие — persistent structured result cards в SQLCipher для секретаря; M20-05, device acceptance и последующие этапы остаются открытыми.
+
 ## ACT-0103 · 2026-11-03 · M20-05 navigation and Today/Secretary UI
 
 Добавлена нижняя навигация Today / Secretary / Cases / Memory / More. Today агрегирует только локальные задачи, открытые дела из SQLCipher и календарные события ближайших семи дней; состояния загрузки, частичной ошибки и пустого дня различаются. Secretary совмещает push-to-talk и текстовый чат с общей сохранённой историей. Старые экраны остаются достижимы через More. Исправлено разделение локальных scope/actor IDs и cloud consent preferences; отзыв consent больше не меняет пространство памяти. Добавлены тесты языка вкладок, маршрутов и синтетического Today dashboard.
