@@ -314,7 +314,8 @@ class AgentOrchestrator(
                                 }, code = "person_name_ambiguous", observations = observations)
                             }
                             return@withTimeout finish(turn, AgentTurnStatus.PARTIAL,
-                                answer = if (appliedWriteCount > 0) partialWriteFailure(turn.locale) else writeFailure(turn.locale),
+                                answer = if (appliedWriteCount > 0) partialWriteFailure(turn.locale)
+                                    else writeFailure(turn.locale, failedWrites),
                                 code = "tool_write_failed", observations = observations)
                         }
                         terminal = if (failedTools) AgentTurnStatus.PARTIAL else AgentTurnStatus.COMPLETED
@@ -331,14 +332,16 @@ class AgentOrchestrator(
                         // A domain conflict can be the correct reason to ask the user (for example,
                         // two scoped people with the same name). Preserve that clarification while
                         // still preventing an Answer from being reported as a successful write.
-                        val hardWriteFailure = unresolvedAgentWriteFailures(observations).any {
+                        val failedWrites = unresolvedAgentWriteFailures(observations)
+                        val hardWriteFailure = failedWrites.any {
                             it.status == ToolObservationStatus.REJECTED || it.status == ToolObservationStatus.FAILED
                         }
                         if (hardWriteFailure) {
                             terminal = AgentTurnStatus.PARTIAL
                             val hasAppliedWrite = observations.any { it.name in AGENT_PERSISTED_WRITE_TOOLS && it.status == ToolObservationStatus.APPLIED }
                             return@withTimeout finish(turn, terminal,
-                                answer = if (hasAppliedWrite) partialWriteFailure(turn.locale) else writeFailure(turn.locale),
+                                answer = if (hasAppliedWrite) partialWriteFailure(turn.locale)
+                                    else writeFailure(turn.locale, failedWrites),
                                 code = "tool_write_failed", observations = observations)
                         }
                         terminal = AgentTurnStatus.AWAITING_CLARIFICATION
@@ -607,7 +610,7 @@ class AgentOrchestrator(
         val unresolved = unresolvedAgentWriteFailures(observations)
         if (unresolved.isNotEmpty()) {
             return finish(turn, if (applied) AgentTurnStatus.PARTIAL else AgentTurnStatus.FAILED,
-                answer = if (applied) partialWriteFailure(turn.locale) else writeFailure(turn.locale),
+                answer = if (applied) partialWriteFailure(turn.locale) else writeFailure(turn.locale, unresolved),
                 code = "tool_write_failed", observations = observations)
         }
         if (!applied) return null
@@ -639,13 +642,25 @@ class AgentOrchestrator(
         return AgentRunResult(turn.turnId, status.toResult(), answer, code, observations.toList())
     }
 
-    private fun writeFailure(locale: String) = if (locale == "ru-RU")
-        "Не удалось сохранить изменение. Повторите попытку."
-    else "Məlumatı yadda saxlaya bilmədim. Yenidən cəhd edin."
+    private fun writeFailure(locale: String, failures: List<AgentToolObservation> = emptyList()): String {
+        val deleteTools = setOf("delete_profile_fact", "delete_memory_episode", "delete_memory_object", "delete_table_row", "delete_table")
+        if (failures.isNotEmpty() && failures.all { it.name in deleteTools }) return when (locale) {
+            "ru-RU" -> "Не удалось удалить сохранённую запись. Удаление не подтверждено; проверьте память перед повторной попыткой."
+            "en-US" -> "I couldn't delete the saved item. Deletion isn't confirmed; check memory before trying again."
+            else -> "Yaddaşdakı qeydi silə bilmədim. Silinmə təsdiqlənməyib; yenidən cəhd etməzdən əvvəl yaddaşı yoxlayın."
+        }
+        return when (locale) {
+            "ru-RU" -> "Не удалось сохранить изменение. Повторите попытку."
+            "en-US" -> "I couldn't save the change. Please try again."
+            else -> "Dəyişikliyi yadda saxlaya bilmədim. Yenidən cəhd edin."
+        }
+    }
 
-    private fun partialWriteFailure(locale: String) = if (locale == "ru-RU")
-        "Часть операции выполнена, но одно изменение не сохранилось. Проверьте запись."
-    else "Əməliyyat qismən tamamlandı, amma bir dəyişiklik yadda saxlanmadı. Yazını yoxlayın."
+    private fun partialWriteFailure(locale: String) = when (locale) {
+        "ru-RU" -> "Часть операции выполнена, но одно изменение не сохранилось. Проверьте результат."
+        "en-US" -> "Part of the operation completed, but one change wasn't saved. Please check the result."
+        else -> "Əməliyyat qismən tamamlandı, amma bir dəyişiklik yadda saxlanmadı. Nəticəni yoxlayın."
+    }
 
     private fun logStage(traceId: String, stage: String, status: String, code: String) {
         val safeStage = stage.takeIf { it.matches(Regex("[a-z_]{1,40}")) } ?: "unknown"

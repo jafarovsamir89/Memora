@@ -1,3 +1,11 @@
+## ACT-0134 - 2026-11-03 - Не сообщать ложный успех при отказе удаления памяти
+
+При конфликте/отказе write tool runtime перехватывал ответ модели, но использовал общее сообщение «не удалось сохранить», которое плохо описывало запрос удаления; для `en-US` fallback также возвращал азербайджанский текст. Теперь чистая неудача удаления profile fact, memory episode/object или table/table row формирует локализованный AZ/RU/EN ответ: удаление не подтверждено, перед повтором проверьте память. Если ответ модели после failed delete говорит «удалено», он блокируется существующей проверкой unresolved writes. Остальные failed write получают английский fallback. S40 добавлен в `docs/SCENARIOS.md`.
+
+Прицельный fake-provider тест удаляет несуществующий synthetic profile fact, получает конфликт, затем отдаёт ложный успешный ответ; проверено, что запись не появилась, runtime возвращает `PARTIAL/tool_write_failed`, а сообщение на всех трёх языках говорит о неподтверждённом удалении. `:app:testDebugUnitTest`: 56 suites / 285 tests, 0 failures/errors/skips. `:app:assembleDebug`, `:app:assembleDebugAndroidTest`, `:app:compileDebugAndroidTestKotlin`, `:app:lintDebug` прошли; lint 0 errors / 60 warnings / 3 hints. APK v50 / `1.1.28-safe-memory-delete-outcome`, SHA-256 `09862b37ef5b3ce6e685e34a1d331b27cdc76d728265fd4e3fe61ea4d84acdb0`. Не устанавливался; пользовательская БД не открывалась.
+
+Изменены `AgentRuntime.kt`, `AgentFakeProviderProfileMemoryTest.kt`, Android version metadata, `docs/SCENARIOS.md`, `TODO.md`, дневник и этот лог. Не закрывает весь профильный delete readback UX, другие write pathways, M20-01/04/08 или release gates.
+
 ## ACT-0133 - 2026-11-03 - Дедупликация источников в истории человека
 
 Исправлена история карточки человека: один и тот же канонический task/calendar/finance/memory source, связанный с несколькими делами, ранее создавал несколько визуально одинаковых событий из-за разных `CaseEvidenceRow.evidenceId`. Для evidence entries построение story ID теперь опирается на `sourceKind + sourceId + sourceRevisionId`; записи редакций самого дела остаются отдельными. БД, доменные источники и связи не менялись.

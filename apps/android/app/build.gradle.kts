@@ -19,8 +19,8 @@ android {
         applicationId = "ai.memora.app"
         minSdk = 26
         targetSdk = 36
-        versionCode = 49
-        versionName = "1.1.27-person-timeline-source-dedup"
+        versionCode = 50
+        versionName = "1.1.28-safe-memory-delete-outcome"
         testInstrumentationRunner = "ai.memora.app.GeminiSyntheticProbe"
     }
     buildFeatures { compose = true }

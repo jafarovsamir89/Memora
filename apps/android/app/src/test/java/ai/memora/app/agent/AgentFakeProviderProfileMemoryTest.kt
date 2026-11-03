@@ -107,6 +107,31 @@ class AgentFakeProviderProfileMemoryTest {
         assertTrue(conversations.turn(scope, "00000000-0000-4000-8000-000000000812").isEmpty())
     }
 
+    @Test fun failedProfileDeletionNeverReceivesFalseSuccessReplyInAzRuOrEn() = runBlocking {
+        val db = databaseRule.database
+        val scope = "00000000-0000-4000-8000-000000000821"
+        val actor = "00000000-0000-4000-8000-000000000822"
+        val conversations = ProtectedConversationRepository(db)
+        val handlers = LocalMemoryTools(ProtectedDomainRepository(db), ProtectedMemoryRepository(db),
+            conversations = conversations, profileMemory = ProtectedProfileMemoryRepository(db)).handlers()
+        val expectedMessages = mapOf(
+            "az-AZ" to "Silinmə təsdiqlənməyib",
+            "ru-RU" to "Удаление не подтверждено",
+            "en-US" to "Deletion isn't confirmed",
+        )
+        expectedMessages.forEach { (locale, expectedMessage) ->
+            val provider = FailedProfileDeletionProvider()
+            val result = AgentOrchestrator(provider, DefaultAgentToolRegistry(handlers), AllowPolicy(), MemoryJournal())
+                .run(AgentTurnRequest(provider.turnId, scope, actor, null, locale, "Synthetic deletion request"))
+
+            assertEquals(AgentRunResultStatus.PARTIAL, result.status)
+            assertEquals("tool_write_failed", result.code)
+            assertEquals("profile_fact_not_found", result.toolResults.single().code)
+            assertTrue(result.answer.orEmpty().contains(expectedMessage))
+            assertFalse(result.answer.orEmpty().contains("Synthetic item deleted"))
+        }
+    }
+
     private class ProfileFactProvider : AgentModelGateway {
         var rounds = 0
         override suspend fun complete(request: AgentModelRequest): AgentModelReply {
@@ -125,6 +150,16 @@ class AgentFakeProviderProfileMemoryTest {
             rounds++
             return AgentModelReply.Calls(listOf(AgentModelToolCall("revoked-profile-save", "save_profile_fact", 1,
                 mapOf("category" to "preference", "fact" to "Synthetic private preference"))))
+        }
+    }
+
+    private class FailedProfileDeletionProvider : AgentModelGateway {
+        val turnId = java.util.UUID.randomUUID().toString()
+        private var rounds = 0
+        override suspend fun complete(request: AgentModelRequest): AgentModelReply = when (rounds++) {
+            0 -> AgentModelReply.Calls(listOf(AgentModelToolCall("missing-profile-delete", "delete_profile_fact", 1,
+                mapOf("fact_id" to "00000000-0000-4000-8000-000000000823", "expected_revision" to 1L))))
+            else -> AgentModelReply.Answer("Synthetic item deleted.")
         }
     }
 

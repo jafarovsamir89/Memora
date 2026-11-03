@@ -101,7 +101,7 @@ class AgentRuntimeTest {
         val result = runtime(model, DefaultAgentToolRegistry(listOf(failing, succeeding))).run(turn)
 
         assertEquals(AgentRunResultStatus.PARTIAL, result.status)
-        assertEquals("Əməliyyat qismən tamamlandı, amma bir dəyişiklik yadda saxlanmadı. Yazını yoxlayın.", result.answer)
+        assertEquals("Əməliyyat qismən tamamlandı, amma bir dəyişiklik yadda saxlanmadı. Nəticəni yoxlayın.", result.answer)
         assertEquals(listOf(ToolObservationStatus.FAILED, ToolObservationStatus.APPLIED), result.toolResults.map { it.status })
         assertEquals("prepare_failed", result.toolResults.first().code)
         assertEquals(0, failing.commits)
