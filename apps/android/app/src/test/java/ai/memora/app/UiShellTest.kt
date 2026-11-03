@@ -217,6 +217,21 @@ class UiShellTest {
         screenshot("14-today-with-local-data")
     }
 
+    @Test fun dailyAttentionIsVisibleButStartsOptedOut() {
+        compose.setContent {
+            CompositionLocalProvider(LocalAgentDatabaseOverride provides agentDatabase.database) {
+                TestMemoraApp(initialRoute = "settings", capturePersistenceOverride = captureStore,
+                    appearanceStoreOverride = appearanceStore)
+            }
+        }
+        compose.waitUntil(10_000) {
+            compose.onAllNodes(hasTestTag("attention_enabled") and isEnabled()).fetchSemanticsNodes().isNotEmpty()
+        }
+        compose.onNodeWithTag("attention_enabled").assertIsOff()
+        compose.onNodeWithTag("attention_settings_error").assertDoesNotExist()
+        compose.onNodeWithText("По желанию локальная сводка", substring = true).assertExists()
+    }
+
     @Test fun secretaryShowsPersistedActionStatusSourceAndRelatedArea() = kotlinx.coroutines.runBlocking {
         val context = ApplicationProvider.getApplicationContext<Context>()
         val processor = ai.memora.app.voice.AgentVoiceTurnProcessor(context, agentDatabase.database)
@@ -294,8 +309,17 @@ class UiShellTest {
     }
 
     @Test fun darkThemeAndLanguageSwitch() {
-        compose.setContent { TestMemoraApp(initialRoute = "settings", initialTheme = "light", capturePersistenceOverride = captureStore, appearanceStoreOverride = appearanceStore) }
-        compose.waitUntil(10_000) { compose.onAllNodes(hasTestTag("filter_dark") and isEnabled()).fetchSemanticsNodes().isNotEmpty() }
+        compose.setContent {
+            CompositionLocalProvider(LocalAgentDatabaseOverride provides agentDatabase.database) {
+                TestMemoraApp(initialRoute = "settings", initialTheme = "light", capturePersistenceOverride = captureStore,
+                    appearanceStoreOverride = appearanceStore)
+            }
+        }
+        compose.waitUntil(10_000) {
+            compose.onAllNodes(hasTestTag("filter_dark") and isEnabled()).fetchSemanticsNodes().isNotEmpty() &&
+                compose.onAllNodes(hasTestTag("attention_enabled") and isEnabled()).fetchSemanticsNodes().isNotEmpty()
+        }
+        compose.onNodeWithTag("attention_settings_error").assertDoesNotExist()
         compose.onNodeWithTag("filter_dark").performClick()
         awaitAppearance("ru", "dark")
         screenshot("06-settings-dark")

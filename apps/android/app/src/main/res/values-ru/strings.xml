@@ -432,4 +432,20 @@
     <string name="today_tasks_count">Задачи</string>
     <string name="today_cases_count">Дела</string>
     <string name="today_events_count">События</string>
+<string name="attention_settings_title">Ежедневное внимание</string>
+    <string name="attention_settings_explainer">По желанию локальная сводка проверяет сохранённые задачи, события календаря и открытые дела. Данные не отправляются Google; в уведомлении нет имён, сумм и текста. Одинаковое время начала и окончания отключает тихие часы.</string>
+<string name="attention_settings_enabled">Включить ежедневную сводку</string>
+<string name="attention_settings_time">Время сводки: %1$s</string>
+<string name="attention_settings_quiet_start">Тихие часы начинаются: %1$s</string>
+<string name="attention_settings_quiet_end">Тихие часы заканчиваются: %1$s</string>
+<string name="attention_settings_loading">Загружаем локальные настройки…</string>
+<string name="attention_settings_error">Не удалось прочитать или сохранить настройки внимания в защищённой памяти.</string>
+<string name="attention_channel">Ежедневное внимание</string>
+<string name="attention_notification_title">Сводка Memora готова</string>
+<string name="attention_notification_body">Откройте сохранённые приоритеты на сегодня.</string>
+<string name="attention_snooze">Напомнить через час</string>
+<string name="attention_dismiss">Скрыть до завтра</string>
+<string name="today_attention_suggestions">Следующие 1–3 шага</string>
+<string name="attention_settings_notifications_unavailable">Уведомления отключены в настройках Android; Memora не сможет показать сводку.</string>
+<string name="attention_settings_permission_denied">Разрешение на уведомления не выдано. Ежедневная сводка останется выключенной.</string>
 </resources>

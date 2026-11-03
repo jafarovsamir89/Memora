@@ -21,7 +21,11 @@ import ai.memora.app.data.protectedstore.DomainObjectRow
 import ai.memora.app.data.protectedstore.ProtectedCaseRepository
 import ai.memora.app.data.protectedstore.ProtectedConversationRepository
 import ai.memora.app.data.protectedstore.ProtectedDomainRepository
+import ai.memora.app.data.protectedstore.ProtectedMemoryRepository
 import ai.memora.app.domain.LocalMemoryIndex
+import ai.memora.app.reminders.AttentionEngine
+import ai.memora.app.reminders.AttentionKind
+import ai.memora.app.reminders.AttentionSuggestion
 import ai.memora.app.ui.*
 import ai.memora.app.voice.AgentVoiceTurnProcessor
 import kotlinx.coroutines.delay
@@ -45,27 +49,38 @@ fun WorkingHomeScreen(language: String, state: CaptureSessionState, navigate: (S
     val caseRepository = remember(database) { database?.let(::ProtectedCaseRepository) }
     val domainRepository = remember(database) { database?.let(::ProtectedDomainRepository) }
     var dueTasks by remember { mutableStateOf<List<ai.memora.app.domain.Task>>(emptyList()) }
-    var activeCases by remember { mutableStateOf<List<ai.memora.app.data.protectedstore.CaseRecordRow>>(emptyList()) }
     var openCaseCount by remember { mutableIntStateOf(0) }
     var upcomingEvents by remember { mutableStateOf<List<ai.memora.app.data.protectedstore.LocalCalendarEventRow>>(emptyList()) }
+    var attentionSuggestions by remember { mutableStateOf<List<AttentionSuggestion>>(emptyList()) }
     var overviewLoading by remember { mutableStateOf(true) }
     var overviewError by remember { mutableStateOf(false) }
     LaunchedEffect(scopeId, taskStore, database) {
         overviewLoading = true
         overviewError = false
         try {
-            val today = LocalDate.now(ZoneId.of("Asia/Baku"))
+            val deviceZone = ZoneId.systemDefault()
+            val today = LocalDate.now(deviceZone)
             val through = today.plusDays(7)
             val taskRead = taskStore?.let { withContext(Dispatchers.IO) { it.load() } }
             if (taskRead == null || taskRead == StoreRead.Unavailable) overviewError = true
-            dueTasks = (taskRead as? StoreRead.Ready)?.tasks.orEmpty()
+            val legacyTasks = (taskRead as? StoreRead.Ready)?.tasks.orEmpty()
+            val memory = database ?: error("protected_overview_unavailable")
+            val protectedTasks = withContext(Dispatchers.IO) {
+                ProtectedMemoryRepository(memory).tasks().tasks.filter { it.scopeId == scopeId }
+            }
+            val mergedTasks = legacyTasks.associateBy { it.id }.toMutableMap().apply {
+                protectedTasks.forEach { put(it.id, it) }
+            }.values.toList()
+            dueTasks = mergedTasks
                 .filter { task -> !task.completed && task.dueLocal?.substringBefore('T')?.let { it <= through.toString() } == true }
                 .sortedBy { it.dueLocal }
             val cases = caseRepository ?: error("protected_overview_unavailable")
             val domains = domainRepository ?: error("protected_overview_unavailable")
             openCaseCount = cases.openCaseCount(scopeId)
-            activeCases = cases.openCases(scopeId, limit = 4)
             upcomingEvents = domains.calendarBetween(scopeId, today.atStartOfDay().toString(), today.plusDays(8).atStartOfDay().toString())
+            val attentionCases = cases.openCases(scopeId, limit = 100)
+            attentionSuggestions = AttentionEngine.suggest(scopeId, mergedTasks, attentionCases, upcomingEvents,
+                System.currentTimeMillis(), deviceZone, limit = 3)
         } catch (_: Exception) {
             overviewError = true
         } finally {
@@ -73,7 +88,7 @@ fun WorkingHomeScreen(language: String, state: CaptureSessionState, navigate: (S
         }
     }
     ScreenColumn {
-        Text(LocalDate.now(ZoneId.of("Asia/Baku")).format(DateTimeFormatter.ofPattern("EEEE, d MMMM", Locale.forLanguageTag(language))),
+        Text(LocalDate.now(ZoneId.systemDefault()).format(DateTimeFormatter.ofPattern("EEEE, d MMMM", Locale.forLanguageTag(language))),
             style = MaterialTheme.typography.labelSmall, color = colors.muted)
         ScreenHeading(s(R.string.home_title), s(R.string.working_home_hint))
         MemoraCard(tint = colors.hero) {
@@ -95,25 +110,20 @@ fun WorkingHomeScreen(language: String, state: CaptureSessionState, navigate: (S
         if (!overviewLoading && !overviewError && dueTasks.isEmpty() && openCaseCount == 0 && upcomingEvents.isEmpty()) {
             EmptyState(s(R.string.today_clear_title), s(R.string.today_clear_body), Glyph.Calendar)
         }
-        dueTasks.take(4).forEach { task ->
-            MemoraCard(onClick = { navigate("tasks") }, modifier = Modifier.testTag("today_task_${task.id}")) {
-                Text(s(R.string.today_due_tasks), style = MaterialTheme.typography.labelSmall, color = colors.accent)
-                Text(task.title, style = MaterialTheme.typography.titleMedium, color = colors.ink)
-                task.dueLocal?.let { Text(it.replace('T', ' '), style = MaterialTheme.typography.bodySmall, color = colors.muted) }
-            }
-        }
-        activeCases.take(4).forEach { case ->
-            MemoraCard(onClick = { navigate("cases") }, modifier = Modifier.testTag("today_case_${case.caseId}")) {
-                Text(s(R.string.today_open_cases), style = MaterialTheme.typography.labelSmall, color = colors.accent)
-                Text(case.title, style = MaterialTheme.typography.titleMedium, color = colors.ink)
-                case.nextAction?.takeIf(String::isNotBlank)?.let { Text(it, color = colors.muted) }
-            }
-        }
-        upcomingEvents.take(4).forEach { event ->
-            MemoraCard(onClick = { navigate("calendar") }, modifier = Modifier.testTag("today_event_${event.eventId}")) {
-                Text(s(R.string.today_upcoming), style = MaterialTheme.typography.labelSmall, color = colors.accent)
-                Text(event.title, style = MaterialTheme.typography.titleMedium, color = colors.ink)
-                Text(event.startLocal.replace('T', ' '), style = MaterialTheme.typography.bodySmall, color = colors.muted)
+        if (attentionSuggestions.isNotEmpty()) {
+            SectionHeading(s(R.string.today_attention_suggestions))
+            attentionSuggestions.forEach { suggestion ->
+                val (label, route, tag) = when (suggestion.kind) {
+                    AttentionKind.TASK -> Triple(R.string.today_due_tasks, "tasks", "today_task_${suggestion.sourceId}")
+                    AttentionKind.CASE -> Triple(R.string.today_open_cases, "cases", "today_case_${suggestion.sourceId}")
+                    AttentionKind.CALENDAR -> Triple(R.string.today_upcoming, "calendar", "today_event_${suggestion.sourceId}")
+                }
+                MemoraCard(onClick = { navigate(route) }, modifier = Modifier.testTag(tag)) {
+                    Text(s(label), style = MaterialTheme.typography.labelSmall, color = colors.accent)
+                    Text(suggestion.title, style = MaterialTheme.typography.titleMedium, color = colors.ink)
+                    suggestion.sourceLocalTime?.let { Text(it.replace('T', ' '), style = MaterialTheme.typography.bodySmall, color = colors.muted) }
+                    suggestion.detail?.takeIf(String::isNotBlank)?.let { Text(it, style = MaterialTheme.typography.bodySmall, color = colors.muted) }
+                }
             }
         }
         OutlinedButton(onClick = { navigate("chat") }, modifier = Modifier.fillMaxWidth().testTag("open_chat")) { Text(s(R.string.ask_memory)) }

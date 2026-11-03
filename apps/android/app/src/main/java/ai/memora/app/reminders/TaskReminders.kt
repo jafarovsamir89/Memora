@@ -109,17 +109,19 @@ class TaskReminderReceiver : BroadcastReceiver() {
 
 class TaskRescheduleReceiver : BroadcastReceiver() {
     override fun onReceive(context: Context, intent: Intent) {
-        if (intent.action != Intent.ACTION_BOOT_COMPLETED && intent.action != Intent.ACTION_MY_PACKAGE_REPLACED) return
+        if (intent.action !in setOf(Intent.ACTION_BOOT_COMPLETED, Intent.ACTION_MY_PACKAGE_REPLACED,
+                Intent.ACTION_TIME_CHANGED, Intent.ACTION_TIMEZONE_CHANGED)) return
         val pending = goAsync()
         Thread {
             try {
                 val store = EncryptedTaskStore(File(context.filesDir, "tasks-prototype.bin"), TaskStoreKey::get)
                 val legacyTasks = (store.load() as? StoreRead.Ready)?.tasks.orEmpty()
-                val scopeId = context.getSharedPreferences("voice-first-consent", Context.MODE_PRIVATE).getString("scope-id", null)
+                val scopeId = ai.memora.app.voice.AgentVoiceTurnProcessor(context).conversationScopeId()
                 val agentTasks = scopeId?.let { scope ->
                     runCatching { runBlocking { ProtectedMemoryRepository(AgentDatabase.open(context)).tasks().tasks.filter { it.scopeId == scope } } }.getOrDefault(emptyList())
                 }.orEmpty()
                 TaskReminders.reschedule(context, (legacyTasks + agentTasks).distinctBy { it.id })
+                AttentionNotifications.schedule(context, scopeId)
             } catch (_: Exception) { /* Retry when the application is opened. */ }
             finally { pending.finish() }
         }.start()

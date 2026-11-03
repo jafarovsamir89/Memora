@@ -253,6 +253,7 @@ fun SettingsScreen(theme: String, changeTheme: (String) -> Unit, language: Strin
         Filters(listOf("system" to s(R.string.theme_system), "light" to s(R.string.theme_light), "dark" to s(R.string.theme_dark)), theme, changeTheme, enabled = ready)
         SectionHeading(s(R.string.language))
         Filters(listOf("ru" to "Русский", "az" to "Azərbaycan", "en" to "English"), language, changeLanguage, enabled = ready)
+        AttentionSettingsControls()
         DevicePermissionSettings()
         if (granted) OutlinedButton(onClick = {
             if (voiceConsent.edit().clear().commit()) granted = false

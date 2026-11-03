@@ -432,4 +432,20 @@
     <string name="today_tasks_count">Tasks</string>
     <string name="today_cases_count">Cases</string>
     <string name="today_events_count">Events</string>
+<string name="attention_settings_title">Daily attention</string>
+    <string name="attention_settings_explainer">An optional on-device briefing checks saved tasks, calendar events, and open cases. It sends no data to Google; notifications show no names, amounts, or private text. Set quiet-hour start and end to the same time to turn quiet hours off.</string>
+<string name="attention_settings_enabled">Enable daily briefing</string>
+<string name="attention_settings_time">Briefing time: %1$s</string>
+<string name="attention_settings_quiet_start">Quiet hours start: %1$s</string>
+<string name="attention_settings_quiet_end">Quiet hours end: %1$s</string>
+<string name="attention_settings_loading">Loading local settings…</string>
+<string name="attention_settings_error">Could not read or save attention settings in protected storage.</string>
+<string name="attention_channel">Daily attention</string>
+<string name="attention_notification_title">Your Memora briefing is ready</string>
+<string name="attention_notification_body">Open today’s saved priorities.</string>
+<string name="attention_snooze">Remind me in one hour</string>
+<string name="attention_dismiss">Dismiss for today</string>
+<string name="today_attention_suggestions">Your next 1–3 steps</string>
+<string name="attention_settings_notifications_unavailable">Notifications are turned off in Android settings, so Memora cannot show the briefing.</string>
+<string name="attention_settings_permission_denied">Notification permission was denied. The daily briefing remains off.</string>
 </resources>

@@ -103,6 +103,11 @@ internal val AGENT_DB_11_TO_12 = androidx.room.migration.Migration(11, 12) { db 
     db.execSQL("CREATE INDEX IF NOT EXISTS index_agent_action_result_scopeId_turnId_createdAtMillis ON agent_action_result(scopeId, turnId, createdAtMillis)")
 }
 
+/** Opt-in local attention preferences and delivery controls; no source text is copied into this table. */
+internal val AGENT_DB_12_TO_13 = androidx.room.migration.Migration(12, 13) { db ->
+    db.execSQL("CREATE TABLE IF NOT EXISTS attention_settings (scopeId TEXT NOT NULL, enabled INTEGER NOT NULL, briefingTimeLocal TEXT NOT NULL, quietStartMinute INTEGER NOT NULL, quietEndMinute INTEGER NOT NULL, lastNotificationDate TEXT, dismissedDate TEXT, snoozedUntilMillis INTEGER, snoozedForDate TEXT, updatedAtMillis INTEGER NOT NULL, PRIMARY KEY(scopeId))")
+}
+
 /** Minimal command journal. Only identifiers, digest, status and recovery versions are retained. */
 @Entity(tableName = "agent_command_journal")
 internal data class AgentCommandJournalRow(
@@ -154,6 +159,21 @@ internal data class AgentActionResultRow(
 internal data class ConversationRetentionRow(
     @PrimaryKey val scopeId: String,
     val retentionDays: Int,
+    val updatedAtMillis: Long,
+)
+
+/** User-controlled schedule. The SQLCipher row stores settings and delivery dates, never notification content. */
+@Entity(tableName = "attention_settings")
+internal data class AttentionSettingsRow(
+    @PrimaryKey val scopeId: String,
+    val enabled: Boolean,
+    val briefingTimeLocal: String,
+    val quietStartMinute: Int,
+    val quietEndMinute: Int,
+    val lastNotificationDate: String?,
+    val dismissedDate: String?,
+    val snoozedUntilMillis: Long?,
+    val snoozedForDate: String?,
     val updatedAtMillis: Long,
 )
 
@@ -420,6 +440,10 @@ internal interface ProtectedStoreDao {
     suspend fun conversationRetention(scope: String): ConversationRetentionRow?
     @androidx.room.Insert(onConflict = androidx.room.OnConflictStrategy.REPLACE)
     suspend fun putConversationRetention(row: ConversationRetentionRow)
+    @androidx.room.Query("SELECT * FROM attention_settings WHERE scopeId=:scope")
+    suspend fun attentionSettings(scope: String): AttentionSettingsRow?
+    @androidx.room.Insert(onConflict = androidx.room.OnConflictStrategy.REPLACE)
+    suspend fun putAttentionSettings(row: AttentionSettingsRow)
     @androidx.room.Query("DELETE FROM agent_conversation_message WHERE scopeId=:scope")
     suspend fun clearConversation(scope: String)
 
@@ -521,12 +545,12 @@ internal interface ProtectedStoreDao {
 @Database(entities = [AgentCommandJournalRow::class, MemoryDraftRow::class, MemorySourceRow::class,
     MemoryRevisionRow::class, MemoryTombstoneRow::class, TaskEventRow::class, DeletedTaskRow::class,
     PersonRow::class, MoneyEventRow::class, LegacyMigrationRow::class, AgentOutboxRow::class, AgentTurnJournalRow::class,
-    AgentConversationMessageRow::class, AgentActionResultRow::class, ConversationRetentionRow::class,
+    AgentConversationMessageRow::class, AgentActionResultRow::class, ConversationRetentionRow::class, AttentionSettingsRow::class,
     DomainObjectRow::class, DomainRevisionRow::class, DomainLinkRow::class, UserTableRow::class, TableColumnRow::class,
     TableDataRow::class, MoneyAdjustmentRow::class, LocalCalendarEventRow::class, TableSchemaRevisionRow::class,
     LocalProfileRow::class, PersonIdentityLinkRow::class, CaseRecordRow::class, CaseRevisionRow::class,
     CaseParticipantRow::class, CaseEvidenceRow::class],
-    version = 12, exportSchema = true)
+    version = 13, exportSchema = true)
 internal abstract class AgentDatabase : RoomDatabase() {
     abstract fun protectedStoreDao(): ProtectedStoreDao
     companion object {
@@ -636,7 +660,7 @@ internal abstract class AgentDatabase : RoomDatabase() {
                 database = Room.databaseBuilder(context.applicationContext, AgentDatabase::class.java, databaseName)
                     .addMigrations(AGENT_DB_1_TO_2, AGENT_DB_2_TO_3, AGENT_DB_3_TO_4, AGENT_DB_4_TO_5,
                         AGENT_DB_5_TO_6, AGENT_DB_6_TO_7, AGENT_DB_7_TO_8, AGENT_DB_8_TO_9, AGENT_DB_9_TO_10,
-                        AGENT_DB_10_TO_11, AGENT_DB_11_TO_12)
+                        AGENT_DB_10_TO_11, AGENT_DB_11_TO_12, AGENT_DB_12_TO_13)
                     .setJournalMode(RoomDatabase.JournalMode.TRUNCATE)
                     // WAL remains disabled until P1 WAL/SHM privacy and recovery gates pass.
                     .openHelperFactory(SupportOpenHelperFactory(databaseKey, null, false))

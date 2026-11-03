@@ -34,10 +34,18 @@ class TaskPrototypeUiTest {
                 MemoraTheme("light") { ScreenColumn { TaskPrototype(store) } }
             }
         }
-        compose.waitUntil(10_000) { compose.onAllNodesWithTag("prototype_add").fetchSemanticsNodes().isNotEmpty() }
+        compose.waitUntil(10_000) {
+            compose.onAllNodes(hasTestTag("prototype_input") and isEnabled()).fetchSemanticsNodes().isNotEmpty()
+        }
         compose.onNodeWithTag("prototype_input").performScrollTo().performTextInput("Synthetic test task")
+        compose.waitUntil(10_000) {
+            compose.onAllNodes(hasTestTag("prototype_add") and isEnabled()).fetchSemanticsNodes().isNotEmpty()
+        }
         compose.onNodeWithTag("prototype_add").performScrollTo().performClick()
         compose.waitUntil(10_000) { compose.onAllNodesWithText("Synthetic test task").fetchSemanticsNodes().isNotEmpty() }
+        compose.waitUntil(10_000) {
+            compose.onAllNodes(hasTestTag("prototype_input") and isEnabled()).fetchSemanticsNodes().isNotEmpty()
+        }
         compose.onNodeWithText("Synthetic test task").performScrollTo().performClick()
         compose.waitUntil(10_000) { (store.load() as? ai.memora.app.data.StoreRead.Ready)?.tasks?.singleOrNull()?.completed == true }
     }
