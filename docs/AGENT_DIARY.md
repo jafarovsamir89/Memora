@@ -18,6 +18,8 @@ APK SHA-256 `7AFBE0476AB2AB4A8BE05BDD4A0EF29A0523B292A480407CC17805E5301BFC1C`; 
 
 Следующий шаг: передать владельцу установленный v42 на боевую проверку и по фактическому результату продолжить M20-03. Параллельно остаются semantic/evidence memory, complete cross-domain links, gift/business/BMW, mixed RU/AZ, notifications, accessibility, live Gemini/App Check, database migration/restart readback, M20-08 acceptance и release gates. M20 и продукт в целом не завершены.
 
+Git handoff: код и синхронизированные документы ACT-0127 зафиксированы коммитом `6278300a186b44aee2a5c931dd3790b8f856ad56` (`feat(android): add explicit person aliases`) и отправлены в `origin/main`. После push `git fetch`, local HEAD и `git ls-remote origin refs/heads/main` совпали. Дневник/лог handoff дополняются отдельным status commit.
+
 **Исторический срез ACT-0126:** в карточке человека открываются детали связанного дела, task/calendar источники и Back navigation; в v41 schema 15. Подробная история следует ниже.
 
 Полная проверка ACT-0126 после последней UI-правки: `:app:testDebugUnitTest :app:assembleDebug :app:assembleDebugAndroidTest :app:compileDebugAndroidTestKotlin :app:lintDebug --no-daemon --console=plain --max-workers=2` — `BUILD SUCCESSFUL`, 54 suites / 274 JVM tests, 0 failures/errors/skips; оба APK собраны, AndroidTest Kotlin скомпилирован, lint 0 errors / 57 warnings / 3 hints. Целевой сценарий `personTimelineOpensExplicitTaskAndCalendarSourcesAndReturnsToCard` прошёл. Synthetic screenshots 20–23 сохранены; скриншоты 22–23 просмотрены, они показывают host/Robolectric рендер, не реальный экран телефона.
