@@ -1,5 +1,15 @@
 # Memora — лог действий
 
+## ACT-0131 - 2026-11-03 - Тайм-аут голосового секретаря и диагностика отказов
+
+Разобран ответ UI `Alınmadı. Yenidən cəhd edin.` после корректной транскрибации. `VoiceFirstScreen` оборачивал весь agent turn тайм-аутом 30 с, хотя `AgentRuntime` допускает до 60 с и включает несколько модельных раундов с локальными инструментами. На подключённом Redmi изолированный synthetic Gemini text-запрос занял 14.2 с, а function-calling с возвратом результата и финальным ответом — 26.5 с; полноценный ход мог пересечь 30-секундный внешний лимит и быть отменён до результата. Увеличен внешний timeout voice/text до 65 с, чтобы дать runtime завершить собственный тайм-аут и вернуть конкретный статус.
+
+Убран информационный провал: `AgentVoiceTurnProcessor` сохраняет только безопасный code в `VoiceFirstResult.Failed`; экраны показывают code для диагностики, но не содержимое речи, prompt, сумму, имя или токен. Логи остаются без содержимого памяти. Обновлены AZ/RU/EN строки. Schema, policy gates, App Check и хранилище не менялись; APK друга пока не проверен, поэтому точный friend-device отказ ещё открыт.
+
+Проверки: на Redmi через opt-in `GeminiSyntheticProbe` synthetic text вызов с `gemini-3.5-flash-lite` прошёл за 14.2 с, отдельный function-calling round-trip прошёл за 26.5 с. `:app:testDebugUnitTest --tests ai.memora.app.voice.VoiceFirstScreenTest` — 2/2 passed, 0 failures/errors; `:app:assembleDebug` успешно. APK v47 / `1.1.25-agent-timeout-diagnostics`, versionCode 47, SHA-256 `FF1BEC9592694C8A7EB066777938D9F36E5354C1B4CB2F868E5B184A08CAC6BF`; backup `C:\memora-backups\Memora-v47-1.1.25-agent-timeout-diagnostics-2026-11-03.apk` совпадает. На Redmi приложение не переустанавливалось; friend-specific live test не выполнялся. Пользовательская база не открывалась и не менялась.
+
+Следующий шаг: передать APK v47 другу и повторить голосовой запрос с уже принятым токеном. Если отказ повторится, получить только безопасный код, отображённый в скобках. Не закрывать MEM-08.01 и не заявлять второй телефон рабочим до этого результата.
+
 ## ACT-0130 - 2026-11-03 - Точная доставка локальных напоминаний
 
 По сообщению владельца задача сохранялась, но notification не приходил при включённых уведомлениях. На установленной v45 системные сведения показывали `POST_NOTIFICATIONS: granted=true`; код запрашивал только неточный `setAndAllowWhileIdle`, не объявлял exact-alarm access, но сообщал общий `Scheduled`. Android вправе задерживать неточные idle alarms, поэтому статус не отражал ограничение.

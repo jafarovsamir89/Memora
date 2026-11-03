@@ -56,6 +56,7 @@ class GeminiSpokenIntentParser : SpokenIntentParser {
 
 sealed interface VoiceFirstResult {
     data class Ready(val spoken: String, val saved: Boolean) : VoiceFirstResult
+    data class Failed(val code: String) : VoiceFirstResult
     data object Unavailable : VoiceFirstResult
 }
 interface VoiceTurnProcessor { suspend fun handle(transcript: String): VoiceFirstResult }

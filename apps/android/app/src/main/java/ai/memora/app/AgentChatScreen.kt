@@ -71,6 +71,7 @@ fun AgentChatScreen(language: String = "az", showVoiceControl: Boolean = false, 
     var clearDialog by remember { mutableStateOf(false) }
     var busy by remember { mutableStateOf(false) }
     var failed by remember { mutableStateOf(false) }
+    var failureCode by remember { mutableStateOf<String?>(null) }
 
     suspend fun refreshMessages() {
         val recent = repository.recent(scopeId, 80)
@@ -90,12 +91,14 @@ fun AgentChatScreen(language: String = "az", showVoiceControl: Boolean = false, 
         input = ""
         correctionDraftPrepared = false
         failed = false
+        failureCode = null
         busy = true
         coroutineScope.launch {
             try {
-                when (val result = withTimeout(60_000) { processor.handleText(trimmed) }) {
+                when (val result = withTimeout(65_000) { processor.handleText(trimmed) }) {
                     is VoiceFirstResult.Ready -> refreshMessages()
-                    VoiceFirstResult.Unavailable -> failed = true
+                    is VoiceFirstResult.Failed -> { failed = true; failureCode = result.code }
+                    VoiceFirstResult.Unavailable -> { failed = true; failureCode = "request_failed" }
                 }
             } catch (cancelled: CancellationException) {
                 throw cancelled
@@ -217,7 +220,11 @@ fun AgentChatScreen(language: String = "az", showVoiceControl: Boolean = false, 
             }
         }
         if (busy) MemoraCard { Text(s(ai.memora.app.R.string.ai_loading), color = colors.muted) }
-        if (failed) MemoraCard { Text(s(ai.memora.app.R.string.ai_failed), color = colors.muted) }
+        if (failed) MemoraCard {
+            val message = failureCode?.let { context.getString(ai.memora.app.R.string.ai_failed_code, it) }
+                ?: s(ai.memora.app.R.string.ai_failed)
+            Text(message, color = colors.muted)
+        }
         Spacer(Modifier.height(4.dp))
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             OutlinedTextField(input, { if (it.length <= 20_000) input = it }, Modifier.weight(1f).testTag("chat_input"),

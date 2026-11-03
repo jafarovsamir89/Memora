@@ -55,6 +55,7 @@ fun VoiceFirstScreen(gatewayOverride: AudioNoteGateway? = null, recorderOverride
     var state by remember { mutableStateOf("idle") }
     var transcript by remember { mutableStateOf("") }
     var answer by remember { mutableStateOf("") }
+    var failureCode by remember { mutableStateOf<String?>(null) }
     var job by remember { mutableStateOf<Job?>(null) }
     var release by remember { mutableStateOf<CompletableDeferred<Boolean>?>(null) }
     var visible by remember { mutableStateOf(true) }
@@ -74,7 +75,7 @@ fun VoiceFirstScreen(gatewayOverride: AudioNoteGateway? = null, recorderOverride
         if (context.checkSelfPermission(Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) {
             permission.launch(Manifest.permission.RECORD_AUDIO); return false
         }
-        transcript = ""; answer = ""; state = "recording"
+        transcript = ""; answer = ""; failureCode = null; state = "recording"
         recorder.prepare()
         val released = CompletableDeferred<Boolean>()
         release = released
@@ -92,16 +93,22 @@ fun VoiceFirstScreen(gatewayOverride: AudioNoteGateway? = null, recorderOverride
                 ensureActive()
                 if (spoken.isBlank()) { state = "error"; return@launch }
                 transcript = spoken
-                val result = withTimeout(30_000) { processor.handle(spoken) }
+                // AgentRuntime allows 60 seconds for multi-round tool calling; leave a small
+                // margin so the screen does not cancel the turn before the runtime reports its result.
+                val result = withTimeout(65_000) { processor.handle(spoken) }
                 ensureActive()
-                if (result !is VoiceFirstResult.Ready) { state = "error"; return@launch }
-                answer = result.spoken
+                val spokenAnswer = when (result) {
+                    is VoiceFirstResult.Ready -> result.spoken
+                    is VoiceFirstResult.Failed -> { failureCode = result.code; state = "error"; return@launch }
+                    VoiceFirstResult.Unavailable -> { state = "error"; return@launch }
+                }
+                answer = spokenAnswer
                 state = "speaking"
-                try { withTimeout(30_000) { speech.speak(result.spoken) }; state = "idle" }
+                try { withTimeout(30_000) { speech.speak(spokenAnswer) }; state = "idle" }
                 catch (_: TimeoutCancellationException) { state = "sound_error" }
                 catch (cancelled: CancellationException) { throw cancelled }
                 catch (_: Exception) { state = "sound_error" }
-            } catch (_: TimeoutCancellationException) { if (visible) state = "error" }
+            } catch (_: TimeoutCancellationException) { if (visible) { failureCode = "request_timeout"; state = "error" } }
             catch (cancelled: CancellationException) { throw cancelled }
             catch (_: Exception) { if (visible) state = "error" }
             finally { recorder.stop(); wav?.fill(0); release = null; job = null }
@@ -147,7 +154,9 @@ fun VoiceFirstScreen(gatewayOverride: AudioNoteGateway? = null, recorderOverride
     val label = s(R.string.voice_first_button)
     Column(Modifier.fillMaxWidth().testTag("voice_first_home").padding(vertical = 12.dp),
         horizontalAlignment = Alignment.CenterHorizontally) {
-        Text(s(when (state) {
+        val statusText = if (state == "error" && failureCode != null) {
+            context.getString(R.string.voice_first_error_code, failureCode ?: "request_failed")
+        } else s(when (state) {
             "recording" -> R.string.voice_first_listening
             "release" -> R.string.voice_first_release
             "processing" -> R.string.voice_first_processing
@@ -156,7 +165,9 @@ fun VoiceFirstScreen(gatewayOverride: AudioNoteGateway? = null, recorderOverride
             "error" -> R.string.voice_first_error
             "sound_error" -> R.string.voice_first_sound_error
             else -> R.string.voice_first_hint
-        }), textAlign = TextAlign.Center, style = MaterialTheme.typography.bodyLarge)
+        })
+        Text(statusText, textAlign = TextAlign.Center, style = MaterialTheme.typography.bodyLarge,
+            modifier = Modifier.testTag("voice_first_status"))
         Spacer(Modifier.height(16.dp))
         Box(Modifier.size(176.dp).background(colors.accent.copy(alpha = if (state == "recording") .19f else .08f), CircleShape)
             .border(1.dp, colors.accent.copy(alpha = .18f), CircleShape), contentAlignment = Alignment.Center) {

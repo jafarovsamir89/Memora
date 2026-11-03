@@ -103,7 +103,7 @@ internal class AgentVoiceTurnProcessor(context: Context, private val databaseOve
                     VoiceFirstResult.Ready(answer, false)
                 }
                 AgentRunResultStatus.FAILED, AgentRunResultStatus.RECOVERY_REQUIRED -> {
-                    if (actionResults.isEmpty()) VoiceFirstResult.Unavailable
+                    if (actionResults.isEmpty()) VoiceFirstResult.Failed(safeFailureCode(result.code))
                     else {
                         val answer = if (result.status == AgentRunResultStatus.RECOVERY_REQUIRED)
                             recoveryAnswer(responsePreferences?.language) else failureAnswer(responsePreferences?.language)
@@ -117,9 +117,15 @@ internal class AgentVoiceTurnProcessor(context: Context, private val databaseOve
             throw cancelled
         } catch (error: Exception) {
             Log.w("MemoraAgent", "turn_exception type=${error.javaClass.simpleName.take(64)}")
-            VoiceFirstResult.Unavailable
+            val gatewayCode = (error as? AgentGatewayFailure)?.safeCode
+            if (gatewayCode == null) VoiceFirstResult.Unavailable
+            else VoiceFirstResult.Failed(safeFailureCode(gatewayCode))
         }
     }
+
+    private fun safeFailureCode(code: String?): String = code
+        ?.takeIf { it.matches(Regex("[a-z0-9_]{1,64}")) }
+        ?: "request_failed"
 
     private fun stableId(key: String): String {
         return synchronized(identityLock) {

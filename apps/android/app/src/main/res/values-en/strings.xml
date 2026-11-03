@@ -178,6 +178,7 @@
     <string name="ai_send_confirm">Send to Google</string>
     <string name="ai_loading">Waiting for Google…</string>
     <string name="ai_failed">No response. Check your connection and Firebase setup, then retry.</string>
+    <string name="ai_failed_code">No response (%1$s). Check your connection and Firebase setup.</string>
     <string name="agent_chat_intro">Conversation history is encrypted on this device and shared with the voice assistant.</string>
     <string name="agent_chat_empty">Your messages will appear here when you start a conversation.</string>
     <string name="agent_chat_clear">Clear conversation</string>
@@ -282,6 +283,7 @@
     <string name="voice_first_processing">Thinking…</string>
     <string name="voice_first_speaking">Speaking…</string>
     <string name="voice_first_error">Something went wrong. Try again.</string>
+    <string name="voice_first_error_code">Could not complete (%1$s). Try again; this code helps identify the issue.</string>
     <string name="voice_first_sound_error">Could not play audio. The answer is shown below.</string>
     <string name="voice_first_consent_title">Voice assistant with Google</string>
     <string name="voice_first_consent_body">With your consent, your voice and transcript are sent to Google Gemini. To produce speech, Google receives the answer, including the relevant name and amount. Your selected response language, tone, and level of detail are also sent; your profile name and time zone are not. Conversation history and saved memory records are sent only with separate memory consent. Google may use free-service data to improve products. Consent is saved on this device.</string>

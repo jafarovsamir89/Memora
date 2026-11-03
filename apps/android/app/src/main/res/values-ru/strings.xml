@@ -178,6 +178,7 @@
     <string name="ai_send_confirm">Отправить в Google</string>
     <string name="ai_loading">Получаю ответ Google…</string>
     <string name="ai_failed">Ответ недоступен. Проверьте подключение и настройку Firebase, затем повторите.</string>
+    <string name="ai_failed_code">Ответ недоступен (%1$s). Проверьте подключение и настройки Firebase.</string>
     <string name="agent_chat_intro">Переписка хранится на этом устройстве в зашифрованном виде и использует ту же память, что и голосовой помощник.</string>
     <string name="agent_chat_empty">Здесь появятся сообщения после начала разговора.</string>
     <string name="agent_chat_clear">Удалить переписку</string>
@@ -282,6 +283,7 @@
     <string name="voice_first_processing">Думаю…</string>
     <string name="voice_first_speaking">Отвечаю…</string>
     <string name="voice_first_error">Не получилось. Попробуйте ещё раз.</string>
+    <string name="voice_first_error_code">Не получилось (%1$s). Попробуйте ещё раз; этот код поможет найти причину.</string>
     <string name="voice_first_sound_error">Не удалось воспроизвести звук. Ответ показан ниже.</string>
     <string name="voice_first_consent_title">Голосовой помощник с Google</string>
     <string name="voice_first_consent_body">С вашего согласия сказанное аудио и его текст отправляются Google Gemini. Для озвучки Google получает текст ответа, включая связанные имя и сумму. Выбранные язык ответа, манера общения и подробность ответа тоже отправляются; имя профиля и часовой пояс не отправляются. История переписки и записи памяти передаются только при отдельном разрешении памяти. Google может использовать данные бесплатного сервиса для улучшения продуктов. Согласие сохраняется на устройстве.</string>

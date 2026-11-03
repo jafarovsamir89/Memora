@@ -70,4 +70,32 @@ class VoiceFirstScreenTest {
         compose.onNodeWithTag("voice_first_button").performTouchInput { up() }
         compose.waitUntil(5000) { transmissions == 2 }
     }
+
+    @Test fun agentFailureDisplaysSafeDiagnosticCode() {
+        val stopped = CompletableDeferred<Unit>()
+        var recordingStarted = false
+        val recorder = object : AudioNoteRecorder {
+            override suspend fun record(): ByteArray { recordingStarted = true; stopped.await(); return byteArrayOf(1, 2) }
+            override fun stop() { stopped.complete(Unit) }
+        }
+        val gateway = object : AudioNoteGateway {
+            override suspend fun transcribe(wav: ByteArray) = "synthetic statement"
+        }
+        val processor = object : VoiceTurnProcessor {
+            override suspend fun handle(transcript: String) = VoiceFirstResult.Failed("model_permission_denied")
+        }
+        val speech = object : SpeechOutput { override suspend fun speak(text: String) { fail("failed turn must not be spoken") } }
+        compose.setContent { CompositionLocalProvider(LocalStrings provides context.resources) {
+            MemoraTheme("light") { Column(Modifier.verticalScroll(rememberScrollState())) { VoiceFirstScreen(gateway, recorder, processor, speech) } }
+        } }
+        compose.onNodeWithTag("voice_first_button").performClick()
+        compose.onNodeWithTag("voice_first_consent").performClick()
+        compose.onNodeWithTag("voice_first_button").performTouchInput { down(center) }
+        compose.waitUntil(5_000) { recordingStarted }
+        compose.onNodeWithTag("voice_first_button").performTouchInput { up() }
+        compose.waitUntil(5_000) {
+            compose.onAllNodesWithText("model_permission_denied", substring = true).fetchSemanticsNodes().isNotEmpty()
+        }
+        compose.onNodeWithTag("voice_first_status").assertTextContains("model_permission_denied", substring = true)
+    }
 }

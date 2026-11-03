@@ -19,8 +19,8 @@ android {
         applicationId = "ai.memora.app"
         minSdk = 26
         targetSdk = 36
-        versionCode = 46
-        versionName = "1.1.24-exact-task-reminders"
+        versionCode = 47
+        versionName = "1.1.25-agent-timeout-diagnostics"
         testInstrumentationRunner = "ai.memora.app.GeminiSyntheticProbe"
     }
     buildFeatures { compose = true }
