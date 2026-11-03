@@ -1,10 +1,22 @@
 # Memora — лог действий
 
+## ACT-0113 - 2026-11-03 - Synthetic memory-context runtime test
+
+Added AgentFakeProviderMemoryTest.fakeProviderUsesScopedMemoryEvidenceForGiftAdviceWithoutWriting. A synthetic profile and fictional preference are seeded in the test Room database; a fake model routes search_memory through AgentRuntime, reads the evidence/revision in the same scope, and returns a suggestion. The test proves the foreign scope marker is absent and the store remains unchanged. This validates the local evidence path only; it is not a Gemini natural-language or live API test.
+
+Targeted test passed. Full baseline command :app:testDebugUnitTest :app:assembleDebug :app:assembleDebugAndroidTest :app:compileDebugAndroidTestKotlin :app:lintDebug --no-daemon --console=plain --max-workers=1 completed BUILD SUCCESSFUL: 49 suites / 258 tests, failures/errors/skipped = 0; lint 0 errors/56 warnings. AndroidTest APK built and Kotlin compiled, instrumentation not run. Debug APK stayed v34 / 1.1.12-attention at 31,354,049 bytes; APK and backup SHA-256 still match 7BA970ACF774128817BF3B6006B025D9BA22A5FD1DE76A9F30864169CF632503. adb.exe was invoked; adb devices -l returned no devices. No production APK was installed, no live Gemini request was made, and no personal DB was accessed.
+
+## ACT-0112 - 2026-11-03 - M20-08 validation evidence matrix
+
+Reviewed the complete M20-08 acceptance list against the current synthetic host tests and added docs/M20_08_VALIDATION_MATRIX.md. The matrix maps evidence for runtime recovery, consent revocation, idempotence, provider substitution, same-name identity isolation, onboarding, financial corrections, source links and Room 12-to-13 migration. It separates these host results from unavailable Android SQLCipher/device checks and live Gemini routing.
+
+Open scenario gaps are seeded gift-context E2E, multi-week episodic summary/deletion propagation, complete synthetic BMW cross-domain restart, mixed RU/AZ and live Gemini, full screen/TalkBack review, and airplane-mode Android UX. The prior ACT-0111 baseline remains 48 suites / 257 tests with 0 failures/errors/skips, lint 0 errors/56 warnings. No new tests were run in this documentation-only evidence pass. SDK adb.exe was invoked; adb devices -l returned no devices. No user database or personal install was accessed.
+
 ## ACT-0111 - 2026-11-03 - M20-07 opt-in local attention
 
 Добавлен opt-in локальный attention engine и Room migration 12 to 13. Подсказки используют сроки задач, календарные события и открытые дела; ограничены тремя grounded items. Добавлены quiet hours, generic notification/neutral lock screen, dismiss, snooze, date dedupe, lifecycle/time-change schedule reconcile и локализованные permission/error states. Финансовые сроки и pending questions не моделируются. Настройки выключены по умолчанию; пользовательская база не читалась и не очищалась.
 
-Проверки: полный Gradle baseline  BUILD SUCCESSFUL; 48 suites / 257 tests, failures/errors/skipped = 0; lint 0 errors/56 warnings; debug/AndroidTest APK builds и Kotlin compile прошли. Host screenshots 06-settings-dark.png и 14-today-with-local-data.png reviewed; schema 13 JSON validated. APK/backup: 31,354,049 bytes, SHA-256 7BA970ACF774128817BF3B6006B025D9BA22A5FD1DE76A9F30864169CF632503; backup C:\memora-backups\Memora-v34-1.1.12-attention-verified-2026-11-03.apk. Code commit bdc61cee2096afe7e65e880af9c9bb7a2eeb80e2; docs commit and push pending. adb.exe found in Android SDK; adb devices -l returned no devices; migration/notification delivery/Gemini/owner acceptance open; M20-07 and release readiness not complete.
+Проверки: полный Gradle baseline  BUILD SUCCESSFUL; 48 suites / 257 tests, failures/errors/skipped = 0; lint 0 errors/56 warnings; debug/AndroidTest APK builds и Kotlin compile прошли. Host screenshots 06-settings-dark.png и 14-today-with-local-data.png reviewed; schema 13 JSON validated. APK/backup: 31,354,049 bytes, SHA-256 7BA970ACF774128817BF3B6006B025D9BA22A5FD1DE76A9F30864169CF632503; backup C:\memora-backups\Memora-v34-1.1.12-attention-verified-2026-11-03.apk. Code commit bdc61cee2096afe7e65e880af9c9bb7a2eeb80e2; documentation commit 0ac5cb5800f5ec454d922e48f47847e3303bca66 pushed to origin/main; fetch and remote SHA matched and tree was clean. adb.exe found in Android SDK; adb devices -l returned no devices; migration/notification delivery/Gemini/owner acceptance open; M20-07 and release readiness not complete.
 
 ## ACT-0109 · 2026-11-03 · M20-06 аналитика дел и задач
 
