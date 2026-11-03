@@ -1,6 +1,12 @@
 # M20-08 Native validation matrix
 
-Status as of 2026-11-03, APK v53 / 1.1.31-canonical-task-person-links, Room schema 17. This matrix records existing evidence and remaining work; it does not turn host tests into device or live-provider acceptance.
+Status as of 2026-11-03, APK v54 / 1.1.32-ranked-lexical-memory, Room schema 17. This matrix records existing evidence and remaining work; it does not turn host tests into device or live-provider acceptance.
+
+## ACT-0139 update
+
+`search_memory` now ranks local lexical matches using query-term coverage, title match and exact phrase boosts. This improves candidate order when a concise exact phrase is present; it does not resolve paraphrases and is not semantic or embedding retrieval. A synthetic regression confirms `BMW repair` in the task title ranks above the same terms separated by another title token. The tool remains bounded, scoped and read-only.
+
+Full Gradle rerun passed: 57 suites / 288 JVM tests, 0 failures/errors/skips; debug and AndroidTest APKs assembled; AndroidTest Kotlin compiled; lint 0 errors / 60 warnings / 3 hints. An earlier combined run failed once at `UiShellTest.navigationSearchAndSource`; the isolated test passed, and the following full run passed. APK v54 SHA-256 `12c42043c394646cf49f7a43cd4def08a1916def405d8e9860547be094e56aaf`. ADB showed no connected device; v54 was not installed, no SQLCipher device migration/readback ran, and user DB was not opened or changed. M20-04 remains partial pending true semantic/hybrid retrieval and broader natural-query/owner acceptance.
 
 ## ACT-0138 update
 

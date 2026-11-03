@@ -112,7 +112,7 @@ class AgentFakeProviderUnifiedMemoryTest {
         val observation = result.toolResults.single()
         assertEquals("search_memory", observation.name)
         assertEquals(ToolObservationStatus.APPLIED, observation.status)
-        assertEquals("normalized_lexical", observation.modelData["match_mode"])
+        assertEquals("ranked_lexical", observation.modelData["match_mode"])
         val activity = observation.modelData["activity"] as List<*>
         val activityKinds = activity.map { (it as Map<*, *>)["kind"] as String }.toSet()
         assertTrue(activityKinds.containsAll(setOf("money_event", "case", "task", "calendar_event", "table_row")))
@@ -145,6 +145,32 @@ class AgentFakeProviderUnifiedMemoryTest {
         assertTrue("unexpected AZ name results: $azKinds", azKinds.containsAll(setOf("money_event", "case", "task", "table_row")))
         assertTrue((inflectedName.modelData["evidence"] as List<*>).isNotEmpty())
         assertTrue((inflectedName.modelData["conversation_turns"] as List<*>).isNotEmpty())
+    }
+
+    @Test fun exactPhraseAndTitleMatchesRankAheadOfScatteredFieldMatches() = runBlocking {
+        val db = databaseRule.database
+        val scope = "00000000-0000-4000-8000-000000000154"
+        db.protectedStoreDao().putTaskEvents(listOf(
+            TaskEventRow(taskId = "scattered-match", scopeId = scope, actorId = "owner",
+                commandId = "scattered-created", type = "created", previousVersion = null,
+                title = "BMW engine repair", completed = null, dueLocal = null, dueZone = null,
+                remind = null, personLabel = null, projectLabel = null),
+            TaskEventRow(taskId = "phrase-match", scopeId = scope, actorId = "owner",
+                commandId = "phrase-created", type = "created", previousVersion = null,
+                title = "BMW repair pickup", completed = null, dueLocal = null, dueZone = null,
+                remind = null, personLabel = null, projectLabel = null),
+        ))
+        val tools = LocalMemoryTools(ProtectedDomainRepository(db), ProtectedMemoryRepository(db)).handlers()
+        val handler = tools.single { it.descriptor.name == "search_memory" }
+        val result = handler.read(AgentModelToolCall("phrase-ranking", "search_memory", 1,
+            mapOf("query" to "BMW repair")), AgentTurnRequest("turn-ranking", scope, "session-ranking",
+            null, "az-AZ", "synthetic query"))
+
+        assertEquals(ToolObservationStatus.APPLIED, result.status)
+        assertEquals("ranked_lexical", result.modelData["match_mode"])
+        val hits = result.modelData["activity"] as List<*>
+        val taskIds = hits.mapNotNull { (it as Map<*, *>).takeIf { row -> row["kind"] == "task" }?.get("task_id") }
+        assertEquals(listOf("phrase-match", "scattered-match"), taskIds)
     }
 
     private class UnifiedMemoryProvider : AgentModelGateway {

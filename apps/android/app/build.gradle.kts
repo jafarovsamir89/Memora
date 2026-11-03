@@ -19,8 +19,8 @@ android {
         applicationId = "ai.memora.app"
         minSdk = 26
         targetSdk = 36
-        versionCode = 53
-        versionName = "1.1.31-canonical-task-person-links"
+        versionCode = 54
+        versionName = "1.1.32-ranked-lexical-memory"
         testInstrumentationRunner = "ai.memora.app.GeminiSyntheticProbe"
     }
     buildFeatures { compose = true }

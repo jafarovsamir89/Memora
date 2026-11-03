@@ -52,7 +52,7 @@ internal class LocalMemoryTools(private val repository: ProtectedDomainRepositor
             if (query.isBlank() || query.length > 200) return rejected()
             val terms = memorySearchTerms(query)
             if (terms.isEmpty()) return ToolCommitResult(ToolObservationStatus.APPLIED, "evidence_found", mapOf(
-                "count" to 0, "match_mode" to "normalized_lexical", "evidence" to emptyList<Any>(), "episodes" to emptyList<Any>(),
+                "count" to 0, "match_mode" to "ranked_lexical", "evidence" to emptyList<Any>(), "episodes" to emptyList<Any>(),
                 "conversation_turns" to emptyList<Any>(),
                 "profile_facts" to emptyList<Any>(), "person_aliases" to emptyList<Any>(), "activity" to emptyList<Any>(), "activity_truncated" to false,
             ))
@@ -68,7 +68,7 @@ internal class LocalMemoryTools(private val repository: ProtectedDomainRepositor
             val activity = searchRelatedActivity(turn.scopeId, terms, query)
             return ToolCommitResult(ToolObservationStatus.APPLIED, "evidence_found", mapOf(
                 "count" to (hits.size + episodes.size + conversationTurns.size + profileFacts.size + aliasHits.size + activity.items.size),
-                "match_mode" to "normalized_lexical",
+                "match_mode" to "ranked_lexical",
                 "truncated" to (hits.size == 8 || episodes.size == 5 || conversationTurns.size == 5 ||
                     profileFacts.size == 8 || activity.truncated),
                 "evidence" to hits.map { hit -> mapOf("id" to hit.objectId, "kind" to hit.kind.name.lowercase(),
@@ -428,20 +428,27 @@ internal class LocalMemoryTools(private val repository: ProtectedDomainRepositor
     private val cases by lazy { repository.caseRepository() }
 
     /**
-     * Adds bounded, relevance-ranked references from canonical domain stores to general memory search.
+     * Adds bounded, phrase- and title-weighted lexical references from canonical domain stores to memory search.
      * Exact finance totals and full case timelines remain the responsibility of their specialist tools.
      */
     private suspend fun searchRelatedActivity(scope: String, terms: List<String>, query: String): UnifiedActivitySearch {
         val hits = mutableListOf<RankedActivity>()
         val foldedTerms = terms.map(::normalizeMemorySearchText).distinct()
 
+        val phraseTerms = memorySearchTerms(query)
+        val phrase = phraseTerms.joinToString(" ")
+
         fun score(fields: List<String>, title: String? = null): Int {
-            val tokens = fields.flatMap(::memorySearchTerms).toSet()
-            val matched = foldedTerms.count { term -> tokens.any { token -> memorySearchTokenMatches(term, token) } }
+            val fieldTerms = fields.map(::memorySearchTerms)
+            val tokens = fieldTerms.flatten().toSet()
+            val matchedTerms = foldedTerms.filter { term -> tokens.any { token -> memorySearchTokenMatches(term, token) } }
+            val matched = matchedTerms.size
             if (matched == 0) return 0
             val titleTokens = title?.let(::memorySearchTerms).orEmpty()
-            val titleMatches = foldedTerms.count { term -> titleTokens.any { memorySearchTokenMatches(term, it) } }
-            return matched * 100 / foldedTerms.size + titleMatches * 15
+            val titleMatches = matchedTerms.count { term -> titleTokens.any { memorySearchTokenMatches(term, it) } }
+            val exactPhrase = phraseTerms.size > 1 && fieldTerms.any { it.windowed(phraseTerms.size)
+                .any { window -> window.joinToString(" ") == phrase } }
+            return matched * 100 / foldedTerms.size + titleMatches * 30 + if (exactPhrase) 80 else 0
         }
 
         if (financeEnabled) {
