@@ -472,6 +472,7 @@
     <string name="action_area_memory">Yaddaş</string>
     <string name="action_prepare_correction">Düzəliş və ya geri qaytarma hazırla</string>
     <string name="action_correction_draft_note">Mətn yalnız layihə kimi hazırlanıb. Göndərilməyənədək heç bir əməliyyat aparılmır.</string>
+    <string name="agent_failed_draft_kept">Mesajınız qaralama kimi saxlanıb. Əvvəlki sorğunun nəticəsi qeyri-müəyyəndirsə, yenidən göndərməzdən əvvəl məlumatı yoxlayın.</string>
     <string name="action_correction_draft_template">Bu əvvəlki əməliyyatı düzəltməyə və ya geri qaytarmağa kömək et. Mənbə: “%1$s”. Tətbiqdəki dəqiq qeydin ID-si: %2$s. Yalnız bu qeydi dəyiş; qeyri-müəyyənlik varsa əvvəlcə soruş.</string>
     <string name="today_due_tasks">Vaxtı çatan və yaxınlaşan işlər</string>
     <string name="today_open_cases">Açıq işlər</string>

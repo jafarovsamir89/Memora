@@ -37,6 +37,7 @@ import ai.memora.app.data.protectedstore.AgentConversationMessageRow
 import ai.memora.app.data.protectedstore.AgentActionResultRow
 import ai.memora.app.agent.AgentCloudConsentKeys
 import ai.memora.app.ui.Glyph
+import ai.memora.app.ui.LocalStrings
 import ai.memora.app.ui.MemoraCard
 import ai.memora.app.ui.ScreenColumn
 import ai.memora.app.ui.colors
@@ -50,7 +51,8 @@ import kotlinx.coroutines.withTimeout
 
 /** Text chat and push-to-talk share the same agent, encrypted memory, and bounded dialogue context. */
 @Composable
-fun AgentChatScreen(language: String = "az", showVoiceControl: Boolean = false, onOpenArea: (String) -> Unit = {}) {
+fun AgentChatScreen(language: String = "az", showVoiceControl: Boolean = false, onOpenArea: (String) -> Unit = {},
+    textTurnOverride: (suspend (String) -> VoiceFirstResult)? = null) {
     val context = LocalContext.current
     val settings = remember(context) { context.getSharedPreferences("voice-first-consent", 0) }
     val database = rememberUiAgentDatabase()
@@ -72,6 +74,7 @@ fun AgentChatScreen(language: String = "az", showVoiceControl: Boolean = false, 
     var busy by remember { mutableStateOf(false) }
     var failed by remember { mutableStateOf(false) }
     var failureCode by remember { mutableStateOf<String?>(null) }
+    var draftRestoredAfterFailure by rememberSaveable { mutableStateOf(false) }
 
     suspend fun refreshMessages() {
         val recent = repository.recent(scopeId, 80)
@@ -92,18 +95,33 @@ fun AgentChatScreen(language: String = "az", showVoiceControl: Boolean = false, 
         correctionDraftPrepared = false
         failed = false
         failureCode = null
+        draftRestoredAfterFailure = false
         busy = true
         coroutineScope.launch {
             try {
-                when (val result = withTimeout(65_000) { processor.handleText(trimmed) }) {
+                val result = withTimeout(65_000) { textTurnOverride?.invoke(trimmed) ?: processor.handleText(trimmed) }
+                when (result) {
                     is VoiceFirstResult.Ready -> refreshMessages()
-                    is VoiceFirstResult.Failed -> { failed = true; failureCode = result.code }
-                    VoiceFirstResult.Unavailable -> { failed = true; failureCode = "request_failed" }
+                    is VoiceFirstResult.Failed -> {
+                        input = trimmed
+                        draftRestoredAfterFailure = true
+                        failed = true
+                        failureCode = result.code
+                    }
+                    VoiceFirstResult.Unavailable -> {
+                        input = trimmed
+                        draftRestoredAfterFailure = true
+                        failed = true
+                        failureCode = "request_failed"
+                    }
                 }
             } catch (cancelled: CancellationException) {
                 throw cancelled
             } catch (_: Exception) {
+                input = trimmed
+                draftRestoredAfterFailure = true
                 failed = true
+                failureCode = "request_failed"
             } finally {
                 busy = false
             }
@@ -221,13 +239,19 @@ fun AgentChatScreen(language: String = "az", showVoiceControl: Boolean = false, 
         }
         if (busy) MemoraCard { Text(s(ai.memora.app.R.string.ai_loading), color = colors.muted) }
         if (failed) MemoraCard {
-            val message = failureCode?.let { context.getString(ai.memora.app.R.string.ai_failed_code, it) }
+            val message = failureCode?.let { LocalStrings.current.getString(ai.memora.app.R.string.ai_failed_code, it) }
                 ?: s(ai.memora.app.R.string.ai_failed)
             Text(message, color = colors.muted)
+            if (draftRestoredAfterFailure) Text(s(ai.memora.app.R.string.agent_failed_draft_kept),
+                color = colors.muted, style = androidx.compose.material3.MaterialTheme.typography.bodySmall,
+                modifier = Modifier.testTag("agent_failed_draft_note"))
         }
         Spacer(Modifier.height(4.dp))
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            OutlinedTextField(input, { if (it.length <= 20_000) input = it }, Modifier.weight(1f).testTag("chat_input"),
+            OutlinedTextField(input, { if (it.length <= 20_000) {
+                input = it
+                if (draftRestoredAfterFailure) { draftRestoredAfterFailure = false; failed = false; failureCode = null }
+            } }, Modifier.weight(1f).testTag("chat_input"),
                 label = { Text(s(ai.memora.app.R.string.question)) }, shape = RoundedCornerShape(20.dp), maxLines = 4,
                 enabled = !busy)
             FilledIconButton({ send(input) }, Modifier.testTag("chat_send"), enabled = input.isNotBlank() && !busy) {

@@ -124,7 +124,7 @@ fun AppCheckDebugSettings() {
             status?.let { message ->
                 Text(
                     text = if (message == R.string.app_check_debug_http_failed) {
-                        context.getString(message, httpStatus ?: 0)
+                        LocalStrings.current.getString(message, httpStatus ?: 0)
                     } else s(message),
                     color = if (message == R.string.app_check_debug_token_accepted || message == R.string.app_check_debug_token_removed)
                         MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.error,

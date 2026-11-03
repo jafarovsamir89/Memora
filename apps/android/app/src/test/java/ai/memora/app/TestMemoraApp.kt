@@ -19,6 +19,7 @@ internal fun TestMemoraApp(
     initialLanguage: String = "az",
     taskStoreOverride: EncryptedTaskStore? = null,
     profileStoreOverride: LocalProfileStore? = null,
+    textTurnOverride: (suspend (String) -> ai.memora.app.voice.VoiceFirstResult)? = null,
 ) {
     val profileStore = androidx.compose.runtime.remember(profileStoreOverride, initialLanguage) {
         profileStoreOverride ?: InMemoryLocalProfileStore(
@@ -28,7 +29,7 @@ internal fun TestMemoraApp(
     }
     CompositionLocalProvider(LocalProfileStoreOverride provides profileStore) {
         MemoraApp(initialRoute, initialTheme, capturePersistenceOverride, appearanceStoreOverride,
-            initialLanguage, taskStoreOverride)
+            initialLanguage, taskStoreOverride, textTurnOverride)
     }
 }
 

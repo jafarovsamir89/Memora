@@ -278,6 +278,36 @@ class UiShellTest {
         Unit
     }
 
+    @Test fun failedTextTurnKeepsTheOriginalDraftAndDoesNotRetryAutomatically() {
+        val context = ApplicationProvider.getApplicationContext<Context>()
+        val prefs = context.getSharedPreferences("voice-first-consent", Context.MODE_PRIVATE)
+        prefs.edit().putBoolean(ai.memora.app.agent.AgentCloudConsentKeys.TEXT, false).commit()
+        var calls = 0
+        val request = "Synthetic request that must stay available after failure"
+        compose.setContent {
+            CompositionLocalProvider(LocalAgentDatabaseOverride provides agentDatabase.database) {
+                TestMemoraApp(initialRoute = "chat", initialLanguage = "ru",
+                    capturePersistenceOverride = captureStore,
+                    appearanceStoreOverride = AtomicAppearanceStore(
+                        File(context.cacheDir, "ui-chat-failure-${UUID.randomUUID()}"), AppearanceSettings("ru", "light")),
+                    textTurnOverride = {
+                        calls++
+                        ai.memora.app.voice.VoiceFirstResult.Failed("model_timeout")
+                    })
+            }
+        }
+        compose.onNodeWithTag("chat_input").performTextInput(request)
+        compose.onNodeWithTag("chat_send").performClick()
+        compose.onNodeWithTag("agent_text_consent_confirm").performClick()
+        compose.waitUntil(10_000) {
+            compose.onAllNodesWithTag("agent_failed_draft_note").fetchSemanticsNodes().isNotEmpty()
+        }
+        val restored = compose.onNodeWithTag("chat_input").fetchSemanticsNode()
+            .config[SemanticsProperties.EditableText].text
+        Assert.assertEquals(request, restored)
+        Assert.assertEquals(1, calls)
+    }
+
     @Test fun textDraftGoesToInboxWithoutAi() {
         compose.setContent { TestMemoraApp(initialTheme = "light", capturePersistenceOverride = captureStore, appearanceStoreOverride = appearanceStore) }
         compose.onNodeWithTag("nav_memory").performClick()

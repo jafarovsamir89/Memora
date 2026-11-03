@@ -1,5 +1,15 @@
 # Memora — лог действий
 
+## ACT-0132 - 2026-11-03 - Не терять текстовую просьбу при отказе
+
+В `AgentChatScreen` восстановлен текст отправленной просьбы в поле черновика при `Failed`, `Unavailable` и непредвиденном исключении; автоматического повтора нет, поскольку серверный ответ может не сообщать, завершилась ли уже локальная запись. Добавлена локализованная AZ/RU/EN подсказка проверить результат перед повторной отправкой. Для изолированного UI acceptance добавлен необязательный internal text-turn override, production path остаётся `AgentVoiceTurnProcessor`. При ручном редактировании черновика старое сообщение об ошибке сбрасывается.
+
+Compose lint выявил три `LocalContextGetResourceValueCall`: тексты кодов ошибки чата и голоса, а также HTTP-статус debug App Check читались через `Context.getString`. Переводы переведены на `LocalStrings.current`, чтобы корректно реагировать на смену конфигурации/языка.
+
+Проверки: полный `:app:testDebugUnitTest` — 56 suites / 284 tests, 0 failures/errors/skips; целевой сценарий включён и прошёл. `:app:assembleDebug` успешно; `:app:lintDebug` успешно при `JAVA_TOOL_OPTIONS=-XX:-TieredCompilation`, 0 errors / 60 warnings / 3 hints. Первая lint JVM завершилась внутренним C1 compiler error в локальном Temurin 17, повторная сборка прошла. APK versionCode 48 / `1.1.26-chat-draft-recovery`, SHA-256 `f0c80217fd85fcbd6a88fd7d6558636ffdc29a21d9cfe47fce377e8fe61489fb`. На устройство не устанавливалось; личная база не открывалась.
+
+Текущий пункт относится к M20-01/05 reliability/result experience и не закрывает их приёмку. Следом — M20-03/04: выбрать ограниченную canonical-link slice с проверкой migration/revision/source semantics; полная device/AZ-RU/product acceptance остаётся открытой. ACT-0131 friend-device retry и фактическая доставка напоминания также остаются owner field checks.
+
 ## ACT-0131 - 2026-11-03 - Тайм-аут голосового секретаря и диагностика отказов
 
 Разобран ответ UI `Alınmadı. Yenidən cəhd edin.` после корректной транскрибации. `VoiceFirstScreen` оборачивал весь agent turn тайм-аутом 30 с, хотя `AgentRuntime` допускает до 60 с и включает несколько модельных раундов с локальными инструментами. На подключённом Redmi изолированный synthetic Gemini text-запрос занял 14.2 с, а function-calling с возвратом результата и финальным ответом — 26.5 с; полноценный ход мог пересечь 30-секундный внешний лимит и быть отменён до результата. Увеличен внешний timeout voice/text до 65 с, чтобы дать runtime завершить собственный тайм-аут и вернуть конкретный статус.

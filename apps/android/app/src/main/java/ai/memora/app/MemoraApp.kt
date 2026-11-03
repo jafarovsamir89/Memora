@@ -53,7 +53,8 @@ private data class PendingCaptureImport(val text: String, val preview: CaptureIm
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun MemoraApp(initialRoute: String = "home", initialTheme: String = "system", capturePersistenceOverride: CapturePersistence? = null,
-    appearanceStoreOverride: AppearanceStore? = null, initialLanguage: String = "az", taskStoreOverride: EncryptedTaskStore? = null) {
+    appearanceStoreOverride: AppearanceStore? = null, initialLanguage: String = "az", taskStoreOverride: EncryptedTaskStore? = null,
+    textTurnOverride: (suspend (String) -> ai.memora.app.voice.VoiceFirstResult)? = null) {
     val context = LocalContext.current
     val appearanceFactory = remember(context, appearanceStoreOverride, initialTheme, initialLanguage) { AppearanceViewModel.Factory(context, AppearanceSettings(initialLanguage, initialTheme), appearanceStoreOverride) }
     val appearanceModel: AppearanceViewModel = viewModel(factory = appearanceFactory)
@@ -274,7 +275,8 @@ fun MemoraApp(initialRoute: String = "home", initialTheme: String = "system", ca
                                 appearanceModel.change(language = it)
                                 (profileState as? LocalProfileState.Ready)?.profile?.let { profile -> profileModel.syncLanguage(it) }
                             }, appearance.ready && !appearance.busy, appearance.error, { appearanceModel.load() }, { about = true })
-                            "chat" -> AgentChatScreen(language, showVoiceControl = true, onOpenArea = navigate)
+                            "chat" -> AgentChatScreen(language, showVoiceControl = true, onOpenArea = navigate,
+                                textTurnOverride = textTurnOverride)
                         }
                       }
                     }

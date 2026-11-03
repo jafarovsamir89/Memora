@@ -32,6 +32,7 @@ import androidx.lifecycle.LifecycleOwner
 import ai.memora.app.R
 import ai.memora.app.agent.AgentCloudConsentKeys
 import ai.memora.app.ui.Glyph
+import ai.memora.app.ui.LocalStrings
 import ai.memora.app.ui.colors
 import ai.memora.app.ui.s
 import kotlinx.coroutines.*
@@ -155,7 +156,7 @@ fun VoiceFirstScreen(gatewayOverride: AudioNoteGateway? = null, recorderOverride
     Column(Modifier.fillMaxWidth().testTag("voice_first_home").padding(vertical = 12.dp),
         horizontalAlignment = Alignment.CenterHorizontally) {
         val statusText = if (state == "error" && failureCode != null) {
-            context.getString(R.string.voice_first_error_code, failureCode ?: "request_failed")
+            LocalStrings.current.getString(R.string.voice_first_error_code, failureCode ?: "request_failed")
         } else s(when (state) {
             "recording" -> R.string.voice_first_listening
             "release" -> R.string.voice_first_release

@@ -19,8 +19,8 @@ android {
         applicationId = "ai.memora.app"
         minSdk = 26
         targetSdk = 36
-        versionCode = 47
-        versionName = "1.1.25-agent-timeout-diagnostics"
+        versionCode = 48
+        versionName = "1.1.26-chat-draft-recovery"
         testInstrumentationRunner = "ai.memora.app.GeminiSyntheticProbe"
     }
     buildFeatures { compose = true }

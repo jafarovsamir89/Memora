@@ -472,6 +472,7 @@
     <string name="action_area_memory">Память</string>
     <string name="action_prepare_correction">Подготовить исправление или отмену</string>
     <string name="action_correction_draft_note">Текст только подготовлен как черновик. Операция не начнётся, пока вы его не отправите.</string>
+    <string name="agent_failed_draft_kept">Ваше сообщение осталось в черновике. Если предыдущий запрос мог изменить данные, сначала проверьте результат, чтобы не повторить действие.</string>
     <string name="action_correction_draft_template">Помоги исправить или отменить предыдущее действие. Источник: «%1$s». Точный ID записи в приложении: %2$s. Измени только эту запись; если есть неоднозначность, сначала спроси.</string>
     <string name="today_due_tasks">Просроченные и ближайшие дела</string>
     <string name="today_open_cases">Открытые дела</string>
