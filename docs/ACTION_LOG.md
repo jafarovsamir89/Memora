@@ -1,5 +1,9 @@
 # Memora — лог действий
 
+## ACT-0123 - 2026-11-03 - Git handoff ACT-0122
+
+Implementation and synchronized status were committed as 1671ce257e06ca5cbaa35fd531026eec506d5506 (feat(android): unify scoped memory retrieval) and pushed to origin/main. git fetch, local HEAD, git ls-remote and the remote branch all matched; worktree was clean at handoff. v38 remains installed over v37 without clearing data; backup and validation evidence are recorded in ACT-0122. The owner cannot connect the second phone right now, so its debug App Check token and Gemini call remain unverified. Continue M20-04/08 and independent UI/product acceptance work.
+
 ## ACT-0122 - 2026-11-03 - Scoped cross-domain lexical memory search
 
 Implemented bounded search_memory evidence across canonical domain records, finance ledger, tasks, calendar, custom tables, cases, retained conversation, source-backed episodes and profile facts. Gateway/tool descriptions route broad natural-history questions to this read tool before specialist reads. Results retain scope/provenance/revisions; exact totals remain specialist finance output. Added Azerbaijani diacritic/transliteration/prefix matching while explicitly avoiding semantic-search claims. Persisted-memory consent gates all persistent sources. Ledger rows are included only when finance-source migration/configuration is available (financeEnabled); this path does not define a separate finance-consent category. No Room schema migration.
