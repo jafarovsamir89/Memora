@@ -18,6 +18,8 @@
 
 Следующий шаг: владелец создаёт новое короткое напоминание голосом (например, через 1 минуту на вымышленное действие) и проверяет, что уведомление действительно появляется. Просроченное задание не используется для проверки, потому что просроченные reminders намеренно не отправляются пачкой. Android сейчас сообщает, что exact-alarm permission выдано; если Gemini не отвечает, отдельно проверить App Check debug-token exchange. Не считать сборку APK доказательством доставки.
 
+Код и основной пакет документов отправлены в `origin/main` коммитом `2b35947a1253198e369afad4696f3fad0b408308` (`fix(android): deliver task reminders on time`). Проверка `git fetch`, локального `HEAD`, `origin/main` и `git ls-remote` подтвердила одинаковый hash; отдельная синхронизация этой записи дневника выполняется следующим docs-коммитом.
+
 Реализация закоммичена в `cc130d026ec984cd4681d222d3008e020c2dde8e` (`feat(android): support relative task reminders`); статус синхронизации Git проверяется в текущем handoff.
 
 Подтверждённый handoff: implementation commit `cc130d026ec984cd4681d222d3008e020c2dde8e` и documentation commit `175f4a4d1f1ccd4bc94e5a3c206cf882a2bb36ed` находятся в `origin/main`; после fetch local HEAD, tracking branch и remote `ls-remote` совпали, дерево было чистым.
