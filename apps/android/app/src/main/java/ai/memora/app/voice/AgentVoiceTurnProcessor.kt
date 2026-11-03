@@ -53,6 +53,8 @@ internal class AgentVoiceTurnProcessor(context: Context, private val databaseOve
     private suspend fun process(message: String, channel: AgentInputChannel): VoiceFirstResult {
         if (message.isBlank() || message.length > 20_000) return VoiceFirstResult.Ready("Zəhmət olmasa, bir daha deyin.", false)
         return try {
+            // Retention is a local user setting; apply it even when cloud-memory consent is disabled.
+            conversations.applyRetention(scopeId)
             val history = if (preferences.getBoolean("gemini-persisted-memory-v1", false))
                 conversations.recentContext(scopeId, 12).mapNotNull { row ->
                     row.message.takeLast(4_000).takeIf(String::isNotBlank)?.let { AgentDialogueMessage(row.role, it) }

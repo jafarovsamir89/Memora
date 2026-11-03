@@ -17,3 +17,11 @@ internal fun rememberUiAgentDatabase(): AgentDatabase {
     val injected = LocalAgentDatabaseOverride.current
     return remember(context, injected) { injected ?: AgentDatabase.open(context) }
 }
+
+/** Read-only projections can expose a local unavailable state instead of crashing the containing screen. */
+@Composable
+internal fun rememberOptionalUiAgentDatabase(): AgentDatabase? {
+    val context = LocalContext.current
+    val injected = LocalAgentDatabaseOverride.current
+    return remember(context, injected) { injected ?: runCatching { AgentDatabase.open(context) }.getOrNull() }
+}
