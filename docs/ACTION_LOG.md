@@ -1113,4 +1113,4 @@ ACT-0095 зафиксирован коммитом fc2e21bd55e5f209f604a191d72f6
 
 Изменён `CasesAndPersonCardTest.kt` и синхронизированы чек-лист, инженерный план, дневник и этот лог. Product code, APK и schema не менялись; личная БД не открывалась.
 
-Git handoff будет дополнен после push и проверки remote HEAD.
+Коммит `a2d78262def81713cb958420e1a7a8af2b6665f9` (`test(android): verify finance source dedup on person card`) отправлен в `origin/main`; после `git fetch` local HEAD и `git ls-remote origin refs/heads/main` совпали. Единственный незатронутый untracked-файл — `docs/adr/ADR-012-keystore-wrapping-key-rotation.md`.

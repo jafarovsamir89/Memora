@@ -26,7 +26,7 @@
 
 Изменены `CasesAndPersonCardTest.kt`, `TODO.md`, `docs/ENGINEERING_PLAN.md`, дневник и лог действий. M20-03 остаётся частичным: canonical links между доменами, acceptance людей/дел и проверки на реальном устройстве открыты.
 
-Git handoff ACT-0137 будет записан после commit/push и проверки совпадения удалённой ветки.
+Git handoff ACT-0137: `a2d78262def81713cb958420e1a7a8af2b6665f9` (`test(android): verify finance source dedup on person card`) отправлен в `origin/main`; после `git fetch`, локальный HEAD и `git ls-remote` совпали. В рабочем дереве остался только прежний untracked `docs/adr/ADR-012-keystore-wrapping-key-rotation.md`, он не затрагивался.
 
 **Предыдущий проверенный срез ACT-0136, 2026-11-03:** APK v52 / `1.1.30-delete-timeout-acknowledgement`, Room schema 16. Если persisted delete tool подтвердил локальную операцию, но следующий запрос модели завершился timeout/ошибкой, AZ/RU/EN fallback теперь сообщает, что сохранённая запись удалена, а пояснение помощника не завершено. Раньше одинаковый fallback для всех writes говорил «запись сохранена», что было неверно для удаления. Общий статус остаётся `PARTIAL`, tool readback `APPLIED`; при дополнительных отказах используется частичный исход. Схема БД не менялась.
 
