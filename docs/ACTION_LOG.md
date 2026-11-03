@@ -1,3 +1,11 @@
+## ACT-0133 - 2026-11-03 - Дедупликация источников в истории человека
+
+Исправлена история карточки человека: один и тот же канонический task/calendar/finance/memory source, связанный с несколькими делами, ранее создавал несколько визуально одинаковых событий из-за разных `CaseEvidenceRow.evidenceId`. Для evidence entries построение story ID теперь опирается на `sourceKind + sourceId + sourceRevisionId`; записи редакций самого дела остаются отдельными. БД, доменные источники и связи не менялись.
+
+Тест добавляет одну synthetic task в два разных дела с одним участником и проверяет ровно одну карточку task source, обе карточки дел, навигацию в источники и возврат. Целевой `CasesAndPersonCardTest.personTimelineOpensExplicitTaskAndCalendarSourcesAndReturnsToCard` прошёл. Полный `:app:testDebugUnitTest`: 56 suites / 284 tests, 0 failures/errors/skips. `:app:assembleDebug` прошёл. `:app:lintDebug` прошёл: 0 errors / 60 warnings / 3 hints. APK v49 / `1.1.27-person-timeline-source-dedup`, SHA-256 `2a33b3ab4e4b5b67edc5993e17106270b8e0a1380415210505233dba7baff7c9`. Не устанавливался; пользовательская БД не открывалась.
+
+Изменены `SavedObjectsScreen.kt`, `CasesAndPersonCardTest.kt`, Android version metadata, `TODO.md`, дневник и этот лог. Связи задачи с человеком остаются опосредованными делом; прямые canonical task/person links и остальные gates M20-03/05/08 не закрыты.
+
 # Memora — лог действий
 
 ## ACT-0132 - 2026-11-03 - Не терять текстовую просьбу при отказе

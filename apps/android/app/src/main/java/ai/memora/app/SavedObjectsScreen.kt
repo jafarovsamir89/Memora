@@ -414,7 +414,13 @@ private fun PersonCardSections(
                         event.title.isNotBlank() -> "${snapshot.record.title}: ${event.title}"
                         else -> snapshot.record.title
                     }
-                    add(PersonStoryEntry("case-${event.id}", event.at, personTimelineOrder(event.at), label, event.detail, source))
+                    // A source can be referenced by several cases. The person's global story is a
+                    // timeline of canonical records, so key evidence cards by source identity,
+                    // while keeping separate case-revision entries for each case.
+                    val storyId = if (source != null) {
+                        "source-${event.sourceKind}-${event.sourceId}-${event.sourceRevisionId.orEmpty()}"
+                    } else "case-${event.id}"
+                    add(PersonStoryEntry(storyId, event.at, personTimelineOrder(event.at), label, event.detail, source))
                 }
         }
     }.distinctBy { it.id }.sortedWith(compareByDescending<PersonStoryEntry> { it.sortOrder }.thenBy { it.id }).take(40)

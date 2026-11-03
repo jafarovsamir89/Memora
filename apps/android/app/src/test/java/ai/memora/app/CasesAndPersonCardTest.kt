@@ -213,6 +213,11 @@ class CasesAndPersonCardTest {
             evidenceId = "synthetic-task-evidence", now = "2026-11-03T10:03:00Z")
         cases.addEvidence(scope, "synthetic-source-case", "calendar_event", "synthetic-linked-calendar", "appointment",
             evidenceId = "synthetic-calendar-evidence", now = "2026-11-03T10:04:00Z")
+        cases.createCase(scope, "synthetic-source-case-2", "Synthetic follow-up case", "Second fictional case",
+            sourceTurnId = "00000000-0000-4000-8000-000000000203", now = "2026-11-03T10:05:00Z")
+        cases.addParticipant(scope, "synthetic-source-case-2", "synthetic-source-person", now = "2026-11-03T10:06:00Z")
+        cases.addEvidence(scope, "synthetic-source-case-2", "task", "synthetic-linked-task", "follow_up",
+            evidenceId = "synthetic-task-evidence-2", now = "2026-11-03T10:07:00Z")
 
         compose.setContent {
             CompositionLocalProvider(LocalAgentDatabaseOverride provides databaseRule.database) {
@@ -225,14 +230,14 @@ class CasesAndPersonCardTest {
             compose.onAllNodesWithTag("saved_object_synthetic-source-person").fetchSemanticsNodes().isNotEmpty()
         }
         compose.onNodeWithTag("saved_object_synthetic-source-person").performScrollTo().performClick()
-        val taskStoryTag = "person_story_case-evidence:synthetic-task-evidence"
-        val calendarStoryTag = "person_story_case-evidence:synthetic-calendar-evidence"
-        compose.waitUntil(10_000) {
-            compose.onAllNodesWithTag(taskStoryTag).fetchSemanticsNodes().isNotEmpty() &&
-                compose.onAllNodesWithTag(calendarStoryTag).fetchSemanticsNodes().isNotEmpty()
-        }
+        val taskStoryTag = "person_story_source-task-synthetic-linked-task-"
+        val calendarStoryTag = "person_story_source-calendar_event-synthetic-linked-calendar-"
+        compose.waitUntil(10_000) { compose.onAllNodesWithTag(taskStoryTag).fetchSemanticsNodes().isNotEmpty() }
+        compose.onAllNodesWithTag(calendarStoryTag).assertCountEquals(1)
         compose.onAllNodesWithTag(taskStoryTag).assertCountEquals(1)
         compose.onAllNodesWithTag(calendarStoryTag).assertCountEquals(1)
+        compose.onNodeWithTag("person_related_case_synthetic-source-case").assertExists()
+        compose.onNodeWithTag("person_related_case_synthetic-source-case-2").assertExists()
         compose.onNodeWithTag(taskStoryTag).performScrollTo()
         screenshot("20-person-card-explicit-sources")
 
