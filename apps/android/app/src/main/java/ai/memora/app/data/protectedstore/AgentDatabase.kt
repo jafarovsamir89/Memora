@@ -69,6 +69,12 @@ internal val AGENT_DB_7_TO_8 = androidx.room.migration.Migration(7, 8) { db ->
     db.execSQL("CREATE UNIQUE INDEX IF NOT EXISTS index_money_event_scopeId_commandId ON money_event(scopeId, commandId)")
 }
 
+/** Existing installations receive a completed profile; a new schema starts without one. */
+internal val AGENT_DB_8_TO_9 = androidx.room.migration.Migration(8, 9) { db ->
+    db.execSQL("CREATE TABLE IF NOT EXISTS local_profile (localProfileId TEXT NOT NULL, displayName TEXT, language TEXT NOT NULL, toneStyle TEXT NOT NULL, responseStyle TEXT NOT NULL, timeZoneId TEXT NOT NULL, onboardingVersion INTEGER NOT NULL, onboardingCompleted INTEGER NOT NULL, remoteAccountId TEXT, createdAtMillis INTEGER NOT NULL, updatedAtMillis INTEGER NOT NULL, PRIMARY KEY(localProfileId))")
+    db.execSQL("INSERT INTO local_profile (localProfileId, displayName, language, toneStyle, responseStyle, timeZoneId, onboardingVersion, onboardingCompleted, remoteAccountId, createdAtMillis, updatedAtMillis) VALUES (lower(hex(randomblob(4))) || '-' || lower(hex(randomblob(2))) || '-4' || substr(lower(hex(randomblob(2))), 2, 3) || '-a' || substr(lower(hex(randomblob(2))), 2, 3) || '-' || lower(hex(randomblob(6))), NULL, 'az', 'friendly', 'balanced', 'Asia/Baku', 1, 1, NULL, CAST(strftime('%s','now') AS INTEGER) * 1000, CAST(strftime('%s','now') AS INTEGER) * 1000)")
+}
+
 /** Minimal command journal. Only identifiers, digest, status and recovery versions are retained. */
 @Entity(tableName = "agent_command_journal")
 internal data class AgentCommandJournalRow(
@@ -137,6 +143,22 @@ internal data class LocalCalendarEventRow(@PrimaryKey val eventId: String, val s
     val startLocal: String, val endLocal: String?, val zoneId: String, val timePrecision: String,
     val version: Long, val status: String)
 
+/** A single encrypted local profile; remoteAccountId stays null until a future accepted server phase. */
+@Entity(tableName = "local_profile")
+internal data class LocalProfileRow(
+    @PrimaryKey val localProfileId: String,
+    val displayName: String?,
+    val language: String,
+    val toneStyle: String,
+    val responseStyle: String,
+    val timeZoneId: String,
+    val onboardingVersion: Int,
+    val onboardingCompleted: Boolean,
+    val remoteAccountId: String?,
+    val createdAtMillis: Long,
+    val updatedAtMillis: Long,
+)
+
 @Entity(tableName = "memory_draft")
 internal data class MemoryDraftRow(@PrimaryKey val id: Int = 1, val text: String, val version: Long)
 
@@ -194,6 +216,14 @@ internal data class AgentOutboxRow(
 
 @androidx.room.Dao
 internal interface ProtectedStoreDao {
+    @androidx.room.Query("SELECT * FROM local_profile ORDER BY createdAtMillis LIMIT 1") suspend fun localProfile(): LocalProfileRow?
+    @androidx.room.Insert(onConflict = androidx.room.OnConflictStrategy.ABORT) suspend fun insertLocalProfile(row: LocalProfileRow)
+    @androidx.room.Query("UPDATE local_profile SET displayName=:displayName, language=:language, toneStyle=:tone, responseStyle=:style, timeZoneId=:zone, onboardingVersion=:onboardingVersion, onboardingCompleted=1, updatedAtMillis=:updatedAt WHERE localProfileId=:id AND onboardingCompleted=0")
+    suspend fun completeLocalProfile(id: String, displayName: String?, language: String, tone: String, style: String, zone: String,
+        onboardingVersion: Int, updatedAt: Long): Int
+    @androidx.room.Query("UPDATE local_profile SET language=:language, updatedAtMillis=:updatedAt WHERE localProfileId=:id")
+    suspend fun updateLocalProfileLanguage(id: String, language: String, updatedAt: Long): Int
+
     @androidx.room.Insert(onConflict = androidx.room.OnConflictStrategy.ABORT)
     suspend fun putConversationMessages(rows: List<AgentConversationMessageRow>)
     @androidx.room.Query("SELECT * FROM agent_conversation_message WHERE scopeId=:scope ORDER BY sequence DESC LIMIT :limit")
@@ -302,8 +332,9 @@ internal interface ProtectedStoreDao {
     PersonRow::class, MoneyEventRow::class, LegacyMigrationRow::class, AgentOutboxRow::class, AgentTurnJournalRow::class,
     AgentConversationMessageRow::class,
     DomainObjectRow::class, DomainRevisionRow::class, DomainLinkRow::class, UserTableRow::class, TableColumnRow::class,
-    TableDataRow::class, MoneyAdjustmentRow::class, LocalCalendarEventRow::class, TableSchemaRevisionRow::class],
-    version = 8, exportSchema = true)
+    TableDataRow::class, MoneyAdjustmentRow::class, LocalCalendarEventRow::class, TableSchemaRevisionRow::class,
+    LocalProfileRow::class],
+    version = 9, exportSchema = true)
 internal abstract class AgentDatabase : RoomDatabase() {
     abstract fun protectedStoreDao(): ProtectedStoreDao
     companion object {
@@ -411,7 +442,8 @@ internal abstract class AgentDatabase : RoomDatabase() {
             var database: AgentDatabase? = null
             try {
                 database = Room.databaseBuilder(context.applicationContext, AgentDatabase::class.java, databaseName)
-                    .addMigrations(AGENT_DB_1_TO_2, AGENT_DB_2_TO_3, AGENT_DB_3_TO_4, AGENT_DB_4_TO_5, AGENT_DB_5_TO_6, AGENT_DB_6_TO_7, AGENT_DB_7_TO_8)
+                    .addMigrations(AGENT_DB_1_TO_2, AGENT_DB_2_TO_3, AGENT_DB_3_TO_4, AGENT_DB_4_TO_5,
+                        AGENT_DB_5_TO_6, AGENT_DB_6_TO_7, AGENT_DB_7_TO_8, AGENT_DB_8_TO_9)
                     .setJournalMode(RoomDatabase.JournalMode.TRUNCATE)
                     // WAL remains disabled until P1 WAL/SHM privacy and recovery gates pass.
                     .openHelperFactory(SupportOpenHelperFactory(databaseKey, null, false))

@@ -143,7 +143,7 @@
     <string name="voice_too_long">Mətn 20000 simvoldan uzundur. Qeydi bölün.</string>
     <string name="ai_chat_body">Köməkçinin əsas dili Azərbaycan dilidir. Söhbət bu cihazda şifrəli saxlanılır; son söhbət konteksti yalnız yaddaş icazəsini ayrıca verdikdə Gemini-yə göndərilir.</string>
     <string name="ai_consent_title">Mətn Google-a göndərilsin?</string>
-    <string name="ai_consent_body">Aşağıdakı mətn cavab üçün Google Gemini-yə göndəriləcək. Son söhbət və seçilmiş yaddaş məlumatları yalnız ayrıca yaddaş icazəsi aktivdirsə göndərilir. Google ödənişsiz xidmət məlumatlarından məhsullarını yaxşılaşdırmaq üçün istifadə edə bilər.</string>
+    <string name="ai_consent_body">Aşağıdakı mətn cavab üçün Google Gemini-yə göndəriləcək. Seçdiyiniz cavab dili, ünsiyyət tərzi və cavab uzunluğu da göndərilir; profil adı və saat qurşağı göndərilmir. Son söhbət və yaddaş qeydləri yalnız ayrıca yaddaş icazəsi aktivdirsə göndərilir. Google pulsuz xidmət məlumatlarından məhsullarını yaxşılaşdırmaq üçün istifadə edə bilər.</string>
     <string name="ai_send_confirm">Google-a göndər</string>
     <string name="ai_loading">Google cavabını gözləyirik…</string>
     <string name="ai_failed">Cavab alınmadı. Bağlantını və Firebase ayarlarını yoxlayıb yenidən cəhd edin.</string>
@@ -250,7 +250,7 @@
     <string name="voice_first_error">Alınmadı. Yenidən cəhd edin.</string>
     <string name="voice_first_sound_error">Səs səsləndirilə bilmədi. Cavab aşağıdadır.</string>
     <string name="voice_first_consent_title">Google ilə səsli köməkçi</string>
-    <string name="voice_first_consent_body">Sizin razılığınızla danışdığınız səs və onun mətni Google Gemini-yə göndərilir. Cavabı səsləndirmək üçün cavabın özü, o cümlədən əlaqəli ad və məbləğ Google-a göndərilir. Google pulsuz xidmət məlumatlarından məhsullarını yaxşılaşdırmaq üçün istifadə edə bilər. Bütün yaddaş arxivi göndərilmir. Razılıq bu cihazda saxlanılır.</string>
+    <string name="voice_first_consent_body">Sizin razılığınızla danışdığınız səs və onun mətni Google Gemini-yə göndərilir. Cavabı səsləndirmək üçün cavabın özü, o cümlədən əlaqəli ad və məbləğ Google-a göndərilir. Seçdiyiniz cavab dili, ünsiyyət tərzi və cavab uzunluğu da göndərilir; profil adı və saat qurşağı göndərilmir. Söhbət tarixçəsi və yaddaş qeydləri yalnız ayrıca yaddaş icazəsi ilə göndərilir. Google pulsuz xidmət məlumatlarından məhsullarını yaxşılaşdırmaq üçün istifadə edə bilər. Razılıq bu cihazda saxlanılır.</string>
     <string name="voice_first_menu_hint">Menyu üçün sola sürüşdürün</string>
     <string name="voice_memory_title">Səs yaddaşı</string>
     <string name="voice_memory_help">Yazılmış köçürmələr, borclar və ilkin mətn. Səhv qeydi silib yenidən deyə bilərsiniz.</string>
@@ -283,4 +283,27 @@
     <string name="saved_objects_details_truncated">Uzun qeydin ilk hissəsi göstərilir.</string>
     <string name="notes_title">Qeydlər</string>
     <string name="notes_hint">Yaddaşda saxlanmış qeydlər</string>
+    <string name="onboarding_eyebrow">MEMORA — ŞƏXSİ KATİBİNİZ</string>
+    <string name="onboarding_title">Vacib olanları birlikdə yadda saxlayaq.</string>
+    <string name="onboarding_body">Danışın, fikirləşin, plan qurun. Memora söhbətinizi davam etdirməyə və yalnız istədiyiniz məlumatları yadda saxlamağa kömək edəcək.</string>
+    <string name="onboarding_examples_title">Memora necə kömək edir?</string>
+    <string name="onboarding_examples_body">Bir insan, borc və ya plan barədə danışın, sonra yaddaşda nə olduğunu soruşun. Bunlar yalnız nümunədir, heç nə saxlanılmır.</string>
+    <string name="onboarding_name">Sizə necə müraciət edim? (istəyə bağlı)</string>
+    <string name="onboarding_name_hint">Adınız və ya müraciət forması</string>
+    <string name="onboarding_language">Söhbət dili</string>
+    <string name="onboarding_tone">Ünsiyyət tərzi</string>
+    <string name="onboarding_tone_friendly">Səmimi</string>
+    <string name="onboarding_tone_direct">Birbaşa</string>
+    <string name="onboarding_style">Cavab üslubu</string>
+    <string name="onboarding_style_concise">Qısa</string>
+    <string name="onboarding_style_balanced">Balanslı</string>
+    <string name="onboarding_style_detailed">Ətraflı</string>
+    <string name="onboarding_timezone">Saat qurşağı</string>
+    <string name="onboarding_privacy_title">Yaddaş cihazınızda qalır</string>
+    <string name="onboarding_privacy_body">Yeni profil boş başlayır. Mikrofon icazəsi və məlumatların Google-a göndərilməsi ayrıca, yalnız ehtiyac olduqda soruşulur.</string>
+    <string name="onboarding_start">Başlayaq</string>
+    <string name="onboarding_saving">Profil saxlanılır…</string>
+    <string name="onboarding_load_error">Yerli profili açmaq mümkün olmadı. Məlumatlar dəyişdirilməyib.</string>
+    <string name="onboarding_save_error">Profili saxlamaq alınmadı. Yenidən cəhd edin.</string>
+    <string name="onboarding_retry">Yenidən cəhd et</string>
 </resources>

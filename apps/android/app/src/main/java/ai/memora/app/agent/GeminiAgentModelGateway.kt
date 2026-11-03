@@ -72,6 +72,23 @@ internal fun requireGeminiFinalAnswer(text: String?): AgentModelReply.Answer {
     return AgentModelReply.Answer(answer)
 }
 
+internal fun agentResponsePreferenceInstruction(preferences: AgentResponsePreferences?): String {
+    preferences ?: return ""
+    val language = when (preferences.language) {
+        "ru" -> "Russian"
+        "en" -> "English"
+        else -> "Azerbaijani (az-AZ), never Turkish"
+    }
+    val tone = if (preferences.toneStyle == "direct") "direct and candid" else "friendly and warm"
+    val length = when (preferences.responseStyle) {
+        "concise" -> "brief unless detail is necessary for correctness"
+        "detailed" -> "explain useful context and steps without repeating yourself"
+        else -> "balanced: answer clearly with enough context"
+    }
+    return "\n\nUser-selected response preferences: default to $language; use a $tone tone; be $length. " +
+        "The user's current message or explicit language request takes priority over the saved language preference."
+}
+
 internal data class GeminiFailureClassification(val safeCode: String, val category: String)
 
 internal fun classifyGeminiFailure(status: Int?, causeNames: Set<String>, providerCode: String?): GeminiFailureClassification {
@@ -135,7 +152,7 @@ class GeminiAgentModelGateway : AgentModelGateway {
             "gemini-3.5-flash-lite",
             generationConfig = generationConfig { temperature = 0.1f; maxOutputTokens = 768 },
             tools = declarations.takeIf { it.isNotEmpty() }?.let { listOf(Tool.functionDeclarations(it)) }.orEmpty(),
-            systemInstruction = content { text(SYSTEM_INSTRUCTION) },
+            systemInstruction = content { text(SYSTEM_INSTRUCTION + agentResponsePreferenceInstruction(request.responsePreferences)) },
         )
         val active = session ?: Session(model.startChat()).also { sessions[request.turnId] = it }
         val response = if (!active.userMessageSent) {

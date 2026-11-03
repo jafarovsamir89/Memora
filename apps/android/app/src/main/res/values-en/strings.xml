@@ -143,7 +143,7 @@
     <string name="voice_too_long">Text exceeds 20000 characters. Split the note.</string>
     <string name="ai_chat_body">Azerbaijani is the primary assistant language. Conversation history is encrypted on this device; recent context is sent to Gemini only with separate memory consent.</string>
     <string name="ai_consent_title">Send this text to Google?</string>
-    <string name="ai_consent_body">The text below will be sent to Google Gemini for a response. Recent conversation and selected memory are sent only when separate memory consent is enabled. Google may use free-service data to improve products.</string>
+    <string name="ai_consent_body">The text below will be sent to Google Gemini for a response. Your selected response language, tone, and level of detail are also sent; your profile name and time zone are not. Recent conversation and saved memory records are sent only when separate memory consent is enabled. Google may use free-service data to improve products.</string>
     <string name="ai_send_confirm">Send to Google</string>
     <string name="ai_loading">Waiting for Google…</string>
     <string name="ai_failed">No response. Check your connection and Firebase setup, then retry.</string>
@@ -250,7 +250,7 @@
     <string name="voice_first_error">Something went wrong. Try again.</string>
     <string name="voice_first_sound_error">Could not play audio. The answer is shown below.</string>
     <string name="voice_first_consent_title">Voice assistant with Google</string>
-    <string name="voice_first_consent_body">With your consent, your voice and transcript are sent to Google Gemini. To produce speech, Google receives the answer, including the relevant name and amount. Google may use free-service data to improve products. Your entire memory archive is not sent. Consent is saved on this device.</string>
+    <string name="voice_first_consent_body">With your consent, your voice and transcript are sent to Google Gemini. To produce speech, Google receives the answer, including the relevant name and amount. Your selected response language, tone, and level of detail are also sent; your profile name and time zone are not. Conversation history and saved memory records are sent only with separate memory consent. Google may use free-service data to improve products. Consent is saved on this device.</string>
     <string name="voice_first_menu_hint">Swipe left to open the menu</string>
     <string name="voice_memory_title">Voice memory</string>
     <string name="voice_memory_help">Saved transfers, debts and original text. Delete an incorrect entry and say it again.</string>
@@ -283,4 +283,27 @@
     <string name="saved_objects_details_truncated">Only the beginning of this long record is shown.</string>
     <string name="notes_title">Notes</string>
     <string name="notes_hint">Notes saved in memory</string>
+    <string name="onboarding_eyebrow">MEMORA — YOUR PERSONAL SECRETARY</string>
+    <string name="onboarding_title">Let’s keep the important things together.</string>
+    <string name="onboarding_body">Talk, think things through, and plan. Memora helps continue your conversations and saves only the information you ask it to remember.</string>
+    <string name="onboarding_examples_title">How can Memora help?</string>
+    <string name="onboarding_examples_body">Talk about a person, a debt, or a plan, then ask what was saved. These are examples only; nothing is stored.</string>
+    <string name="onboarding_name">What should I call you? (optional)</string>
+    <string name="onboarding_name_hint">Your name or preferred form of address</string>
+    <string name="onboarding_language">Conversation language</string>
+    <string name="onboarding_tone">Conversation tone</string>
+    <string name="onboarding_tone_friendly">Friendly</string>
+    <string name="onboarding_tone_direct">Direct</string>
+    <string name="onboarding_style">Response style</string>
+    <string name="onboarding_style_concise">Concise</string>
+    <string name="onboarding_style_balanced">Balanced</string>
+    <string name="onboarding_style_detailed">Detailed</string>
+    <string name="onboarding_timezone">Time zone</string>
+    <string name="onboarding_privacy_title">Your memory stays on this device</string>
+    <string name="onboarding_privacy_body">Your new profile starts empty. Microphone access and sending data to Google are requested separately, only when needed.</string>
+    <string name="onboarding_start">Get started</string>
+    <string name="onboarding_saving">Saving profile…</string>
+    <string name="onboarding_load_error">Could not open the local profile. No data was changed.</string>
+    <string name="onboarding_save_error">Could not save the profile. Try again.</string>
+    <string name="onboarding_retry">Try again</string>
 </resources>

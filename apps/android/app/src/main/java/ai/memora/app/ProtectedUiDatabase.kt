@@ -5,9 +5,11 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.platform.LocalContext
 import ai.memora.app.data.protectedstore.AgentDatabase
+import ai.memora.app.data.LocalProfileStore
 
 /** Explicit dependency injection; the normal application always opens the protected SQLCipher store. */
 internal val LocalAgentDatabaseOverride = staticCompositionLocalOf<AgentDatabase?> { null }
+internal val LocalProfileStoreOverride = staticCompositionLocalOf<LocalProfileStore?> { null }
 
 @Composable
 internal fun rememberUiAgentDatabase(): AgentDatabase {

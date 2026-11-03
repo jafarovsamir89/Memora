@@ -33,6 +33,7 @@ import androidx.compose.ui.unit.dp
 import ai.memora.app.data.protectedstore.AgentDatabase
 import ai.memora.app.data.protectedstore.ProtectedConversationRepository
 import ai.memora.app.data.protectedstore.AgentConversationMessageRow
+import ai.memora.app.agent.AgentCloudConsentKeys
 import ai.memora.app.ui.Glyph
 import ai.memora.app.ui.MemoraCard
 import ai.memora.app.ui.ScreenColumn
@@ -56,7 +57,7 @@ fun AgentChatScreen(language: String = "az") {
     var messages by remember { mutableStateOf<List<AgentConversationMessageRow>>(emptyList()) }
     var input by rememberSaveable { mutableStateOf("") }
     var pendingMessage by rememberSaveable { mutableStateOf("") }
-    var textConsent by remember { mutableStateOf(settings.getBoolean("gemini-text-and-answer-v1", false)) }
+    var textConsent by remember { mutableStateOf(settings.getBoolean(AgentCloudConsentKeys.TEXT, false)) }
     var memoryConsent by remember { mutableStateOf(settings.getBoolean("gemini-persisted-memory-v1", false)) }
     var textConsentDialog by remember { mutableStateOf(false) }
     var memoryConsentDialog by remember { mutableStateOf(false) }
@@ -102,7 +103,7 @@ fun AgentChatScreen(language: String = "az") {
             val message = pendingMessage
             textConsentDialog = false
             pendingMessage = ""
-            if (settings.edit().putBoolean("gemini-text-and-answer-v1", true).commit()) {
+            if (settings.edit().putBoolean(AgentCloudConsentKeys.TEXT, true).commit()) {
                 textConsent = true
                 send(message)
             } else failed = true
@@ -170,7 +171,7 @@ fun AgentChatScreen(language: String = "az") {
             }
         }
         if (textConsent) TextButton(onClick = {
-            if (settings.edit().putBoolean("gemini-text-and-answer-v1", false).commit()) textConsent = false
+            if (settings.edit().putBoolean(AgentCloudConsentKeys.TEXT, false).commit()) textConsent = false
             else failed = true
         }, modifier = Modifier.testTag("agent_text_consent_toggle")) { Text(s(ai.memora.app.R.string.agent_text_revoke)) }
     }

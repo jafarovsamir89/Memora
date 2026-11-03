@@ -54,7 +54,7 @@ class CaptureUiIntegrationTest {
         compose.setContent {
             key(owner.value) {
                 CompositionLocalProvider(LocalViewModelStoreOwner provides owner.value) {
-                    MemoraApp(initialLanguage = "ru", initialRoute = if (showInbox.value) "inbox" else "memory", capturePersistenceOverride = disk)
+                    TestMemoraApp(initialLanguage = "ru", initialRoute = if (showInbox.value) "inbox" else "memory", capturePersistenceOverride = disk)
                 }
             }
         }
@@ -88,7 +88,7 @@ class CaptureUiIntegrationTest {
         }
         val owner = Owner()
         compose.setContent {
-            CompositionLocalProvider(LocalViewModelStoreOwner provides owner) { MemoraApp(initialLanguage = "ru", initialRoute = "memory", capturePersistenceOverride = unreliable) }
+            CompositionLocalProvider(LocalViewModelStoreOwner provides owner) { TestMemoraApp(initialLanguage = "ru", initialRoute = "memory", capturePersistenceOverride = unreliable) }
         }
         compose.onNodeWithTag("capture_text").performClick()
         awaitReady()
@@ -116,7 +116,7 @@ class CaptureUiIntegrationTest {
                 return if (calls.incrementAndGet() == 1 && result == CaptureWrite.Recorded) CaptureWrite.Unavailable else result
             }
         }
-        compose.setContent { MemoraApp(initialLanguage = "ru", initialRoute = "memory", capturePersistenceOverride = unreliable) }
+        compose.setContent { TestMemoraApp(initialLanguage = "ru", initialRoute = "memory", capturePersistenceOverride = unreliable) }
         compose.onNodeWithTag("capture_text").performClick()
         awaitReady()
         compose.onNodeWithTag("capture_input").performTextInput("synthetic one")
@@ -132,7 +132,7 @@ class CaptureUiIntegrationTest {
 
     @Test fun deleteNeedsConfirmationAndExportExplainsPlaintext() {
         val disk = disk()
-        compose.setContent { MemoraApp(initialLanguage = "ru", initialRoute = "memory", capturePersistenceOverride = disk) }
+        compose.setContent { TestMemoraApp(initialLanguage = "ru", initialRoute = "memory", capturePersistenceOverride = disk) }
         compose.onNodeWithTag("capture_text").performClick()
         awaitReady()
         compose.onNodeWithTag("capture_input").performTextInput("synthetic removal")
@@ -167,7 +167,7 @@ class CaptureUiIntegrationTest {
                 return CaptureWrite.Unavailable
             }
         }
-        compose.setContent { MemoraApp(initialLanguage = "ru", initialRoute = "inbox", capturePersistenceOverride = uncertain) }
+        compose.setContent { TestMemoraApp(initialLanguage = "ru", initialRoute = "inbox", capturePersistenceOverride = uncertain) }
         compose.waitUntil(10_000) { compose.onAllNodesWithTag("capture_edit_0").fetchSemanticsNodes().isNotEmpty() }
         compose.onNodeWithTag("capture_edit_0").performScrollTo().performClick()
         compose.onNodeWithTag("capture_edit_text").performTextClearance()
@@ -194,7 +194,7 @@ class CaptureUiIntegrationTest {
                 return if (attempts.size == 1) CaptureWrite.Unavailable else disk.revise(sourceId, expectedRevisionId, revisionId, text, recordedAt)
             }
         }
-        compose.setContent { MemoraApp(initialLanguage = "ru", initialRoute = "inbox", capturePersistenceOverride = unreliable) }
+        compose.setContent { TestMemoraApp(initialLanguage = "ru", initialRoute = "inbox", capturePersistenceOverride = unreliable) }
         compose.waitUntil(10_000) { compose.onAllNodesWithTag("capture_edit_0").fetchSemanticsNodes().isNotEmpty() }
         compose.onNodeWithTag("capture_edit_0").performScrollTo().performClick()
         compose.onNodeWithTag("capture_edit_text").performTextClearance()
@@ -216,7 +216,7 @@ class CaptureUiIntegrationTest {
         assertEquals(CaptureWrite.Recorded, disk.submit("c1", 1, "s1", "r1", "Salam Bakı", now, "Asia/Baku"))
         assertEquals(CaptureWrite.Recorded, disk.saveDraft(2, "Salam Gəncə"))
         assertEquals(CaptureWrite.Recorded, disk.submit("c2", 3, "s2", "r2", "Salam Gəncə", now, "Asia/Baku"))
-        compose.setContent { MemoraApp(initialLanguage = "ru", initialRoute = "inbox", capturePersistenceOverride = disk) }
+        compose.setContent { TestMemoraApp(initialLanguage = "ru", initialRoute = "inbox", capturePersistenceOverride = disk) }
         compose.waitUntil(10_000) { compose.onAllNodesWithTag("draft_1").fetchSemanticsNodes().isNotEmpty() }
         compose.onNodeWithTag("inbox_search").performTextInput("GƏNCƏ")
         compose.onNodeWithText("Salam Gəncə").assertExists()

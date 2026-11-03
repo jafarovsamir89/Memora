@@ -75,15 +75,23 @@ class AgentToolCatalogTest {
 
     @Test fun alternateProviderCanAnswerConversationWithoutSelectingTools() = runBlocking {
         val fakeProvider = FakeAgentModelGateway(AgentModelReply.Answer("Salam! Necə kömək edim?"))
+        val preferences = AgentResponsePreferences("ru", "direct", "concise")
         val result = AgentOrchestrator(fakeProvider, DefaultAgentToolRegistry(), AllowPolicy(), MemoryJournal())
             .run(AgentTurnRequest("00000000-0000-4000-8000-000000000002", "00000000-0000-4000-8000-000000000003",
                 "00000000-0000-4000-8000-000000000004", null,
-                "az-AZ", "Salam"))
+                "ru-RU", "Salam", responsePreferences = preferences))
 
         assertEquals(AgentRunResultStatus.COMPLETED, result.status)
         assertEquals("Salam! Necə kömək edim?", result.answer)
         assertTrue(result.toolResults.isEmpty())
         assertTrue(fakeProvider.requests.single().tools.isEmpty())
+        assertEquals(preferences, fakeProvider.requests.single().responsePreferences)
+        val instruction = agentResponsePreferenceInstruction(preferences)
+        assertTrue(instruction.contains("Russian"))
+        assertTrue(instruction.contains("direct and candid"))
+        assertTrue(instruction.contains("brief"))
+        assertTrue(agentResponsePreferenceInstruction(AgentResponsePreferences("az", "friendly", "detailed"))
+            .contains("Azerbaijani (az-AZ), never Turkish"))
     }
 
     private class FakeAgentModelGateway(vararg replies: AgentModelReply) : AgentModelGateway {

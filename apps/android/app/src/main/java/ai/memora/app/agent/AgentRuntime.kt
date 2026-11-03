@@ -37,6 +37,15 @@ data class AgentDialogueMessage(val role: String, val text: String) {
     init { require(role in setOf("user", "model") && text.isNotBlank() && text.length <= 4_000) }
 }
 
+/** Explicit, non-identifying profile choices that may be sent only after the cloud model consent gate. */
+data class AgentResponsePreferences(val language: String, val toneStyle: String, val responseStyle: String) {
+    init {
+        require(language in setOf("az", "ru", "en"))
+        require(toneStyle in setOf("friendly", "direct"))
+        require(responseStyle in setOf("concise", "balanced", "detailed"))
+    }
+}
+
 data class AgentTurnRequest(
     val turnId: String,
     val scopeId: String,
@@ -46,6 +55,7 @@ data class AgentTurnRequest(
     val text: String,
     val channel: AgentInputChannel = AgentInputChannel.VOICE,
     val conversationHistory: List<AgentDialogueMessage> = emptyList(),
+    val responsePreferences: AgentResponsePreferences? = null,
 )
 
 enum class AgentTurnStatus {
@@ -95,6 +105,7 @@ data class AgentModelRequest(
     val previousToolResults: List<AgentToolObservation>,
     val tools: List<AgentToolDescriptor>,
     val conversationHistory: List<AgentDialogueMessage> = emptyList(),
+    val responsePreferences: AgentResponsePreferences? = null,
 )
 
 sealed interface AgentModelReply {
@@ -263,6 +274,7 @@ class AgentOrchestrator(
                         previousToolResults = observations.toList(),
                         tools = registry.enabledTools(),
                         conversationHistory = turn.conversationHistory,
+                        responsePreferences = turn.responsePreferences,
                     )) }
                 } catch (error: AgentGatewayFailure) {
                     val fallback = finishAfterModelFailure(turn, observations, error.safeCode)

@@ -45,15 +45,16 @@ class UiShellTest {
         val context = ApplicationProvider.getApplicationContext<Context>()
         val prefs = context.getSharedPreferences("voice-first-consent", 0)
         prefs.edit().putBoolean("google-note-v1", true).putBoolean("google-live-v1", true)
-            .putBoolean("google-audio-and-answer-v1", true).commit()
-        compose.setContent { MemoraApp(initialRoute = "settings", capturePersistenceOverride = captureStore, appearanceStoreOverride = appearanceStore) }
+            .putBoolean("google-audio-and-answer-v1", true)
+            .putBoolean(ai.memora.app.agent.AgentCloudConsentKeys.VOICE, true).commit()
+        compose.setContent { TestMemoraApp(initialRoute = "settings", capturePersistenceOverride = captureStore, appearanceStoreOverride = appearanceStore) }
         compose.onNodeWithTag("voice_revoke_consent").performScrollTo().performClick()
         compose.runOnIdle { org.junit.Assert.assertTrue(prefs.all.isEmpty()) }
         compose.onNodeWithTag("voice_revoke_consent").assertDoesNotExist()
     }
 
     @Test fun sqlcipherCommunityLicenseIsReachableFromAbout() {
-        compose.setContent { MemoraApp(initialRoute = "home", initialLanguage = "az", capturePersistenceOverride = captureStore, appearanceStoreOverride = appearanceStore) }
+        compose.setContent { TestMemoraApp(initialRoute = "home", initialLanguage = "az", capturePersistenceOverride = captureStore, appearanceStoreOverride = appearanceStore) }
         compose.onNodeWithTag("app_info").performClick()
         compose.onNodeWithTag("open_source_licenses").performClick()
         compose.onNodeWithTag("sqlcipher_license_text").assertExists()
@@ -107,7 +108,7 @@ class UiShellTest {
         val now = java.time.Instant.parse("2026-01-01T12:00:00Z")
         captureStore.saveDraft(0, "İlqar, yaddaş yoxlaması")
         captureStore.submit("cmd", 1, "synthetic-source", "r1", "İlqar, yaddaş yoxlaması", now, "Asia/Baku")
-        compose.setContent { MemoraApp(initialTheme = "light", capturePersistenceOverride = captureStore, appearanceStoreOverride = appearanceStore) }
+        compose.setContent { TestMemoraApp(initialTheme = "light", capturePersistenceOverride = captureStore, appearanceStoreOverride = appearanceStore) }
         compose.onNodeWithTag("voice_first_button").assertIsDisplayed()
         compose.onNodeWithTag("nav_home").assertIsDisplayed()
         compose.onNodeWithTag("nav_memory").assertIsDisplayed()
@@ -125,7 +126,7 @@ class UiShellTest {
     }
 
     @Test fun textDraftGoesToInboxWithoutAi() {
-        compose.setContent { MemoraApp(initialTheme = "light", capturePersistenceOverride = captureStore, appearanceStoreOverride = appearanceStore) }
+        compose.setContent { TestMemoraApp(initialTheme = "light", capturePersistenceOverride = captureStore, appearanceStoreOverride = appearanceStore) }
         compose.onNodeWithTag("nav_memory").performClick()
         compose.onNodeWithTag("capture_text").performScrollTo().performClick()
         awaitCaptureReady()
@@ -142,7 +143,7 @@ class UiShellTest {
         taskStore.append(ai.memora.app.domain.TaskEvent.Created("synthetic-task", "local", "owner", "command", "Synthetic task"))
         compose.setContent {
             CompositionLocalProvider(LocalAgentDatabaseOverride provides agentDatabase.database) {
-                MemoraApp(initialRoute = "tasks", initialTheme = "light", capturePersistenceOverride = captureStore, appearanceStoreOverride = appearanceStore, taskStoreOverride = taskStore)
+                TestMemoraApp(initialRoute = "tasks", initialTheme = "light", capturePersistenceOverride = captureStore, appearanceStoreOverride = appearanceStore, taskStoreOverride = taskStore)
             }
         }
         compose.waitUntil(10_000) { compose.onAllNodesWithText("Synthetic task").fetchSemanticsNodes().isNotEmpty() }
@@ -155,7 +156,7 @@ class UiShellTest {
     }
 
     @Test fun darkThemeAndLanguageSwitch() {
-        compose.setContent { MemoraApp(initialRoute = "settings", initialTheme = "light", capturePersistenceOverride = captureStore, appearanceStoreOverride = appearanceStore) }
+        compose.setContent { TestMemoraApp(initialRoute = "settings", initialTheme = "light", capturePersistenceOverride = captureStore, appearanceStoreOverride = appearanceStore) }
         compose.waitUntil(10_000) { compose.onAllNodes(hasTestTag("filter_dark") and isEnabled()).fetchSemanticsNodes().isNotEmpty() }
         compose.onNodeWithTag("filter_dark").performClick()
         awaitAppearance("ru", "dark")
@@ -174,7 +175,7 @@ class UiShellTest {
 
     @Test fun storedAppearanceIsAppliedAtStartup() {
         appearanceStore.write(AppearanceSettings("az", "dark"))
-        compose.setContent { MemoraApp(initialRoute = "settings", initialTheme = "light", capturePersistenceOverride = captureStore, appearanceStoreOverride = appearanceStore) }
+        compose.setContent { TestMemoraApp(initialRoute = "settings", initialTheme = "light", capturePersistenceOverride = captureStore, appearanceStoreOverride = appearanceStore) }
         compose.waitUntil(10_000) { compose.onAllNodesWithText("Görünüş").fetchSemanticsNodes().isNotEmpty() }
         compose.onNodeWithTag("filter_az").assertIsSelected()
         compose.onNodeWithTag("filter_dark").assertIsSelected()
@@ -183,7 +184,7 @@ class UiShellTest {
     @Test fun freshProfileUsesAzerbaijaniWithoutAddingDemoMemories() {
         val context = ApplicationProvider.getApplicationContext<Context>()
         val fresh = AtomicAppearanceStore(File(context.cacheDir, "fresh-${UUID.randomUUID()}"))
-        compose.setContent { MemoraApp(initialRoute = "settings", capturePersistenceOverride = captureStore, appearanceStoreOverride = fresh) }
+        compose.setContent { TestMemoraApp(initialRoute = "settings", capturePersistenceOverride = captureStore, appearanceStoreOverride = fresh) }
         compose.waitUntil(10_000) { compose.onAllNodes(hasTestTag("filter_az") and isSelected() and isEnabled()).fetchSemanticsNodes().isNotEmpty() }
         compose.onNodeWithText("Görünüş").assertExists()
         compose.onNodeWithTag("nav_home").performClick()
@@ -203,7 +204,7 @@ class UiShellTest {
                 stored = settings
             }
         }
-        compose.setContent { MemoraApp(initialRoute = "settings", initialTheme = "light", capturePersistenceOverride = captureStore, appearanceStoreOverride = store) }
+        compose.setContent { TestMemoraApp(initialRoute = "settings", initialTheme = "light", capturePersistenceOverride = captureStore, appearanceStoreOverride = store) }
         compose.waitUntil(10_000) { compose.onAllNodes(hasTestTag("filter_az") and isEnabled()).fetchSemanticsNodes().isNotEmpty() }
         compose.onNodeWithTag("filter_az").performClick()
         compose.waitUntil(10_000) { compose.onAllNodesWithTag("settings_storage_error").fetchSemanticsNodes().isNotEmpty() }
@@ -220,7 +221,7 @@ class UiShellTest {
     @Test fun financeShowsEmptyStateWithoutInventedAmounts() {
         compose.setContent {
             CompositionLocalProvider(LocalAgentDatabaseOverride provides agentDatabase.database) {
-                MemoraApp(initialRoute = "finance", initialTheme = "light", capturePersistenceOverride = captureStore, appearanceStoreOverride = appearanceStore)
+                TestMemoraApp(initialRoute = "finance", initialTheme = "light", capturePersistenceOverride = captureStore, appearanceStoreOverride = appearanceStore)
             }
         }
         compose.onNodeWithText("Данных пока нет").assertExists()
@@ -230,7 +231,7 @@ class UiShellTest {
     }
 
     @Test fun voiceInputRequiresAnExplicitStart() {
-        compose.setContent { MemoraApp(initialTheme = "light", capturePersistenceOverride = captureStore, appearanceStoreOverride = appearanceStore) }
+        compose.setContent { TestMemoraApp(initialTheme = "light", capturePersistenceOverride = captureStore, appearanceStoreOverride = appearanceStore) }
         compose.onNodeWithTag("nav_capture").performClick()
         compose.onNodeWithTag("audio_note_start").assertExists()
         compose.onNodeWithTag("audio_note_review").assertDoesNotExist()
@@ -240,7 +241,7 @@ class UiShellTest {
 
     @Test fun draftSurvivesUiRecreation() {
         val restoration = StateRestorationTester(compose)
-        restoration.setContent { MemoraApp(initialTheme = "light", capturePersistenceOverride = captureStore, appearanceStoreOverride = appearanceStore) }
+        restoration.setContent { TestMemoraApp(initialTheme = "light", capturePersistenceOverride = captureStore, appearanceStoreOverride = appearanceStore) }
         compose.onNodeWithTag("nav_memory").performClick()
         compose.onNodeWithTag("capture_text").performScrollTo().performClick()
         awaitCaptureReady()
@@ -257,7 +258,7 @@ class UiShellTest {
         compose.setContent {
             val density = LocalDensity.current.density
             CompositionLocalProvider(LocalDensity provides Density(density, fontScale = 1.4f)) {
-                MemoraApp(initialTheme = "light", capturePersistenceOverride = captureStore, appearanceStoreOverride = appearanceStore)
+                TestMemoraApp(initialTheme = "light", capturePersistenceOverride = captureStore, appearanceStoreOverride = appearanceStore)
             }
         }
         compose.onNodeWithTag("nav_memory").performClick()
@@ -268,7 +269,7 @@ class UiShellTest {
 
     @Test @Config(qualifiers = "w960dp-h600dp-land-xhdpi")
     fun tabletLandscapeKeepsNavigationReachable() {
-        compose.setContent { MemoraApp(initialTheme = "light", capturePersistenceOverride = captureStore, appearanceStoreOverride = appearanceStore) }
+        compose.setContent { TestMemoraApp(initialTheme = "light", capturePersistenceOverride = captureStore, appearanceStoreOverride = appearanceStore) }
         compose.onNodeWithTag("nav_memory").assertIsDisplayed().performClick()
         compose.onNodeWithTag("memory_search").assertIsDisplayed()
         screenshot("11-tablet-landscape")

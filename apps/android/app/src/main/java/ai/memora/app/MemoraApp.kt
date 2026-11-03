@@ -36,6 +36,8 @@ import ai.memora.app.data.CaptureExport
 import ai.memora.app.data.CaptureImportPreview
 import ai.memora.app.data.CaptureFileRead
 import ai.memora.app.data.CaptureImportReader
+import ai.memora.app.data.LocalProfileState
+import ai.memora.app.data.LocalProfileViewModel
 import androidx.lifecycle.viewmodel.compose.viewModel
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -58,6 +60,12 @@ fun MemoraApp(initialRoute: String = "home", initialTheme: String = "system", ca
     val appearance by appearanceModel.state.collectAsState()
     val language = appearance.settings.language
     val theme = appearance.settings.theme
+    val profileStoreOverride = LocalProfileStoreOverride.current
+    val profileFactory = remember(context, profileStoreOverride, initialLanguage) {
+        LocalProfileViewModel.Factory(context, initialLanguage, profileStoreOverride)
+    }
+    val profileModel: LocalProfileViewModel = viewModel(factory = profileFactory)
+    val profileState by profileModel.state.collectAsState()
     val taskStore = remember(context, taskStoreOverride) { taskStoreOverride ?: EncryptedTaskStore(File(context.filesDir, "tasks-prototype.bin"), TaskStoreKey::get) }
     val captureFactory = remember(context, capturePersistenceOverride) { CaptureViewModel.Factory(context, capturePersistenceOverride) }
     val captureModel: CaptureViewModel = viewModel(factory = captureFactory)
@@ -70,6 +78,30 @@ fun MemoraApp(initialRoute: String = "home", initialTheme: String = "system", ca
 
     CompositionLocalProvider(LocalStrings provides resources) {
         MemoraTheme(theme) {
+          when (val profile = profileState) {
+            LocalProfileState.Loading -> LocalProfileLoadingScreen()
+            LocalProfileState.Onboarding -> LocalProfileOnboardingScreen(
+                initialLanguage = language,
+                canContinue = appearance.ready,
+                onLanguageChange = { appearanceModel.change(language = it) },
+                saving = false,
+                saveError = false,
+                onStart = profileModel::complete,
+            )
+            is LocalProfileState.Failed -> {
+                if (profile.pendingInput != null) {
+                    LocalProfileOnboardingScreen(
+                        initialLanguage = profile.pendingInput.language,
+                        initialInput = profile.pendingInput,
+                        canContinue = appearance.ready,
+                        onLanguageChange = { appearanceModel.change(language = it) },
+                        saving = false,
+                        saveError = true,
+                        onStart = profileModel::complete,
+                    )
+                } else LocalProfileErrorScreen(R.string.onboarding_load_error, profileModel::retry)
+            }
+            is LocalProfileState.Ready -> {
             var route by rememberSaveable { mutableStateOf(initialRoute) }
             var parent by rememberSaveable { mutableStateOf("home") }
             var capture by rememberSaveable { mutableStateOf(false) }
@@ -235,7 +267,10 @@ fun MemoraApp(initialRoute: String = "home", initialTheme: String = "system", ca
                             "calendar" -> CalendarScreen()
                             "people" -> SavedObjectsScreen(DomainKind.PERSON)
                             "projects" -> SavedObjectsScreen(DomainKind.PROJECT)
-                            "settings" -> SettingsScreen(theme, { appearanceModel.change(theme = it) }, language, { appearanceModel.change(language = it) }, appearance.ready && !appearance.busy, appearance.error, { appearanceModel.load() }, { about = true })
+                            "settings" -> SettingsScreen(theme, { appearanceModel.change(theme = it) }, language, {
+                                appearanceModel.change(language = it)
+                                (profileState as? LocalProfileState.Ready)?.profile?.let { profile -> profileModel.syncLanguage(it) }
+                            }, appearance.ready && !appearance.busy, appearance.error, { appearanceModel.load() }, { about = true })
                             "chat" -> AgentChatScreen(language)
                         }
                       }
@@ -298,6 +333,8 @@ fun MemoraApp(initialRoute: String = "home", initialTheme: String = "system", ca
                     Spacer(Modifier.height(16.dp))
                 }
             }
+            }
+          }
         }
     }
 }

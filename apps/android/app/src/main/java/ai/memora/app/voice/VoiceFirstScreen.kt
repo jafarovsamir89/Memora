@@ -30,6 +30,7 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.LifecycleOwner
 import ai.memora.app.R
+import ai.memora.app.agent.AgentCloudConsentKeys
 import ai.memora.app.ui.Glyph
 import ai.memora.app.ui.colors
 import ai.memora.app.ui.s
@@ -47,7 +48,7 @@ fun VoiceFirstScreen(gatewayOverride: AudioNoteGateway? = null, recorderOverride
     val processor = processorOverride ?: remember(context) { MemoraVoiceTurnProcessor(context) }
     val speech = speechOverride ?: remember { GeminiSpeechOutput() }
     val scope = rememberCoroutineScope()
-    var consent by remember { mutableStateOf(settings.getBoolean("google-audio-and-answer-v1", false)) }
+    var consent by remember { mutableStateOf(settings.getBoolean(AgentCloudConsentKeys.VOICE, false)) }
     var consentDialog by remember { mutableStateOf(false) }
     var memoryConsent by remember { mutableStateOf(settings.getBoolean("gemini-persisted-memory-v1", false)) }
     var memoryConsentDialog by remember { mutableStateOf(false) }
@@ -125,7 +126,7 @@ fun VoiceFirstScreen(gatewayOverride: AudioNoteGateway? = null, recorderOverride
         title = { Text(s(R.string.voice_first_consent_title)) }, text = { Text(s(R.string.voice_first_consent_body)) },
         confirmButton = { TextButton(onClick = {
             consentDialog = false
-            if (settings.edit().putBoolean("google-audio-and-answer-v1", true).commit()) {
+            if (settings.edit().putBoolean(AgentCloudConsentKeys.VOICE, true).commit()) {
                 consent = true
                 if (context.checkSelfPermission(Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED)
                     permission.launch(Manifest.permission.RECORD_AUDIO)

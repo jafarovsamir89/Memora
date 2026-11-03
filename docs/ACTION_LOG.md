@@ -1,5 +1,11 @@
 # Memora — лог действий
 
+## ACT-0099 · 2026-11-03 · M20-02 local profile и onboarding
+
+Добавлен зашифрованный профиль и первый запуск: AZ default, optional display name, язык, tone/response style, timezone и onboarding completion. Clean-install lineage проверяется до открытия Room; initial state оставляет user/domain tables пустыми. Room 8→9 миграция additive и создаёт завершённый legacy profile для существующих установок. Стиль ответа уходит в Gemini только с новой версией cloud consent; имя и timezone в prompt/runtime не включаются. Обновлены onboarding UI, AZ/RU/EN strings, migration probe, unit/UI tests и versionCode 27 / `1.1.5-local-profile`. Product Spec, audit, TODO и diary синхронизированы.
+
+**Проверки:** `:app:testDebugUnitTest :app:assembleDebug :app:assembleDebugAndroidTest :app:compileDebugAndroidTestKotlin :app:lintDebug --no-daemon --console=plain --max-workers=2` — BUILD SUCCESSFUL; JUnit XML 227/227, 0 failures/errors; lint 0 errors, 47 warnings, 2 hints. APK `ai.memora.app`, code 27/name `1.1.5-local-profile`, size 29,042,007 bytes, SHA-256 `A4DFA93EDFEC0645DDC7DAD204A24592424108C080B2F9783D862B3D5124C55F`; backup outside repo at `C:\memora-backups\Memora-v27-1.1.5-local-profile-2026-11-03.apk` matches. ADB shows no device/emulator, so SQLCipher Android migration probe, install/update, screenshot and field acceptance were not run. Android backup remains disabled; portable encrypted export/import and KeyStore recovery remain open. No user DB was read, removed or modified; no Gemini API request was made. Commit/push status is not recorded until verified.
+
 ## ACT-0097 · 2026-11-03 · M20-00 baseline audit и APK backup
 
 Исполнен M20-00 по мастер-документу. Повторно сверены утверждённая Memora 2.0 спецификация, обязательные документы проекта, legacy product/data/security/UX/engineering contracts, ADR-010/011, Android routes, runtime/provider/tool chain, Room/SQLCipher schema v8, отдельные store paths, Android backup/key lifecycle и имеющийся synthetic test report. Полная clause→source→gap→target→acceptance matrix добавлена в [MEMORA_2_0_AUDIT.md](MEMORA_2_0_AUDIT.md). Устаревший верхний ACT-0038 checkpoint в TODO заменён на M20-00..09.

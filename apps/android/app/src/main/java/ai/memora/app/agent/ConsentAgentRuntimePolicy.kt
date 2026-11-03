@@ -1,5 +1,10 @@
 package ai.memora.app.agent
 
+internal object AgentCloudConsentKeys {
+    const val VOICE = "google-agent-audio-and-answer-v2"
+    const val TEXT = "gemini-agent-text-and-answer-v2"
+}
+
 /** Re-checks cloud and persisted-memory permissions at every boundary of a turn. */
 internal class ConsentAgentRuntimePolicy(
     private val cloudConsent: (AgentInputChannel) -> Boolean,

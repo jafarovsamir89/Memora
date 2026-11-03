@@ -3,6 +3,7 @@ package ai.memora.app.voice
 import android.content.Context
 import android.util.Log
 import ai.memora.app.agent.*
+import ai.memora.app.data.ProtectedLocalProfileStore
 import ai.memora.app.data.VoiceMoneyKey
 import ai.memora.app.data.VoiceMoneyStore
 import ai.memora.app.data.protectedstore.AgentDatabase
@@ -27,8 +28,8 @@ internal class AgentVoiceTurnProcessor(context: Context, private val databaseOve
     private val actorId by lazy { stableId("actor-id") }
     private val policy = ConsentAgentRuntimePolicy(
         cloudConsent = { channel -> when (channel) {
-            AgentInputChannel.VOICE -> preferences.getBoolean("google-audio-and-answer-v1", false)
-            AgentInputChannel.TEXT -> preferences.getBoolean("gemini-text-and-answer-v1", false)
+            AgentInputChannel.VOICE -> preferences.getBoolean(AgentCloudConsentKeys.VOICE, false)
+            AgentInputChannel.TEXT -> preferences.getBoolean(AgentCloudConsentKeys.TEXT, false)
         } },
         memoryConsent = { preferences.getBoolean("gemini-persisted-memory-v1", false) },
     )
@@ -58,6 +59,10 @@ internal class AgentVoiceTurnProcessor(context: Context, private val databaseOve
                 }
             else emptyList()
             val repo = domainRepository
+            val profile = ProtectedLocalProfileStore(database).read()
+            val responsePreferences = profile?.takeIf { it.onboardingCompleted }?.let {
+                AgentResponsePreferences(it.language, it.toneStyle, it.responseStyle)
+            }
             val handlers = if (preferences.getBoolean("gemini-persisted-memory-v1", false))
                 LocalMemoryTools(repo, ProtectedMemoryRepository(database), financeEnabled = migrateLegacyFinance(),
                     onTaskChanged = { task -> TaskReminders.schedule(appContext, task).name.lowercase() },
@@ -66,7 +71,9 @@ internal class AgentVoiceTurnProcessor(context: Context, private val databaseOve
                 RoomAgentRunJournal(database))
             val turnId = UUID.randomUUID().toString()
             val result = orchestrator.run(AgentTurnRequest(turnId, scopeId, actorId, null,
-                locale = "az-AZ", text = message, channel = channel, conversationHistory = history))
+                locale = responsePreferences?.language?.let(::languageTag) ?: "az-AZ",
+                text = message, channel = channel, conversationHistory = history,
+                responsePreferences = responsePreferences))
             if (result.status == AgentRunResultStatus.FAILED || result.status == AgentRunResultStatus.RECOVERY_REQUIRED) {
                 Log.w("MemoraAgent", "turn_unavailable status=${result.status.name.lowercase()} code=${result.code ?: "unknown"}")
             }
@@ -96,5 +103,11 @@ internal class AgentVoiceTurnProcessor(context: Context, private val databaseOve
         val created = UUID.randomUUID().toString()
         check(preferences.edit().putString(key, created).commit())
         return created
+    }
+
+    private fun languageTag(language: String): String = when (language) {
+        "ru" -> "ru-RU"
+        "en" -> "en-US"
+        else -> "az-AZ"
     }
 }

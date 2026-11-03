@@ -30,10 +30,10 @@ val LocalStrings = staticCompositionLocalOf<Resources> { error("Missing localize
 @Composable fun s(id: Int): String = LocalStrings.current.getString(id)
 
 @Composable
-fun ScreenColumn(content: @Composable ColumnScope.() -> Unit) {
+fun ScreenColumn(modifier: Modifier = Modifier, content: @Composable ColumnScope.() -> Unit) {
     Column(
         Modifier.fillMaxSize().verticalScroll(rememberScrollState())
-            .padding(horizontal = 24.dp).padding(top = 18.dp, bottom = 28.dp),
+            .then(modifier).padding(horizontal = 24.dp).padding(top = 18.dp, bottom = 28.dp),
         verticalArrangement = Arrangement.spacedBy(20.dp), content = content,
     )
 }

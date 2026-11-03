@@ -1,6 +1,6 @@
 # Memora — полный рабочий чек-лист от идеи до production
 
-**Создан:** 2026-10-28. **Состояние 2026-11-03:** M20-00 audit завершён; реализован и локально проверен provider-neutral tool catalog для M20-01; начат M20-02 profile/onboarding. Полная реализация и production-приёмка не завершены.
+**Создан:** 2026-10-28. **Состояние 2026-11-03:** M20-00 audit завершён; M20-01 provider-neutral tool catalog и M20-02 profile/onboarding реализованы на кодовом уровне, но оба сохраняют native/live acceptance gates. Продолжается M20-03 people/cases. Полная реализация и production-приёмка не завершены.
 
 Это основной список выполнения. [Инженерный план](docs/ENGINEERING_PLAN.md) объясняет этапы E0–E7 и решения, [дневник](docs/AGENT_DIARY.md) хранит текущий контекст, [полная спецификация](docs/FULL_PRODUCT_SPEC.md) определяет продукт. Правила работы — [AGENTS.md](AGENTS.md).
 
@@ -18,16 +18,16 @@
 
 ## Где мы сейчас и что делаем следующим
 
-**M20-00 завершён; кодовый срез M20-01 проверен; следующий — M20-02, 2026-11-03.** Исходная реализация v26 / `1.1.4-field-secretary`, Room schema 8; APK backup вне репозитория, SHA и путь в [аудите M20-00](docs/MEMORA_2_0_AUDIT.md). Для M20-01 сейчас прошли targeted unit tests (5 assertions/tests across two classes), `assembleDebug` и `lintDebug` (0 errors, 47 warnings, 2 hints). Телефон не подключён; live Gemini после переноса деклараций ещё не повторялся, поэтому реальная модельная приёмка остаётся открытой.
+**M20-00 завершён; M20-01 code slice и M20-02 onboarding/profile реализованы; активный срез — M20-03.** v27 / `1.1.5-local-profile`, Room schema 9. Backup исходного рабочего APK v26 находится вне репозитория, а APK v27 отдельно сохранён; пути и SHA — в [дневнике](docs/AGENT_DIARY.md) и [аудите](docs/MEMORA_2_0_AUDIT.md). Полный host suite: 227/227 JVM tests, debug и AndroidTest APK builds, instrumentation Kotlin compilation; lint 0 errors, 47 warnings, 2 hints. Телефон/эмулятор не подключён: миграция SQLCipher на Android runtime, установка, полевая приёмка и повторный live Gemini probe не выполнены. M20-01 и M20-02 не закрыты; Android backup/recovery/export-import остаётся отдельным пробелом.
 
 Аудит подтвердил рабочие Gemini tools, AgentRuntime, SQLCipher ledger, capture/task/calendar/table функции и отсутствие production demo seeding. Provider catalog теперь держит все 31 tool contract без Firebase типов; Gemini gateway строит из него декларации и результаты, а fake provider проверяет разговор без записи и запись точной суммы в существующий ledger. Выявлены отдельные источники задач, заметок и людей, отсутствие onboarding/local profile/cases, а также незавершённая переносимость Keystore-защищённой базы при reinstall/restore. Полная карта и ограничения — [MEMORA_2_0_AUDIT.md](docs/MEMORA_2_0_AUDIT.md). M20-01 не закрывается до повторного synthetic Gemini probe после адаптерного рефакторинга.
 
 | M20 checkpoint | Состояние на 2026-11-03 | Следующий проверяемый результат |
 | --- | --- | --- |
-| M20-00 Audit | Завершён для baseline 2026-11-03: product/data/security/UX/engineering contracts, ADR-010/011, Kotlin routes, stores, schema v8, backup/key behavior, tests and APK evidence mapped. | См. [MEMORA_2_0_AUDIT.md](docs/MEMORA_2_0_AUDIT.md); повторная сверка требуется после миграций/переходов источника данных. |
-| M20-01 Provider-neutral secretary | Кодовый срез готов; Gemini live probe после изменений отложен до устройства/доступного synthetic API окна. | Повторить AZ/RU synthetic Gemini function-chain; затем зафиксировать conformance. |
-| M20-02 First run/profile | Начат. | AZ-first optional profile, чистый onboarding и migration-safe legacy completion без новых фактов. |
-| M20-03 People/cases | Открыт. | Reversible verified identity bridge, same-name clarification, case and sourced timeline. |
+| M20-00 Audit | Завершён для исходного v26 / schema 8 baseline; текущие изменения отражены в audit. | Повторная сверка после следующих миграций/переходов источника данных. |
+| M20-01 Provider-neutral secretary | Code-level catalog + fake conformance готовы; live Gemini post-refactor открыта. | Повторить синтетическую AZ/RU function chain на разрешённой среде; сравнить function selection, result envelope и final answer. |
+| M20-02 First run/profile | Onboarding, encrypted profile и additive v8→v9 migration добавлены; 227/227 JVM tests прошли, AndroidTest Kotlin компилируется. Stage открыт. | Исполнить v8 populated-fixture migration на SQLCipher Android runtime; проверить чистую install/update/restart и выбрать проверенную recovery/export-import политику. Сейчас ADB пуст. |
+| M20-03 People/cases | Следующий активный этап; существующие people/finance/domain IDs и links используются как база. | Сначала безопасный identity/link/case domain audit; затем reversible same-name bridge и source-linked case timeline с синтетическими fixtures. |
 | M20-04 Long-term memory | Открыт. | Profile/episodic summaries with turn provenance, retrieval, correction and deletion propagation. |
 | M20-05 Premium experience | Открыт. | Today/Secretary/Cases/Memory, rich results, legacy reachability, screenshot and accessibility review. |
 | M20-06 Analytics/advice | Открыт. | Synthetic Ruslan gift and evidence-based business analysis with coverage caveats. |

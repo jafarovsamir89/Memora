@@ -143,7 +143,7 @@
     <string name="voice_too_long">Текст превышает 20000 символов. Разделите запись.</string>
     <string name="ai_chat_body">Основной язык помощника — азербайджанский. Переписка хранится на устройстве в зашифрованном виде; недавний контекст передаётся Gemini только при отдельном разрешении памяти.</string>
     <string name="ai_consent_title">Отправить текст в Google?</string>
-    <string name="ai_consent_body">Показанный ниже текст будет отправлен Google Gemini для ответа. Недавняя переписка и выбранные записи памяти передаются только при отдельном разрешении памяти. Google может использовать данные бесплатного сервиса для улучшения продуктов.</string>
+    <string name="ai_consent_body">Показанный ниже текст будет отправлен Google Gemini для ответа. Выбранные язык ответа, манера общения и подробность ответа тоже отправляются; имя профиля и часовой пояс не отправляются. Недавняя переписка и записи памяти передаются только при отдельном разрешении памяти. Google может использовать данные бесплатного сервиса для улучшения продуктов.</string>
     <string name="ai_send_confirm">Отправить в Google</string>
     <string name="ai_loading">Получаю ответ Google…</string>
     <string name="ai_failed">Ответ недоступен. Проверьте подключение и настройку Firebase, затем повторите.</string>
@@ -250,7 +250,7 @@
     <string name="voice_first_error">Не получилось. Попробуйте ещё раз.</string>
     <string name="voice_first_sound_error">Не удалось воспроизвести звук. Ответ показан ниже.</string>
     <string name="voice_first_consent_title">Голосовой помощник с Google</string>
-    <string name="voice_first_consent_body">С вашего согласия сказанное аудио и его текст отправляются Google Gemini. Для озвучки Google получает текст ответа, включая связанные имя и сумму. Google может использовать данные бесплатного сервиса для улучшения продуктов. Весь архив памяти не отправляется. Согласие сохраняется на устройстве.</string>
+    <string name="voice_first_consent_body">С вашего согласия сказанное аудио и его текст отправляются Google Gemini. Для озвучки Google получает текст ответа, включая связанные имя и сумму. Выбранные язык ответа, манера общения и подробность ответа тоже отправляются; имя профиля и часовой пояс не отправляются. История переписки и записи памяти передаются только при отдельном разрешении памяти. Google может использовать данные бесплатного сервиса для улучшения продуктов. Согласие сохраняется на устройстве.</string>
     <string name="voice_first_menu_hint">Проведите влево, чтобы открыть меню</string>
     <string name="voice_memory_title">Голосовая память</string>
     <string name="voice_memory_help">Сохранённые передачи, долги и исходный текст. Ошибочную запись можно удалить и произнести заново.</string>
@@ -283,4 +283,27 @@
     <string name="saved_objects_details_truncated">Показано начало длинной записи.</string>
     <string name="notes_title">Заметки</string>
     <string name="notes_hint">Заметки, сохранённые в памяти</string>
+    <string name="onboarding_eyebrow">MEMORA — ВАШ ЛИЧНЫЙ СЕКРЕТАРЬ</string>
+    <string name="onboarding_title">Будем хранить важное вместе.</string>
+    <string name="onboarding_body">Обсуждайте, обдумывайте и планируйте. Memora поможет продолжить разговор и сохранит только те сведения, о которых вы попросите.</string>
+    <string name="onboarding_examples_title">Чем помогает Memora?</string>
+    <string name="onboarding_examples_body">Расскажите о человеке, долге или плане, а позже спросите, что сохранилось. Это только примеры, они не записываются.</string>
+    <string name="onboarding_name">Как к вам обращаться? (необязательно)</string>
+    <string name="onboarding_name_hint">Имя или форма обращения</string>
+    <string name="onboarding_language">Язык общения</string>
+    <string name="onboarding_tone">Манера общения</string>
+    <string name="onboarding_tone_friendly">Дружелюбная</string>
+    <string name="onboarding_tone_direct">Прямая</string>
+    <string name="onboarding_style">Стиль ответов</string>
+    <string name="onboarding_style_concise">Кратко</string>
+    <string name="onboarding_style_balanced">Сбалансированно</string>
+    <string name="onboarding_style_detailed">Подробно</string>
+    <string name="onboarding_timezone">Часовой пояс</string>
+    <string name="onboarding_privacy_title">Память хранится на устройстве</string>
+    <string name="onboarding_privacy_body">Новый профиль начинается пустым. Доступ к микрофону и отправка данных в Google запрашиваются отдельно, только когда понадобятся.</string>
+    <string name="onboarding_start">Начать</string>
+    <string name="onboarding_saving">Сохраняем профиль…</string>
+    <string name="onboarding_load_error">Не удалось открыть локальный профиль. Данные не изменены.</string>
+    <string name="onboarding_save_error">Не удалось сохранить профиль. Попробуйте ещё раз.</string>
+    <string name="onboarding_retry">Повторить</string>
 </resources>
