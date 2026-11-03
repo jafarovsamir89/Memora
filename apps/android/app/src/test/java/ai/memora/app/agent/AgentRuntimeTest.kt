@@ -109,6 +109,24 @@ class AgentRuntimeTest {
         assertFalse(result.answer.orEmpty().contains("synthetic-private-error"))
     }
 
+    @Test fun successfulDeletionFollowedByModelTimeoutUsesDeletionWording() = runBlocking {
+        val deletion = FakeTool(toolName = "delete_profile_fact")
+        val model = object : AgentModelGateway {
+            var requests = 0
+            override suspend fun complete(request: AgentModelRequest): AgentModelReply {
+                return if (requests++ == 0) AgentModelReply.Calls(listOf(call("delete", "delete_profile_fact")))
+                else throw AgentGatewayFailure("model_timeout")
+            }
+        }
+        val result = runtime(model, DefaultAgentToolRegistry(listOf(deletion))).run(turn)
+
+        assertEquals(AgentRunResultStatus.PARTIAL, result.status)
+        assertEquals("reply_timeout_after_write", result.code)
+        assertEquals(ToolObservationStatus.APPLIED, result.toolResults.single().status)
+        assertTrue(result.answer.orEmpty().contains("Yaddaş qeydi silindi"))
+        assertFalse(result.answer.orEmpty().contains("yadda saxlanıldı"))
+    }
+
     @Test fun domainConflictCanReturnClarificationButCannotBeReportedAsSaved() = runBlocking {
         fun ambiguousTool(code: String = "person_name_ambiguous") = object : AgentToolHandler {
             override val descriptor = AgentToolDescriptor("record_money_event", 1, ToolAccess.PERSISTED_MEMORY,

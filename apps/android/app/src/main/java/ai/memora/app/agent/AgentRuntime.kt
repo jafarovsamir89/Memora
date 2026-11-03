@@ -617,13 +617,28 @@ class AgentOrchestrator(
         val anotherToolFailed = observations.any {
             it.name !in AGENT_PERSISTED_WRITE_TOOLS && it.status in WRITE_FAILURES
         }
-        val answer = when (turn.locale) {
+        val deleteTools = setOf("delete_profile_fact", "delete_memory_episode", "delete_memory_object", "delete_table_row", "delete_table")
+        val deleteOnly = writes.isNotEmpty() && writes.all { it.name in deleteTools }
+        val answer = if (deleteOnly) when (turn.locale) {
+            "ru-RU" -> if (anotherToolFailed)
+                "Запись удалена, но дополнительный шаг не выполнен. Проверьте результат."
+            else "Запись удалена, но модель не смогла завершить ответ. Проверьте результат."
+            "en-US" -> if (anotherToolFailed)
+                "The saved item was deleted, but another step failed. Please verify the result."
+            else "The saved item was deleted, but the assistant couldn't finish its reply. Please verify the result."
+            else -> if (anotherToolFailed)
+                "Yaddaş qeydi silindi, amma əlavə addım tamamlanmadı. Nəticəni yoxlayın."
+            else "Yaddaş qeydi silindi, lakin köməkçi cavabını tamamlaya bilmədi. Nəticəni yoxlayın."
+        } else when (turn.locale) {
             "ru-RU" -> if (anotherToolFailed)
                 "Запись сохранена, но один из дополнительных шагов не выполнен. Проверьте результат."
             else "Запись сохранена, но Gemini не подтвердил, завершены ли дополнительные действия. Проверьте результат."
+            "en-US" -> if (anotherToolFailed)
+                "The change was saved, but an additional step failed. Please check the result."
+            else "The change was saved, but the assistant couldn't confirm whether other steps finished. Please check the result."
             else -> if (anotherToolFailed)
                 "Qeyd yadda saxlanıldı, amma əlavə addımlardan biri tamamlanmadı. Nəticəni yoxlayın."
-            else "Qeyd yadda saxlanıldı, amma Gemini əlavə addımların tamamlandığını təsdiqləyə bilmədi. Nəticəni yoxlayın."
+            else "Qeyd yadda saxlanıldı, lakin köməkçi əlavə addımları təsdiqləyə bilmədi. Nəticəni yoxlayın."
         }
         val safeCode = if (anotherToolFailed) "tool_operation_failed_after_write"
             else if (failureCode == "model_timeout") "reply_timeout_after_write" else "reply_unavailable_after_write"

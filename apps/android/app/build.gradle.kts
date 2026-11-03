@@ -19,8 +19,8 @@ android {
         applicationId = "ai.memora.app"
         minSdk = 26
         targetSdk = 36
-        versionCode = 51
-        versionName = "1.1.29-safe-delete-result-cards"
+        versionCode = 52
+        versionName = "1.1.30-delete-timeout-acknowledgement"
         testInstrumentationRunner = "ai.memora.app.GeminiSyntheticProbe"
     }
     buildFeatures { compose = true }

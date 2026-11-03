@@ -1,3 +1,11 @@
+## ACT-0136 - 2026-11-03 - Точное сообщение после применённого удаления и timeout модели
+
+`finishAfterModelFailure` раньше для любого успешно применённого persistent write отвечал «запись сохранена», включая `delete_profile_fact`/другие delete tools. Если локальное удаление/readback уже было успешным, но Gemini timeout-ил на финальном ответе, текст не соответствовал факту. Runtime теперь распознаёт write batch, состоящий только из удалений, и в AZ/RU/EN говорит, что запись удалена, но ответ помощника/дополнительный шаг не завершён; статус остаётся `PARTIAL`, а при смешанном write batch сохраняется общий осторожный ответ. Для прочих `en-US` write-failure acknowledgements добавлены соответствующие английские формулировки.
+
+Целевой `AgentRuntimeTest.successfulDeletionFollowedByModelTimeoutUsesDeletionWording` прошёл: fake delete применён, второй ответ gateway бросил безопасный `model_timeout`, tool observation остался APPLIED, turn PARTIAL, сообщение отражает факт удаления. Полный `:app:testDebugUnitTest`: 56 suites / 286 tests, 0 failures/errors/skips. `:app:assembleDebug`, `:app:assembleDebugAndroidTest`, `:app:compileDebugAndroidTestKotlin`, `:app:lintDebug` прошли; lint 0 errors / 60 warnings / 3 hints. APK v52 / `1.1.30-delete-timeout-acknowledgement`, SHA-256 `9045e9b8144b7875afb59f6f43e6b9d7a5f7dcc15e82d0007e2e096894b3ea26`. Не устанавливался; пользовательская БД не открывалась.
+
+Уточнён S40. Изменены `AgentRuntime.kt`, `AgentRuntimeTest.kt`, Android version metadata, `docs/SCENARIOS.md`, `TODO.md`, дневник и этот лог. Обобщённые non-delete write timeout, mixed correction batch, Gemini/device field acceptance остаются частичными.
+
 ## ACT-0135 - 2026-11-03 - Ясный статус отказа удаления в карточке действия
 
 Расширена persisted action result card Secretary: при FAILED/CONFLICT/UNKNOWN для удаления profile fact, memory episode/object или table/table row под общим статусом показывается локализованное предупреждение, что удаление не подтверждено и перед повтором нужно проверить память. Не отображаются внутренний tool code или содержимое памяти. S40 уточнён.
