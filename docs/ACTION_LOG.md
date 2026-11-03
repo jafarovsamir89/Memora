@@ -1,5 +1,9 @@
 # Memora — лог действий
 
+## ACT-0117 - 2026-11-03 - Git handoff ACT-0116
+
+Пакет source-backed episodic memory и live Gemini typed-source fix зафиксирован коммитом `78467e7c2ccc0cd42d1da8885d503317c0996590` (`feat(android): add source-backed episodic memory`) и отправлен в `origin/main`. После push `git fetch origin main`, локальный HEAD и `git ls-remote origin refs/heads/main` вернули одинаковый SHA; рабочее дерево чистое `main...origin/main`. Установленный v35 остаётся на телефоне; следующая реализация — editable personal profile facts/preferences для M20-04.
+
 ## ACT-0116 - 2026-11-03 - Live Gemini episodic tool routing and typed source IDs
 
 Extended the opt-in Android synthetic Gemini probe with an isolated episodic-memory scenario. It seeds only generated archived USER turns, asks Gemini to summarize a durable prior agreement, asserts the selected tools and summary semantics, reads back episode/source links from the dedicated SQLCipher DB, then opens that DB in a separate instrumentation process and checks retrieval. The final app APK remains versionCode 35/name `1.1.13-episodic-memory`, Room schema 14.
