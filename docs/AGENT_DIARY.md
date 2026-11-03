@@ -14,6 +14,10 @@
 
 **Проверенный APK-срез ACT-0111, 2026-11-03:** APK v34 / 1.1.12-attention, Room schema 13; M20-07 реализован частично: opt-in локальные подсказки из задач с реальными сроками, календарных событий и открытых дел; quiet hours, snooze/dismiss, date dedupe и восстановление расписания. Источники не содержат сроков долгов и незакрытых вопросов. ACT-0113 host baseline: 258/258 JVM tests, debug/AndroidTest builds, AndroidTest Kotlin compile; lint 0 errors/56 warnings. APK и backup C:\memora-backups\Memora-v34-1.1.12-attention-verified-2026-11-03.apk совпадают по SHA-256 7BA970ACF774128817BF3B6006B025D9BA22A5FD1DE76A9F30864169CF632503; synthetic screenshots проверены. adb.exe найден в Android SDK, но adb devices -l пуст, поэтому device install, SQLCipher migration 12 to 13, notification delivery, TalkBack, live Gemini и owner acceptance открыты; пользовательская БД не трогалась. Текущий этап - M20-08 evidence mapping и synthetic runtime cases; device/native/release gates остаются открыты.
 
+### ACT-0114 - 2026-11-03 - Git handoff ACT-0113
+
+Пакет теста scoped memory-context и M20-08 validation matrix зафиксирован коммитом d9c082d833c11c72d1f69a7a981b4510cecc6180 и отправлен в origin/main. fetch, локальный HEAD и ls-remote вернули один SHA; дерево было чистым main...origin/main. Следующая доступная задача - продолжать закрывать реализационные пробелы и синтетические сценарии M20, сохраняя незакрытые Android/live acceptance gates.
+
 ### ACT-0113 - 2026-11-03 - Synthetic memory-context runtime test
 
 Добавлен AgentFakeProviderMemoryTest.fakeProviderUsesScopedMemoryEvidenceForGiftAdviceWithoutWriting: в синтетической Room БД создан вымышленный профиль и предпочтение, fake provider через AgentRuntime вызывает search_memory, получает исходную ревизию и формирует совет. Проверены изоляция другого scope и отсутствие записей. Это подтверждает локальную evidence chain, но не выбор инструмента реальным Gemini и не качество естественного диалога.

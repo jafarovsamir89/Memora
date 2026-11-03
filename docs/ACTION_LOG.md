@@ -1,5 +1,9 @@
 # Memora — лог действий
 
+## ACT-0114 - 2026-11-03 - Git handoff ACT-0113
+
+Code and evidence-matrix package was committed as d9c082d833c11c72d1f69a7a981b4510cecc6180 (test(android): cover scoped gift memory lookup) and pushed to origin/main. git fetch origin main, local HEAD, and git ls-remote origin refs/heads/main returned the same SHA; git status -sb reported a clean main...origin/main tree.
+
 ## ACT-0113 - 2026-11-03 - Synthetic memory-context runtime test
 
 Added AgentFakeProviderMemoryTest.fakeProviderUsesScopedMemoryEvidenceForGiftAdviceWithoutWriting. A synthetic profile and fictional preference are seeded in the test Room database; a fake model routes search_memory through AgentRuntime, reads the evidence/revision in the same scope, and returns a suggestion. The test proves the foreign scope marker is absent and the store remains unchanged. This validates the local evidence path only; it is not a Gemini natural-language or live API test.
