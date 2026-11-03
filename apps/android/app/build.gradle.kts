@@ -19,8 +19,8 @@ android {
         applicationId = "ai.memora.app"
         minSdk = 26
         targetSdk = 36
-        versionCode = 37
-        versionName = "1.1.15-profile-memory-actions"
+        versionCode = 38
+        versionName = "1.1.16-unified-memory"
         testInstrumentationRunner = "ai.memora.app.GeminiSyntheticProbe"
     }
     buildFeatures { compose = true }

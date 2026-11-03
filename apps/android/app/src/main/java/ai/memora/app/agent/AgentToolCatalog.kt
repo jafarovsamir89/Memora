@@ -54,7 +54,7 @@ internal object AgentToolCatalog {
             "Read the exact retained USER message for one turn_id returned by search_conversation_history or search_memory. Use to verify the source of an episode summary before making a personal-history claim. Does not return the assistant reply.",
             required = mapOf("turn_id" to str)),
         tool("search_memory",
-            "Search protected local notes, people, projects, explicit personal profile facts, and episodic summaries for evidence needed to answer. Profile facts are user-stated or user-corrected and include source references and revisions.",
+            "Search protected local notes, people, projects, explicit personal profile facts, episodic summaries, and relevant linked cases, ledger events, tasks, and calendar events. Results are bounded and scoped; each domain hit includes its canonical source ID/revision. Use search_money for exact balances/totals and search_cases for a complete case timeline. Profile facts are user-stated or user-corrected and include source references and revisions.",
             required = mapOf("query" to str)),
         tool("save_profile_fact",
             "Save one concise, non-sensitive, stable fact or preference about the user that is explicitly stated in the current message. Use only for the user's own preferences, goals, or work/habit context; never infer, store sensitive traits, names, direct identifiers, or facts about other people. Keep the user's display name and time zone in local profile settings. The app binds the source to the exact current user message.",

@@ -1,5 +1,15 @@
 # Memora — лог действий
 
+## ACT-0122 - 2026-11-03 - Scoped cross-domain lexical memory search
+
+Implemented bounded search_memory evidence across canonical domain records, finance ledger, tasks, calendar, custom tables, cases, retained conversation, source-backed episodes and profile facts. Gateway/tool descriptions route broad natural-history questions to this read tool before specialist reads. Results retain scope/provenance/revisions; exact totals remain specialist finance output. Added Azerbaijani diacritic/transliteration/prefix matching while explicitly avoiding semantic-search claims. Persisted-memory consent gates all persistent sources. Ledger rows are included only when finance-source migration/configuration is available (financeEnabled); this path does not define a separate finance-consent category. No Room schema migration.
+
+Added synthetic AgentFakeProviderUnifiedMemoryTest: checks multi-source evidence, foreign-scope isolation, source IDs/revisions, bounded lexical matches, Azerbaijani inflected name retrieval and no DB writes. Full Gradle command passed: 54 suites / 272 tests, 0 failures/errors/skips; debug/AndroidTest APK builds and AndroidTest Kotlin compile passed; lint 0 errors / 57 warnings / 0 informational. APK v38 / 1.1.16-unified-memory, SHA-256 5D0D84E6B1594BAA463B6264B6EB75C8368DA60332C62A322A1B929064B2E9BF; matching backup at C:\memora-backups\Memora-v38-1.1.16-unified-memory-2026-11-03.apk. adb install -r updated v37→v38 on the connected Redmi; launch and versionCode 38 confirmed. No user DB read/clear. No live Gemini call for this feature.
+
+Investigated second-phone Gemini failure: debug build installs DebugAppCheckProviderFactory; project history records only the original Redmi debug token. A new device likely needs its own allowlist entry in Firebase App Check. This is not yet confirmed by second-device log/request and no token was read or recorded. Release source set uses Play Integrity and has separate setup/acceptance requirements.
+
+M20-04/08 remain partial: semantic/hybrid ranking, live Gemini cross-domain selection, delete natural-language post-readback after rate limits, user DB migration/readback, owner acceptance, notifications, accessibility and full scenarios remain open. No stage/release completion claimed.
+
 ## ACT-0121 - 2026-11-03 - Git handoff ACT-0120
 
 ACT-0120 system-instruction/probe refinement and synchronized project status were committed as `8663984ca907b33c3b5362743f7a7773ec7b8a62` (`fix(android): strengthen explicit profile memory actions`) and pushed to `origin/main`. `git fetch origin main`, local HEAD and `git ls-remote origin refs/heads/main` matched; worktree was clean at handoff. APK v37 remains installed and launched. Next implementation slice: unified cross-domain evidence retrieval for M20-04, keeping each source's permission, canonical store and provenance; do not read or migrate the owner's DB without an explicit, content-safe plan.

@@ -1,6 +1,16 @@
 # M20-08 Native validation matrix
 
-Status as of 2026-11-03, APK v37 / 1.1.15-profile-memory-actions, Room schema 15. This matrix records existing evidence and remaining work; it does not turn host tests into device or live-provider acceptance.
+Status as of 2026-11-03, APK v38 / 1.1.16-unified-memory, Room schema 15. This matrix records existing evidence and remaining work; it does not turn host tests into device or live-provider acceptance.
+
+## ACT-0122 update
+
+The bounded cross-domain lexical path was added to search_memory without changing the Room schema or bypassing canonical tools. It reports only scoped, bounded evidence for domain records, cases, finance ledger events, tasks, calendar, custom table rows, retained conversation turns, source-backed episodes and editable profile facts. Provenance IDs/revisions are included; exact finance totals remain delegated to finance analytics tools. Search reads require the existing persisted-memory consent. Ledger rows are included only when finance-source migration/configuration is available (financeEnabled); this path does not define a separate finance-consent category. Azerbaijani normalization handles diacritics, common transliterations and inflected prefixes; this is lexical matching, not semantic/embedding search.
+
+A synthetic fake-provider E2E fixture verifies cross-domain evidence, foreign-scope isolation, source provenance, zero writes and bounded output, including Azerbaijani name inflection. Tool descriptors continue to require persisted-memory consent; broader consent-revocation behavior is covered by existing runtime/profile tests. Full command:
+
+    .\gradlew.bat :app:testDebugUnitTest :app:assembleDebug :app:assembleDebugAndroidTest :app:compileDebugAndroidTestKotlin :app:lintDebug --no-daemon --console=plain --max-workers=2
+
+Result: 54 suites / 272 tests, zero failures/errors/skips; debug and AndroidTest APKs assembled, AndroidTest Kotlin compiled, lint 0 errors / 57 warnings / 0 informational issues. APK v38 SHA-256 5D0D84E6B1594BAA463B6264B6EB75C8368DA60332C62A322A1B929064B2E9BF; backup C:\memora-backups\Memora-v38-1.1.16-unified-memory-2026-11-03.apk matches. adb install -r updated v37→v38 on the connected Redmi and launched it; user data were not cleared and the app DB was not inspected. No live Gemini request was made for this feature. AppCheckSetup.kt selects the debug provider for debug builds; project history records only the Redmi debug token, so another device likely needs its separate token added in Firebase Console before AI Logic calls succeed. That second-device diagnosis remains unverified until a request/log is observed. Search quality, semantic retrieval, owner acceptance, all other M20 and release gates remain open.
 
 ## ACT-0120 update
 

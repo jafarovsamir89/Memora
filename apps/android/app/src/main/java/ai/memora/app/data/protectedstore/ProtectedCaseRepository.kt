@@ -2,9 +2,11 @@ package ai.memora.app.data.protectedstore
 
 import androidx.room.withTransaction
 import ai.memora.app.domain.VoiceMoneyRules
+import java.text.Normalizer
 import java.time.Instant
 import java.time.LocalDateTime
 import java.time.ZoneId
+import java.util.Locale
 import java.util.UUID
 import org.json.JSONObject
 
@@ -287,13 +289,35 @@ internal class ProtectedCaseRepository(private val db: AgentDatabase) {
 
     suspend fun searchCases(scope: String, query: String, limit: Int = 8): List<CaseRecordRow> {
         require(scope.isNotBlank() && query.length <= 200 && limit in 1..30)
-        val needle = query.trim().lowercase()
-        return dao.activeCases(scope, 100).filter { record ->
-            needle.isEmpty() || record.title.lowercase().contains(needle) || record.summary.orEmpty().lowercase().contains(needle) ||
-                record.nextAction.orEmpty().lowercase().contains(needle) || dao.caseParticipants(scope, record.caseId).any { participant ->
-                    dao.domainObject(scope, participant.domainPersonId)?.title?.lowercase()?.contains(needle) == true
-                }
-        }.take(limit)
+        val terms = caseSearchTerms(query)
+        if (terms.isEmpty()) return if (query.isBlank()) dao.activeCases(scope, limit) else emptyList()
+        return dao.activeCases(scope, 100).mapNotNull { record ->
+            val participantNames = dao.caseParticipants(scope, record.caseId).mapNotNull { participant ->
+                dao.domainObject(scope, participant.domainPersonId)?.takeIf { it.deletedAt == null }?.title
+            }
+            val titleTokens = caseSearchTerms(record.title)
+            val allTokens = (listOfNotNull(record.title, record.summary, record.nextAction) + participantNames).flatMap(::caseSearchTerms).distinct()
+            val matched = terms.count { term -> allTokens.any { caseSearchTokenMatches(term, it) } }
+            if (matched == 0) null else {
+                val titleMatches = terms.count { term -> titleTokens.any { caseSearchTokenMatches(term, it) } }
+                (record to (matched * 100 / terms.size + titleMatches * 15))
+            }
+        }.sortedWith(compareByDescending<Pair<CaseRecordRow, Int>> { it.second }
+            .thenByDescending { it.first.updatedAt }.thenBy { it.first.title.lowercase(Locale.ROOT) })
+            .take(limit).map { it.first }
+    }
+
+    private fun caseSearchTerms(value: String): List<String> = foldCaseSearch(value)
+        .split(CASE_SEARCH_SEPARATOR).filter { it.length > 1 && it !in CASE_SEARCH_STOP_WORDS }.distinct().take(20)
+
+    private fun foldCaseSearch(value: String): String = Normalizer.normalize(value.lowercase(Locale.ROOT), Normalizer.Form.NFD)
+        .replace(CASE_SEARCH_MARKS, "").replace('ə', 'e').replace('ı', 'i').replace('ё', 'е')
+        .replace("ch", "c").replace("sh", "s")
+
+    private fun caseSearchTokenMatches(query: String, candidate: String): Boolean {
+        if (query == candidate) return true
+        if (minOf(query.length, candidate.length) < 4) return false
+        return query.zip(candidate).takeWhile { (left, right) -> left == right }.size >= 4
     }
 
     private suspend fun resolveSource(scope: String, kind: String, sourceId: String, revisionId: String?, now: String): Pair<String, String?>? = when (kind) {
@@ -373,5 +397,11 @@ internal class ProtectedCaseRepository(private val db: AgentDatabase) {
 
     private companion object {
         val CASE_STATUSES = setOf("open", "waiting", "completed", "cancelled")
+        val CASE_SEARCH_SEPARATOR = Regex("[^\\p{L}\\p{N}]+")
+        val CASE_SEARCH_MARKS = Regex("\\p{M}+")
+        val CASE_SEARCH_STOP_WORDS = setOf("what", "whats", "find", "show", "about", "with", "the", "for", "and", "from",
+            "what", "is", "was", "are", "to", "of", "in", "on", "me", "my", "who", "when", "where", "why", "how",
+            "ne", "nə", "haqqinda", "haqqında", "haqda", "mene", "mənə", "menim", "mənim", "ve", "və", "bu", "bir",
+            "что", "как", "мне", "мой", "моя", "мое", "об", "про", "для", "и", "по", "у", "к", "в", "на", "с", "из", "от", "за", "ли")
     }
 }

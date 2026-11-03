@@ -624,15 +624,13 @@ internal class ProtectedDomainRepository(private val db: AgentDatabase) {
             val p = JSONObject(rev.payloadJson); val title = p.optString("title", row.title); val body = p.optString("body").takeIf { it.isNotEmpty() }
             val text = listOfNotNull(title, body).joinToString(" ")
             val tokenMatches = TOKEN_REGEX.findAll(fold(text)).filter { token ->
-                terms.any { term -> token.value == term || (minOf(term.length, token.value.length) >= 4 &&
-                    (term.startsWith(token.value) || token.value.startsWith(term))) }
+                terms.any { term -> searchTokenMatches(term, token.value) }
             }.toList()
             if (tokenMatches.isEmpty()) continue
             val score = tokenMatches.map { it.value }.distinct().size * 100 / terms.size +
                 if (fold(title).contains(needle)) 100 else 0
             val originalToken = TOKEN_REGEX.findAll(text).firstOrNull { token ->
-                terms.any { term -> fold(token.value) == term || (minOf(term.length, token.value.length) >= 4 &&
-                    (term.startsWith(fold(token.value)) || fold(token.value).startsWith(term))) }
+                terms.any { term -> searchTokenMatches(term, fold(token.value)) }
             } ?: continue
             val start = originalToken.range.first
             val snippetStart = (start - 300).coerceAtLeast(0)
@@ -898,8 +896,16 @@ internal class ProtectedDomainRepository(private val db: AgentDatabase) {
     private fun payload(title: String, body: String?, status: String, deletedAt: String?) = JSONObject()
         .put("title", title).put("body", body ?: JSONObject.NULL).put("status", status)
         .put("deletedAt", deletedAt ?: JSONObject.NULL).toString()
-    private fun fold(value: String) = Normalizer.normalize(value, Normalizer.Form.NFC).lowercase(Locale.ROOT)
+    private fun fold(value: String) = Normalizer.normalize(value.lowercase(Locale.ROOT), Normalizer.Form.NFD)
+        .replace(SEARCH_MARKS, "").replace('ə', 'e').replace('ı', 'i').replace('ё', 'е')
+        .replace("ch", "c").replace("sh", "s")
+    private fun searchTokenMatches(query: String, candidate: String): Boolean {
+        if (query == candidate) return true
+        if (minOf(query.length, candidate.length) < 4) return false
+        return query.zip(candidate).takeWhile { (left, right) -> left == right }.size >= 4
+    }
     private val TOKEN_REGEX = Regex("[\\p{L}\\p{N}]+")
+    private val SEARCH_MARKS = Regex("\\p{M}+")
     private val STOP_WORDS = setOf("the", "and", "for", "with", "from", "about", "this", "that", "что", "это", "мне", "меня", "мои", "мой", "моя", "у", "и", "в", "на", "для", "ne", "nə", "mene", "mənə", "mənim", "və", "bir", "bu", "da", "də")
     private fun jsonValue(value: Any?): Any? = when (value) {
         null, JSONObject.NULL -> null

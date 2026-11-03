@@ -17,9 +17,11 @@ import ai.memora.app.domain.TaskRules
 import ai.memora.app.domain.VoiceMoneyRules
 import java.security.MessageDigest
 import java.math.BigDecimal
+import java.text.Normalizer
 import java.time.Instant
 import java.time.LocalDate
 import java.time.ZoneId
+import java.util.Locale
 import java.util.UUID
 import org.json.JSONObject
 import org.json.JSONArray
@@ -45,21 +47,39 @@ internal class LocalMemoryTools(private val repository: ProtectedDomainRepositor
         override suspend fun read(call: AgentModelToolCall, turn: AgentTurnRequest): ToolCommitResult {
             val query = call.arguments["query"] as? String ?: return rejected()
             if (query.isBlank() || query.length > 200) return rejected()
+            val terms = memorySearchTerms(query)
+            if (terms.isEmpty()) return ToolCommitResult(ToolObservationStatus.APPLIED, "evidence_found", mapOf(
+                "count" to 0, "match_mode" to "normalized_lexical", "evidence" to emptyList<Any>(), "episodes" to emptyList<Any>(),
+                "conversation_turns" to emptyList<Any>(),
+                "profile_facts" to emptyList<Any>(), "activity" to emptyList<Any>(), "activity_truncated" to false,
+            ))
             val hits = repository.search(turn.scopeId, query, limit = 8)
             val episodes = conversations?.searchEpisodes(turn.scopeId, query, limit = 5).orEmpty()
+            val conversationTurns = conversations?.search(turn.scopeId, query, limit = 5).orEmpty()
             val profileFacts = profileMemory?.list(turn.scopeId, query, limit = 8).orEmpty()
+            val activity = searchRelatedActivity(turn.scopeId, terms, query)
             return ToolCommitResult(ToolObservationStatus.APPLIED, "evidence_found", mapOf(
-                "count" to (hits.size + episodes.size + profileFacts.size),
+                "count" to (hits.size + episodes.size + conversationTurns.size + profileFacts.size + activity.items.size),
+                "match_mode" to "normalized_lexical",
+                "truncated" to (hits.size == 8 || episodes.size == 5 || conversationTurns.size == 5 ||
+                    profileFacts.size == 8 || activity.truncated),
                 "evidence" to hits.map { hit -> mapOf("id" to hit.objectId, "kind" to hit.kind.name.lowercase(),
                     "title" to hit.title, "text" to hit.evidenceText.take(500),
                     "text_truncated" to (hit.evidenceText.length > 500), "revision" to hit.evidenceRevisionId) },
                 "episodes" to episodes.map { episode -> mapOf("id" to episode.episodeId, "kind" to "episode_summary",
                     "title" to episode.title, "summary" to episode.summary, "source_turn_ids" to episode.sourceTurnIds,
                     "revision" to episode.revision, "derived_not_canonical" to true) },
+                "conversation_turns" to conversationTurns.map { turnEvidence -> mapOf("turn_id" to turnEvidence.turnId,
+                    "role" to turnEvidence.role, "created_at_epoch_ms" to turnEvidence.createdAtMillis,
+                    "snippet" to turnEvidence.snippet.take(500), "text_truncated" to (turnEvidence.snippet.length > 500),
+                    "source" to "retained_conversation_archive") },
                 "profile_facts" to profileFacts.map { fact -> mapOf("id" to fact.factId, "kind" to "profile_fact",
                     "category" to fact.category, "fact" to fact.fact, "revision" to fact.revision,
                     "source_turn_ids" to fact.sourceTurnIds, "provenance" to fact.revisions.lastOrNull()?.provenance,
                     "explicit_user_memory" to true) },
+                "activity" to activity.items,
+                "activity_truncated" to activity.truncated,
+                "activity_limit" to MAX_UNIFIED_ACTIVITY_HITS,
             ))
         }
 
@@ -397,6 +417,141 @@ internal class LocalMemoryTools(private val repository: ProtectedDomainRepositor
     }
 
     private val cases by lazy { repository.caseRepository() }
+
+    /**
+     * Adds bounded, relevance-ranked references from canonical domain stores to general memory search.
+     * Exact finance totals and full case timelines remain the responsibility of their specialist tools.
+     */
+    private suspend fun searchRelatedActivity(scope: String, terms: List<String>, query: String): UnifiedActivitySearch {
+        val hits = mutableListOf<RankedActivity>()
+        val foldedTerms = terms.map(::normalizeMemorySearchText).distinct()
+
+        fun score(fields: List<String>, title: String? = null): Int {
+            val tokens = fields.flatMap(::memorySearchTerms).toSet()
+            val matched = foldedTerms.count { term -> tokens.any { token -> memorySearchTokenMatches(term, token) } }
+            if (matched == 0) return 0
+            val titleTokens = title?.let(::memorySearchTerms).orEmpty()
+            val titleMatches = foldedTerms.count { term -> titleTokens.any { memorySearchTokenMatches(term, it) } }
+            return matched * 100 / foldedTerms.size + titleMatches * 15
+        }
+
+        if (financeEnabled) {
+            val people = repository.financePeople(scope).associateBy { it.personId }
+            val adjustments = repository.financeAdjustments(scope)
+            val annotationsByEvent = adjustments.filter { it.kind == "annotation" }.groupBy { it.reversesEventId }
+            val voidStates = adjustments.filter { it.kind in setOf("event_void", "event_restore") }
+                .groupBy { it.reversesEventId }.mapValues { (_, rows) ->
+                    rows.sortedWith(compareBy({ it.occurredAt.orEmpty() }, { it.eventId }))
+                        .fold(false) { voided, row -> row.kind == "event_void" }
+                }
+            repository.allFinanceEvents(scope).forEach { event ->
+                val person = people[event.personId]
+                val annotations = annotationsByEvent[event.eventId].orEmpty()
+                val searchable = listOfNotNull(person?.displayName, event.comment, event.source) + annotations.map { it.reason }
+                val relevance = score(searchable, person?.displayName)
+                if (relevance > 0) {
+                    val isVoided = voidStates[event.eventId] ?: false
+                    hits += RankedActivity(relevance, event.occurredAt ?: event.recordedAt, "money_event", event.eventId,
+                        mapOf("kind" to "money_event", "source_id" to event.eventId, "source_revision_id" to null,
+                            "person_id" to event.personId, "person_name" to person?.displayName, "event_kind" to event.kind,
+                            "minor_units" to event.minorUnits, "currency" to event.currency,
+                            "occurred_at" to (event.occurredAt ?: event.recordedAt), "voided" to isVoided,
+                            "comment" to event.comment?.take(180), "source" to event.source.take(180),
+                            "annotation_ids" to annotations.take(4).map { it.eventId },
+                            "annotations" to annotations.take(4).map { it.reason.take(160) },
+                            "annotations_truncated" to (annotations.size > 4),
+                            "exact_financial_totals_require_search_money" to true))
+                }
+            }
+        }
+
+        memory.tasks().tasks.asSequence().filter { it.scopeId == scope }.forEach { task ->
+            val relevance = score(listOfNotNull(task.title, task.personLabel, task.projectLabel), task.title)
+            if (relevance > 0) hits += RankedActivity(relevance, task.dueLocal.orEmpty(), "task", task.id,
+                mapOf("kind" to "task", "source_id" to task.id, "source_revision_id" to "${task.id}:${task.version}",
+                    "task_id" to task.id, "version" to task.version, "title" to task.title,
+                    "completed" to task.completed, "due_local" to task.dueLocal, "due_zone" to task.dueZone,
+                    "person_label" to task.personLabel, "project_label" to task.projectLabel,
+                    "completion_timestamp_available" to false))
+        }
+
+        repository.allCalendarEvents(scope).forEach { event ->
+            val relevance = score(listOf(event.title), event.title)
+            if (relevance > 0) hits += RankedActivity(relevance, event.startLocal, "calendar_event", event.eventId,
+                mapOf("kind" to "calendar_event", "source_id" to event.eventId,
+                    "source_revision_id" to "${event.eventId}:${event.version}", "version" to event.version,
+                    "title" to event.title, "start_local" to event.startLocal, "end_local" to event.endLocal,
+                    "time_zone" to event.zoneId, "time_precision" to event.timePrecision, "status" to event.status))
+        }
+
+        repository.tables(scope).forEach { snapshot ->
+            val columnNames = snapshot.columns.associate { it.columnId to it.name }
+            snapshot.rows.forEach rowLoop@{ row ->
+                val values = runCatching { JSONObject(row.valuesJson) }.getOrNull() ?: return@rowLoop
+                val searchableValues = values.keys().asSequence().mapNotNull { key ->
+                    values.opt(key)?.takeIf { it != JSONObject.NULL }?.toString()?.let { "${columnNames[key].orEmpty()} $it" }
+                }.toList()
+                val searchable = listOf(snapshot.table.title) + snapshot.columns.map { it.name } + searchableValues
+                val relevance = score(searchable, snapshot.table.title)
+                if (relevance > 0) hits += RankedActivity(relevance, row.rowId, "table_row", row.rowId,
+                    mapOf("kind" to "table_row", "source_id" to row.rowId, "source_revision_id" to "${row.rowId}:${row.version}",
+                        "row_id" to row.rowId, "row_version" to row.version, "table_id" to snapshot.table.tableId,
+                        "table_title" to snapshot.table.title.take(120), "schema_version" to snapshot.table.schemaVersion,
+                        "column_names" to snapshot.columns.take(12).associate { it.columnId to it.name.take(80) },
+                        "values_json" to row.valuesJson.take(500), "values_truncated" to (row.valuesJson.length > 500)))
+            }
+        }
+
+        val caseCandidates = cases.searchCases(scope, query, limit = 20)
+        caseCandidates.forEach caseLoop@{ record ->
+            val snapshot = cases.caseSnapshot(scope, record.caseId) ?: return@caseLoop
+            val participants = snapshot.participants.map { mapOf("person_object_id" to it.objectId, "name" to it.title) }
+            val relevance = score(listOfNotNull(record.title, record.summary, record.nextAction) + snapshot.participants.map { it.title }, record.title)
+            if (relevance > 0) hits += RankedActivity(relevance, record.updatedAt, "case", record.caseId,
+                mapOf("kind" to "case", "source_id" to record.caseId, "source_revision_id" to "${record.caseId}:${record.version}",
+                    "case_id" to record.caseId, "version" to record.version, "title" to record.title,
+                    "summary" to record.summary?.take(240), "status" to record.status,
+                    "next_action" to record.nextAction?.take(180), "participants" to participants.take(8),
+                    "sources" to snapshot.evidence.filter { it.sourceAvailable }.take(8).map { source -> mapOf(
+                        "source_kind" to source.evidence.sourceKind, "source_id" to source.evidence.sourceId,
+                        "source_revision_id" to source.evidence.sourceRevisionId, "relation" to source.evidence.relation,
+                        "title" to source.title.take(160), "detail" to source.detail?.take(180)) },
+                    "sources_truncated" to (snapshot.evidence.count { it.sourceAvailable } > 8)))
+        }
+
+        val ranked = hits.sortedWith(compareByDescending<RankedActivity> { it.score }
+            .thenByDescending { it.sortAt }.thenBy { it.kind }.thenBy { it.id })
+        return UnifiedActivitySearch(ranked.take(MAX_UNIFIED_ACTIVITY_HITS).map { it.data },
+            ranked.size > MAX_UNIFIED_ACTIVITY_HITS || caseCandidates.size == MAX_CASE_CANDIDATES)
+    }
+
+    private data class RankedActivity(val score: Int, val sortAt: String, val kind: String, val id: String, val data: Map<String, Any?>)
+    private data class UnifiedActivitySearch(val items: List<Map<String, Any?>>, val truncated: Boolean)
+
+    private fun memorySearchTerms(value: String): List<String> = normalizeMemorySearchText(value)
+        .split(MEMORY_SEARCH_SEPARATOR).filter { it.length > 1 && it !in MEMORY_SEARCH_STOP_WORDS }.distinct().take(20)
+
+    private fun normalizeMemorySearchText(value: String): String = Normalizer.normalize(value.lowercase(Locale.ROOT), Normalizer.Form.NFD)
+        .replace(MEMORY_SEARCH_MARKS, "").replace('ə', 'e').replace('ı', 'i').replace('ё', 'е')
+        .replace("ch", "c").replace("sh", "s")
+
+    private fun memorySearchTokenMatches(query: String, candidate: String): Boolean {
+        if (query == candidate) return true
+        if (minOf(query.length, candidate.length) < 4) return false
+        val sharedPrefix = query.zip(candidate).takeWhile { (left, right) -> left == right }.size
+        return sharedPrefix >= 4
+    }
+
+    private companion object {
+        val MEMORY_SEARCH_SEPARATOR = Regex("[^\\p{L}\\p{N}]+")
+        val MEMORY_SEARCH_MARKS = Regex("\\p{M}+")
+        val MEMORY_SEARCH_STOP_WORDS = setOf("what", "whats", "find", "show", "about", "with", "the", "for", "and", "from",
+            "what", "is", "was", "are", "to", "of", "in", "on", "me", "my", "who", "when", "where", "why", "how",
+            "ne", "nə", "haqqinda", "haqqında", "haqda", "mene", "mənə", "menim", "mənim", "ve", "və", "bu", "bir",
+            "что", "как", "мне", "мой", "моя", "мое", "об", "про", "для", "и", "по", "у", "к", "в", "на", "с", "из", "от", "за", "ли")
+        const val MAX_UNIFIED_ACTIVITY_HITS = 12
+        const val MAX_CASE_CANDIDATES = 20
+    }
 
     private inner class CreateCase : AgentToolHandler {
         override val descriptor = AgentToolDescriptor("create_case", 1, ToolAccess.PERSISTED_MEMORY, ToolEffect.WRITE, runtimeEnabled = true)

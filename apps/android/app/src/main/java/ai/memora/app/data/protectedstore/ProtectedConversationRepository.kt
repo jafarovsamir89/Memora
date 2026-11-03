@@ -2,6 +2,7 @@ package ai.memora.app.data.protectedstore
 
 import androidx.room.withTransaction
 import java.security.MessageDigest
+import java.text.Normalizer
 
 internal data class ConversationEvidence(
     val turnId: String,
@@ -145,13 +146,11 @@ internal class ProtectedConversationRepository(private val db: AgentDatabase) {
             page.asSequence().filter { cutoff == null || it.createdAtMillis >= cutoff }.mapNotNull { row ->
             val tokens = TOKEN.findAll(row.message).toList()
             val foldedTokens = tokens.map { fold(it.value) }
-            val matched = terms.count { term -> foldedTokens.any { token -> token == term ||
-                (minOf(token.length, term.length) >= 4 && (token.startsWith(term) || term.startsWith(token))) } }
+            val matched = terms.count { term -> foldedTokens.any { token -> searchTokenMatches(term, token) } }
             if (terms.isNotEmpty() && matched == 0) return@mapNotNull null
             val first = tokens.indices.firstOrNull { index ->
                 val token = foldedTokens[index]
-                terms.any { term -> token == term || (minOf(token.length, term.length) >= 4 &&
-                    (token.startsWith(term) || term.startsWith(token))) }
+                terms.any { term -> searchTokenMatches(term, token) }
             }
             if (terms.isNotEmpty() && first == null) return@mapNotNull null
             val start = (first?.let { tokens[it].range.first - 180 } ?: 0).coerceAtLeast(0)
@@ -245,8 +244,7 @@ internal class ProtectedConversationRepository(private val db: AgentDatabase) {
                         if (hits.size >= limit) break
                     } else {
                         val contentTokens = TOKEN.findAll(fold("${episode.title} ${episode.summary}")).map { it.value }.toList()
-                        val score = terms.count { term -> contentTokens.any { token -> token == term ||
-                            (minOf(token.length, term.length) >= 4 && (token.startsWith(term) || term.startsWith(token))) } }
+                        val score = terms.count { term -> contentTokens.any { token -> searchTokenMatches(term, token) } }
                         if (score > 0) hits += episode.copy(score = score * 10 + episode.revision.coerceAtMost(9).toInt())
                     }
                 }
@@ -369,8 +367,15 @@ internal class ProtectedConversationRepository(private val db: AgentDatabase) {
             assistant.message, null)
     }
 
-    private fun fold(value: String) = value.lowercase(java.util.Locale.ROOT)
-        .replace('ı', 'i').replace('İ', 'i').replace('ё', 'е')
+    private fun fold(value: String) = Normalizer.normalize(value.lowercase(java.util.Locale.ROOT), Normalizer.Form.NFD)
+        .replace(SEARCH_MARKS, "").replace('ə', 'e').replace('ı', 'i').replace('ё', 'е')
+        .replace("ch", "c").replace("sh", "s")
+
+    private fun searchTokenMatches(query: String, candidate: String): Boolean {
+        if (query == candidate) return true
+        if (minOf(query.length, candidate.length) < 4) return false
+        return query.zip(candidate).takeWhile { (left, right) -> left == right }.size >= 4
+    }
 
     private fun isUuid(value: String) = runCatching { java.util.UUID.fromString(value) }.isSuccess
 
@@ -388,6 +393,7 @@ internal class ProtectedConversationRepository(private val db: AgentDatabase) {
         val ACTION_TARGET_KINDS = setOf("memory", "finance", "case", "task", "calendar", "table")
         val ALLOWED_RETENTION_DAYS = setOf(RETENTION_FOREVER, 30, 90, 365)
         val TOKEN = Regex("[\\p{L}\\p{N}]+")
+        val SEARCH_MARKS = Regex("\\p{M}+")
         val STOP_WORDS = setOf("and", "the", "that", "what", "when", "were", "was", "with", "about", "from", "this", "have", "did", "we",
             "last", "week", "weeks", "ago", "past", "previous", "discuss", "discussed", "talk", "talked", "said",
             "и", "а", "в", "во", "на", "о", "об", "что", "как", "когда", "где", "это", "мы", "был", "были", "про", "насчёт",

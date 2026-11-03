@@ -35,15 +35,15 @@ internal class ProtectedProfileMemoryRepository(private val db: AgentDatabase) {
     suspend fun list(scopeId: String, query: String = "", limit: Int = 30): List<ProfileFactEvidence> {
         require(scopeId.isNotBlank() && query.length <= 200 && limit in 1..100)
         val rows = dao.profileFacts(scopeId, MAX_PROFILE_FACTS)
-        val terms = TOKEN.findAll(fold(query)).map { it.value }.filter { it.length > 1 }
+        val terms = TOKEN.findAll(foldSearch(query)).map { it.value }.filter { it.length > 1 && it !in SEARCH_STOP_WORDS }
             .distinct().take(12).toList()
         val evidence = rows.mapNotNull { row ->
             val value = loadEvidence(scopeId, row.factId) ?: return@mapNotNull null
             if (terms.isEmpty()) value
             else {
-                val haystack = fold("${row.category} ${row.fact}")
-                val matched = terms.count(haystack::contains)
-                if (matched == 0) null else value.copy(score = matched * 10 + if (haystack.contains(fold(query).trim())) 5 else 0)
+                val haystack = TOKEN.findAll(foldSearch("${row.category} ${row.fact}")).map { it.value }.toList()
+                val matched = terms.count { term -> haystack.any { token -> searchTokenMatches(term, token) } }
+                if (matched == 0) null else value.copy(score = matched * 10 + if (terms.all { term -> haystack.any { searchTokenMatches(term, it) } }) 5 else 0)
             }
         }
         return if (terms.isEmpty()) evidence.take(limit)
@@ -199,7 +199,19 @@ internal class ProtectedProfileMemoryRepository(private val db: AgentDatabase) {
 
     private fun normalizeFact(value: String): String = TOKEN.findAll(fold(value)).joinToString(" ") { it.value }
     private fun fold(value: String): String = Normalizer.normalize(value, Normalizer.Form.NFC).lowercase(Locale.ROOT)
+    private fun foldSearch(value: String): String = Normalizer.normalize(value.lowercase(Locale.ROOT), Normalizer.Form.NFD)
+        .replace(SEARCH_MARKS, "").replace('ə', 'e').replace('ı', 'i').replace('ё', 'е')
+        .replace("ch", "c").replace("sh", "s")
+    private fun searchTokenMatches(query: String, candidate: String): Boolean {
+        if (query == candidate) return true
+        if (minOf(query.length, candidate.length) < 4) return false
+        return query.zip(candidate).takeWhile { (left, right) -> left == right }.size >= 4
+    }
     private val TOKEN = Regex("[\\p{L}\\p{N}]+")
+    private val SEARCH_MARKS = Regex("\\p{M}+")
+    private val SEARCH_STOP_WORDS = setOf("what", "whats", "find", "show", "about", "with", "the", "for", "and", "from",
+        "what", "is", "was", "are", "to", "of", "in", "on", "me", "my", "who", "when", "where", "why", "how",
+        "ne", "haqqinda", "haqda", "mene", "menim", "ve", "bu", "bir", "що", "как", "мне", "об", "про", "для", "и", "по", "у", "к", "в", "на", "с", "из", "от", "за")
 
     companion object {
         val CATEGORIES = setOf("preference", "goal", "context", "other")
