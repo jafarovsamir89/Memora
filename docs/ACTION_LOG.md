@@ -1,5 +1,11 @@
 # Memora — лог действий
 
+## ACT-0109 · 2026-11-03 · M20-06 аналитика дел и задач
+
+В добавление к v32 месячной финансовой аналитике добавлены read-only `summarize_work_status` и согласованный finance snapshot. Инструмент возвращает scoped текущие counts protected tasks и case status с ограниченными списками открытых задач/последних дел; указывает отсутствие task completion timestamps и запрещает выводить доход/стоимость/ROI только из этой выборки. Gemini instruction совмещает finance+work evidence при business question и явно ищет подарок/occasion в сохранённой памяти и связанных источниках при разрешённом consent. Finance events, adjustments и people читаются в одной `Room.withTransaction`. Room schema остаётся 12; записей инструменты не создают.
+
+Целевые fake-provider/tool tests прошли. Полная команда `:app:testDebugUnitTest :app:assembleDebug :app:assembleDebugAndroidTest :app:compileDebugAndroidTestKotlin :app:lintDebug --no-daemon --console=plain --max-workers=2` завершилась `BUILD SUCCESSFUL`: 47 suites / 250 tests; failures/errors/skipped = 0; lint 0 errors, 55 warnings, 3 hints. APK v33 `1.1.11-work-analytics`, 29,362,023 bytes, SHA-256 `c6c43f1553b66778fba2edbfc2cf4956acdbca506895f524ab3b67cef548a466`; `C:\memora-backups\Memora-v33-1.1.11-work-analytics-2026-11-03.apk` совпадает. ADB пуст; API/device/SQLCipher/TalkBack/owner acceptance не запускались; личные данные не трогались. Commit/push этого пакета будет зафиксирован после Git handoff.
+
 ## ACT-0107 · 2026-11-03 · M20-06 локальная финансовая аналитика
 
 Добавлены точный месячный агрегатор ledger и read-only tool `analyze_finance_period`, подключённый к существующему provider-neutral catalog и защищённым memory/finance policy gates. Учтены append-only корректировки, void/reversal и погашения; разные валюты и одинаковые имена разделены по currency/person ID. В Reports UI AZ/RU/EN отображаются поступления, расходы/погашения, движение средств, отдельно долги, открытый остаток, сравнение прошлого месяца и coverage caveats. Движение средств не называется прибылью; неизвестные начальные балансы, неполное покрытие, категории и проектные связи не маскируются. Room schema 12 не менялась.

@@ -253,6 +253,11 @@ internal class ProtectedCaseRepository(private val db: AgentDatabase) {
         return dao.openCaseCount(scope)
     }
 
+    suspend fun statusCounts(scope: String): List<CaseStatusCountRow> {
+        require(scope.isNotBlank())
+        return dao.caseStatusCounts(scope)
+    }
+
     suspend fun openCases(scope: String, limit: Int = 4): List<CaseRecordRow> {
         require(scope.isNotBlank() && limit in 1..100)
         return dao.openCases(scope, limit)

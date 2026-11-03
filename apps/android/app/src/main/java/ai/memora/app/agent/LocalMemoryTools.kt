@@ -29,7 +29,7 @@ internal class LocalMemoryTools(private val repository: ProtectedDomainRepositor
     fun handlers(): List<AgentToolHandler> = listOf(
         SearchMemory(), SaveNote(), EditMemoryObject(), DeleteMemoryObject(), RestoreMemoryObject(), LinkObjects(), ListTables(), ReadTableRows(), CreateTable(), AddTableRow(),
         UpdateTableRow(), DeleteTableRow(), RestoreTableRow(), RenameTable(), DeleteTable(), RestoreTable(),
-        SearchConversationHistory(), ListTasks(), CreateTask(), EditTask(), SetTaskCompletion(), ListCalendarEvents(), CreateCalendarEvent(),
+        SearchConversationHistory(), ListTasks(), SummarizeWorkStatus(), CreateTask(), EditTask(), SetTaskCompletion(), ListCalendarEvents(), CreateCalendarEvent(),
         EditCalendarEvent(), CancelCalendarEvent(),
         SearchMoney(), AnalyzeFinancePeriod(), RecordMoneyEvent(), SettleDebt(), ReverseMoneyEvent(), CorrectMoneyEvent(), AnnotateMoneyEvent(),
         CreateCase(), SearchCases(), UpdateCase(), AddCaseParticipant(), LinkCaseSource(),
@@ -891,6 +891,72 @@ internal class LocalMemoryTools(private val repository: ProtectedDomainRepositor
         override suspend fun commit(command: PreparedAgentCommand) = rejected()
     }
 
+    private inner class SummarizeWorkStatus : AgentToolHandler {
+        override val descriptor = AgentToolDescriptor("summarize_work_status", 1, ToolAccess.PERSISTED_MEMORY,
+            ToolEffect.READ, runtimeEnabled = true)
+
+        override suspend fun read(call: AgentModelToolCall, turn: AgentTurnRequest): ToolCommitResult {
+            if (call.arguments.isNotEmpty()) return rejected()
+            return try {
+                val allTasks = memory.tasks().tasks.filter { it.scopeId == turn.scopeId }
+                val openTasks = allTasks.filterNot { it.completed }
+                val sampledTasks = openTasks.take(MAX_WORK_TASKS).map { task -> mapOf(
+                    "task_id" to task.id,
+                    "title" to task.title.take(200),
+                    "due_local" to task.dueLocal,
+                    "due_zone" to task.dueZone,
+                    "person_label" to task.personLabel,
+                    "project_label" to task.projectLabel,
+                ) }
+                val statusCounts = cases.statusCounts(turn.scopeId)
+                val totalCases = statusCounts.sumOf { it.count }
+                val caseSample = cases.cases(turn.scopeId, MAX_WORK_CASES).map { case -> mapOf(
+                    "case_id" to case.caseId,
+                    "title" to case.title.take(200),
+                    "status" to case.status,
+                    "summary" to case.summary?.take(500),
+                    "next_action" to case.nextAction?.take(250),
+                    "updated_at" to case.updatedAt,
+                    "source_turn_id" to case.sourceTurnId,
+                ) }
+                ToolCommitResult(ToolObservationStatus.APPLIED, "work_status_ready", mapOf(
+                    "source" to "protected_task_event_projection_and_case_records",
+                    "as_of" to Instant.now().toString(),
+                    "tasks" to mapOf(
+                        "total_current_tasks" to allTasks.size,
+                        "open_current_tasks" to openTasks.size,
+                        "completed_current_tasks" to (allTasks.size - openTasks.size),
+                        "open_tasks" to sampledTasks,
+                        "open_task_sample_truncated" to (openTasks.size > sampledTasks.size),
+                        "completion_period_analysis_available" to false,
+                    ),
+                    "cases" to mapOf(
+                        "current_case_count" to totalCases,
+                        "open_case_count" to statusCounts.filterNot { it.status in TERMINAL_CASE_STATUSES }.sumOf { it.count },
+                        "status_counts" to statusCounts.associate { it.status to it.count },
+                        "recent_case_sample" to caseSample,
+                        "recent_case_sample_truncated" to (totalCases > caseSample.size),
+                    ),
+                    "limitations" to listOf(
+                        "task_completion_timestamps_not_stored; no period completion rate",
+                        "task_and_case_records_do_not_establish_revenue_cost_profit_or_project_roi",
+                        "person_and_project_labels_are_text_not_verified_identity_links",
+                        "case_details_and_canonical_evidence_can_be_loaded_with_search_cases",
+                    ),
+                ))
+            } catch (cancelled: kotlinx.coroutines.CancellationException) {
+                throw cancelled
+            } catch (_: Exception) {
+                ToolCommitResult(ToolObservationStatus.FAILED, "work_status_unavailable")
+            }
+        }
+
+        override suspend fun prepare(call: AgentModelToolCall, turn: AgentTurnRequest, commandId: String) =
+            ToolPreparation.Rejected("read_only_tool")
+
+        override suspend fun commit(command: PreparedAgentCommand) = rejected()
+    }
+
     private inner class RecordMoneyEvent : AgentToolHandler {
         override val descriptor = AgentToolDescriptor("record_money_event", 1, ToolAccess.PERSISTED_MEMORY,
             ToolEffect.WRITE, runtimeEnabled = financeEnabled)
@@ -1211,3 +1277,7 @@ internal class LocalMemoryTools(private val repository: ProtectedDomainRepositor
     private fun sha256(value: String) = MessageDigest.getInstance("SHA-256").digest(value.toByteArray(Charsets.UTF_8))
         .joinToString("") { "%02x".format(it) }
 }
+
+private const val MAX_WORK_TASKS = 16
+private const val MAX_WORK_CASES = 12
+private val TERMINAL_CASE_STATUSES = setOf("completed", "archived", "cancelled")

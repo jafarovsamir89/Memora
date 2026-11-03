@@ -240,6 +240,9 @@ internal data class CaseRecordRow(
     val deletedAt: String?,
 )
 
+/** Aggregate projection used by bounded read-only work analytics. */
+internal data class CaseStatusCountRow(val status: String, val count: Int)
+
 @Entity(tableName = "case_revision", primaryKeys = ["caseId", "version"])
 internal data class CaseRevisionRow(
     val caseId: String,
@@ -363,6 +366,8 @@ internal interface ProtectedStoreDao {
     suspend fun openCases(scope: String, limit: Int): List<CaseRecordRow>
     @androidx.room.Query("SELECT COUNT(*) FROM case_record WHERE scopeId=:scope AND deletedAt IS NULL AND status NOT IN ('completed','archived','cancelled')")
     suspend fun openCaseCount(scope: String): Int
+    @androidx.room.Query("SELECT status, COUNT(*) AS count FROM case_record WHERE scopeId=:scope AND deletedAt IS NULL GROUP BY status ORDER BY status")
+    suspend fun caseStatusCounts(scope: String): List<CaseStatusCountRow>
     @androidx.room.Insert(onConflict = androidx.room.OnConflictStrategy.ABORT) suspend fun insertCase(row: CaseRecordRow)
     @androidx.room.Query("UPDATE case_record SET title=:title, summary=:summary, status=:status, nextAction=:nextAction, version=:nextVersion, updatedAt=:now WHERE scopeId=:scope AND caseId=:id AND version=:expected AND deletedAt IS NULL")
     suspend fun updateCase(scope: String, id: String, expected: Long, nextVersion: Long, title: String, summary: String?, status: String, nextAction: String?, now: String): Int

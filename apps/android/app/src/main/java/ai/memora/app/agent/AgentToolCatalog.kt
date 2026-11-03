@@ -59,6 +59,8 @@ internal object AgentToolCatalog {
         tool("analyze_finance_period",
             "Read exact monthly receipt, expense and debt-origin totals from the protected ledger; includes prior-month comparison, current outstanding debts and explicit incomplete-coverage flags. This is not profit/accounting or full-business coverage.",
             optional = mapOf("month" to str)),
+        tool("summarize_work_status",
+            "Read the current protected task projection and exact case counts/statuses with a bounded recent case sample. This is a present-state snapshot, not dated productivity, revenue, or proof of business performance."),
         tool("record_money_event",
             "Record a clearly stated receipt, debt, or expense. Preserve the exact amount and original source. A missing date defaults to today in Asia/Baku; reason and date are optional and must not block a clear write. Reuse or create a person atomically.",
             required = mapOf("kind" to enumeration("receipt", "debt", "expense"), "person_name" to str, "amount" to str),

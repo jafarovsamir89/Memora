@@ -254,10 +254,12 @@ internal class ProtectedDomainRepository(private val db: AgentDatabase) {
     /** Exact month comparison over the canonical ledger; debt originations and outstanding debt stay separate. */
     suspend fun financeAnalytics(scope: String, month: YearMonth, zone: ZoneId = FinanceAnalytics.bakuZone): FinanceAnalyticsSnapshot {
         require(scope.isNotBlank())
-        val events = dao.financeEventsForAnalysis(scope)
-        val adjustments = dao.financeAdjustmentsForAnalysis(scope)
-        val people = dao.people(scope).associate { it.personId to it.displayName }
-        return FinanceAnalytics.fromLedger(month, events, adjustments, people, zone)
+        return db.withTransaction {
+            val events = dao.financeEventsForAnalysis(scope)
+            val adjustments = dao.financeAdjustmentsForAnalysis(scope)
+            val people = dao.people(scope).associate { it.personId to it.displayName }
+            FinanceAnalytics.fromLedger(month, events, adjustments, people, zone)
+        }
     }
 
     /** Appends the user's verbatim follow-up to one existing ledger event without changing its amount. */

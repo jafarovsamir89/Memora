@@ -11,7 +11,7 @@ import org.junit.Test
 class AgentToolCatalogTest {
     @Test fun everyExistingGeminiToolHasOneVersionedProviderNeutralContract() {
         val expected = setOf(
-            "search_conversation_history", "search_memory", "search_money", "analyze_finance_period", "record_money_event", "settle_debt",
+            "search_conversation_history", "search_memory", "search_money", "analyze_finance_period", "summarize_work_status", "record_money_event", "settle_debt",
             "reverse_money_event", "correct_money_event", "annotate_money_event", "save_note", "edit_memory_object",
             "delete_memory_object", "restore_memory_object", "link_objects", "list_tables", "read_table_rows",
             "create_table", "add_table_row", "update_table_row", "delete_table_row", "restore_table_row",
@@ -51,6 +51,9 @@ class AgentToolCatalogTest {
         val analyzeFinance = requireNotNull(AgentToolCatalog.find("analyze_finance_period", 1))
         assertEquals(listOf("month"), analyzeFinance.optionalParameters)
         assertTrue(analyzeFinance.parameters.all { it.optional })
+
+        val workStatus = requireNotNull(AgentToolCatalog.find("summarize_work_status", 1))
+        assertTrue(workStatus.parameters.isEmpty())
 
         val createCase = requireNotNull(AgentToolCatalog.find("create_case", 1))
         assertEquals(setOf("title"), createCase.parameters.filterNot { it.optional }.map { it.name }.toSet())
