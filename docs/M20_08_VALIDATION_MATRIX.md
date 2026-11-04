@@ -2,6 +2,10 @@
 
 Status as of 2026-11-03, APK v57 / 1.1.35-memory-correction-propagation, Room schema 18. This matrix records existing evidence and remaining work; it does not turn host tests into device or live-provider acceptance.
 
+## ACT-0165 — SAF backup omits a separate persistent Inbox store
+
+On a disposable Android 14 profile, created a synthetic Inbox note through the UI, exported the current Room backup through SAF, deleted the note, then imported and confirmed the file through the same UI. The app restarted and the Room replacement succeeded, but Inbox showed its empty state: the note was absent. Active code stores Inbox data separately in `captures-prototype.bin`; the SQLCipher snapshot does not cover that file. Separate active task and voice-memory files were found but not round-trip tested. The profile was removed; owner data untouched. M20-02 remains partial and whole-app portable backup is incomplete. See [scope gap and recommended design](PORTABLE_BACKUP_SCOPE_GAP.md).
+
 ## ACT-0164 — Negative near-miss retrieval behavior
 
 Added explicit empty-relevance synthetic queries for AZ `BMW ödəniş`, RU `BMW оплата`, and mixed `BMW payment`. Focused test passed: each negative query retrieved 4/3/4 task IDs respectively, despite the corpus containing no BMW payment task. Positive Recall@5 stayed `1.000/1.000/0.984`; P@returned across positive+negative queries is `0.409/0.790/0.386`. This quantifies false candidates; it does not modify the ranker or prove a production rejection policy. Full Gradle passed: 60 suites / 303 tests, 0 failures/errors/skips; debug/AndroidTest builds, AndroidTest Kotlin compile passed; lint 0/63/3.
