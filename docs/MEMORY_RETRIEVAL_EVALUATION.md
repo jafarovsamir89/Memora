@@ -1,6 +1,12 @@
 # M20-04 local retrieval evaluation
 
-**Status:** lexical host harness now evaluates 96 synthetic queries against explicit relevant sets over 30 in-scope task sources, including one judged near-miss per AZ/RU/mixed class; semantic retrieval is not implemented. Last updated 2026-11-03.
+**Status:** lexical host harness evaluates 96 synthetic queries against explicit relevant sets over 30 in-scope task sources. ACT-0168 adds exact ISO-date retrieval across dated canonical activity, using the owner's profile timezone for instants and a strict adjacent-day exclusion. This does not implement natural-language date parsing, date ranges, or semantic retrieval. Last updated 2026-11-03.
+
+## ACT-0168 — Strict explicit-date retrieval for canonical activity
+
+`search_memory` now indexes the stored local calendar date alongside lexical fields for ledger events, task due dates and calendar events. Finance instants are converted to the user's configured profile timezone; local task/calendar times use their stored zone; date-precision calendar events remain date-only. When a query contains a valid full `YYYY-MM-DD`, activity ranking requires an exact normalized date match, so matching only the year/month cannot return a neighboring day. No schema or data migration was needed.
+
+Synthetic `AgentFakeProviderUnifiedMemoryTest.explicitIsoDateFindsOnlyDatedFinanceTaskAndCalendarSources` seeds same-day and next-day ledger, task and calendar sources. A UTC finance event at `2026-11-03T21:30Z` is found under `2026-11-04` for `Asia/Baku`; events at the next local date are excluded. The focused test and full suite passed. This establishes literal ISO-date behavior for these canonical activity sources, not natural language such as “tomorrow”, date ranges, every conversation/profile-memory path, or person/project relevance. Retrieval remains lexical.
 
 ## ACT-0164 — Add a judged near-miss per language class
 

@@ -21,7 +21,9 @@ import java.security.MessageDigest
 import java.math.BigDecimal
 import java.text.Normalizer
 import java.time.Instant
+import java.time.LocalDateTime
 import java.time.LocalDate
+import java.time.OffsetDateTime
 import java.time.ZoneId
 import java.util.Locale
 import java.util.UUID
@@ -33,7 +35,11 @@ internal class LocalMemoryTools(private val repository: ProtectedDomainRepositor
     private val financeEnabled: Boolean = true, private val onTaskChanged: (Task) -> String = { "not_scheduled" },
     private val conversations: ProtectedConversationRepository? = null,
     private val profileMemory: ProtectedProfileMemoryRepository? = null,
-    private val personAliases: PersonAliasRepository? = null) {
+    private val personAliases: PersonAliasRepository? = null,
+    private val userTimeZoneId: String? = null) {
+    private val userTimeZone: ZoneId by lazy {
+        runCatching { userTimeZoneId?.let(ZoneId::of) ?: ZoneId.of("UTC") }.getOrDefault(ZoneId.of("UTC"))
+    }
     fun handlers(): List<AgentToolHandler> = listOf(
         SearchMemory(), SaveProfileFact(), EditProfileFact(), DeleteProfileFact(), SaveNote(), SaveMemoryEpisode(), DeleteMemoryEpisode(), EditMemoryObject(), DeleteMemoryObject(), RestoreMemoryObject(), LinkObjects(), ListTables(), ReadTableRows(), CreateTable(), AddTableRow(),
         UpdateTableRow(), DeleteTableRow(), RestoreTableRow(), RenameTable(), DeleteTable(), RestoreTable(),
@@ -434,11 +440,15 @@ internal class LocalMemoryTools(private val repository: ProtectedDomainRepositor
     private suspend fun searchRelatedActivity(scope: String, terms: List<String>, query: String): UnifiedActivitySearch {
         val hits = mutableListOf<RankedActivity>()
         val foldedTerms = terms.map(::normalizeMemorySearchText).distinct()
+        val explicitDates = ISO_LOCAL_DATE.findAll(query).mapNotNull { match ->
+            runCatching { LocalDate.parse(match.value) }.getOrNull()?.toString()
+        }.toSet()
 
         val phraseTerms = memorySearchTerms(query)
         val phrase = phraseTerms.joinToString(" ")
 
         fun score(fields: List<String>, title: String? = null): Int {
+            if (explicitDates.isNotEmpty() && fields.none { field -> field in explicitDates }) return 0
             val fieldTerms = fields.map(::memorySearchTerms)
             val tokens = fieldTerms.flatten().toSet()
             val matchedTerms = foldedTerms.filter { term -> tokens.any { token -> memorySearchTokenMatches(term, token) } }
@@ -463,7 +473,8 @@ internal class LocalMemoryTools(private val repository: ProtectedDomainRepositor
             repository.allFinanceEvents(scope).forEach { event ->
                 val person = people[event.personId]
                 val annotations = annotationsByEvent[event.eventId].orEmpty()
-                val searchable = listOfNotNull(person?.displayName, event.comment, event.source) + annotations.map { it.reason }
+                val dates = listOfNotNull(localDate(event.occurredAt ?: event.recordedAt))
+                val searchable = listOfNotNull(person?.displayName, event.comment, event.source) + annotations.map { it.reason } + dates
                 val relevance = score(searchable, person?.displayName)
                 if (relevance > 0) {
                     val isVoided = voidStates[event.eventId] ?: false
@@ -482,7 +493,8 @@ internal class LocalMemoryTools(private val repository: ProtectedDomainRepositor
         }
 
         memory.tasks().tasks.asSequence().filter { it.scopeId == scope }.forEach { task ->
-            val relevance = score(listOfNotNull(task.title, task.personLabel, task.projectLabel), task.title)
+            val dates = listOfNotNull(localDate(task.dueLocal, task.dueZone))
+            val relevance = score(listOfNotNull(task.title, task.personLabel, task.projectLabel) + dates, task.title)
             if (relevance > 0) hits += RankedActivity(relevance, task.dueLocal.orEmpty(), "task", task.id,
                 mapOf("kind" to "task", "source_id" to task.id, "source_revision_id" to "${task.id}:${task.version}",
                     "task_id" to task.id, "version" to task.version, "title" to task.title,
@@ -492,7 +504,9 @@ internal class LocalMemoryTools(private val repository: ProtectedDomainRepositor
         }
 
         repository.allCalendarEvents(scope).forEach { event ->
-            val relevance = score(listOf(event.title), event.title)
+            val dates = listOfNotNull(calendarDate(event.startLocal, event.zoneId, event.timePrecision),
+                event.endLocal?.let { calendarDate(it, event.zoneId, event.timePrecision) })
+            val relevance = score(listOf(event.title) + dates, event.title)
             if (relevance > 0) hits += RankedActivity(relevance, event.startLocal, "calendar_event", event.eventId,
                 mapOf("kind" to "calendar_event", "source_id" to event.eventId,
                     "source_revision_id" to "${event.eventId}:${event.version}", "version" to event.version,
@@ -558,7 +572,22 @@ internal class LocalMemoryTools(private val repository: ProtectedDomainRepositor
         return sharedPrefix >= 4
     }
 
+    /** Normalize source times to the user's profile zone before matching a full ISO date. */
+    private fun localDate(value: String?, sourceZoneId: String? = null): String? {
+        if (value.isNullOrBlank()) return null
+        val sourceZone = runCatching { sourceZoneId?.let(ZoneId::of) ?: userTimeZone }.getOrDefault(userTimeZone)
+        return runCatching { Instant.parse(value).atZone(userTimeZone).toLocalDate().toString() }.getOrNull()
+            ?: runCatching { OffsetDateTime.parse(value).atZoneSameInstant(userTimeZone).toLocalDate().toString() }.getOrNull()
+            ?: runCatching { LocalDateTime.parse(value).atZone(sourceZone).withZoneSameInstant(userTimeZone).toLocalDate().toString() }.getOrNull()
+            ?: runCatching { LocalDate.parse(value).toString() }.getOrNull()
+    }
+
+    private fun calendarDate(value: String, sourceZoneId: String, precision: String): String? =
+        if (precision == "date") runCatching { LocalDate.parse(value).toString() }.getOrNull()
+        else localDate(value, sourceZoneId)
+
     private companion object {
+        val ISO_LOCAL_DATE = Regex("(?<!\\d)\\d{4}-\\d{2}-\\d{2}(?!\\d)")
         val MEMORY_SEARCH_SEPARATOR = Regex("[^\\p{L}\\p{N}]+")
         val MEMORY_SEARCH_MARKS = Regex("\\p{M}+")
         val MEMORY_SEARCH_STOP_WORDS = setOf("what", "whats", "find", "show", "about", "with", "the", "for", "and", "from",

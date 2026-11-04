@@ -73,7 +73,8 @@ internal class AgentVoiceTurnProcessor(context: Context, private val databaseOve
                 LocalMemoryTools(repo, ProtectedMemoryRepository(database), financeEnabled = migrateLegacyFinance(),
                     onTaskChanged = { task -> TaskReminders.schedule(appContext, task).code() },
                     conversations = conversations, profileMemory = ProtectedProfileMemoryRepository(database),
-                    personAliases = ai.memora.app.data.protectedstore.PersonAliasRepository(database)).handlers() else emptyList()
+                    personAliases = ai.memora.app.data.protectedstore.PersonAliasRepository(database),
+                    userTimeZoneId = profile?.timeZoneId).handlers() else emptyList()
             val orchestrator = AgentOrchestrator(GeminiAgentModelGateway(), DefaultAgentToolRegistry(handlers), policy,
                 RoomAgentRunJournal(database))
             val turnId = UUID.randomUUID().toString()

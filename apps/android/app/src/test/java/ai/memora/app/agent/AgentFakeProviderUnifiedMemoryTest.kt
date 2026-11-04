@@ -173,6 +173,60 @@ class AgentFakeProviderUnifiedMemoryTest {
         assertEquals(listOf("phrase-match", "scattered-match"), taskIds)
     }
 
+    @Test fun explicitIsoDateFindsOnlyDatedFinanceTaskAndCalendarSources() = runBlocking {
+        val db = databaseRule.database
+        val scope = "00000000-0000-4000-8000-000000000158"
+        val domain = ProtectedDomainRepository(db)
+        domain.recordFinanceEvent(scope, "Synthetic customer", "receipt", 1_250, "AZN",
+            "synthetic dated receipt", null, "synthetic-date-person", "synthetic-date-receipt",
+            "synthetic-date-receipt-command", "2026-11-03T21:30:00Z", "2026-11-03T21:30:00Z")
+        domain.recordFinanceEvent(scope, "Synthetic customer", "receipt", 2_500, "AZN",
+            "synthetic next-day receipt", null, "synthetic-date-person", "synthetic-next-day-receipt",
+            "synthetic-next-day-receipt-command", "2026-11-04T21:30:00Z", "2026-11-04T21:30:00Z")
+        domain.createCalendarEvent(CalendarInput("synthetic-date-calendar", scope, "Synthetic appointment",
+            "2026-11-04T12:00", null, "Asia/Baku", "minute"))
+        domain.createCalendarEvent(CalendarInput("synthetic-next-day-calendar", scope, "Synthetic appointment",
+            "2026-11-05T12:00", null, "Asia/Baku", "minute"))
+        db.protectedStoreDao().putTaskEvents(listOf(
+            TaskEventRow(taskId = "synthetic-date-task", scopeId = scope, actorId = "synthetic-owner",
+                commandId = "synthetic-date-task-created", type = "created", previousVersion = null,
+                title = "Synthetic follow-up", completed = null, dueLocal = null,
+                dueZone = null, remind = null, personLabel = null, projectLabel = null),
+            TaskEventRow(taskId = "synthetic-date-task", scopeId = scope, actorId = "synthetic-owner",
+                commandId = "synthetic-date-task-due", type = "details", previousVersion = 1,
+                title = null, completed = null, dueLocal = "2026-11-04T15:00",
+                dueZone = "Asia/Baku", remind = false, personLabel = null, projectLabel = null),
+            TaskEventRow(taskId = "synthetic-next-day-task", scopeId = scope, actorId = "synthetic-owner",
+                commandId = "synthetic-next-day-task-created", type = "created", previousVersion = null,
+                title = "Synthetic follow-up", completed = null, dueLocal = null,
+                dueZone = null, remind = null, personLabel = null, projectLabel = null),
+            TaskEventRow(taskId = "synthetic-next-day-task", scopeId = scope, actorId = "synthetic-owner",
+                commandId = "synthetic-next-day-task-due", type = "details", previousVersion = 1,
+                title = null, completed = null, dueLocal = "2026-11-05T15:00",
+                dueZone = "Asia/Baku", remind = false, personLabel = null, projectLabel = null),
+        ))
+        val handler = LocalMemoryTools(domain, ProtectedMemoryRepository(db), financeEnabled = true,
+            userTimeZoneId = "Asia/Baku")
+            .handlers().single { it.descriptor.name == "search_memory" }
+        val turn = AgentTurnRequest("synthetic-date-search-turn", scope, "synthetic-date-search-session",
+            null, "az-AZ", "Find synthetic records on 2026-11-04")
+        val result = handler.read(AgentModelToolCall("synthetic-date-query", "search_memory", 1,
+            mapOf("query" to "2026-11-04")), turn)
+
+        assertEquals(ToolObservationStatus.APPLIED, result.status)
+        val hits = result.modelData["activity"] as List<*>
+        val keys = hits.map { row ->
+            val item = row as Map<*, *>
+            "${item["kind"]}:${item["source_id"]}"
+        }.toSet()
+        assertTrue("date should retrieve its scoped finance source: $keys", "money_event:synthetic-date-receipt" in keys)
+        assertTrue("date should retrieve its scoped calendar source: $keys", "calendar_event:synthetic-date-calendar" in keys)
+        assertTrue("date should retrieve its scoped task source: $keys", "task:synthetic-date-task" in keys)
+        assertFalse("next-day finance source must not match", "money_event:synthetic-next-day-receipt" in keys)
+        assertFalse("next-day calendar source must not match", "calendar_event:synthetic-next-day-calendar" in keys)
+        assertFalse("next-day task source must not match", "task:synthetic-next-day-task" in keys)
+    }
+
     @Test fun localMemoryRetrievalFindsExactAzerbaijaniRussianAndMixedButDoesNotClaimParaphraseRecall() = runBlocking {
         val db = databaseRule.database
         val scope = "00000000-0000-4000-8000-000000000155"

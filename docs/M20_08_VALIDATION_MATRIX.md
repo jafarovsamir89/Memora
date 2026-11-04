@@ -2,6 +2,10 @@
 
 Status as of 2026-11-03, APK v57 / 1.1.35-memory-correction-propagation, Room schema 18. This matrix records existing evidence and remaining work; it does not turn host tests into device or live-provider acceptance.
 
+## ACT-0168 — Exact local-date memory retrieval
+
+`search_memory` indexes user-local calendar dates for finance timestamps, task due dates and calendar events. The unit regression confirms a UTC timestamp near midnight maps to the profile-local `Asia/Baku` date and excludes next-day finance/task/calendar sources. Full Gradle passed: 60 suites / 304 tests, 0 failures/errors/skips; debug and AndroidTest APK builds, AndroidTest Kotlin compilation, lint 0 errors / 63 warnings / 3 hints. APK SHA-256 `f4c2be8377e607902dd572fb1f1a7c18b4eddbd6c7b237cc1df1640bdb2fcc3b`. Synthetic host evidence only; natural-language dates/ranges, owner-device performance, wider cross-domain relevance and M20-04 acceptance remain open.
+
 ## ACT-0166 — Portable backup state inventory
 
 Read-only repository inventory now maps Room/SQLCipher, captures, tasks, legacy voice-money, stable agent scope/actor IDs, appearance settings, cloud consent, app/install identifiers, device permissions and derived reminders. Selected archive scope and exclusions are in [PORTABLE_BACKUP_STORE_INVENTORY.md](PORTABLE_BACKUP_STORE_INVENTORY.md) and ADR-013. This is documentation only; no runtime coverage or test result changed. M20-02 stays partial.
