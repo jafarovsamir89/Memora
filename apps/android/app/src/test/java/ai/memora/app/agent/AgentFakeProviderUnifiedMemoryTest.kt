@@ -173,6 +173,49 @@ class AgentFakeProviderUnifiedMemoryTest {
         assertEquals(listOf("phrase-match", "scattered-match"), taskIds)
     }
 
+    @Test fun localMemoryRetrievalFindsSyntheticAzerbaijaniRussianAndMixedLanguageSources() = runBlocking {
+        val db = databaseRule.database
+        val scope = "00000000-0000-4000-8000-000000000155"
+        db.protectedStoreDao().putTaskEvents(listOf(
+            TaskEventRow(taskId = "az-bmw-task", scopeId = scope, actorId = "synthetic-owner",
+                commandId = "az-bmw-created", type = "created", previousVersion = null,
+                title = "BMW təmir görüşü cümə", completed = null, dueLocal = null, dueZone = null,
+                remind = null, personLabel = null, projectLabel = null),
+            TaskEventRow(taskId = "ru-bmw-task", scopeId = scope, actorId = "synthetic-owner",
+                commandId = "ru-bmw-created", type = "created", previousVersion = null,
+                title = "BMW ремонт встреча пятница", completed = null, dueLocal = null, dueZone = null,
+                remind = null, personLabel = null, projectLabel = null),
+            TaskEventRow(taskId = "en-bmw-task", scopeId = scope, actorId = "synthetic-owner",
+                commandId = "en-bmw-created", type = "created", previousVersion = null,
+                title = "BMW repair appointment Friday", completed = null, dueLocal = null, dueZone = null,
+                remind = null, personLabel = null, projectLabel = null),
+        ))
+        val handler = LocalMemoryTools(ProtectedDomainRepository(db), ProtectedMemoryRepository(db)).handlers()
+            .single { it.descriptor.name == "search_memory" }
+        val turn = AgentTurnRequest("synthetic-retrieval-turn", scope, "synthetic-retrieval-session",
+            null, "az-AZ", "Synthetic local retrieval baseline")
+
+        fun taskIds(result: ToolCommitResult): Set<String> {
+            assertEquals(ToolObservationStatus.APPLIED, result.status)
+            assertEquals("ranked_lexical", result.modelData["match_mode"])
+            return (result.modelData["activity"] as List<*>)
+                .mapNotNull { (it as Map<*, *>).takeIf { row -> row["kind"] == "task" }?.get("task_id") as? String }
+                .toSet()
+        }
+
+        val az = handler.read(AgentModelToolCall("az-retrieval", "search_memory", 1,
+            mapOf("query" to "BMW təmir görüşü")), turn)
+        val ru = handler.read(AgentModelToolCall("ru-retrieval", "search_memory", 1,
+            mapOf("query" to "BMW ремонт встреча")), turn)
+        val mixed = handler.read(AgentModelToolCall("mixed-retrieval", "search_memory", 1,
+            mapOf("query" to "BMW təmir appointment")), turn)
+
+        assertTrue("AZ exact lexical source missing", "az-bmw-task" in taskIds(az))
+        assertTrue("RU exact lexical source missing", "ru-bmw-task" in taskIds(ru))
+        assertTrue("mixed AZ/EN exact-term source missing", "az-bmw-task" in taskIds(mixed))
+        assertTrue("mixed AZ/EN exact-term source missing", "en-bmw-task" in taskIds(mixed))
+    }
+
     private class UnifiedMemoryProvider : AgentModelGateway {
         var answerReceivedEvidence: Map<*, *>? = null
         private var callIndex = 0

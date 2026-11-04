@@ -18,7 +18,13 @@
 
 **Актуальный статус ACT-0148:** synthetic Android 14 Room/SQLCipher snapshot + portable-container round-trip passed; полный Gradle 59/295, lint 0/60/3; APK SHA-256 `491be68b79e2f58f3eb3b88e0468b7bb80897403235309287d87cd0595715471`. Snapshot helper остаётся не подключён к пользовательскому workflow.
 
+**Последний проверенный пакет ACT-0149:** synthetic baseline точного поиска задач на AZ, RU и mixed AZ/EN; свежий полный Gradle прошёл: 59 suites / 296 tests, 0 failures/errors/skips; debug и AndroidTest APK собраны, AndroidTest Kotlin скомпилирован, lint 0 ошибок / 60 warnings / 3 hints. Product APK/schema не менялись; APK SHA-256 `491be68b79e2f58f3eb3b88e0468b7bb80897403235309287d87cd0595715471`. Результаты явно `ranked_lexical`; это не semantic/paraphrase retrieval и M20-04 остаётся partial.
+
 Следующий шаг: продолжать M20-02 с пользовательским export/import workflow и безопасным restore/cutover поверх synthetic-tested snapshot helper (transactional consistency, verify-before-activate, fail-closed); M20-03 code slice ACT-0145/0146 завершён, но live/owner BMW acceptance остаётся отдельным gate. Для M20-04 — построить синтетический AZ/RU/mixed evaluation и проверить подходящую local model/API, licence, memory/latency на target-class Android; до конкретного результата считать search lexical. M20-02/03/04, native acceptance и release readiness остаются partial.
+
+### ACT-0149 — 2026-11-03 — Синтетический baseline поиска AZ/RU/mixed
+
+Добавлен целевой тест `localMemoryRetrievalFindsSyntheticAzerbaijaniRussianAndMixedLanguageSources`: на synthetic canonical task rows проверяются точные AZ (`BMW təmir görüşü`), RU (`BMW ремонт встреча`) и mixed AZ/EN (`BMW təmir appointment`) запросы; все ожидаемые task IDs находятся, ответ маркируется `ranked_lexical`. Полный Gradle прошёл: свежие XML — 59 suites / 296 tests, 0 failures/errors/skips; debug и AndroidTest APK собраны, AndroidTest Kotlin скомпилирован, lint 0 ошибок / 60 warnings / 3 hints. APK SHA не изменился. Добавлены S48 и протокол будущей оценки retrieval по AZ/RU/mixed, paraphrase corpus, Recall@5/Precision@5/MRR, scope/provenance и ресурсам целевого Android. Это лексический baseline, не семантический поиск. M20-04 остаётся partial.
 
 ### ACT-0146 — 2026-11-03 — Сквозная запись BMW case с SQLCipher reopen
 

@@ -133,3 +133,8 @@ Official model documentation was reviewed for local semantic retrieval. Embeddin
 ### ACT-0148 — Encrypted snapshot persistence evidence
 
 On the synthetic Android 14 emulator, the SQLCipher snapshot helper exported all 45 Room v18 tables with a separate key, encrypted the payload/key in the portable container, then reopened the result and verified the source fact, schema version and encrypted-only markers. This remains a probe, not a user export/import or restore feature.
+
+
+### ACT-0149 — Synthetic multilingual lexical baseline
+
+Added a focused test that searches the same synthetic in-scope task records with an Azerbaijani query (`BMW təmir görüşü`), Russian query (`BMW ремонт встреча`) and mixed Azerbaijani/English query (`BMW təmir appointment`). All expected task sources are returned by the current lexical ranker and marked `ranked_lexical`. This is language-normalization baseline evidence, not semantic/paraphrase recall. The evaluation protocol and future local model gates are in `MEMORY_RETRIEVAL_EVALUATION.md`; M20-04 remains partial.

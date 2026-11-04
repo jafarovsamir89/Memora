@@ -202,3 +202,7 @@ A user states a real-world financial fact in ordinary Azerbaijani, Russian, or m
 ## S47 — Парольная переносимая копия не раскрывает данные и отказывает при порче
 
 Синтетический payload шифруется независимой от Android Keystore парольной фразой в версионированный AEAD-контейнер. Правильная фраза возвращает исходные байты; неверная фраза, изменённый заголовок/шифротекст, усечённый файл и чрезмерные параметры KDF отвергаются до выдачи открытых байтов. Зашифрованный контейнер не содержит тестовую строку в открытом виде. ACT-0147 проверил контейнер на synthetic bytes; ACT-0148 на synthetic Android 14 Room v18 export обернул отдельно зашифрованный snapshot и его ключ, открыл его с новым local DB именем и прочитал profile fact при 45 таблицах и `user_version=18`. File picker, полный manifest, импорт, atomic cutover и отказной restore на устройстве остаются незакрытыми.
+
+## S48 — Базовый локальный поиск AZ/RU/mixed
+
+Локальный поиск по synthetic canonical task источникам должен находить точные азербайджанские слова `BMW təmir görüşü`, русские `BMW ремонт встреча` и смешанный запрос `BMW təmir appointment`, возвращая ожидаемые task IDs с `match_mode=ranked_lexical`. Это проверяет baseline языковой нормализации/ранжирования и не является проверкой semantic/paraphrase retrieval. Полный evaluation corpus и модельные метрики ведутся отдельно в `docs/MEMORY_RETRIEVAL_EVALUATION.md`.

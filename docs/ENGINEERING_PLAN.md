@@ -4,6 +4,8 @@
 
 **ACT-0148:** password-protected portable payload plus a SQLCipher snapshot helper have host/JCA checks and synthetic Android 14 Room v18 export/wrap/reopen readback (45 tables, one synthetic fact, schema18). The helper remains disconnected from user export/import UI and atomic restore/cutover; M20-02 remains partial. M20-04 stays lexical until a privacy-preserving on-device model passes synthetic AZ/RU/mixed relevance, license and target-device resource checks.
 
+**ACT-0149:** the exact-term M20-04 AZ/RU/mixed lexical baseline passes; full Gradle reports 59 suites / 296 tests, lint 0/60/3. This only establishes current normalization/ranker behavior. Next: expand the synthetic corpus with paraphrases, inflections, near misses and scope distractors, then compare lexical vs a rights-cleared local model and measure on Redmi-class Android. No embedding model or vectors are selected/stored yet.
+
 **Архивный checkpoint ACT-0113:** APK v34 / 1.1.12-attention, Room schema 13; историческая проверка M20-07 и связанный статус оставлены ниже для журнала.
 
 **Актуальное дополнение ACT-0093 (2026-11-03):** исправлена сквозная запись Gemini в SQLCipher и task event readback; gateway использует `gemini-3.5-flash-lite`, а квотная ошибка отображается как `model_rate_limited`. APK versionCode 24 / `1.1.2-field-secretary` собран и установлен поверх данных на Redmi Android 13. 31 целевой unit test, lint и synthetic migration probe прошли. AZ/RU mutate E2E и локальные readbacks после process restart прошли на APK v23; AZ Gemini restart search прошёл, RU search ограничен подтверждённой квотой. Полный Gemini mutate на установленной v24 после квотного отказа не повторялся. Field acceptance и release gates остаются открытыми.

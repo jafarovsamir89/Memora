@@ -2,6 +2,10 @@
 
 Status as of 2026-11-03, APK v57 / 1.1.35-memory-correction-propagation, Room schema 18. This matrix records existing evidence and remaining work; it does not turn host tests into device or live-provider acceptance.
 
+## ACT-0149 — Synthetic AZ/RU/mixed lexical baseline
+
+Added a regression over three synthetic task titles: exact Azerbaijani and Russian queries each find their matching task; a mixed Azerbaijani/English query finds both expected sources. The response reports `match_mode=ranked_lexical`. Full Gradle passed: 59 suites / 296 tests, 0 failures/errors/skips; debug and AndroidTest APKs assembled, AndroidTest Kotlin compiled, lint 0 errors / 60 warnings / 3 hints. Product APK/schema did not change; APK SHA-256 remains `491be68b79e2f58f3eb3b88e0468b7bb80897403235309287d87cd0595715471`. This is exact-term lexical evidence, not semantic/paraphrase retrieval. No device or user DB was used; M20-04 remains partial.
+
 ## ACT-0147 — Portable backup cryptographic envelope foundation
 
 Added a versioned AES-256-GCM / PBKDF2-HMAC-SHA-256 container primitive. Host regressions cover round-trip, plaintext absence, wrong passphrase, header/ciphertext tampering, truncated input and bounded KDF parameters. Full Gradle passed: 59 suites / 295 tests, 0 failures/errors/skips; debug/AndroidTest builds, AndroidTest Kotlin compilation and lint passed (0/60/3). An opt-in instrumentation probe on the synthetic Android 14 emulator confirmed Android JCA round-trip and wrong-passphrase rejection. This probe used only a synthetic byte array; it did not access or write the app database. The container is not connected to SQLCipher snapshot/export, file UI or atomic restore, so M20-02 remains partial. APK was built (SHA-256 `e0fc91a48f85633b41c4c8eed4fd63e77738fc07565c804dc6a171160a0d6b33`) but not installed on an owner device.
