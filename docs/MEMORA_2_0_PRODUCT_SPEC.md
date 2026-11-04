@@ -1,4 +1,4 @@
-**ACT-0157 update:** active SQLCipher restore cutover and pre-Room startup recovery now exist behind an internal confirmation-gated API. Synthetic Android 14 passed a successful replacement, candidate-validation rollback, and injected restart recovery at three journal phases; full suite 60/301, lint 0/60/3. The API is not connected to SAF/UI. Injected callback interruption does not prove force-stop or hard power-loss durability. M20-02 remains partial pending user workflow, device/owner acceptance and broader fault matrix.
+**ACT-0157 update:** active SQLCipher restore cutover and pre-Room startup recovery now exist behind an internal confirmation-gated API. Synthetic Android 14 passed a successful replacement, candidate-validation rollback, and injected restart recovery at three journal phases plus interrupted rollback cleanup; full suite 60/301, lint 0/60/3. The API is not connected to SAF/UI. Injected callback interruption does not prove force-stop or hard power-loss durability. M20-02 remains partial pending user workflow, device/owner acceptance and broader fault matrix.
 
 # MEMORA 2.0 — полное продуктовое видение и техническое задание
 
