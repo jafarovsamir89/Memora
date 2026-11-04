@@ -4,6 +4,7 @@ import ai.memora.app.UiAgentDatabaseRule
 import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Rule
@@ -77,6 +78,45 @@ class ProfileMemoryRepositoryTest {
         assertTrue(conversations.deleteTurn("synthetic-profile-retention", retainedTurn))
         assertNull(repo.get("synthetic-profile-retention", retainedFact.factId))
         assertTrue(repo.list("synthetic-profile-retention").isEmpty())
+    }
+
+    @Test fun correctingProfileFactInvalidatesOnlyEpisodesBasedOnSupersededSources() = runBlocking {
+        val db = databaseRule.database
+        val profiles = ProtectedProfileMemoryRepository(db)
+        val conversations = ProtectedConversationRepository(db)
+        val scope = "synthetic-correction-propagation"
+        val originalSource = "synthetic-fact-source-original"
+        val duplicateSource = "synthetic-fact-source-repeat"
+        val correctionSource = "synthetic-fact-source-correction"
+        val unrelatedSource = "synthetic-unrelated-episode-source"
+
+        val fact = profiles.saveUserStated(scope, "preference", "Prefers short replies",
+            originalSource, "Synthetic: I prefer short replies.", nowMillis = 1_000)
+        profiles.saveUserStated(scope, "preference", "Prefers short replies",
+            duplicateSource, "Synthetic: Short replies are best for me.", nowMillis = 2_000)
+        conversations.appendTurn(scope, unrelatedSource, "Synthetic: Keep the repair estimate for Friday.",
+            "Synthetic assistant reply.", 3_000)
+        val firstDerived = conversations.saveEpisode(scope, "Synthetic reply preference",
+            "The owner prefers short replies.", listOf(originalSource), nowMillis = 4_000)
+        val repeatedDerived = conversations.saveEpisode(scope, "Synthetic concise response preference",
+            "Short replies are preferred.", listOf(duplicateSource), nowMillis = 5_000)
+        val unrelatedDerived = conversations.saveEpisode(scope, "Synthetic repair follow-up",
+            "Keep the repair estimate for Friday.", listOf(unrelatedSource), nowMillis = 6_000)
+
+        val corrected = profiles.correctFromUser(scope, fact.factId, fact.revision, "preference",
+            "Prefers detailed replies", correctionSource,
+            "Synthetic correction: I prefer detailed replies now.", nowMillis = 7_000)
+
+        assertEquals("Prefers detailed replies", corrected.fact)
+        assertEquals(2L, corrected.revision)
+        assertNull(conversations.episode(scope, firstDerived.episodeId))
+        assertNull(conversations.episode(scope, repeatedDerived.episodeId))
+        assertEquals(unrelatedDerived.episodeId,
+            conversations.episode(scope, unrelatedDerived.episodeId)?.episodeId)
+        assertTrue(conversations.turn(scope, originalSource).any { it.role == "user" })
+        assertTrue(conversations.turn(scope, duplicateSource).any { it.role == "user" })
+        assertTrue(conversations.turn(scope, correctionSource).any { it.role == "user" })
+        assertEquals(listOf(1L, 2L), profiles.get(scope, fact.factId)?.revisions?.map { it.revision })
     }
 
     @Test fun editedFactsCannotCollideAndSourceMessagesAreNotModelAuthored() = runBlocking {

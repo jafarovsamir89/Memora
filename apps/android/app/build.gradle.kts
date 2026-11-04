@@ -19,8 +19,8 @@ android {
         applicationId = "ai.memora.app"
         minSdk = 26
         targetSdk = 36
-        versionCode = 56
-        versionName = "1.1.34-calendar-person-links"
+        versionCode = 57
+        versionName = "1.1.35-memory-correction-propagation"
         testInstrumentationRunner = "ai.memora.app.GeminiSyntheticProbe"
     }
     buildFeatures { compose = true }

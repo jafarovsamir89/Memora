@@ -1,6 +1,10 @@
 # M20-08 Native validation matrix
 
-Status as of 2026-11-03, APK v56 / 1.1.34-calendar-person-links, Room schema 18. This matrix records existing evidence and remaining work; it does not turn host tests into device or live-provider acceptance.
+Status as of 2026-11-03, APK v57 / 1.1.35-memory-correction-propagation, Room schema 18. This matrix records existing evidence and remaining work; it does not turn host tests into device or live-provider acceptance.
+
+## ACT-0143 update
+
+An explicit owner correction or manual edit that changes a profile fact now invalidates derived episodes citing any prior source turn attached to that fact, inside the same Room transaction. The conversation turns and fact revision/source history remain; episodes based on unrelated turns remain. ADR-016 documents the conservative whole-episode invalidation rule. The synthetic `correctingProfileFactInvalidatesOnlyEpisodesBasedOnSupersededSources` regression passes. Full Gradle: 58 suites / 292 tests, 0 failures/errors/skips; `assembleDebug`, `assembleDebugAndroidTest`, `compileDebugAndroidTestKotlin`, and `lintDebug` passed; lint 0 errors / 60 warnings / 3 hints. APK v57 SHA-256 `d6d840ad5e4a994247b06b603bab210c6ebfa791ebb3ec002bbd8dbc61866dc0`. No Room migration was added, and v57 was not installed. This covers profile-fact-to-episode invalidation only, not semantic retrieval or corrections to domain cases/projects/ledger. No owner device or database was used.
 
 ## ACT-0142 update
 

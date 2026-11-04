@@ -141,6 +141,10 @@ internal class ProtectedProfileMemoryRepository(private val db: AgentDatabase) {
             if (sourceTurnId != null) dao.insertProfileFactSource(ProfileFactSourceRow(scopeId, factId, sourceTurnId, provenance))
             return@withTransaction requireReadback(scopeId, factId)
         }
+        // Any episode built from the superseded statement can now contradict the owner's correction.
+        // Invalidate only derived summaries that cite one of this fact's prior source turns; keep the
+        // conversation and the complete profile-fact revision trail intact.
+        val supersededSourceTurnIds = dao.profileFactSources(scopeId, factId).map { it.turnId }.distinct()
         val nextRevision = Math.addExact(current.revision, 1)
         val updatedAt = maxOf(nowMillis, current.updatedAtMillis)
         check(dao.updateProfileFact(scopeId, factId, expectedRevision, category, normalized, digest,
@@ -148,6 +152,9 @@ internal class ProtectedProfileMemoryRepository(private val db: AgentDatabase) {
         if (sourceTurnId != null) dao.insertProfileFactSource(ProfileFactSourceRow(scopeId, factId, sourceTurnId, provenance))
         dao.insertProfileFactRevision(ProfileFactRevisionRow(scopeId, factId, nextRevision, category,
             normalized, provenance, sourceTurnId, updatedAt))
+        supersededSourceTurnIds.forEach { sourceTurnId ->
+            dao.deleteEpisodesForConversationTurn(scopeId, sourceTurnId)
+        }
         requireReadback(scopeId, factId).also { saved ->
             check(saved.revision == nextRevision && saved.category == category && saved.fact == normalized &&
                 saved.revisions.lastOrNull()?.sourceTurnId == sourceTurnId) { "profile_fact_readback_mismatch" }
