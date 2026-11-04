@@ -2,6 +2,8 @@
 
 **ACT-0166 — 2026-11-03.** Read-only source inventory for ADR-013. Paths below are current repository evidence, not a claim that backup support already exists. Re-run this inventory whenever a persistent store, setting, permission, or writer is added.
 
+Repository review also found `LegacyStoreMigrationCoordinator` and `ProtectedMemoryRepository.migrateLegacy`: they can read all three encrypted file stores and transactionally migrate them into existing SQLCipher tables, recording source digests and preserving capture revisions/tombstones, task events/deleted IDs, and finance records. Current evidence is an opt-in synthetic Android instrumentation probe against a separate empty DB; no normal app launch or user screen invokes this coordinator. It cannot yet migrate into a populated DB, replace the active file-backed UI paths, or prove restart/owner-data preservation. Therefore this existing path is a candidate for a later storage-consolidation phase, not evidence that those files are already portable or safe to omit from ADR-013's archive.
+
 ## Data that must follow the user
 
 | Store / state | Current source and protection | Backup treatment |

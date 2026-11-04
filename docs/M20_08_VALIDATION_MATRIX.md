@@ -6,6 +6,10 @@ Status as of 2026-11-03, APK v57 / 1.1.35-memory-correction-propagation, Room sc
 
 Read-only repository inventory now maps Room/SQLCipher, captures, tasks, legacy voice-money, stable agent scope/actor IDs, appearance settings, cloud consent, app/install identifiers, device permissions and derived reminders. Selected archive scope and exclusions are in [PORTABLE_BACKUP_STORE_INVENTORY.md](PORTABLE_BACKUP_STORE_INVENTORY.md) and ADR-013. This is documentation only; no runtime coverage or test result changed. M20-02 stays partial.
 
+## ACT-0167 — Existing legacy-to-SQLCipher migration is not user cutover
+
+`LegacyStoreMigrationCoordinator` / `ProtectedMemoryRepository.migrateLegacy` are exercised only through an opt-in synthetic Android probe against a separate empty SQLCipher DB. No normal app path invokes them, populated targets are rejected, and current Inbox/task UI writes still use file stores. Retain those files in portable-backup scope until populated upgrade, active-source cutover, restart and owner-data preservation are verified. No new tests or runtime changes.
+
 ## ACT-0165 — SAF backup omits a separate persistent Inbox store
 
 On a disposable Android 14 profile, created a synthetic Inbox note through the UI, exported the current Room backup through SAF, deleted the note, then imported and confirmed the file through the same UI. The app restarted and the Room replacement succeeded, but Inbox showed its empty state: the note was absent. Active code stores Inbox data separately in `captures-prototype.bin`; the SQLCipher snapshot does not cover that file. Separate active task and voice-memory files were found but not round-trip tested. The profile was removed; owner data untouched. M20-02 remains partial and whole-app portable backup is incomplete. See [scope gap and recommended design](PORTABLE_BACKUP_SCOPE_GAP.md).
