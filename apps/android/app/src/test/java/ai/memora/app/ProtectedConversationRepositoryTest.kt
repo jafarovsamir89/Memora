@@ -19,7 +19,8 @@ class ProtectedConversationRepositoryTest {
 
     @Test fun searchFindsFullTurnBeyondFormer240MessageWindow() = runBlocking {
         val repository = ProtectedConversationRepository(databaseRule.database)
-        repeat(130) { index ->
+        // 520 rows cross both the former 240-message window and multiple DAO search pages.
+        repeat(260) { index ->
             val marker = if (index == 0) "synthetic archive needle" else "synthetic ordinary dialogue $index"
             repository.appendTurn("scope-memory", "turn-$index", marker, "synthetic reply $index", 1_800_000_000_000L + index)
         }
