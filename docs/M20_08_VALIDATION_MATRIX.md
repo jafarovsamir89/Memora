@@ -2,6 +2,10 @@
 
 Status as of 2026-11-03, APK v57 / 1.1.35-memory-correction-propagation, Room schema 18. This matrix records existing evidence and remaining work; it does not turn host tests into device or live-provider acceptance.
 
+## ACT-0147 — Portable backup cryptographic envelope foundation
+
+Added a versioned AES-256-GCM / PBKDF2-HMAC-SHA-256 container primitive. Host regressions cover round-trip, plaintext absence, wrong passphrase, header/ciphertext tampering, truncated input and bounded KDF parameters. Full Gradle passed: 59 suites / 295 tests, 0 failures/errors/skips; debug/AndroidTest builds, AndroidTest Kotlin compilation and lint passed (0/60/3). An opt-in instrumentation probe on the synthetic Android 14 emulator confirmed Android JCA round-trip and wrong-passphrase rejection. This probe used only a synthetic byte array; it did not access or write the app database. The container is not connected to SQLCipher snapshot/export, file UI or atomic restore, so M20-02 remains partial. APK was built (SHA-256 `e0fc91a48f85633b41c4c8eed4fd63e77738fc07565c804dc6a171160a0d6b33`) but not installed on an owner device.
+
 ## ACT-0146 — BMW case, exact payment allocation and SQLCipher reopen
 
 Extended M20-03 synthetic coverage to link an owner-confirmed finance/domain PERSON, canonical project, exact memory revision, one 300 AZN obligation and a single 100 AZN receipt allocated to that obligation. Readback keeps the 200 AZN outstanding balance separate from actual receipts. The manual synthetic Android 14 SQLCipher migration probe creates the same scoped case and sources in its isolated Room v18 database, closes/reopens the encrypted file, and rechecks source IDs/revision, identity, event count, receipt, debt balance and canonical row counts. Probe returned `status=passed` and deletes the named fixture DB/envelope/key. Full Gradle: 58 suites / 292 tests, 0 failures/errors/skips; debug/AndroidTest assembly, Kotlin compile and lint passed (0 errors / 60 warnings / 3 hints). This does not prove natural-language Gemini selection, owner-device acceptance or production readiness.

@@ -45,6 +45,7 @@ class GeminiSyntheticProbe : Instrumentation() {
     private var storageProbe = false
     private var migrationProbe = false
     private var envelopeWriteFailureProbe = false
+    private var portableBackupCipherProbe = false
     private var useTranscribeLive = false
     private var restoreOrthography = false
     private var orthographyOnly = false
@@ -68,6 +69,7 @@ class GeminiSyntheticProbe : Instrumentation() {
         storageProbe = arguments?.getString("allowSyntheticStorageProbe") == "true"
         migrationProbe = arguments?.getString("allowSyntheticMigrationProbe") == "true"
         envelopeWriteFailureProbe = arguments?.getString("allowSyntheticEnvelopeWriteFailureProbe") == "true"
+        portableBackupCipherProbe = arguments?.getString("allowSyntheticPortableBackupCipherProbe") == "true"
         useTranscribeLive = arguments?.getString("transcribeLive") == "true"
         restoreOrthography = arguments?.getString("restoreOrthography") != "false"
         orthographyOnly = arguments?.getString("orthographyOnly") == "true"
@@ -108,6 +110,11 @@ class GeminiSyntheticProbe : Instrumentation() {
         if (envelopeWriteFailureProbe) {
             val failureResults = DatabaseStorageProbe.runEnvelopeWriteFailureProbe(targetContext, permitted = true)
             finish(if (failureResults.getString("status") == "passed") Activity.RESULT_OK else Activity.RESULT_CANCELED, failureResults)
+            return
+        }
+        if (portableBackupCipherProbe) {
+            val results = DatabaseStorageProbe.runPortableBackupCipherProbe(permitted = true)
+            finish(if (results.getString("status") == "passed") Activity.RESULT_OK else Activity.RESULT_CANCELED, results)
             return
         }
         if (processDeathProbe != null) {

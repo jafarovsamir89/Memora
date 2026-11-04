@@ -31,6 +31,34 @@ object DatabaseStorageProbe {
         override fun startWrite(): FileOutputStream = throw IOException("synthetic ENOSPC")
     }
 
+    /** Checks Android's own JCA implementation with synthetic bytes; no app database is read or written. */
+    fun runPortableBackupCipherProbe(permitted: Boolean): Bundle {
+        val result = Bundle()
+        if (!permitted) {
+            result.putString("status", "explicit_synthetic_opt_in_required")
+            return result
+        }
+        return try {
+            val cipher = PortableBackupCipher()
+            val payload = "synthetic protected backup payload".toByteArray()
+            val passphrase = "synthetic backup passphrase".toCharArray()
+            val container = cipher.encrypt(payload, passphrase)
+            val roundTrip = cipher.decrypt(container, passphrase).contentEquals(payload)
+            val wrongPasswordRejected = runCatching {
+                cipher.decrypt(container, "wrong synthetic passphrase".toCharArray())
+            }.exceptionOrNull() is PortableBackupAuthenticationException
+            check(roundTrip && wrongPasswordRejected)
+            result.putBoolean("android_jca_round_trip_passed", roundTrip)
+            result.putBoolean("wrong_passphrase_refused", wrongPasswordRejected)
+            result.putString("status", "passed")
+            result
+        } catch (error: Exception) {
+            result.putString("status", "failed")
+            result.putString("error_type", error.javaClass.simpleName)
+            result
+        }
+    }
+
     /** Injects no-space-at-startWrite failures before rekey and during staged-key promotion. */
     fun runEnvelopeWriteFailureProbe(context: Context, permitted: Boolean): Bundle {
         val result = Bundle()
