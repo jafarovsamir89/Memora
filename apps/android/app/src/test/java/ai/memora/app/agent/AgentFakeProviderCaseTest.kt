@@ -2,6 +2,8 @@ package ai.memora.app.agent
 
 import ai.memora.app.UiAgentDatabaseRule
 import ai.memora.app.data.protectedstore.DomainKind
+import ai.memora.app.data.protectedstore.MemoryRevisionRow
+import ai.memora.app.data.protectedstore.MemorySourceRow
 import ai.memora.app.data.protectedstore.ProtectedCaseRepository
 import ai.memora.app.data.protectedstore.ProtectedDomainRepository
 import ai.memora.app.data.protectedstore.ProtectedMemoryRepository
@@ -59,15 +61,21 @@ class AgentFakeProviderCaseTest {
         assertEquals(1, db.protectedStoreDao().moneyEvents(scope).size)
     }
 
-    @Test fun fakeProviderCreatesCaseAndLinksCanonicalFinanceSourceWithoutCopyingIt() = runBlocking {
+    @Test fun fakeProviderCreatesCaseAndLinksCanonicalFinanceProjectAndMemorySourcesWithoutCopyingThem() = runBlocking {
         val db = databaseRule.database
         val scope = "00000000-0000-4000-8000-000000000104"
         val domain = ProtectedDomainRepository(db)
         domain.createObject(scope, "synthetic-person-object", DomainKind.PERSON,
             "Synthetic Elchin", "Fictional person for case integration test", null, "2026-11-03T09:00:00Z")
+        domain.createObject(scope, "synthetic-bmw-project", DomainKind.PROJECT,
+            "Synthetic BMW repair project", "Fictional project source", null, "2026-11-03T09:05:00Z")
         domain.recordFinanceEvent(scope, "Synthetic Elchin", "receipt", 10_000, "AZN", "synthetic source", null,
             "synthetic-finance-person", "synthetic-receipt", "synthetic-receipt-command",
             "2026-11-03T09:10:00Z", "2026-11-03T09:10:00Z")
+        db.protectedStoreDao().putSources(listOf(MemorySourceRow("synthetic-memory-source", "synthetic-memory-command",
+            null, "Asia/Baku", "voice", false, 1, scope)))
+        db.protectedStoreDao().putRevisions(listOf(MemoryRevisionRow("synthetic-memory-source", "synthetic-memory-revision",
+            1, "Fictional repair decision: wait for the blue replacement part.", "2026-11-03T09:15:00Z")))
 
         val provider = ScriptedCaseProvider()
         val handlers = LocalMemoryTools(domain, ProtectedMemoryRepository(db), financeEnabled = true).handlers()
@@ -77,7 +85,8 @@ class AgentFakeProviderCaseTest {
 
         assertEquals(AgentRunResultStatus.COMPLETED, result.status)
         assertEquals("Synthetic case stored.", result.answer)
-        assertEquals(listOf("case_created", "case_participant_added", "case_source_linked", "cases_loaded"),
+        assertEquals(listOf("case_created", "case_participant_added", "case_source_linked", "case_source_linked",
+            "case_source_linked", "cases_loaded"),
             result.toolResults.map { it.code })
         assertTrue(result.toolResults.all { it.status == ToolObservationStatus.APPLIED })
         val caseId = provider.caseId
@@ -85,11 +94,24 @@ class AgentFakeProviderCaseTest {
         val snapshot = requireNotNull(ProtectedCaseRepository(db).caseSnapshot(scope, requireNotNull(caseId)))
         assertEquals("Synthetic BMW repair", snapshot.record.title)
         assertEquals(listOf("Synthetic Elchin"), snapshot.participants.map { it.title })
-        assertEquals(1, snapshot.evidence.size)
-        assertEquals("synthetic-receipt", snapshot.evidence.single().evidence.sourceId)
-        assertTrue(snapshot.evidence.single().sourceAvailable)
+        assertEquals(3, snapshot.evidence.size)
+        val financeEvidence = snapshot.evidence.single { it.evidence.sourceKind == "money_event" }
+        val projectEvidence = snapshot.evidence.single { it.evidence.sourceKind == "domain_object" }
+        val memoryEvidence = snapshot.evidence.single { it.evidence.sourceKind == "memory_revision" }
+        assertEquals("synthetic-receipt", financeEvidence.evidence.sourceId)
+        assertEquals("synthetic-bmw-project", projectEvidence.evidence.sourceId)
+        assertEquals("Synthetic BMW repair project", projectEvidence.title)
+        assertEquals("synthetic-memory-source", memoryEvidence.evidence.sourceId)
+        assertEquals("synthetic-memory-revision", memoryEvidence.evidence.sourceRevisionId)
+        assertEquals("Fictional repair decision: wait for the blue replacement part.", memoryEvidence.detail)
+        assertTrue(snapshot.evidence.all { it.sourceAvailable })
         assertEquals(1, db.protectedStoreDao().moneyEvents(scope).size)
+        assertEquals(1, db.protectedStoreDao().activeDomainObjects(scope, DomainKind.PROJECT.name, 20).size)
+        assertEquals(1, db.protectedStoreDao().sources().count { it.sourceId == "synthetic-memory-source" })
+        assertEquals(1, db.protectedStoreDao().revisions().count { it.sourceId == "synthetic-memory-source" })
         assertEquals(1, snapshot.timeline.count { it.sourceKind == "money_event" })
+        assertEquals(1, snapshot.timeline.count { it.sourceKind == "domain_object" })
+        assertEquals(1, snapshot.timeline.count { it.sourceKind == "memory_revision" })
         assertTrue(snapshot.timeline.any { it.sourceKind == "case_revision" })
     }
 
@@ -136,9 +158,17 @@ class AgentFakeProviderCaseTest {
                     AgentModelReply.Calls(listOf(AgentModelToolCall("case-person", "add_case_participant", 1,
                         mapOf("case_id" to caseId, "person_object_id" to "synthetic-person-object", "role" to "customer"))))
                 }
-                2 -> AgentModelReply.Calls(listOf(AgentModelToolCall("case-source", "link_case_source", 1,
-                    mapOf("case_id" to caseId, "source_kind" to "money_event", "source_id" to "synthetic-receipt",
-                        "relation" to "advance"))))
+                2 -> AgentModelReply.Calls(listOf(
+                    AgentModelToolCall("case-finance-source", "link_case_source", 1,
+                        mapOf("case_id" to caseId, "source_kind" to "money_event", "source_id" to "synthetic-receipt",
+                            "relation" to "advance")),
+                    AgentModelToolCall("case-project-source", "link_case_source", 1,
+                        mapOf("case_id" to caseId, "source_kind" to "domain_object", "source_id" to "synthetic-bmw-project",
+                            "relation" to "repair_project")),
+                    AgentModelToolCall("case-memory-source", "link_case_source", 1,
+                        mapOf("case_id" to caseId, "source_kind" to "memory_revision", "source_id" to "synthetic-memory-source",
+                            "source_revision_id" to "synthetic-memory-revision", "relation" to "repair_decision")),
+                ))
                 3 -> AgentModelReply.Calls(listOf(AgentModelToolCall("case-search", "search_cases", 1,
                     mapOf("query" to "BMW"))))
                 else -> AgentModelReply.Answer("Synthetic case stored.")

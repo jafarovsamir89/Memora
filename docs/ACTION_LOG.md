@@ -1,3 +1,11 @@
+## ACT-0145 - 2026-11-03 - Verify canonical project and memory sources on a case
+
+Extended the synthetic fake-provider case journey to link one canonical PROJECT and one exact `memory_revision`, alongside the existing finance receipt. Readback verifies exact source IDs/revision, resolved title/text and one canonical row per source; no case-local copies are created. Compose coverage confirms the case exposes project and memory evidence and opens their details. No production source, schema or APK version changed.
+
+The targeted fake-provider test passed. A Compose assertion initially assumed source text was unique even though it correctly appears in both evidence and timeline (and again in the detail dialog); selectors were corrected for the visible duplicate nodes, and the focused UI test passed. Full Gradle `testDebugUnitTest assembleDebug assembleDebugAndroidTest compileDebugAndroidTestKotlin lintDebug` completed successfully. Fresh XML: 58 suites / 292 tests, 0 failures/errors/skips; lint 0 errors / 60 warnings / 3 hints. Debug APK remains v57 / `1.1.35-memory-correction-propagation`, SHA-256 `d6d840ad5e4a994247b06b603bab210c6ebfa791ebb3ec002bbd8dbc61866dc0`; it was not installed. No owner phone or database was used.
+
+Updated S45, M20-03 TODO state, validation matrix, product/engineering checkpoints, AGENTS and diary. M20-03 remains partial for broad identity resolution, restart/device coverage and owner BMW/Elchin acceptance. M20-02 recovery/export and M20-04 semantic/hybrid retrieval remain open. Implementation evidence is committed locally; no push was requested.
+
 ## ACT-0136 - 2026-11-03 - Точное сообщение после применённого удаления и timeout модели
 
 `finishAfterModelFailure` раньше для любого успешно применённого persistent write отвечал «запись сохранена», включая `delete_profile_fact`/другие delete tools. Если локальное удаление/readback уже было успешным, но Gemini timeout-ил на финальном ответе, текст не соответствовал факту. Runtime теперь распознаёт write batch, состоящий только из удалений, и в AZ/RU/EN говорит, что запись удалена, но ответ помощника/дополнительный шаг не завершён; статус остаётся `PARTIAL`, а при смешанном write batch сохраняется общий осторожный ответ. Для прочих `en-US` write-failure acknowledgements добавлены соответствующие английские формулировки.

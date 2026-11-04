@@ -9,6 +9,8 @@ import androidx.compose.ui.test.*
 import androidx.compose.ui.test.junit4.v2.createComposeRule
 import androidx.test.core.app.ApplicationProvider
 import ai.memora.app.data.protectedstore.DomainKind
+import ai.memora.app.data.protectedstore.MemoryRevisionRow
+import ai.memora.app.data.protectedstore.MemorySourceRow
 import ai.memora.app.data.protectedstore.CalendarInput
 import ai.memora.app.data.protectedstore.ProtectedCaseRepository
 import ai.memora.app.data.protectedstore.ProtectedDomainRepository
@@ -43,6 +45,8 @@ class CasesAndPersonCardTest {
         val cases = ProtectedCaseRepository(databaseRule.database)
         domain.createObject(scope, "synthetic-case-person", DomainKind.PERSON, "Synthetic Mechanic", "Fictional card", null,
             "2026-11-03T09:00:00Z")
+        domain.createObject(scope, "synthetic-case-project", DomainKind.PROJECT, "Synthetic BMW project", "Fictional project source", null,
+            "2026-11-03T09:02:00Z")
         domain.recordFinanceEvent(scope, "Synthetic Mechanic", "receipt", 25_000, "AZN", "synthetic event", null,
             "synthetic-finance-person", "synthetic-case-receipt", "synthetic-case-command",
             "2026-11-03T09:10:00Z", "2026-11-03T09:10:00Z")
@@ -53,6 +57,15 @@ class CasesAndPersonCardTest {
             participantId = "synthetic-participant", now = "2026-11-03T09:01:00Z")
         cases.addEvidence(scope, "synthetic-case-bmw", "money_event", "synthetic-case-receipt", "advance",
             evidenceId = "synthetic-case-evidence", now = "2026-11-03T09:11:00Z")
+        cases.addEvidence(scope, "synthetic-case-bmw", "domain_object", "synthetic-case-project", "repair_project",
+            evidenceId = "synthetic-case-project-evidence", now = "2026-11-03T09:12:00Z")
+        databaseRule.database.protectedStoreDao().putSources(listOf(MemorySourceRow("synthetic-case-memory", "synthetic-case-memory-command",
+            null, "Asia/Baku", "voice", false, 1, scope)))
+        databaseRule.database.protectedStoreDao().putRevisions(listOf(MemoryRevisionRow("synthetic-case-memory", "synthetic-case-memory-revision",
+            1, "Fictional repair note: blue parts arrive Friday.", "2026-11-03T09:13:00Z")))
+        cases.addEvidence(scope, "synthetic-case-bmw", "memory_revision", "synthetic-case-memory", "repair_note",
+            sourceRevisionId = "synthetic-case-memory-revision", evidenceId = "synthetic-case-memory-evidence",
+            now = "2026-11-03T09:14:00Z")
 
         compose.setContent {
             CompositionLocalProvider(LocalStrings provides context.resources, LocalAgentDatabaseOverride provides databaseRule.database) {
@@ -66,10 +79,20 @@ class CasesAndPersonCardTest {
         compose.onNodeWithText("Synthetic Mechanic").assertExists()
         compose.onAllNodesWithText("Money received: Synthetic Mechanic").assertCountEquals(2)
         compose.onAllNodesWithText("250 AZN").assertCountEquals(2)
+        compose.onNodeWithTag("case_evidence_source_synthetic-case-project-evidence").assertExists()
+        compose.onAllNodesWithText("Synthetic BMW project").assertCountEquals(2)
+        compose.onNodeWithTag("case_evidence_source_synthetic-case-memory-evidence").performScrollTo().assertExists()
+        compose.onAllNodesWithText("Fictional repair note: blue parts arrive Friday.").assertCountEquals(2)
         compose.onNodeWithTag("case_detail_next_action").assertTextEquals("Next step: Wait for fictional parts")
         compose.onNodeWithTag("case_evidence_source_synthetic-case-evidence").performScrollTo().performClick()
         compose.onNodeWithTag("case_source_detail_dialog").assertIsDisplayed()
         compose.onNodeWithTag("case_source_detail_title").assertTextEquals("Money received: Synthetic Mechanic")
+        compose.onNodeWithTag("case_source_detail_close").performClick()
+        compose.onNodeWithTag("case_evidence_source_synthetic-case-project-evidence").performScrollTo().performClick()
+        compose.onNodeWithTag("case_source_detail_title").assertTextEquals("Synthetic BMW project")
+        compose.onNodeWithTag("case_source_detail_close").performClick()
+        compose.onNodeWithTag("case_evidence_source_synthetic-case-memory-evidence").performScrollTo().performClick()
+        compose.onAllNodesWithText("Fictional repair note: blue parts arrive Friday.").assertCountEquals(3)
         compose.onNodeWithTag("case_source_detail_close").performClick()
         compose.onNodeWithTag("case_timeline_evidence:synthetic-case-evidence").performScrollTo().performClick()
         compose.onNodeWithTag("case_source_detail_title").assertTextEquals("Money received: Synthetic Mechanic")
