@@ -3,6 +3,8 @@ package ai.memora.app.data.protectedstore
 import android.content.Context
 import android.security.keystore.KeyGenParameterSpec
 import android.security.keystore.KeyProperties
+import android.system.Os
+import android.system.OsConstants
 import android.util.AtomicFile
 import java.io.File
 import java.io.FileOutputStream
@@ -19,12 +21,18 @@ import javax.crypto.spec.GCMParameterSpec
  */
 internal class DatabaseKeyProvider(
     context: Context,
-    private val databaseFile: File = context.getDatabasePath(DATABASE_NAME),
+    internal val databaseFile: File = context.getDatabasePath(DATABASE_NAME),
     private val envelopeFile: AtomicFile = AtomicFile(File(context.noBackupFilesDir, KEY_ENVELOPE_NAME)),
     private val keyStore: KeyStore = KeyStore.getInstance(ANDROID_KEYSTORE).apply { load(null) },
     private val wrappingKeyAlias: String = KEY_ALIAS,
     private val stagedEnvelopeFile: AtomicFile = AtomicFile(
         File(envelopeFile.baseFile.parentFile, "${envelopeFile.baseFile.name}.rotation"),
+    ),
+    private val portableRestoreEnvelopeFile: AtomicFile = AtomicFile(
+        File(envelopeFile.baseFile.parentFile, "${envelopeFile.baseFile.name}.portable-restore"),
+    ),
+    private val portableRestoreRollbackEnvelopeFile: AtomicFile = AtomicFile(
+        File(envelopeFile.baseFile.parentFile, "${envelopeFile.baseFile.name}.portable-rollback"),
     ),
 ) {
     fun loadOrCreate(): ByteArray = synchronized(PROCESS_LOCK) {
@@ -65,7 +73,12 @@ internal class DatabaseKeyProvider(
 
     fun loadStagedRotation(): ByteArray? = synchronized(PROCESS_LOCK) {
         if (!hasAtomicFileContents(stagedEnvelopeFile)) return@synchronized null
-        unwrapEnvelope(stagedEnvelopeFile)
+        unwrapEnvelope(stagedEnvelopeFile).also {
+            if (it.size != DATABASE_KEY_BYTES) {
+                it.fill(0)
+                throw DatabaseKeyUnavailableException("Staged database rotation key has invalid length")
+            }
+        }
     }
 
     /** Install a staged envelope atomically; keep the staged copy until AtomicFile has committed. */
@@ -94,13 +107,104 @@ internal class DatabaseKeyProvider(
             output.fd.sync()
             file.finishWrite(output)
             output = null
+            syncEnvelopeDirectory(file.baseFile.parentFile ?: error("Key envelope has no parent directory"))
         } catch (error: Exception) {
             output?.let { stream -> runCatching { file.failWrite(stream) } }
             throw DatabaseKeyUnavailableException(failureMessage, error)
         }
     }
 
+    private fun syncEnvelopeDirectory(directory: File) {
+        val descriptor = Os.open(directory.path, OsConstants.O_RDONLY, 0)
+        try { Os.fsync(descriptor) } finally { Os.close(descriptor) }
+    }
+
     fun discardStagedRotation() = synchronized(PROCESS_LOCK) { stagedEnvelopeFile.delete() }
+
+    /** Stores the incoming portable snapshot key wrapped by the existing local Keystore key. */
+    fun stagePortableRestoreKey(databaseKey: ByteArray) = synchronized(PROCESS_LOCK) {
+        require(databaseKey.size == DATABASE_KEY_BYTES)
+        check(hasAtomicFileContents(envelopeFile)) { "Cannot restore over a database without its current key envelope" }
+        val sqlCipherPassphrase = PortableSqlCipherSnapshot.roomPassphraseBytes(databaseKey)
+        val encrypted = try {
+            encrypt(getExistingWrappingKey(), sqlCipherPassphrase)
+        } finally {
+            sqlCipherPassphrase.fill(0)
+        }
+        try {
+            writeEnvelope(portableRestoreEnvelopeFile, encrypted, "Could not persist portable restore key")
+        } finally {
+            encrypted.fill(0)
+        }
+    }
+
+    fun loadPortableRestoreKey(): ByteArray? = synchronized(PROCESS_LOCK) {
+        if (!hasAtomicFileContents(portableRestoreEnvelopeFile)) return@synchronized null
+        unwrapEnvelope(portableRestoreEnvelopeFile).also {
+            if (it.size != PORTABLE_PASSPHRASE_BYTES) {
+                it.fill(0)
+                throw DatabaseKeyUnavailableException("Portable restore key has invalid length")
+            }
+        }
+    }
+
+    /** Retains the old wrapped key so the old encrypted DB can be restored after any failed cutover. */
+    fun preserveEnvelopeForPortableRollback() = synchronized(PROCESS_LOCK) {
+        check(hasAtomicFileContents(envelopeFile)) { "Current database key envelope is unavailable" }
+        val bytes = try {
+            envelopeFile.openRead().use { it.readBytes() }
+        } catch (error: Exception) {
+            throw DatabaseKeyUnavailableException("Could not preserve current database key envelope", error)
+        }
+        try {
+            writeEnvelope(portableRestoreRollbackEnvelopeFile, bytes, "Could not persist rollback key envelope")
+        } finally {
+            bytes.fill(0)
+        }
+    }
+
+    /** Promotes the candidate key but keeps both staged and rollback envelopes until startup verifies the DB. */
+    fun promotePortableRestoreKey() = synchronized(PROCESS_LOCK) {
+        val candidate = loadPortableRestoreKey() ?: throw DatabaseKeyUnavailableException("No portable restore key")
+        candidate.fill(0)
+        val bytes = try {
+            portableRestoreEnvelopeFile.openRead().use { it.readBytes() }
+        } catch (error: Exception) {
+            throw DatabaseKeyUnavailableException("Could not read staged portable restore envelope", error)
+        }
+        try {
+            writeEnvelope(envelopeFile, bytes, "Could not promote portable restore key")
+        } finally {
+            bytes.fill(0)
+        }
+    }
+
+    fun rollbackPortableRestoreEnvelope() = synchronized(PROCESS_LOCK) {
+        check(hasAtomicFileContents(portableRestoreRollbackEnvelopeFile)) { "Portable rollback key envelope is missing" }
+        val bytes = try {
+            portableRestoreRollbackEnvelopeFile.openRead().use { it.readBytes() }
+        } catch (error: Exception) {
+            throw DatabaseKeyUnavailableException("Could not read rollback database key envelope", error)
+        }
+        try {
+            writeEnvelope(envelopeFile, bytes, "Could not restore previous database key envelope")
+        } finally {
+            bytes.fill(0)
+        }
+    }
+
+    fun clearPortableRestoreEnvelopes() = synchronized(PROCESS_LOCK) {
+        portableRestoreEnvelopeFile.delete()
+        portableRestoreRollbackEnvelopeFile.delete()
+        check(!hasAtomicFileContents(portableRestoreEnvelopeFile) &&
+            !hasAtomicFileContents(portableRestoreRollbackEnvelopeFile)) {
+            "Portable restore key envelopes could not be removed"
+        }
+    }
+
+    fun hasPortableRestoreEnvelopes(): Boolean = synchronized(PROCESS_LOCK) {
+        hasAtomicFileContents(portableRestoreEnvelopeFile) || hasAtomicFileContents(portableRestoreRollbackEnvelopeFile)
+    }
 
     fun hasDatabaseFile(): Boolean = databaseFile.exists()
 
@@ -125,7 +229,7 @@ internal class DatabaseKeyProvider(
                 updateAAD(ENVELOPE_AAD)
                 doFinal(ciphertext)
             }.also {
-                if (it.size != DATABASE_KEY_BYTES) {
+                if (it.size != DATABASE_KEY_BYTES && it.size != PORTABLE_PASSPHRASE_BYTES) {
                     it.fill(0)
                     throw DatabaseKeyUnavailableException("Unwrapped database key has invalid length")
                 }
@@ -186,6 +290,7 @@ internal class DatabaseKeyProvider(
         private const val KEY_ALIAS = "ai.memora.app.agent.database-key-wrap.v1"
         private const val TRANSFORMATION = "AES/GCM/NoPadding"
         private const val DATABASE_KEY_BYTES = 32
+        private const val PORTABLE_PASSPHRASE_BYTES = DATABASE_KEY_BYTES * 2
         private const val WRAPPING_KEY_BITS = 256
         private const val GCM_TAG_BITS = 128
         private const val GCM_IV_BYTES = 12

@@ -1,6 +1,9 @@
 # ADR-017: формат криптографического контейнера переносимой копии
 
-**Статус:** инженерское решение; потоковые exporter и importer соединены со snapshot/manifest/staged validator и проверены только на synthetic Android DB. Пользовательский SAF export/import workflow и active-DB cutover не подключены. M20-02 остаётся частичным. 2026-11-03.
+**Исторический статус до ACT-0157:** инженерское решение; потоковые exporter и importer соединены со snapshot/manifest/staged validator и проверены только на synthetic Android DB.
+
+**Статус обновлён ACT-0157:** encrypted snapshot exporter/importer/validator and internal recoverable active-DB cutover pass a synthetic Android 14 path; startup recovery is called before Room open. SAF/user-facing flow and physical process/device acceptance remain open, therefore M20-02 remains partial.
+
 
 ## Контекст и границы
 

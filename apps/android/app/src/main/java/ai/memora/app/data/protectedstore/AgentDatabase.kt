@@ -950,8 +950,35 @@ internal abstract class AgentDatabase : RoomDatabase() {
         fun open(context: Context): AgentDatabase {
             instance?.let { return it }
             System.loadLibrary("sqlcipher")
-            return openUsingProvider(context, DatabaseKeyProvider(context), DatabaseKeyProvider.DATABASE_NAME)
+            val provider = DatabaseKeyProvider(context)
+            PortableBackupCutover.recoverBeforeDatabaseOpen(
+                context.applicationContext,
+                DatabaseKeyProvider.DATABASE_NAME,
+                provider,
+            ) { databaseName, key -> validateAndReopenForPortableCutover(context.applicationContext, databaseName, key) }
+            return openUsingProvider(context, provider, DatabaseKeyProvider.DATABASE_NAME)
                 .also { instance = it }
+        }
+
+        /** Arms restore only after SAF/UI has obtained an explicit final replacement confirmation. */
+        @Synchronized
+        internal fun armPortableRestore(
+            context: Context,
+            candidate: PortableBackupFileCandidate,
+            explicitUserConfirmation: Boolean,
+        ) {
+            val provider = DatabaseKeyProvider(context)
+            PortableBackupCutover.arm(
+                context.applicationContext,
+                DatabaseKeyProvider.DATABASE_NAME,
+                provider,
+                candidate,
+                explicitUserConfirmation,
+                closeActiveDatabase = {
+                    instance?.close()
+                    instance = null
+                },
+            )
         }
 
         /** Isolated synthetic entry point so storage probes exercise the exact app startup recovery path. */
@@ -1076,6 +1103,32 @@ internal abstract class AgentDatabase : RoomDatabase() {
                 runCatching { database?.close() }
                 databaseKey.fill(0)
                 throw error
+            }
+        }
+
+        private fun validateAndReopenForPortableCutover(context: Context, databaseName: String, key: ByteArray) {
+            val firstKey = key.copyOf()
+            var first: AgentDatabase? = null
+            val firstReadback = try {
+                first = openWithKey(context, firstKey, databaseName)
+                PortableBackupValidator.inspectOpenedDatabase(first!!.openHelper.writableDatabase).also {
+                    check(it.roomSchemaVersion == PortableBackupPayload.SUPPORTED_ROOM_SCHEMA) {
+                        "Portable restore candidate schema is unsupported"
+                    }
+                }
+            } finally {
+                runCatching { first?.close() }
+                firstKey.fill(0)
+            }
+            val reopenKey = key.copyOf()
+            var reopened: AgentDatabase? = null
+            try {
+                reopened = openWithKey(context, reopenKey, databaseName)
+                val secondReadback = PortableBackupValidator.inspectOpenedDatabase(reopened.openHelper.writableDatabase)
+                check(firstReadback == secondReadback) { "Portable restore readback changed after Room reopen" }
+            } finally {
+                runCatching { reopened?.close() }
+                reopenKey.fill(0)
             }
         }
     }

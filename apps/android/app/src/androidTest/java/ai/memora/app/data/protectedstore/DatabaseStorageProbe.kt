@@ -115,6 +115,11 @@ object DatabaseStorageProbe {
             )
             val portableFile = portableOutput.toByteArray()
             check(exportResult.containerBytes == portableFile.size.toLong())
+            stage = "add_synthetic_source_only_marker_after_export"
+            source!!.openHelper.writableDatabase.execSQL(
+                "INSERT INTO profile_fact (factId, scopeId, category, fact, normalizedDigest, revision, createdAtMillis, updatedAtMillis) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+                arrayOf<Any>("synthetic-old-active-marker", "synthetic-scope", "preference", "synthetic-old-active-marker", "f".repeat(64), 1, 2L, 2L),
+            )
             stage = "clean_private_export_files_after_destination_failure"
             val failedExportPassphrase = "synthetic portable backup passphrase".toCharArray()
             val destinationFailure = runCatching {
@@ -222,11 +227,170 @@ object DatabaseStorageProbe {
             result.putBoolean("encrypted_snapshot_contains_no_plaintext_marker", plaintextMarkerAbsent)
             result.putBoolean("outer_portable_container_contains_no_plaintext_marker", encryptedContainerHasNoMarker)
             result.putBoolean("snapshot_reopened_with_separate_key_and_retained_synthetic_row", markerSurvived)
+
+            stage = "cutover_rollback_restores_previous_synthetic_database"
+            val rollbackInput = portableOutput.toByteArray()
+            val rollbackPassphrase = "synthetic portable backup passphrase".toCharArray()
+            val rollbackCandidate = try {
+                PortableBackupImporter.prepare(context, ByteArrayInputStream(rollbackInput), rollbackInput.size.toLong(), rollbackPassphrase)
+            } finally {
+                rollbackPassphrase.fill('\u0000')
+                rollbackInput.fill(0)
+            }
+            var rollbackRecoveryCalls = 0
+            try {
+                PortableBackupCutover.arm(
+                    context, databaseName, sourceProvider, rollbackCandidate, true,
+                    closeActiveDatabase = {
+                        source?.close()
+                        source = null
+                    },
+                )
+            } finally {
+                rollbackCandidate.close()
+            }
+            val interruptedRollback = runCatching {
+                PortableBackupCutover.recoverBeforeDatabaseOpen(
+                    context, databaseName, sourceProvider,
+                    afterRollbackStep = { step -> if (step == "OLD_DB_RESTORED") error("synthetic rollback interruption") },
+                ) { name, key ->
+                    rollbackRecoveryCalls += 1
+                    if (rollbackRecoveryCalls == 1) error("synthetic candidate verification failure")
+                    val reopened = AgentDatabase.openWithKeyForSyntheticProbe(context, name, key.copyOf())
+                    try {
+                        val db = reopened.openHelper.readableDatabase
+                        check(profileFactCountForProbe(db, "synthetic-portable-snapshot-marker") == 1L)
+                        check(profileFactCountForProbe(db, "synthetic-old-active-marker") == 1L)
+                    } finally {
+                        reopened.close()
+                    }
+                }
+            }.isFailure
+            check(interruptedRollback)
+            val rollbackOutcome = PortableBackupCutover.recoverBeforeDatabaseOpen(
+                context, databaseName, sourceProvider,
+            ) { name, key ->
+                rollbackRecoveryCalls += 1
+                val reopened = AgentDatabase.openWithKeyForSyntheticProbe(context, name, key.copyOf())
+                try {
+                    val db = reopened.openHelper.readableDatabase
+                    check(profileFactCountForProbe(db, "synthetic-portable-snapshot-marker") == 1L)
+                    check(profileFactCountForProbe(db, "synthetic-old-active-marker") == 1L)
+                } finally {
+                    reopened.close()
+                }
+            }
+            check(rollbackOutcome == PortableBackupCutover.RecoveryOutcome.ROLLED_BACK)
+            result.putBoolean("failed_candidate_and_interrupted_rollback_recovered_previous_database", true)
+
+            stage = "cutover_success_activates_imported_snapshot"
+            val successInput = portableOutput.toByteArray()
+            val successPassphrase = "synthetic portable backup passphrase".toCharArray()
+            val successCandidate = try {
+                PortableBackupImporter.prepare(context, ByteArrayInputStream(successInput), successInput.size.toLong(), successPassphrase)
+            } finally {
+                successPassphrase.fill('\u0000')
+                successInput.fill(0)
+            }
+            stage = "arm_successful_restore_cutover"
+            try {
+                PortableBackupCutover.arm(
+                    context, databaseName, sourceProvider, successCandidate, true,
+                    closeActiveDatabase = {},
+                )
+            } finally {
+                successCandidate.close()
+            }
+            stage = "recover_successful_restore_cutover"
+            val activationOutcome = PortableBackupCutover.recoverBeforeDatabaseOpen(
+                context, databaseName, sourceProvider,
+            ) { name, key ->
+                val reopened = AgentDatabase.openWithKeyForSyntheticProbe(context, name, key.copyOf())
+                try {
+                    val verified = PortableBackupValidator.inspectOpenedDatabase(reopened.openHelper.writableDatabase)
+                    check(verified.roomSchemaVersion == 18 && verified.profileFactCount == 1L)
+                } finally {
+                    reopened.close()
+                }
+            }
+            stage = "assert_restore_activation_outcome"
+            check(activationOutcome == PortableBackupCutover.RecoveryOutcome.ACTIVATED)
+            val activated = AgentDatabase.openForSyntheticProbe(context, sourceProvider, databaseName)
+            try {
+                val db = activated.openHelper.readableDatabase
+                check(profileFactCountForProbe(db, "synthetic-portable-snapshot-marker") == 1L)
+                check(profileFactCountForProbe(db, "synthetic-old-active-marker") == 0L)
+            } finally {
+                activated.close()
+            }
+            val restoreArtifactsCleaned = context.noBackupFilesDir.listFiles().orEmpty().none {
+                it.name.startsWith("memora-portable-restore.journal") ||
+                    it.name.startsWith("$databaseName.envelope.portable-")
+            } && listOf(".portable-restore-candidate", ".portable-restore-rollback", ".portable-restore-rejected")
+                .none { File(context.getDatabasePath(databaseName).path + it).exists() }
+            check(restoreArtifactsCleaned)
+            result.putBoolean("restore_cutover_activated_backup_and_cleaned_recovery_artifacts", restoreArtifactsCleaned)
+
+            stage = "inject_interruption_at_durable_restore_phases"
+            val activeBeforeInterruptions = AgentDatabase.openForSyntheticProbe(context, sourceProvider, databaseName)
+            try {
+                activeBeforeInterruptions.openHelper.writableDatabase.execSQL(
+                    "INSERT INTO profile_fact (factId, scopeId, category, fact, normalizedDigest, revision, createdAtMillis, updatedAtMillis) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+                    arrayOf<Any>("synthetic-interruption-source-marker", "synthetic-scope", "preference", "synthetic-interruption-source-marker", "a".repeat(64), 1, 3L, 3L),
+                )
+            } finally {
+                activeBeforeInterruptions.close()
+            }
+            val interruptionStages = listOf(
+                "PREPARED" to PortableBackupCutover.RecoveryOutcome.CANCELLED_BEFORE_SWAP,
+                "OLD_DB_MOVED" to PortableBackupCutover.RecoveryOutcome.ROLLED_BACK,
+                "CANDIDATE_INSTALLED" to PortableBackupCutover.RecoveryOutcome.ACTIVATED,
+            )
+            interruptionStages.forEachIndexed { index, (stopAt, expectedOutcome) ->
+                val input = portableOutput.toByteArray()
+                val phrase = "synthetic portable backup passphrase".toCharArray()
+                val candidate = try {
+                    PortableBackupImporter.prepare(context, ByteArrayInputStream(input), input.size.toLong(), phrase)
+                } finally {
+                    phrase.fill('\u0000')
+                    input.fill(0)
+                }
+                try {
+                    val interrupted = runCatching {
+                        PortableBackupCutover.arm(
+                            context, databaseName, sourceProvider, candidate, true,
+                            closeActiveDatabase = {},
+                            afterDurableStep = { step -> if (step == stopAt) error("synthetic process interruption") },
+                        )
+                    }.isFailure
+                    check(interrupted)
+                } finally {
+                    candidate.close()
+                }
+                val recoveredOutcome = PortableBackupCutover.recoverBeforeDatabaseOpen(
+                    context, databaseName, sourceProvider,
+                ) { name, key ->
+                    val reopened = AgentDatabase.openWithKeyForSyntheticProbe(context, name, key.copyOf())
+                    try {
+                        val db = reopened.openHelper.readableDatabase
+                        check(profileFactCountForProbe(db, "synthetic-portable-snapshot-marker") == 1L)
+                        val expectedSourceMarker = if (index < 2) 1L else 0L
+                        check(profileFactCountForProbe(db, "synthetic-interruption-source-marker") == expectedSourceMarker)
+                    } finally {
+                        reopened.close()
+                    }
+                }
+                check(recoveredOutcome == expectedOutcome)
+            }
+            result.putBoolean("prepared_moved_old_and_installed_crash_phases_recovered", true)
             result.putString("status", "passed")
         } catch (error: Exception) {
             result.putString("status", "failed")
             result.putString("stage", stage)
             result.putString("stage_error_type", error.javaClass.simpleName)
+            result.putString("stage_error_message", error.message?.take(240) ?: "<no-message>")
+            result.putString("stage_cause_type", error.cause?.javaClass?.simpleName ?: "<none>")
+            result.putString("stage_cause_message", error.cause?.message?.take(240) ?: "<no-message>")
         } finally {
             runCatching { source?.close() }
             snapshotKey.fill(0)
@@ -234,13 +398,26 @@ object DatabaseStorageProbe {
             snapshot.delete()
             context.getDatabasePath(databaseName).delete()
             File(context.getDatabasePath(databaseName).path + "-journal").delete()
+            listOf("-wal", "-shm", ".portable-restore-candidate", ".portable-restore-rollback", ".portable-restore-rejected")
+                .forEach { File(context.getDatabasePath(databaseName).path + it).delete() }
+            File(context.noBackupFilesDir, "memora-portable-restore.journal").delete()
+            File(context.noBackupFilesDir, "memora-portable-restore.journal.bak").delete()
             File(context.noBackupFilesDir, "$databaseName.envelope").delete()
             File(context.noBackupFilesDir, "$databaseName.envelope.bak").delete()
             File(context.noBackupFilesDir, "$databaseName.envelope.rotation").delete()
+            listOf(".portable-restore", ".portable-rollback").forEach { suffix ->
+                File(context.noBackupFilesDir, "$databaseName.envelope$suffix").delete()
+                File(context.noBackupFilesDir, "$databaseName.envelope$suffix.bak").delete()
+            }
             runCatching { if (keyStore.containsAlias(alias)) keyStore.deleteEntry(alias) }
         }
         return result
     }
+
+    private fun profileFactCountForProbe(database: androidx.sqlite.db.SupportSQLiteDatabase, factId: String): Long =
+        database.query("SELECT COUNT(*) FROM profile_fact WHERE factId = ?", arrayOf(factId)).use {
+            check(it.moveToFirst()); it.getLong(0)
+        }
 
     /** Injects no-space-at-startWrite failures before rekey and during staged-key promotion. */
     fun runEnvelopeWriteFailureProbe(context: Context, permitted: Boolean): Bundle {

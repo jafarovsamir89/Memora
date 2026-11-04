@@ -80,6 +80,8 @@ internal object PortableBackupValidator {
         }
     }
 
+    internal fun inspectOpenedDatabase(database: SupportSQLiteDatabase): PortableBackupValidationResult = inspect(database)
+
     private fun inspect(database: SupportSQLiteDatabase): PortableBackupValidationResult {
         val version = database.query("PRAGMA user_version").use {
             check(it.moveToFirst()); it.getInt(0)

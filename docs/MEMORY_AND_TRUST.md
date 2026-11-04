@@ -154,3 +154,10 @@ Synthetic exact AZ/RU/mixed retrieval passes, but the lexical engine returns no 
 ### ACT-0153 — Candidate import inspection only
 
 Imported encrypted snapshots can now be opened under a UUID-named temporary SQLCipher/Room DB, checked, closed/reopened and deleted without opening or replacing the active app database. Valid synthetic input and wrong-key cleanup both passed. The active database stays untouched; this is not restore activation.
+
+
+### ACT-0157 — Recoverable local restore cutover
+
+The restore cutover keeps the stable active SQLCipher filename and treats its encrypted file and Keystore-wrapped key as one generation. Before replacement, it validates the authenticated portable envelope and a separate Room18 candidate, stages the new passphrase inside Android Keystore wrapping, preserves the old encrypted database/key envelope, then writes a private phase journal around same-directory renames. Startup recovery runs before normal Room open. The old generation is retained until the installed candidate passes integrity, table/row-count comparison and close/reopen readback. A failed candidate validation rolls back the previous DB and key.
+
+Only synthetic Android 14 instrumentation has exercised success, candidate-validation rollback and injected recovery at three journal phases. No actual user export/import UI is connected. Injected exceptions do not prove force-stop, reboot or power-loss durability, and no physical device/owner acceptance has occurred. Keep M20-02 partial and do not use this internal path on personal data until SAF consent/error handling and device acceptance are complete.
