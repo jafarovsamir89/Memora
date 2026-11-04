@@ -2,7 +2,7 @@
 
 **Текущий проверенный пакет ACT-0146 (2026-11-03):** M20-03 synthetic fake-provider case joins an owner-confirmed finance/domain PERSON, canonical PROJECT, exact `memory_revision`, 300 AZN obligation and one allocated 100 AZN receipt; outstanding amount remains 200 AZN and is not income. Dedicated Android 14 SQLCipher migration probe v1→18 closes/reopens its synthetic encrypted DB and confirms case, exact source IDs/revision, identity and one canonical row per source. Full host Gradle: 58 suites / 292 tests, 0 failures/errors/skips; debug/AndroidTest, Kotlin compile and lint passed (0/60/3). No product code/schema/APK change; v57 SHA unchanged and not installed. Owner/live Gemini acceptance remains open. M20-02 protected export/import and M20-04 semantic/hybrid search remain next distinct packages.
 
-**ACT-0147:** first password-protected portable payload envelope is implemented and host/device-JCA checked; no database snapshot/import or cutover yet, so M20-02 remains partial. M20-04 stays lexical until a privacy-preserving on-device model passes synthetic AZ/RU/mixed relevance, license and target-device resource checks.
+**ACT-0148:** password-protected portable payload plus a SQLCipher snapshot helper have host/JCA checks and synthetic Android 14 Room v18 export/wrap/reopen readback (45 tables, one synthetic fact, schema18). The helper remains disconnected from user export/import UI and atomic restore/cutover; M20-02 remains partial. M20-04 stays lexical until a privacy-preserving on-device model passes synthetic AZ/RU/mixed relevance, license and target-device resource checks.
 
 **Архивный checkpoint ACT-0113:** APK v34 / 1.1.12-attention, Room schema 13; историческая проверка M20-07 и связанный статус оставлены ниже для журнала.
 

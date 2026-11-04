@@ -22,6 +22,7 @@ import org.json.JSONObject
 import java.io.File
 import java.io.FileOutputStream
 import java.io.IOException
+import java.nio.ByteBuffer
 import java.security.KeyStore
 import java.util.UUID
 
@@ -57,6 +58,122 @@ object DatabaseStorageProbe {
             result.putString("error_type", error.javaClass.simpleName)
             result
         }
+    }
+
+    /** Copies a synthetic Room DB into a separately keyed encrypted SQLCipher file and reopens it. */
+    fun runPortableSqlCipherSnapshotProbe(context: Context, permitted: Boolean): Bundle {
+        val result = Bundle()
+        if (!permitted || context.packageName != "ai.memora.app" ||
+            context.applicationInfo.flags and android.content.pm.ApplicationInfo.FLAG_DEBUGGABLE == 0) {
+            result.putString("status", "explicit_debug_synthetic_opt_in_required")
+            return result
+        }
+        val databaseName = "memora-portable-snapshot-source-probe.db"
+        val snapshot = File(context.noBackupFilesDir, "memora-portable-snapshot-probe.db")
+        val restoreName = "memora-portable-snapshot-restore-probe.db"
+        val restoreFile = context.getDatabasePath(restoreName)
+        val envelope = AtomicFile(File(context.noBackupFilesDir, "$databaseName.envelope"))
+        val staged = AtomicFile(File(context.noBackupFilesDir, "$databaseName.envelope.rotation"))
+        val alias = "ai.memora.app.test.portable-snapshot-probe.v1"
+        val keyStore = KeyStore.getInstance("AndroidKeyStore").apply { load(null) }
+        var source: AgentDatabase? = null
+        var restored: AgentDatabase? = null
+        val snapshotKey = ByteArray(32).also(java.security.SecureRandom()::nextBytes)
+        val snapshotPassphrase = snapshotKey.joinToString("") { "%02x".format(it) }.toByteArray(Charsets.UTF_8)
+        var stage = "open_synthetic_source"
+        try {
+            System.loadLibrary("sqlcipher")
+            val sourceProvider = DatabaseKeyProvider(
+                context, context.getDatabasePath(databaseName), envelope, keyStore, alias, staged,
+            )
+            source = AgentDatabase.openForSyntheticProbe(context, sourceProvider, databaseName)
+            stage = "insert_synthetic_marker"
+            source!!.openHelper.writableDatabase.execSQL(
+                "INSERT INTO profile_fact (factId, scopeId, category, fact, normalizedDigest, revision, createdAtMillis, updatedAtMillis) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+                arrayOf<Any>("synthetic-portable-snapshot-marker", "synthetic-scope", "preference", "synthetic-portable-snapshot-marker", "e".repeat(64), 1, 1L, 1L),
+            )
+            result.putInt("source_synthetic_profile_fact_count_before_export", source!!.openHelper.readableDatabase.query(
+                "SELECT COUNT(*) FROM profile_fact",
+            ).use { check(it.moveToFirst()); it.getInt(0) })
+            stage = "export_sqlcipher_snapshot"
+            PortableSqlCipherSnapshot.export(source!!.openHelper.writableDatabase, context, snapshot, snapshotKey)
+            stage = "verify_encrypted_file_has_no_plaintext_marker"
+            val snapshotBytes = snapshot.readBytes()
+            val plaintextMarkerAbsent = !snapshotBytes.toString(Charsets.ISO_8859_1).contains("synthetic-portable-snapshot-marker")
+            check(plaintextMarkerAbsent)
+            stage = "wrap_snapshot_in_portable_container"
+            val payload = ByteBuffer.allocate(4 + 1 + 4 + snapshotPassphrase.size + snapshotBytes.size)
+                .put(byteArrayOf(0x4d, 0x53, 0x4e, 0x50)) // MSNP
+                .put(1)
+                .putInt(snapshotPassphrase.size)
+                .put(snapshotPassphrase)
+                .put(snapshotBytes)
+                .array()
+            val portablePassphrase = "synthetic portable backup passphrase".toCharArray()
+            val portableFile = PortableBackupCipher().encrypt(payload, portablePassphrase)
+            val encryptedContainerHasNoMarker = !portableFile.toString(Charsets.ISO_8859_1)
+                .contains("synthetic-portable-snapshot-marker")
+            val openedPayload = PortableBackupCipher().decrypt(portableFile, portablePassphrase)
+            portablePassphrase.fill('\u0000')
+            snapshotBytes.fill(0)
+            payload.fill(0)
+            portableFile.fill(0)
+            check(encryptedContainerHasNoMarker)
+            val bundle = ByteBuffer.wrap(openedPayload)
+            check(bundle.getInt() == 0x4d534e50 && bundle.get().toInt() == 1)
+            val passphraseLength = bundle.int
+            check(passphraseLength in 32..128 && passphraseLength <= bundle.remaining())
+            val restoredPassphrase = ByteArray(passphraseLength).also(bundle::get)
+            val restoredSnapshotBytes = ByteArray(bundle.remaining()).also(bundle::get)
+            openedPayload.fill(0)
+            stage = "reopen_exported_database"
+            source!!.close()
+            source = null
+            restoreFile.writeBytes(restoredSnapshotBytes)
+            restoredSnapshotBytes.fill(0)
+
+            restored = AgentDatabase.openWithKeyForSyntheticProbe(context, restoreName, restoredPassphrase)
+            restoredPassphrase.fill(0)
+            stage = "verify_reopened_synthetic_marker"
+            val markerSurvived = restored!!.openHelper.readableDatabase.query(
+                "SELECT factId FROM profile_fact WHERE factId = 'synthetic-portable-snapshot-marker' AND fact = 'synthetic-portable-snapshot-marker'",
+            ).use { it.moveToFirst() }
+            val userVersion = restored!!.openHelper.readableDatabase.query("PRAGMA user_version").use {
+                check(it.moveToFirst()); it.getInt(0)
+            }
+            result.putBoolean("snapshot_marker_survived", markerSurvived)
+            result.putInt("snapshot_room_user_version", userVersion)
+            result.putInt("snapshot_synthetic_profile_fact_count", restored!!.openHelper.readableDatabase.query(
+                "SELECT COUNT(*) FROM profile_fact",
+            ).use { check(it.moveToFirst()); it.getInt(0) })
+            result.putInt("snapshot_table_count", restored!!.openHelper.readableDatabase.query(
+                "SELECT COUNT(*) FROM sqlite_master WHERE type = 'table'",
+            ).use { check(it.moveToFirst()); it.getInt(0) })
+            check(markerSurvived && userVersion == 18)
+            result.putBoolean("encrypted_snapshot_contains_no_plaintext_marker", plaintextMarkerAbsent)
+            result.putBoolean("outer_portable_container_contains_no_plaintext_marker", encryptedContainerHasNoMarker)
+            result.putBoolean("snapshot_reopened_with_separate_key_and_retained_synthetic_row", markerSurvived)
+            result.putString("status", "passed")
+        } catch (error: Exception) {
+            result.putString("status", "failed")
+            result.putString("stage", stage)
+            result.putString("stage_error_type", error.javaClass.simpleName)
+        } finally {
+            runCatching { source?.close() }
+            runCatching { restored?.close() }
+            snapshotKey.fill(0)
+            snapshotPassphrase.fill(0)
+            snapshot.delete()
+            context.getDatabasePath(databaseName).delete()
+            File(context.getDatabasePath(databaseName).path + "-journal").delete()
+            restoreFile.delete()
+            File(restoreFile.path + "-journal").delete()
+            File(context.noBackupFilesDir, "$databaseName.envelope").delete()
+            File(context.noBackupFilesDir, "$databaseName.envelope.bak").delete()
+            File(context.noBackupFilesDir, "$databaseName.envelope.rotation").delete()
+            runCatching { if (keyStore.containsAlias(alias)) keyStore.deleteEntry(alias) }
+        }
+        return result
     }
 
     /** Injects no-space-at-startWrite failures before rekey and during staged-key promotion. */

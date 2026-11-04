@@ -124,8 +124,12 @@ When an explicit owner correction or manual edit changes a profile fact, the sam
 
 ACT-0144 extends the regression to cover the separate manual-edit path: the summary made from the correction turn is invalidated by a later owner edit, while the correction conversation and three profile-fact revisions remain. The focused repository suite passes 4/4; no product source or APK change.
 
-### ACT-0147 — Portable export and local semantic-search progress
+### ACT-0147 — Portable export cryptography and local semantic-search progress
 
-The first portable-backup crypto primitive is versioned AES-256-GCM with PBKDF2-HMAC-SHA-256, bounded KDF parsing and header authentication. Host and synthetic Android 14 JCA probes pass for round-trip and wrong-password rejection. This is not a database backup: SQLCipher snapshot/export, importer, atomic restore and file UI remain unimplemented. M20-02 is still partial.
+The first portable-backup crypto primitive is versioned AES-256-GCM with PBKDF2-HMAC-SHA-256, bounded KDF parsing and header authentication. Host and synthetic Android 14 JCA probes pass for round-trip and wrong-password rejection. A separate synthetic Room v18 database was exported with Zetetic `sqlcipher_export`, its encrypted snapshot plus separate key was wrapped in the outer container, reopened under a new local DB path, and one profile fact plus schema version were read back; no plaintext marker was found. The helper/probe is not connected to user export/import UI, URI handling, production temporary-file lifecycle or atomic restore. M20-02 remains partial.
 
 Official model documentation was reviewed for local semantic retrieval. EmbeddingGemma 1 supports 100+ languages and on-device text embeddings but is subject to Gemma Terms. EmbeddingGemma 2 is published under Apache 2.0, while its Android deployment path is still emerging. No model or vector index is selected or added. The current memory retrieval remains lexical; next evaluation must use synthetic AZ/RU/mixed queries, verify target-class resource use and license, and keep derived vectors within SQLCipher with correction/deletion invalidation.
+
+### ACT-0148 — Encrypted snapshot persistence evidence
+
+On the synthetic Android 14 emulator, the SQLCipher snapshot helper exported all 45 Room v18 tables with a separate key, encrypted the payload/key in the portable container, then reopened the result and verified the source fact, schema version and encrypted-only markers. This remains a probe, not a user export/import or restore feature.
