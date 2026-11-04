@@ -3,15 +3,38 @@ package ai.memora.app.data.protectedstore
 import android.content.Context
 import androidx.sqlite.db.SupportSQLiteDatabase
 import java.io.File
+import java.io.FileInputStream
+import java.io.FileOutputStream
 import java.util.UUID
 
 /** Opens an imported encrypted snapshot only under a disposable app-private staging name. */
 internal object PortableBackupValidator {
     fun validate(context: Context, backup: DecodedPortableBackup): PortableBackupValidationResult {
+        val candidateSnapshot = File(context.noBackupFilesDir, "memora-portable-validation-source-${UUID.randomUUID()}.db")
+        try {
+            candidateSnapshot.writeBytes(backup.encryptedSnapshot)
+        } catch (error: Exception) {
+            candidateSnapshot.delete()
+            throw error
+        }
+        val candidate = PortableBackupFileCandidate(
+            backup.manifest,
+            backup.snapshotKeyMaterial.copyOf(),
+            candidateSnapshot,
+        )
+        return try {
+            validate(context, candidate)
+        } finally {
+            candidate.close()
+        }
+    }
+
+    fun validate(context: Context, backup: PortableBackupFileCandidate): PortableBackupValidationResult {
         require(backup.manifest.roomSchemaVersion == PortableBackupPayload.SUPPORTED_ROOM_SCHEMA) {
             "Unsupported Room schema version"
         }
-        require(backup.manifest.encryptedSnapshotBytes == backup.encryptedSnapshot.size) {
+        require(backup.encryptedSnapshotFile.isFile &&
+            backup.manifest.encryptedSnapshotBytes.toLong() == backup.encryptedSnapshotFile.length()) {
             "Snapshot length does not match its manifest"
         }
         val databaseName = "memora-portable-validation-${UUID.randomUUID()}.db"
@@ -23,7 +46,9 @@ internal object PortableBackupValidator {
         stagedFile.parentFile?.mkdirs()
         var staged: AgentDatabase? = null
         try {
-            stagedFile.writeBytes(backup.encryptedSnapshot)
+            FileInputStream(backup.encryptedSnapshotFile).use { input ->
+                FileOutputStream(stagedFile).use { output -> input.copyTo(output, COPY_BUFFER_BYTES); output.fd.sync() }
+            }
             val firstPassphrase = PortableSqlCipherSnapshot.roomPassphraseBytes(backup.snapshotKeyMaterial)
             try {
                 staged = AgentDatabase.openPortableSnapshotForValidation(context, databaseName, firstPassphrase)
@@ -81,6 +106,8 @@ internal object PortableBackupValidator {
         }
         return PortableBackupValidationResult(version, rowCounts, profileFacts)
     }
+
+    private const val COPY_BUFFER_BYTES = 64 * 1024
 }
 
 internal data class PortableBackupValidationResult(

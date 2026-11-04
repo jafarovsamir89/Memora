@@ -1,6 +1,6 @@
 # ADR-017: формат криптографического контейнера переносимой копии
 
-**Статус:** инженерское решение; потоковый exporter объединяет SQLCipher snapshot, manifest и AES-GCM envelope и проверен только на synthetic Android DB. Пользовательский SAF export/import workflow, streaming import и active-DB cutover не подключены. M20-02 остаётся частичным. 2026-11-03.
+**Статус:** инженерское решение; потоковые exporter и importer соединены со snapshot/manifest/staged validator и проверены только на synthetic Android DB. Пользовательский SAF export/import workflow и active-DB cutover не подключены. M20-02 остаётся частичным. 2026-11-03.
 
 ## Контекст и границы
 
@@ -19,10 +19,10 @@
 
 NIST SP 800-132 описывает PBKDF для защиты хранимых данных и ключей; NIST объявил намерение добавить memory-hard вариант при пересмотре документа. Здесь PBKDF2 выбран как доступная стандартная JCA реализация Android без новой криптографической зависимости, а не как окончательная оптимальная UX/security оценка. SQLCipher `sqlcipher_export()` копирует схему и данные в attached DB; интеграция должна использовать документированный механизм, избегать сырого копирования активной SQLite/SQLCipher базы/WAL и проверять фактическую семантику операции на Android.
 
-## Безопасный импорт (обязательный, ещё не реализован)
+## Безопасный импорт
 
-1. Читать вход с жёстким лимитом, дешифровать в выделенный временный каталог приложения и никогда не писать plaintext-копию в общую память.
-2. Проверить AEAD, формат/manifest, поддерживаемую схему и SQLCipher integrity/migration на отдельной БД.
+1. `PortableBackupImporter` ограничивает размер до KDF и потоково расшифровывает в app-private `AtomicFile`; этот временный candidate не читается до проверки GCM tag. После этого manifest/digest проверяются потоково, а SQLCipher snapshot выделяется отдельным файлом. Временный payload содержит snapshot key и удаляется после извлечения; файлы не покидают закрытое хранилище приложения. Физическое защищённое стирание flash не обещается.
+2. Проверить формат/manifest и поддерживаемую схему, затем SQLCipher integrity/migration на отдельной БД.
 3. Открыть candidate только под отдельным UUID staging DB name через Room/SQLCipher, сверить версию/integrity и table/row readback по manifest без логирования содержимого.
 4. Только после успешного close/reopen переключать активную БД атомарным recoverable-маркером. Не удалять прежнюю базу до завершённой проверки нового хранилища.
 5. Неверный пароль, повреждение, неизвестная схема, нехватка места, остановка процесса или ошибка ключа оставляют исходную активную БД нетронутой; очистка только собственных временных артефактов.
@@ -36,4 +36,4 @@ NIST SP 800-132 описывает PBKDF для защиты хранимых д
 
 ## Приёмка
 
-Host tests покрывают внешнюю криптографию (включая streaming round-trip, declared-length mismatch и неверный пароль) и inner-manifest round-trip, unsupported metadata/schema, truncation и altered snapshot digest. Synthetic Android 14 probe экспортирует Room v18 через `PortableBackupExporter`, проверяет целостность и 44 user tables/row counts, plaintext absence, manifest, staged reopen и cleanup приватных файлов при ошибке destination; wrong snapshot key отвергается с cleanup. Открыты: измерение времени KDF на Android 13/минимальном API; SAF пользовательская интеграция и streaming import; проверка совместимости/миграции между форматами; corrupt/unsupported import UX; atomic active-DB import/cutover/restart; URI permissions, storage failure/disk-full; UX и owner acceptance. M20-02 не закрывать по одному synthetic probe.
+Host tests покрывают внешнюю криптографию (включая streaming round-trip, declared-length mismatch и неверный пароль), потоковое извлечение snapshot с digest verification/cleanup и inner-manifest rejection cases. Synthetic Android 14 probe проходит через exporter → importer → Room18 staged validator; подтверждает plaintext absence, 44 user tables, close/reopen, wrong password/key rejection и cleanup импортных/экспортных private files. Открыты: измерение времени KDF на Android 13/минимальном API; SAF пользовательская интеграция; проверка совместимости/миграции между форматами; corrupt/unsupported import UX; atomic active-DB import/cutover/restart; URI permissions, storage failure/disk-full; UX и owner acceptance. M20-02 не закрывать по одному synthetic probe.

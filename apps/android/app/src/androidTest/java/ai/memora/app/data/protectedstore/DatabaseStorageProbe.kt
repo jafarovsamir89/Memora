@@ -24,6 +24,7 @@ import java.io.File
 import java.io.FileOutputStream
 import java.io.IOException
 import java.io.ByteArrayOutputStream
+import java.io.ByteArrayInputStream
 import java.nio.ByteBuffer
 import java.security.KeyStore
 import java.util.UUID
@@ -141,7 +142,6 @@ object DatabaseStorageProbe {
             val openedPayload = PortableBackupCipher().decrypt(portableFile, portablePassphrase)
             portablePassphrase.fill('\u0000')
             snapshotBytes.fill(0)
-            portableFile.fill(0)
             check(encryptedContainerHasNoMarker)
             val decoded = PortableBackupPayload.decode(openedPayload)
             openedPayload.fill(0)
@@ -151,15 +151,53 @@ object DatabaseStorageProbe {
             check(exportResult.manifest == decoded.manifest)
             result.putLong("streamed_export_container_bytes", exportResult.containerBytes)
             result.putBoolean("manifest_schema_and_snapshot_length_verified", true)
-            stage = "validate_imported_snapshot_in_isolated_room_database"
+            stage = "stream_authenticate_import_and_validate_isolated_room_database"
             source!!.close()
             source = null
-            val validation = try {
-                PortableBackupValidator.validate(context, decoded)
+            val importPassphrase = "synthetic portable backup passphrase".toCharArray()
+            val imported = try {
+                PortableBackupImporter.prepare(
+                    context,
+                    ByteArrayInputStream(portableFile),
+                    portableFile.size.toLong(),
+                    importPassphrase,
+                )
             } finally {
+                importPassphrase.fill('\u0000')
+                portableFile.fill(0)
+            }
+            val validation = try {
+                check(imported.manifest == decoded.manifest)
                 decoded.snapshotKeyMaterial.fill(0)
                 decoded.encryptedSnapshot.fill(0)
+                PortableBackupValidator.validate(context, imported)
+            } finally {
+                imported.close()
             }
+            val authenticatedImportCandidateCleaned = !imported.encryptedSnapshotFile.exists()
+            check(authenticatedImportCandidateCleaned)
+            result.putBoolean("authenticated_import_candidate_cleaned", authenticatedImportCandidateCleaned)
+            val wrongPassphrase = "incorrect portable passphrase".toCharArray()
+            val secondPortableFile = portableOutput.toByteArray()
+            val wrongPassphraseRejected = try {
+                runCatching {
+                    PortableBackupImporter.prepare(
+                        context,
+                        ByteArrayInputStream(secondPortableFile),
+                        exportResult.containerBytes,
+                        wrongPassphrase,
+                    )
+                }.isFailure
+            } finally {
+                wrongPassphrase.fill('\u0000')
+                secondPortableFile.fill(0)
+            }
+            val importFilesCleaned = context.noBackupFilesDir.listFiles().orEmpty().none {
+                it.name.startsWith("memora-portable-import-")
+            }
+            check(wrongPassphraseRejected && importFilesCleaned)
+            result.putBoolean("wrong_container_passphrase_rejected", wrongPassphraseRejected)
+            result.putBoolean("failed_import_files_cleaned", importFilesCleaned)
             val markerSurvived = validation.profileFactCount == 1L
             result.putBoolean("snapshot_marker_survived", markerSurvived)
             result.putInt("snapshot_room_user_version", validation.roomSchemaVersion)

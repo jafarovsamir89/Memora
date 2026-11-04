@@ -1,3 +1,11 @@
+## ACT-0155 - 2026-11-03 - Потоковый authenticated import в проверяемый candidate
+
+Добавлен `PortableBackupImporter.prepare`: размер контейнера ограничивается до PBKDF2, incremental AES-GCM decrypt пишет candidate только в app-private `AtomicFile`, а payload читается только после успешной GCM tag проверки. Потоковый parser проверяет schema/app/time/length и SHA-256 snapshot, затем извлекает SQLCipher candidate в отдельный файл без загрузки БД в память. `PortableBackupFileCandidate` владеет key/file до `close`; validator проверяет snapshot под отдельным UUID Room/SQLCipher именем. Активная база не переключается.
+
+Host test проверяет streaming extraction 150 KB, manifest/key, digest failure и cleanup. Полный Gradle: 60 suites / 300 tests, 0 failures/errors/skips; debug/AndroidTest APKs и AndroidTest Kotlin compile прошли, lint 0 errors / 60 warnings / 3 hints. Synthetic Android 14 probe прошёл exporter→importer→staged validator: schema18, 44 user tables, marker readback, round-trip 581778 bytes, отсутствие plaintext marker, wrong password/key refusal, cleanup после ошибки/успеха. APK SHA-256 `d0b497621ff5a5be07f057e76eacf3bfd5ba8c4949dc39ceb44b31abad4ee03d`.
+
+Обновлены ADR-017, TODO, validation matrix, README/engineering/product checkpoints, AGENTS и дневник. SAF/URI, disk-full UX, atomic active-DB cutover/rollback/restart, KDF physical-device timing и owner acceptance остаются открытыми; M20-02 partial. Временное удаление не является secure erase flash. User DB/physical phone не затрагивались. Незакоммиченный ADR-012 владельца сохранён. Commit выполнен локально; push не запрашивался.
+
 ## ACT-0154 - 2026-11-03 - Потоковый защищённый экспорт SQLCipher snapshot
 
 Добавлены streaming AES-GCM encrypt/decrypt API с проверкой declared length, 64 KiB buffer, проверкой tag и host regressions на round-trip, неверный пароль и неверную длину. `PortableBackupPayload.headerForSnapshotFile` вычисляет manifest и SHA-256 потоково. Новый `PortableBackupExporter` формирует отдельный SQLCipher snapshot, шифрует manifest+snapshot в приватный `AtomicFile`, fsync/commit завершённого контейнера и копирует его в caller output stream; секретные временные байты/файлы очищаются. При ошибке destination может остаться частичный внешний файл, который будущая SAF обвязка обязана удалить.

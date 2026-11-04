@@ -3,6 +3,7 @@ package ai.memora.app.data.protectedstore
 import java.nio.ByteBuffer
 import java.io.File
 import java.io.FileInputStream
+import java.io.FileOutputStream
 import java.security.MessageDigest
 
 /** Authenticated-inner manifest and SQLCipher snapshot payload, itself wrapped by [PortableBackupCipher]. */
@@ -139,6 +140,91 @@ internal object PortableBackupPayload {
         }
     }
 
+    /** Authenticates the inner manifest and extracts the SQLCipher file without materializing it in RAM. */
+    fun extractSnapshotFile(payloadFile: File, snapshotFile: File): PortableBackupFileCandidate {
+        require(payloadFile.isFile && payloadFile.length() in (HEADER_BYTES + 1).toLong()..512L * 1024 * 1024) {
+            "Unsupported backup payload size"
+        }
+        require(!snapshotFile.exists()) { "Snapshot staging file already exists" }
+        val header = ByteArray(HEADER_BYTES)
+        var snapshotKey: ByteArray? = null
+        var output: FileOutputStream? = null
+        var success = false
+        try {
+            FileInputStream(payloadFile).use { input ->
+                readFully(input, header)
+                val parsed = ByteBuffer.wrap(header)
+                val magic = ByteArray(MAGIC.size).also(parsed::get)
+                if (!magic.contentEquals(MAGIC)) throw PortableBackupFormatException("Unrecognized backup payload")
+                if (parsed.get() != FORMAT_VERSION) throw PortableBackupFormatException("Unsupported backup payload version")
+                val schemaVersion = parsed.int
+                if (schemaVersion != SUPPORTED_ROOM_SCHEMA) {
+                    throw PortableBackupFormatException("Unsupported Room schema version")
+                }
+                val appVersionCode = parsed.int
+                val createdAtEpochMillis = parsed.long
+                val snapshotLength = parsed.int
+                if (appVersionCode <= 0 || createdAtEpochMillis <= 0 || snapshotLength !in 1..MAX_SNAPSHOT_BYTES ||
+                    payloadFile.length() != HEADER_BYTES.toLong() + snapshotLength) {
+                    throw PortableBackupFormatException("Invalid backup manifest or payload length")
+                }
+                val expectedDigest = ByteArray(DIGEST_BYTES).also(parsed::get)
+                snapshotKey = ByteArray(SNAPSHOT_KEY_BYTES).also(parsed::get)
+                val digest = MessageDigest.getInstance("SHA-256")
+                val buffer = ByteArray(64 * 1024)
+                var remaining = snapshotLength
+                output = FileOutputStream(snapshotFile)
+                try {
+                    while (remaining > 0) {
+                        val read = input.read(buffer, 0, minOf(buffer.size, remaining))
+                        if (read < 0) throw PortableBackupFormatException("Backup snapshot ended before its declared length")
+                        if (read == 0) continue
+                        digest.update(buffer, 0, read)
+                        output.write(buffer, 0, read)
+                        remaining -= read
+                    }
+                    if (input.read() != -1) throw PortableBackupFormatException("Backup payload exceeds its declared length")
+                    output.fd.sync()
+                    val actualDigest = digest.digest()
+                    val matches = MessageDigest.isEqual(expectedDigest, actualDigest)
+                    expectedDigest.fill(0)
+                    actualDigest.fill(0)
+                    if (!matches) {
+                        throw PortableBackupAuthenticationException(
+                            "Backup snapshot digest does not match",
+                            SecurityException("Digest mismatch"),
+                        )
+                    }
+                } finally {
+                    buffer.fill(0)
+                }
+                output.close()
+                output = null
+                check(snapshotFile.length() == snapshotLength.toLong()) { "Extracted snapshot length changed" }
+                success = true
+                return PortableBackupFileCandidate(
+                    manifest = PortableBackupManifest(schemaVersion, appVersionCode, createdAtEpochMillis, snapshotLength),
+                    snapshotKeyMaterial = snapshotKey,
+                    encryptedSnapshotFile = snapshotFile,
+                ).also { snapshotKey = null }
+            }
+        } finally {
+            runCatching { output?.close() }
+            header.fill(0)
+            snapshotKey?.fill(0)
+            if (!success) snapshotFile.delete()
+        }
+    }
+
+    private fun readFully(input: FileInputStream, destination: ByteArray) {
+        var offset = 0
+        while (offset < destination.size) {
+            val read = input.read(destination, offset, destination.size - offset)
+            if (read < 0) throw PortableBackupFormatException("Unsupported or truncated backup payload")
+            if (read > 0) offset += read
+        }
+    }
+
     const val SUPPORTED_ROOM_SCHEMA = 18
 }
 
@@ -160,3 +246,14 @@ internal data class DecodedPortableBackup(
     val snapshotKeyMaterial: ByteArray,
     val encryptedSnapshot: ByteArray,
 )
+
+internal class PortableBackupFileCandidate(
+    val manifest: PortableBackupManifest,
+    val snapshotKeyMaterial: ByteArray,
+    val encryptedSnapshotFile: File,
+) : AutoCloseable {
+    override fun close() {
+        snapshotKeyMaterial.fill(0)
+        encryptedSnapshotFile.delete()
+    }
+}

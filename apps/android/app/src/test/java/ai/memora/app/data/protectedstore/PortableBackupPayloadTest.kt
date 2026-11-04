@@ -2,8 +2,10 @@ package ai.memora.app.data.protectedstore
 
 import org.junit.Assert.assertArrayEquals
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertThrows
 import org.junit.Test
+import java.io.File
 
 class PortableBackupPayloadTest {
     @Test fun roundTripPreservesManifestAndSeparateSnapshotKey() {
@@ -39,5 +41,36 @@ class PortableBackupPayloadTest {
             PortableBackupPayload.decode(changedSnapshot)
         }
         assertThrows(IllegalArgumentException::class.java) { PortableBackupPayload.decode(encoded.copyOf(encoded.size - 1)) }
+    }
+
+    @Test fun streamingManifestExtractionVerifiesDigestAndCleansDamagedSnapshot() {
+        val key = ByteArray(32) { (it + 9).toByte() }
+        val snapshot = ByteArray(150_000) { (it % 253).toByte() }
+        val payload = PortableBackupPayload.encode(18, 57, 1_799_999_999_000L, key, snapshot)
+        val input = File.createTempFile("memora-payload-test", ".bin")
+        val extracted = File.createTempFile("memora-snapshot-test", ".db").also { it.delete() }
+        try {
+            input.writeBytes(payload)
+            val candidate = PortableBackupPayload.extractSnapshotFile(input, extracted)
+            candidate.use {
+                assertEquals(18, it.manifest.roomSchemaVersion)
+                assertArrayEquals(key, it.snapshotKeyMaterial)
+                assertArrayEquals(snapshot, it.encryptedSnapshotFile.readBytes())
+            }
+            assertFalse(extracted.exists())
+
+            val corrupt = payload.copyOf().also { it[it.lastIndex] = (it.last().toInt() xor 1).toByte() }
+            input.writeBytes(corrupt)
+            assertThrows(PortableBackupAuthenticationException::class.java) {
+                PortableBackupPayload.extractSnapshotFile(input, extracted)
+            }
+            assertFalse(extracted.exists())
+        } finally {
+            input.delete()
+            extracted.delete()
+            payload.fill(0)
+            snapshot.fill(0)
+            key.fill(0)
+        }
     }
 }
