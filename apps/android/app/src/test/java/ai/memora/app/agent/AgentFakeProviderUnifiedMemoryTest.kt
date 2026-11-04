@@ -288,13 +288,20 @@ class AgentFakeProviderUnifiedMemoryTest {
                 assertTrue("source/revision missing for '$query'", taskHits.all {
                     it["source_id"] == it["task_id"] && it["source_revision_id"] == "${it["task_id"]}:1"
                 })
-                Observation(expected, taskHits.map { it["task_id"] as String })
+                val ids = taskHits.map { it["task_id"] as String }
+                assertEquals("duplicate task evidence for '$query'", ids.size, ids.distinct().size)
+                Observation(expected, ids)
             }
             assertEquals("each language has 30 query variants", 30, observations.size)
             val recallAt5 = observations.count { it.actual.take(5).contains(it.expected) }.toDouble() / observations.size
             val precisionAt5 = observations.sumOf { it.actual.take(5).count { id -> id == it.expected }.toDouble() / 5.0 } / observations.size
+            val precisionAt1 = observations.count { it.actual.firstOrNull() == it.expected }.toDouble() / observations.size
+            val precisionAtReturned = observations.sumOf { observation ->
+                if (observation.actual.isEmpty()) 0.0 else observation.actual.count { it == observation.expected }.toDouble() / observation.actual.size
+            } / observations.size
+            val meanReturned = observations.sumOf { it.actual.size }.toDouble() / observations.size
             val mrr = observations.sumOf { item -> item.actual.indexOf(item.expected).takeIf { it >= 0 }?.let { 1.0 / (it + 1) } ?: 0.0 } / observations.size
-            println("M20_04_LEXICAL_METRICS language=$language queries=${observations.size} Recall@5=$recallAt5 Precision@5=$precisionAt5 MRR=$mrr")
+            println("M20_04_LEXICAL_METRICS language=$language queries=${observations.size} Recall@5=$recallAt5 Precision@5=$precisionAt5 Precision@1=$precisionAt1 Precision@returned=$precisionAtReturned meanReturned=$meanReturned MRR=$mrr")
         }
     }
 

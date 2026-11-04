@@ -6,7 +6,7 @@
 
 The host regression `syntheticRetrievalCorpusReportsMetricsForThirtyAZRuAndMixedQueries` checks 30 AZ, 30 RU and 30 mixed query variants over 10 stable synthetic task sources per language. Variants include case/diacritic changes, Azerbaijani inflections, RU inflections and alternate AZ/RU/EN word order/phrasing. One same-title source exists in a different scope and must never leak. Every returned task must carry its canonical source ID and exact task revision (`taskId:1`). These are 90 synthetic lexical cases, not 90 independent user intents or a complete relevance corpus.
 
-Measured on the current lexical implementation (top five returned task sources; one labeled relevant source per query):
+Measured on the current lexical implementation (P@5 uses fixed denominator `k=5` even if fewer than five tasks were returned; one labeled relevant source per query):
 
 | Query class | Queries | Recall@5 | Precision@5 | MRR | Cross-scope leaks | Missing/stale provenance |
 | --- | ---: | ---: | ---: | ---: | ---: | ---: |
@@ -14,7 +14,7 @@ Measured on the current lexical implementation (top five returned task sources; 
 | Russian | 30 | 1.000 | 0.200 | 1.000 | 0 | 0 |
 | Mixed AZ/RU/EN | 30 | 1.000 | 0.200 | 0.983 | 0 | 0 |
 
-The 0.20 Precision@5 is a real signal that four of five ranked results are not labeled relevant for a single-source query. The corpus labels only one expected source per query, so the proposed ≥0.90 Precision@5 target is not a valid acceptance gate until queries carry complete multi-source relevance judgments or the application offers an appropriate smaller `k`. Do not declare precision accepted. The existing `car servicing meeting` negative still confirms the current mode does not provide semantic/paraphrase recall. These metrics come from the host in-memory encrypted Room test DB: no Android-device latency, memory, full-query diversity, personal data, or embedding model was evaluated.
+The original `Precision@5=0.20` must not be read as “four of five returned results are irrelevant”: the ranker returns fewer than five task results for many queries, and this metric keeps denominator `k=5`. ACT-0161 added `Precision@1`, the fraction of returned IDs matching the one labeled source (`P@returned`), mean result count and duplicate-source assertions. Baseline values are AZ `P@1=1.000, P@returned=0.412, meanReturned=2.90`; RU `1.000, 0.809, 1.73`; mixed `0.967, 0.396, 2.77`. The single expected source is the only judged relevant source, so `P@returned` is still a labeled precision estimate, not complete relevance truth; additional results may be relevant but unjudged. Do not declare precision accepted. The existing `car servicing meeting` negative still confirms the current mode does not provide semantic/paraphrase recall. These metrics come from the host in-memory encrypted Room test DB: no Android-device latency, memory, full-query diversity, personal data, or embedding model was evaluated.
 
 ## What the current test proves
 
@@ -38,6 +38,10 @@ Record lexical-only and lexical+semantic results on the same corpus. Report Reca
 ## ACT-0159 — Rejected lexical coverage cutoff experiment
 
 To reduce low-confidence lexical matches, the synthetic activity ranker was temporarily gated to require at least 75% of distinct query terms to match. On the same 90-query host corpus, Recall@5 fell from `1.000` to AZ `0.933`, RU `0.833`, and mixed `0.867`; Precision@5 also fell from `0.200` to `0.187`, `0.167`, and `0.173`. MRR fell in lockstep with recall. The filter was reverted and is not part of the product. This experiment shows that a simple term-coverage cutoff trades away expected retrieval without solving the low Precision@5 signal. Keep lexical behavior unchanged until the relevance judgments and appropriate `k` are clarified by a better corpus; do not claim semantic search.
+
+## ACT-0161 — Result-count and top-rank diagnostics
+
+The 90-query host regression now also reports `Precision@1`, labeled-source precision among IDs actually returned (`P@returned`, zero for empty results), and mean number of task results. It asserts no duplicate task IDs per query in addition to scope isolation and canonical task revision provenance. Baseline values: AZ `P@1=1.000, P@returned=0.412, meanReturned=2.90`; RU `1.000, 0.809, 1.73`; mixed `0.967, 0.396, 2.77`. This clarifies that the earlier fixed-denominator `Precision@5=0.20` mixed retrieval quality with under-filled top-five lists; the lower `P@returned` values still use incomplete one-source relevance labels and cannot prove other results irrelevant.
 
 ## Model/runtime boundary
 

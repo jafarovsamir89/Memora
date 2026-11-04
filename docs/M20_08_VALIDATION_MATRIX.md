@@ -2,6 +2,10 @@
 
 Status as of 2026-11-03, APK v57 / 1.1.35-memory-correction-propagation, Room schema 18. This matrix records existing evidence and remaining work; it does not turn host tests into device or live-provider acceptance.
 
+## ACT-0161 — Result-list diagnostics for lexical baseline
+
+The focused 90-query test now reports P@1, labeled-source precision among returned task IDs (`P@returned`, zero for empty results), and mean result count; it asserts no duplicate task IDs. Baseline AZ/RU/mixed: Recall@5 `1.000/1.000/1.000`; fixed-denominator P@5 `0.200/0.200/0.200`; P@1 `1.000/1.000/0.967`; P@returned `0.412/0.809/0.396`; mean results `2.90/1.73/2.77`; MRR `1.000/1.000/0.983`; no scope/provenance/duplicate errors. Since lists are frequently shorter than five, P@5=0.20 is not proof that four of five returned items are irrelevant. P@returned is still based on one relevant label per query; other results remain unjudged. No production ranker change.
+
 ## ACT-0160 — SAF picker launch on Android 14 emulator
 
 The installed v57 app opened the backup screen and launched the platform `DocumentsUI` `PickActivity` from the import action after a synthetic in-memory passphrase was entered. The picker was cancelled without selecting a file; no import, database cutover, or file write occurred. This verifies only the Android 14 picker launch/return path. It does not exercise URI access, provider size metadata, actual backup import/export, force-stop, Redmi behavior, or owner acceptance. The app was returned to its home screen; no app data was cleared or inspected.
@@ -20,7 +24,7 @@ Added a bounded importer that authenticates the GCM tag before parsing its priva
 
 ## ACT-0156 — 90-query lexical retrieval measurements
 
-Added a repeatable host corpus with 30 AZ, 30 RU and 30 mixed query variants over 10 synthetic canonical tasks per language. It reports Recall@5 / Precision@5 / MRR by language and asserts no cross-scope row and complete canonical source/revision provenance. Results: AZ `1.000 / 0.200 / 1.000`; RU `1.000 / 0.200 / 1.000`; mixed `1.000 / 0.200 / 0.983`; 0 scope leaks and 0 missing/stale provenance. Precision is low under the one-relevant-source label because top-5 returns additional unjudged sources; the proposed 0.90 threshold cannot be evaluated until relevance judgments include multiple applicable sources or an appropriate k is defined. The negative paraphrase remains a separate lexical limitation. Full Gradle: 60 suites / 301 tests, 0 failures/errors/skips; debug APK hash remained `d0b497621ff5a5be07f057e76eacf3bfd5ba8c4949dc39ceb44b31abad4ee03d`; lint 0/60/3. Host test only; no embeddings, device performance or personal data.
+Added a repeatable host corpus with 30 AZ, 30 RU and 30 mixed query variants over 10 synthetic canonical tasks per language. ACT-0156 results are Recall@5 `1.000`, fixed-denominator P@5 `0.200`, and MRR `1.000/1.000/0.983`; 0 scope leaks and 0 missing/stale provenance. ACT-0161 added P@1 and returned-list diagnostics; see above. Fixed P@5 denominator plus under-filled result lists means P@5=0.20 is not a false-positive rate, while other candidates are unjudged under the single-source labels. The proposed 0.90 threshold cannot be assessed until full relevance judgments and `k` are defined. The negative paraphrase remains a separate lexical limitation. ACT-0156 full Gradle: 60 suites / 301 tests; lint 0/60/3. Host test only; no embeddings, device performance or personal data.
 
 ## ACT-0149 — Synthetic AZ/RU/mixed lexical baseline
 
