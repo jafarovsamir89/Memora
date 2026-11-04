@@ -1,6 +1,10 @@
 # M20-08 Native validation matrix
 
-Status as of 2026-11-03, APK v54 / 1.1.32-ranked-lexical-memory, Room schema 17. This matrix records existing evidence and remaining work; it does not turn host tests into device or live-provider acceptance.
+Status as of 2026-11-03, APK v55 / 1.1.33-cases-empty-navigation, Room schema 17. This matrix records existing evidence and remaining work; it does not turn host tests into device or live-provider acceptance.
+
+## ACT-0140 update
+
+Visual inspection of the synthetic Android 14 emulator showed the Cases title twice (shared top bar and screen heading), and the empty state had no direct action. Removed only the inner duplicate heading, retained the explanatory subtitle, and added a centered AZ/RU/EN CTA that navigates to Secretary. `UiShellTest.emptyCasesHasSinglePageTitleAndOpensSecretary` verifies the unique content heading and route. Full Gradle: 57 suites / 289 tests, 0 failures/errors/skips; debug and AndroidTest APKs assembled; AndroidTest Kotlin compiled; lint 0 errors / 60 warnings / 3 hints. APK v55 SHA-256 `bce21aef4bf9189a363cf83c59fe4837d59a049c0d08397fedd352d115044027`. v55 installed and launched on synthetic Android 14 emulator; both Cases empty state and Secretary destination were visually inspected. No microphone permission was requested. This does not validate the owner's physical phone or database, and does not close M20-02/03/04/05/08.
 
 ## ACT-0139 update
 

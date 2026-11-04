@@ -319,6 +319,7 @@
     <string name="saved_objects_details_truncated">Показано начало длинной записи.</string>
     <string name="cases_subtitle">Текущие дела и связанные подтверждённые источники.</string>
     <string name="cases_empty">Пока текущих дел нет. Попросите Memora следить за ремонтом, договорённостью или открытым вопросом.</string>
+    <string name="cases_empty_action">Обратиться к секретарю</string>
     <string name="cases_load_error">Не удалось загрузить дела. Попробуйте ещё раз.</string>
     <string name="case_status_open">Открыто</string>
     <string name="case_status_waiting">Ожидает</string>

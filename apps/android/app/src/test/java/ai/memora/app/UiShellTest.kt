@@ -145,6 +145,23 @@ class UiShellTest {
         screenshot("03-source-light")
     }
 
+    @Test fun emptyCasesHasSinglePageTitleAndOpensSecretary() {
+        appearanceStore = AtomicAppearanceStore(File(ApplicationProvider.getApplicationContext<Context>().cacheDir,
+            "ui-cases-settings-${UUID.randomUUID()}"), AppearanceSettings("az", "light"))
+        compose.setContent {
+            CompositionLocalProvider(LocalAgentDatabaseOverride provides agentDatabase.database) {
+                TestMemoraApp(initialTheme = "light", initialLanguage = "az", initialRoute = "cases",
+                    capturePersistenceOverride = captureStore, appearanceStoreOverride = appearanceStore)
+            }
+        }
+        compose.waitUntil(10_000) { compose.onAllNodesWithTag("cases_empty_open_secretary").fetchSemanticsNodes().isNotEmpty() }
+        // One top-bar title plus the selected navigation label; the old duplicate
+        // in the cases content would have made this count three.
+        compose.onAllNodesWithText("İşlər").assertCountEquals(2)
+        compose.onNodeWithTag("cases_empty_open_secretary").assertIsDisplayed().performClick()
+        compose.onNodeWithTag("secretary_voice_card").assertIsDisplayed()
+    }
+
     @Test fun reportsScreenReadsAndLabelsSyntheticLedgerWithoutClaimingProfit() = kotlinx.coroutines.runBlocking {
         val context = ApplicationProvider.getApplicationContext<Context>()
         appearanceStore = AtomicAppearanceStore(File(context.cacheDir, "ui-report-settings-${UUID.randomUUID()}"),

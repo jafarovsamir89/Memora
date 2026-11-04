@@ -1,14 +1,17 @@
 package ai.memora.app
 
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Button
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -20,6 +23,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
@@ -31,7 +35,6 @@ import ai.memora.app.data.protectedstore.ProtectedCaseRepository
 import ai.memora.app.ui.EmptyState
 import ai.memora.app.ui.MemoraCard
 import ai.memora.app.ui.ScreenColumn
-import ai.memora.app.ui.ScreenHeading
 import ai.memora.app.ui.colors
 import ai.memora.app.ui.s
 import ai.memora.app.voice.AgentVoiceTurnProcessor
@@ -41,7 +44,7 @@ import kotlinx.coroutines.launch
 
 /** A local, source-linked view over cases written by the same secretary tools. */
 @Composable
-internal fun CasesScreen() {
+internal fun CasesScreen(onOpenSecretary: () -> Unit = {}) {
     val context = LocalContext.current
     val processor = remember(context) { AgentVoiceTurnProcessor(context) }
     val scopeId = remember(processor) { processor.conversationScopeId() }
@@ -88,11 +91,19 @@ internal fun CasesScreen() {
     }
 
     ScreenColumn(modifier = Modifier.testTag("cases_screen")) {
-        ScreenHeading(s(R.string.cases), s(R.string.cases_subtitle))
+        Text(s(R.string.cases_subtitle), color = colors.muted,
+            style = androidx.compose.material3.MaterialTheme.typography.bodyMedium)
         when {
             loading -> Text(s(R.string.ai_loading), color = colors.muted)
             failed -> EmptyState(s(R.string.working_no_data), s(R.string.cases_load_error))
-            records.isEmpty() -> EmptyState(s(R.string.working_no_data), s(R.string.cases_empty))
+            records.isEmpty() -> {
+                EmptyState(s(R.string.working_no_data), s(R.string.cases_empty))
+                Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
+                    Button(onClick = onOpenSecretary, modifier = Modifier.testTag("cases_empty_open_secretary")) {
+                        Text(s(R.string.cases_empty_action))
+                    }
+                }
+            }
             else -> records.forEach { record ->
                 MemoraCard(
                     onClick = {

@@ -319,6 +319,7 @@
     <string name="saved_objects_details_truncated">Uzun qeydin ilk hissəsi göstərilir.</string>
     <string name="cases_subtitle">Davam edən işlər və onlara bağlı təsdiqlənmiş mənbələr.</string>
     <string name="cases_empty">Hələ davam edən iş yoxdur. Memora-dan təmir, razılaşma və ya gözləyən məsələni izləməsini istəyin.</string>
+    <string name="cases_empty_action">Katibəyə danışın</string>
     <string name="cases_load_error">İşləri yükləmək mümkün olmadı. Yenidən cəhd edin.</string>
     <string name="case_status_open">Açıq</string>
     <string name="case_status_waiting">Gözləyir</string>

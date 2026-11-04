@@ -269,7 +269,7 @@ fun MemoraApp(initialRoute: String = "home", initialTheme: String = "system", ca
                             "finance" -> FinanceScreen()
                             "calendar" -> CalendarScreen()
                             "people" -> SavedObjectsScreen(DomainKind.PERSON)
-                            "cases" -> CasesScreen()
+                            "cases" -> CasesScreen { navigate("chat") }
                             "projects" -> SavedObjectsScreen(DomainKind.PROJECT)
                             "settings" -> SettingsScreen(theme, { appearanceModel.change(theme = it) }, language, {
                                 appearanceModel.change(language = it)

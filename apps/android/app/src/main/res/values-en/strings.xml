@@ -319,6 +319,7 @@
     <string name="saved_objects_details_truncated">Only the beginning of this long record is shown.</string>
     <string name="cases_subtitle">Ongoing cases and their verified linked sources.</string>
     <string name="cases_empty">No ongoing cases yet. Ask Memora to follow a repair, agreement, or open question.</string>
+    <string name="cases_empty_action">Talk to the secretary</string>
     <string name="cases_load_error">Could not load cases. Please try again.</string>
     <string name="case_status_open">Open</string>
     <string name="case_status_waiting">Waiting</string>
