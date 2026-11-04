@@ -138,3 +138,7 @@ On the synthetic Android 14 emulator, the SQLCipher snapshot helper exported all
 ### ACT-0149 — Synthetic multilingual lexical baseline
 
 Added a focused test that searches the same synthetic in-scope task records with an Azerbaijani query (`BMW təmir görüşü`), Russian query (`BMW ремонт встреча`) and mixed Azerbaijani/English query (`BMW təmir appointment`). All expected task sources are returned by the current lexical ranker and marked `ranked_lexical`. This is language-normalization baseline evidence, not semantic/paraphrase recall. The evaluation protocol and future local model gates are in `MEMORY_RETRIEVAL_EVALUATION.md`; M20-04 remains partial.
+
+### ACT-0150 — Snapshot copy verification
+
+The synthetic Room v18 snapshot helper now checks source version, `integrity_check` on both source and exported DB, and matching user table names/row counts. Synthetic Android 14 export and reopen passed. This improves snapshot validation only; it does not supply the user-facing import or atomic database cutover required to complete M20-02.

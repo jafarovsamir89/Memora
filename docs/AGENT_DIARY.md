@@ -20,7 +20,15 @@
 
 **Последний проверенный пакет ACT-0149:** synthetic baseline точного поиска задач на AZ, RU и mixed AZ/EN; свежий полный Gradle прошёл: 59 suites / 296 tests, 0 failures/errors/skips; debug и AndroidTest APK собраны, AndroidTest Kotlin скомпилирован, lint 0 ошибок / 60 warnings / 3 hints. Product APK/schema не менялись; APK SHA-256 `491be68b79e2f58f3eb3b88e0468b7bb80897403235309287d87cd0595715471`. Результаты явно `ranked_lexical`; это не semantic/paraphrase retrieval и M20-04 остаётся partial.
 
+**Последний проверенный пакет ACT-0150:** synthetic Android 14 SQLCipher snapshot probe прошёл после усиления helper: входная schema 18, integrity check обеих БД, сверка имён таблиц и row count каждой таблицы, затем close/reopen и readback synthetic profile fact. Полный Gradle: 59 suites / 296 tests, 0 failures/errors/skips; debug/AndroidTest assembly и AndroidTest Kotlin compile прошли; lint 0 ошибок / 60 warnings / 3 hints. APK v57 SHA-256 `c9693e2919a9828169a6b924a3fbc8bf017434a3cae9d657365004d0dddda772`; владельцу не устанавливался. M20-02 остаётся partial до пользовательского workflow, manifest и атомарного restore.
+
 Следующий шаг: продолжать M20-02 с пользовательским export/import workflow и безопасным restore/cutover поверх synthetic-tested snapshot helper (transactional consistency, verify-before-activate, fail-closed); M20-03 code slice ACT-0145/0146 завершён, но live/owner BMW acceptance остаётся отдельным gate. Для M20-04 — построить синтетический AZ/RU/mixed evaluation и проверить подходящую local model/API, licence, memory/latency на target-class Android; до конкретного результата считать search lexical. M20-02/03/04, native acceptance и release readiness остаются partial.
+
+### ACT-0150 — 2026-11-03 — Проверка целостности SQLCipher snapshot
+
+Усилен `PortableSqlCipherSnapshot`: неподдерживаемая исходная Room schema отклоняется; после `sqlcipher_export` helper выставляет `user_version=18`, запускает `integrity_check` исходной и attached snapshot БД, сравнивает все имена user tables и число строк каждой таблицы. При ошибке до завершения частичный target удаляется. Helper всё ещё вызывается только из opt-in synthetic probe и не является user export/import.
+
+Synthetic Android 14 instrumentation probe прошла: 45 таблиц, schema 18, synthetic profile marker прочитан после close/reopen отдельной БД, открытого marker нет в зашифрованном snapshot и внешнем контейнере. Полный Gradle: 59 suites / 296 tests, 0 failures/errors/skips; debug/AndroidTest assembly и AndroidTest Kotlin compile прошли; lint 0/60/3. APK v57 SHA-256 `c9693e2919a9828169a6b924a3fbc8bf017434a3cae9d657365004d0dddda772`; владельцу не устанавливался. Пользовательский телефон/БД не использовались; M20-02 остаётся partial.
 
 ### ACT-0149 — 2026-11-03 — Синтетический baseline поиска AZ/RU/mixed
 
