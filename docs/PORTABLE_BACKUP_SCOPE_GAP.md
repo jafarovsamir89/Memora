@@ -17,6 +17,8 @@ The first item is proven missing from the user-facing backup. The other files ar
 
 Extend portable backup into one authenticated, versioned bundle of every durable user-owned local store and its required key material, not a collection of separately restorable partial backups. Keep the current outer passphrase encryption and streaming model. Before opening any store on restore, authenticate and validate every manifest section, source schema, length and digest in isolated staging. Then stage all replacement files and key envelopes under one durable journal; startup recovery must activate the whole new generation or return to the whole previous generation. The app must not serve a mixed old/new set. The selected engineering direction is recorded in [ADR-013](adr/ADR-013-portable-backup-all-stores.md); inventory and implementation gates remain open.
 
+Do not simply reuse the existing per-store JSON export methods: capture export omits tombstones and task export omits deleted-ID state. The current importer temporarily writes the decrypted outer payload to an app-private file. The full bundle must keep logical Inbox/task/voice data encrypted at rest during staging; use authenticated streaming or independently encrypted sections that produce only device-encrypted candidates.
+
 ## Acceptance required before M20-02 can claim portable backup completeness
 
 1. Inventory all persistent app-owned stores, keys, migrations, tombstones, revisions and data exclusions; map each owner-visible view to its source of truth.

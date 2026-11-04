@@ -7,7 +7,7 @@
 
 ## Context
 
-Memora has several durable local stores protected by different Android Keystore aliases. A real synthetic SAF round-trip restored the Room/SQLCipher database but omitted a saved Inbox capture from `captures-prototype.bin`. Active task events and voice-memory also use separate files (`tasks-prototype.bin`, `voice-memory.bin`). The current screen exports only the SQLCipher AgentDatabase. Android Keystore keys are non-exportable and device-bound, so copying encrypted files and their aliases cannot create a usable portable backup on another device.
+Memora has several durable local stores protected by different Android Keystore aliases. A real synthetic SAF round-trip restored the Room/SQLCipher database but omitted a saved Inbox capture from `captures-prototype.bin`. Active task events and voice-memory also use separate files (`tasks-prototype.bin`, `voice-memory.bin`). The current screen exports only the SQLCipher AgentDatabase. Android Keystore keys are non-exportable and device-bound, so copying encrypted files and their aliases cannot create a usable portable backup on another device. Existing per-store JSON export methods are not a suitable full-state format: capture export omits tombstones and task export omits deleted-ID state.
 
 ## Decision
 
@@ -17,7 +17,9 @@ Portable backup represents a consistent generation of every durable, user-owned 
 2. Typed logical snapshots of Inbox captures, task events, and voice-memory, including revisions, tombstones and deletion state required for correct readback.
 3. A versioned manifest that identifies included stores, source schema versions, bounded lengths and digests.
 
-The existing passphrase-protected authenticated outer container remains the portability boundary. Export reads each store through its typed API and streams the bundle into that container; it never exports or copies Android Keystore key material. Import validates/authenticates every section in isolation, then writes replacement data using new or existing device-local Keystore keys. Restore stages every store and activates all of them as one recoverable generation. Startup recovery must finish activation of the complete candidate generation or restore the complete prior generation before any screen or agent can read data. Mixed generations are forbidden.
+The existing passphrase-protected authenticated outer container remains the portability boundary. Export reads each store through a typed, complete snapshot API (including tombstones/revisions) and streams the bundle into that container; it never exports or copies Android Keystore key material. Import validates/authenticates every section in isolation, then writes replacement data using new or existing device-local Keystore keys. Restore stages every store and activates all of them as one recoverable generation. Startup recovery must finish activation of the complete candidate generation or restore the complete prior generation before any screen or agent can read data. Mixed generations are forbidden.
+
+The current importer writes the decrypted outer payload to an app-private temporary file before parsing. That is safe only while its inner payload remains independently encrypted. The full-store bundle must not put clear captures/tasks/voice-memory into that temporary file. Extend the container/parser so authenticated data is streamed into locally encrypted candidate stores, or use independently authenticated encrypted sections with a verified manifest. Plain user content may exist only in bounded process memory during conversion; cleanup must clear partial staging files and temporary key bytes.
 
 ## Alternatives considered
 
@@ -31,6 +33,7 @@ The existing passphrase-protected authenticated outer container remains the port
 - Inventory every active and legacy store, key alias/envelope, schema, migration, retention/tombstone rule and source-of-truth screen before code changes.
 - Add a consistent snapshot barrier for foreground, background and scheduled writers.
 - Add typed, bounded adapters for each store; no raw Keystore key export and no plaintext disk staging outside protected app-private files.
+- Preserve tombstones and revisions; do not reuse current human-facing capture/task JSON exports as a complete backup format.
 - Add all-store preflight, journaled activation, rollback and cleanup with fault injection at every durable step.
 - Exercise create → SAF export → mutate/delete → SAF import → cold restart for one synthetic marker in every store; verify both restored and removed markers.
 - Reject wrong passwords, missing/tampered/unsupported store sections and incomplete provider results before changing active data.
