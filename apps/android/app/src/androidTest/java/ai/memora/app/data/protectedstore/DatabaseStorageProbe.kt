@@ -23,6 +23,7 @@ import org.json.JSONObject
 import java.io.File
 import java.io.FileOutputStream
 import java.io.IOException
+import java.io.ByteArrayOutputStream
 import java.nio.ByteBuffer
 import java.security.KeyStore
 import java.util.UUID
@@ -99,25 +100,47 @@ object DatabaseStorageProbe {
             val snapshotBytes = snapshot.readBytes()
             val plaintextMarkerAbsent = !snapshotBytes.toString(Charsets.ISO_8859_1).contains("synthetic-portable-snapshot-marker")
             check(plaintextMarkerAbsent)
-            stage = "wrap_snapshot_in_portable_container"
+            stage = "stream_export_snapshot_into_portable_container"
             val appVersionCode = PackageInfoCompat.getLongVersionCode(
                 context.packageManager.getPackageInfo(context.packageName, 0),
             ).toInt()
-            val payload = PortableBackupPayload.encode(
-                roomSchemaVersion = 18,
-                appVersionCode = appVersionCode,
-                createdAtEpochMillis = System.currentTimeMillis(),
-                snapshotKeyMaterial = snapshotKey,
-                encryptedSnapshot = snapshotBytes,
-            )
             val portablePassphrase = "synthetic portable backup passphrase".toCharArray()
-            val portableFile = PortableBackupCipher().encrypt(payload, portablePassphrase)
+            val portableOutput = ByteArrayOutputStream()
+            val exportResult = PortableBackupExporter.export(
+                context,
+                source!!.openHelper.writableDatabase,
+                portablePassphrase,
+                portableOutput,
+            )
+            val portableFile = portableOutput.toByteArray()
+            check(exportResult.containerBytes == portableFile.size.toLong())
+            stage = "clean_private_export_files_after_destination_failure"
+            val failedExportPassphrase = "synthetic portable backup passphrase".toCharArray()
+            val destinationFailure = runCatching {
+                PortableBackupExporter.export(
+                    context,
+                    source!!.openHelper.writableDatabase,
+                    failedExportPassphrase,
+                    object : java.io.OutputStream() {
+                        override fun write(value: Int) { throw IOException("synthetic destination failure") }
+                        override fun write(bytes: ByteArray, offset: Int, length: Int) {
+                            throw IOException("synthetic destination failure")
+                        }
+                    },
+                )
+            }.isFailure
+            failedExportPassphrase.fill('\u0000')
+            val exportFilesCleaned = context.noBackupFilesDir.listFiles().orEmpty().none {
+                it.name.startsWith("memora-portable-export-")
+            }
+            check(destinationFailure && exportFilesCleaned)
+            result.putBoolean("destination_failure_cleaned_private_export_files", exportFilesCleaned)
+            stage = "verify_streamed_export_envelope"
             val encryptedContainerHasNoMarker = !portableFile.toString(Charsets.ISO_8859_1)
                 .contains("synthetic-portable-snapshot-marker")
             val openedPayload = PortableBackupCipher().decrypt(portableFile, portablePassphrase)
             portablePassphrase.fill('\u0000')
             snapshotBytes.fill(0)
-            payload.fill(0)
             portableFile.fill(0)
             check(encryptedContainerHasNoMarker)
             val decoded = PortableBackupPayload.decode(openedPayload)
@@ -125,6 +148,8 @@ object DatabaseStorageProbe {
             check(decoded.manifest.roomSchemaVersion == 18)
             check(decoded.manifest.appVersionCode == appVersionCode)
             check(decoded.manifest.encryptedSnapshotBytes == decoded.encryptedSnapshot.size)
+            check(exportResult.manifest == decoded.manifest)
+            result.putLong("streamed_export_container_bytes", exportResult.containerBytes)
             result.putBoolean("manifest_schema_and_snapshot_length_verified", true)
             stage = "validate_imported_snapshot_in_isolated_room_database"
             source!!.close()

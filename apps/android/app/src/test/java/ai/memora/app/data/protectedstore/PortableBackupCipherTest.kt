@@ -1,7 +1,10 @@
 package ai.memora.app.data.protectedstore
 
+import java.io.ByteArrayInputStream
+import java.io.ByteArrayOutputStream
 import org.junit.Assert.assertArrayEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertEquals
 import org.junit.Assert.assertThrows
 import org.junit.Test
 
@@ -43,5 +46,25 @@ class PortableBackupCipherTest {
         }
         assertThrows(PortableBackupFormatException::class.java) { cipher.decrypt(tooManyIterations, password) }
         assertThrows(IllegalArgumentException::class.java) { cipher.encrypt(byteArrayOf(), "short".toCharArray()) }
+    }
+
+    @Test fun streamingEncryptionAndDecryptionRoundTripAndRejectWrongLengthOrPassword() {
+        val payload = ByteArray(180_000) { (it % 251).toByte() }
+        val encrypted = ByteArrayOutputStream()
+        val encryptedBytes = cipher.encrypt(ByteArrayInputStream(payload), payload.size.toLong(), password, encrypted)
+        assertEquals(encrypted.size().toLong(), encryptedBytes)
+
+        val restored = ByteArrayOutputStream()
+        val restoredBytes = cipher.decrypt(ByteArrayInputStream(encrypted.toByteArray()), encryptedBytes, password, restored)
+        assertEquals(payload.size.toLong(), restoredBytes)
+        assertArrayEquals(payload, restored.toByteArray())
+
+        assertThrows(IllegalArgumentException::class.java) {
+            cipher.encrypt(ByteArrayInputStream(payload), payload.size.toLong() - 1, password, ByteArrayOutputStream())
+        }
+        assertThrows(PortableBackupAuthenticationException::class.java) {
+            cipher.decrypt(ByteArrayInputStream(encrypted.toByteArray()), encryptedBytes,
+                "wrong streaming password".toCharArray(), ByteArrayOutputStream())
+        }
     }
 }

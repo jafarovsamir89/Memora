@@ -1,6 +1,8 @@
 package ai.memora.app.data.protectedstore
 
 import java.nio.ByteBuffer
+import java.io.File
+import java.io.FileInputStream
 import java.security.MessageDigest
 
 /** Authenticated-inner manifest and SQLCipher snapshot payload, itself wrapped by [PortableBackupCipher]. */
@@ -80,6 +82,63 @@ internal object PortableBackupPayload {
         )
     }
 
+    fun headerForSnapshotFile(
+        roomSchemaVersion: Int,
+        appVersionCode: Int,
+        createdAtEpochMillis: Long,
+        snapshotKeyMaterial: ByteArray,
+        encryptedSnapshotFile: File,
+    ): PreparedPortableBackupPayload {
+        require(roomSchemaVersion == SUPPORTED_ROOM_SCHEMA) { "Unsupported Room schema version" }
+        require(appVersionCode > 0) { "Invalid app version" }
+        require(createdAtEpochMillis > 0) { "Invalid backup creation time" }
+        require(snapshotKeyMaterial.size == SNAPSHOT_KEY_BYTES) { "Snapshot key must be 256 bits" }
+        val byteCount = encryptedSnapshotFile.length()
+        require(encryptedSnapshotFile.isFile && byteCount in 1L..MAX_SNAPSHOT_BYTES.toLong()) {
+            "Unsupported SQLCipher snapshot size"
+        }
+        val digest = MessageDigest.getInstance("SHA-256")
+        val buffer = ByteArray(64 * 1024)
+        var readBytes = 0L
+        try {
+            FileInputStream(encryptedSnapshotFile).use { input ->
+                while (true) {
+                    val read = input.read(buffer)
+                    if (read < 0) break
+                    if (read == 0) continue
+                    digest.update(buffer, 0, read)
+                    readBytes += read
+                }
+            }
+            check(readBytes == byteCount && encryptedSnapshotFile.length() == byteCount) {
+                "SQLCipher snapshot changed while preparing its manifest"
+            }
+            val hash = digest.digest()
+            return try {
+                val prefix = ByteBuffer.allocate(HEADER_BYTES)
+                    .put(MAGIC)
+                    .put(FORMAT_VERSION)
+                    .putInt(roomSchemaVersion)
+                    .putInt(appVersionCode)
+                    .putLong(createdAtEpochMillis)
+                    .putInt(byteCount.toInt())
+                    .put(hash)
+                    .put(snapshotKeyMaterial)
+                    .array()
+                PreparedPortableBackupPayload(
+                    manifest = PortableBackupManifest(roomSchemaVersion, appVersionCode,
+                        createdAtEpochMillis, byteCount.toInt()),
+                    prefix = prefix,
+                    payloadBytes = HEADER_BYTES.toLong() + byteCount,
+                )
+            } finally {
+                hash.fill(0)
+            }
+        } finally {
+            buffer.fill(0)
+        }
+    }
+
     const val SUPPORTED_ROOM_SCHEMA = 18
 }
 
@@ -88,6 +147,12 @@ internal data class PortableBackupManifest(
     val appVersionCode: Int,
     val createdAtEpochMillis: Long,
     val encryptedSnapshotBytes: Int,
+)
+
+internal data class PreparedPortableBackupPayload(
+    val manifest: PortableBackupManifest,
+    val prefix: ByteArray,
+    val payloadBytes: Long,
 )
 
 internal data class DecodedPortableBackup(

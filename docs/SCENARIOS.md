@@ -206,3 +206,7 @@ A user states a real-world financial fact in ordinary Azerbaijani, Russian, or m
 ## S48 — Базовый локальный поиск AZ/RU/mixed
 
 Локальный поиск по synthetic canonical task источникам должен находить точные азербайджанские слова `BMW təmir görüşü`, русские `BMW ремонт встреча` и смешанный запрос `BMW təmir appointment`, возвращая ожидаемые task IDs с `match_mode=ranked_lexical`. Перефразированный запрос `car servicing meeting` не имеет lexical hit и возвращает пустой task set — приложение не должно заявлять semantic recall. Полный evaluation corpus и модельные метрики ведутся отдельно в `docs/MEMORY_RETRIEVAL_EVALUATION.md`.
+
+## S49 — Потоковый экспорт очищает приватные временные файлы при ошибке
+
+На отдельной synthetic Room/SQLCipher базе экспортёр создаёт защищённый контейнер без plaintext marker, manifest и snapshot key проверяются через существующий authenticated parser/staging validator, а потоковая криптография не читает полный snapshot в память. Успешная операция оставляет результат только в stream вызывающей стороны и удаляет приватные временные snapshot/envelope. Если output stream сообщает ошибку записи, export отказывает, удаляет свои временные файлы, не закрывает владённый caller stream и не изменяет активную БД. Неполный caller-owned target должен быть удалён вызывающей SAF логикой. ACT-0154 проверил synthetic happy path и cleanup path; SAF/реальное устройство остаются отдельной приёмкой.

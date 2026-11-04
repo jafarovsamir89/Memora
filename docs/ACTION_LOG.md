@@ -1,3 +1,11 @@
+## ACT-0154 - 2026-11-03 - Потоковый защищённый экспорт SQLCipher snapshot
+
+Добавлены streaming AES-GCM encrypt/decrypt API с проверкой declared length, 64 KiB buffer, проверкой tag и host regressions на round-trip, неверный пароль и неверную длину. `PortableBackupPayload.headerForSnapshotFile` вычисляет manifest и SHA-256 потоково. Новый `PortableBackupExporter` формирует отдельный SQLCipher snapshot, шифрует manifest+snapshot в приватный `AtomicFile`, fsync/commit завершённого контейнера и копирует его в caller output stream; секретные временные байты/файлы очищаются. При ошибке destination может остаться частичный внешний файл, который будущая SAF обвязка обязана удалить.
+
+Synthetic Android 14 probe проверил production coordinator, Room schema18, 44 user tables, один marker, manifest equality, отсутствие marker в обеих encrypted слоях, staging close/reopen, неверный snapshot key и cleanup приватных export-файлов при искусственной ошибке destination; статус passed, envelope 581778 bytes. Полный Gradle: 60 suites / 299 tests, 0 failures/errors/skips; debug и AndroidTest APK, AndroidTest Kotlin compile и lint успешны; lint 0/60/3. APK SHA-256 `f7bf6ddcfdd4f6d7f1ff5b0297eb89957c7b245687eee8cc24092fe6d82be24b`.
+
+Обновлены ADR-017, S47, TODO, validation matrix, README/engineering/product checkpoints, AGENTS и дневник. M20-02 остаётся partial: SAF picker/UI, streaming import, atomic active DB cutover/recovery, format migration, физический KDF benchmark и owner acceptance не выполнены. Только synthetic Android 14 emulator; user DB/phone не использовались. Пользовательский untracked ADR-012 сохранён без изменения. Пакет закоммичен локально; push не запрашивался.
+
 ## ACT-0146 - 2026-11-03 - Verify BMW case finance semantics across SQLCipher reopen
 
 Extended M20-03 synthetic coverage with an owner-confirmed finance/domain PERSON bridge, a canonical project, an exact memory revision, a 300 AZN debt obligation and one 100 AZN receipt allocated to it. The remaining 200 AZN is asserted as outstanding debt, never as cash income. The fake-provider journey links the exact project, memory revision, receipt and obligation into the case; repository readback verifies original IDs and single canonical source rows.
