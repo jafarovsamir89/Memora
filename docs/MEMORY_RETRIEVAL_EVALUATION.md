@@ -1,12 +1,26 @@
 # M20-04 local retrieval evaluation
 
-**Status:** lexical evaluation harness covers 90 synthetic query variants; semantic retrieval is not implemented. Last updated 2026-11-03.
+**Status:** lexical host harness now evaluates 93 synthetic queries against explicit relevant sets over 30 in-scope task sources; semantic retrieval is not implemented. Last updated 2026-11-03.
+
+## ACT-0163 — Full judgments for the existing synthetic corpus
+
+The regression retains the existing 30 lexical variants per AZ/RU/mixed class and adds one broad multi-source query per class: `görüşlər` expects AZ tasks `az-01/04/09`, `встречи` expects `ru-01/04/09`, and `meeting` expects mixed tasks `mx-04/09`. For each query, `relevantIds` lists all expected task sources, and the other task IDs in the 30-source synthetic evaluation universe are treated as non-relevant. Every returned task is still checked for source/revision provenance, duplicate IDs, and cross-scope leakage. Thus precision is fully judged for this narrow synthetic corpus; this does not establish relevance completeness for real user intents.
+
+Focused test `syntheticRetrievalCorpusReportsMetricsForThirtyAZRuAndMixedQueries` passed with 31 queries/class:
+
+| Class | Recall@5 | Fixed P@5 | P@1 | P@returned | Mean returned | MRR | False-positive IDs | Relevant IDs missing at 5 |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| AZ | 1.000 | 0.213 | 1.000 | 0.423 | 2.94 | 1.000 | 58 | 0 |
+| RU | 1.000 | 0.213 | 1.000 | 0.815 | 1.77 | 1.000 | 22 | 0 |
+| Mixed AZ/RU/EN | 0.984 | 0.200 | 0.935 | 0.399 | 2.74 | 0.968 | 54 | 1 |
+
+These results show multiple wrong task candidates and one missed member of the broad mixed-language relevant set in the current lexical ranker. They are not a reason to change ranking yet: the corpus has only 10 synthetic task intents/class plus one broad query, no real user evaluation, and only a single explicit multilingual query per class. The next useful step is expand independently reviewed broad/paraphrase/person/project/time query categories and source sets, then consider retrieval changes against those labels. No production ranking behavior, model, schema or vector index changed.
 
 ## ACT-0156 — 90-query lexical baseline
 
 The host regression `syntheticRetrievalCorpusReportsMetricsForThirtyAZRuAndMixedQueries` checks 30 AZ, 30 RU and 30 mixed query variants over 10 stable synthetic task sources per language. Variants include case/diacritic changes, Azerbaijani inflections, RU inflections and alternate AZ/RU/EN word order/phrasing. One same-title source exists in a different scope and must never leak. Every returned task must carry its canonical source ID and exact task revision (`taskId:1`). These are 90 synthetic lexical cases, not 90 independent user intents or a complete relevance corpus.
 
-Measured on the current lexical implementation (P@5 uses fixed denominator `k=5` even if fewer than five tasks were returned; one labeled relevant source per query):
+Measured in ACT-0156 on the prior narrow one-relevant-source label set (P@5 used fixed denominator `k=5` even if fewer than five tasks were returned):
 
 | Query class | Queries | Recall@5 | Precision@5 | MRR | Cross-scope leaks | Missing/stale provenance |
 | --- | ---: | ---: | ---: | ---: | ---: | ---: |
@@ -14,7 +28,7 @@ Measured on the current lexical implementation (P@5 uses fixed denominator `k=5`
 | Russian | 30 | 1.000 | 0.200 | 1.000 | 0 | 0 |
 | Mixed AZ/RU/EN | 30 | 1.000 | 0.200 | 0.983 | 0 | 0 |
 
-The original `Precision@5=0.20` must not be read as “four of five returned results are irrelevant”: the ranker returns fewer than five task results for many queries, and this metric keeps denominator `k=5`. ACT-0161 added `Precision@1`, the fraction of returned IDs matching the one labeled source (`P@returned`), mean result count and duplicate-source assertions. Baseline values are AZ `P@1=1.000, P@returned=0.412, meanReturned=2.90`; RU `1.000, 0.809, 1.73`; mixed `0.967, 0.396, 2.77`. The single expected source is the only judged relevant source, so `P@returned` is still a labeled precision estimate, not complete relevance truth; additional results may be relevant but unjudged. Do not declare precision accepted. The existing `car servicing meeting` negative still confirms the current mode does not provide semantic/paraphrase recall. These metrics come from the host in-memory encrypted Room test DB: no Android-device latency, memory, full-query diversity, personal data, or embedding model was evaluated.
+The prior ACT-0156 `Precision@5=0.20` used fixed denominator `k=5`, while the set of relevant sources was incomplete; do not interpret it as four of five returned results being irrelevant. ACT-0161 introduced P@1 / P@returned / mean results. ACT-0163 now supplies full judgments only for the current synthetic task universe and reports false positives; the table above supersedes its precision values for this corpus. The negative `car servicing meeting` case still confirms the lexical mode does not provide semantic/paraphrase recall. All measurements are from a host in-memory encrypted Room test DB, not an Android device, and use synthetic topics only.
 
 ## What the current test proves
 

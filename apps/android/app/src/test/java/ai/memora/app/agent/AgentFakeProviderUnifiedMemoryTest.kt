@@ -221,7 +221,9 @@ class AgentFakeProviderUnifiedMemoryTest {
 
     @Test fun syntheticRetrievalCorpusReportsMetricsForThirtyAZRuAndMixedQueries() = runBlocking {
         data class Record(val id: String, val title: String, val queries: List<String>)
-        data class Observation(val expected: String, val actual: List<String>)
+        // All synthetic task IDs are judged for each query; every ID outside this set is non-relevant.
+        data class LabeledQuery(val text: String, val relevantIds: Set<String>)
+        data class Observation(val relevantIds: Set<String>, val actual: List<String>)
         val corpus = mapOf(
             "az" to listOf(
                 Record("az-01", "BMW təmir görüşü cümə", listOf("BMW təmir görüşü", "bmw təmir görüşə", "BMW təmir görüşü cümə")),
@@ -275,33 +277,57 @@ class AgentFakeProviderUnifiedMemoryTest {
             ProtectedMemoryRepository(databaseRule.database)).handlers().single { it.descriptor.name == "search_memory" }
         val turn = AgentTurnRequest("retrieval-evaluation-turn", scope, "retrieval-evaluation-session", null,
             "az-AZ", "Synthetic retrieval evaluation")
+        val broadQueries = mapOf(
+            "az" to listOf(LabeledQuery("görüşlər", setOf("az-01", "az-04", "az-09"))),
+            "ru" to listOf(LabeledQuery("встречи", setOf("ru-01", "ru-04", "ru-09"))),
+            "mixed" to listOf(LabeledQuery("meeting", setOf("mx-04", "mx-09"))),
+        )
+        val relevantUniverse = corpus.values.flatten().map { it.id }.toSet()
         for ((language, records) in corpus) {
-            val observations = records.flatMap { record -> record.queries.map { query -> query to record.id } }.mapIndexed { index, (query, expected) ->
+            val labeledQueries = records.flatMap { record ->
+                record.queries.map { query -> LabeledQuery(query, setOf(record.id)) }
+            } + broadQueries.getValue(language)
+            val observations = labeledQueries.mapIndexed { index, query ->
                 val result = handler.read(AgentModelToolCall("retrieval-eval-$language-$index", "search_memory", 1,
-                    mapOf("query" to query)), turn)
+                    mapOf("query" to query.text)), turn)
                 assertEquals(ToolObservationStatus.APPLIED, result.status)
                 assertEquals("ranked_lexical", result.modelData["match_mode"])
                 val taskHits = (result.modelData["activity"] as List<*>).mapNotNull { item ->
                     (item as? Map<*, *>)?.takeIf { it["kind"] == "task" }
                 }
-                assertTrue("cross-scope row leaked for '$query'", taskHits.none { it["task_id"] == "outside-scope-decoy" })
-                assertTrue("source/revision missing for '$query'", taskHits.all {
+                assertTrue("cross-scope row leaked for '${query.text}'", taskHits.none { it["task_id"] == "outside-scope-decoy" })
+                assertTrue("source/revision missing for '${query.text}'", taskHits.all {
                     it["source_id"] == it["task_id"] && it["source_revision_id"] == "${it["task_id"]}:1"
                 })
                 val ids = taskHits.map { it["task_id"] as String }
-                assertEquals("duplicate task evidence for '$query'", ids.size, ids.distinct().size)
-                Observation(expected, ids)
+                assertEquals("duplicate task evidence for '${query.text}'", ids.size, ids.distinct().size)
+                assertTrue("unknown task source returned for '${query.text}'", ids.all { it in relevantUniverse })
+                Observation(query.relevantIds, ids)
             }
-            assertEquals("each language has 30 query variants", 30, observations.size)
-            val recallAt5 = observations.count { it.actual.take(5).contains(it.expected) }.toDouble() / observations.size
-            val precisionAt5 = observations.sumOf { it.actual.take(5).count { id -> id == it.expected }.toDouble() / 5.0 } / observations.size
-            val precisionAt1 = observations.count { it.actual.firstOrNull() == it.expected }.toDouble() / observations.size
+            assertEquals("each language has 30 lexical variants plus one multi-source query", 31, observations.size)
+            val recallAt5 = observations.sumOf { observation ->
+                observation.actual.take(5).count { it in observation.relevantIds }.toDouble() /
+                    observation.relevantIds.size
+            } / observations.size
+            val precisionAt5 = observations.sumOf { observation ->
+                observation.actual.take(5).count { it in observation.relevantIds }.toDouble() / 5.0
+            } / observations.size
+            val precisionAt1 = observations.count { observation ->
+                observation.actual.firstOrNull() in observation.relevantIds
+            }.toDouble() / observations.size
             val precisionAtReturned = observations.sumOf { observation ->
-                if (observation.actual.isEmpty()) 0.0 else observation.actual.count { it == observation.expected }.toDouble() / observation.actual.size
+                if (observation.actual.isEmpty()) 0.0 else
+                    observation.actual.count { it in observation.relevantIds }.toDouble() / observation.actual.size
             } / observations.size
             val meanReturned = observations.sumOf { it.actual.size }.toDouble() / observations.size
-            val mrr = observations.sumOf { item -> item.actual.indexOf(item.expected).takeIf { it >= 0 }?.let { 1.0 / (it + 1) } ?: 0.0 } / observations.size
-            println("M20_04_LEXICAL_METRICS language=$language queries=${observations.size} Recall@5=$recallAt5 Precision@5=$precisionAt5 Precision@1=$precisionAt1 Precision@returned=$precisionAtReturned meanReturned=$meanReturned MRR=$mrr")
+            val mrr = observations.sumOf { item ->
+                item.actual.indexOfFirst { it in item.relevantIds }.takeIf { it >= 0 }?.let { 1.0 / (it + 1) } ?: 0.0
+            } / observations.size
+            val falsePositiveIds = observations.sumOf { item -> item.actual.count { it !in item.relevantIds } }
+            val missingRelevantAt5 = observations.sumOf { item ->
+                item.relevantIds.count { relevant -> relevant !in item.actual.take(5) }
+            }
+            println("M20_04_JUDGED_METRICS language=$language queries=${observations.size} Recall@5=$recallAt5 Precision@5=$precisionAt5 Precision@1=$precisionAt1 Precision@returned=$precisionAtReturned meanReturned=$meanReturned MRR=$mrr falsePositiveIds=$falsePositiveIds missingRelevantAt5=$missingRelevantAt5")
         }
     }
 
