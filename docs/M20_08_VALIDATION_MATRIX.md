@@ -2,6 +2,10 @@
 
 Status as of 2026-11-03, APK v57 / 1.1.35-memory-correction-propagation, Room schema 18. This matrix records existing evidence and remaining work; it does not turn host tests into device or live-provider acceptance.
 
+## ACT-0164 — Negative near-miss retrieval behavior
+
+Added explicit empty-relevance synthetic queries for AZ `BMW ödəniş`, RU `BMW оплата`, and mixed `BMW payment`. Focused test passed: each negative query retrieved 4/3/4 task IDs respectively, despite the corpus containing no BMW payment task. Positive Recall@5 stayed `1.000/1.000/0.984`; P@returned across positive+negative queries is `0.409/0.790/0.386`. This quantifies false candidates; it does not modify the ranker or prove a production rejection policy. Full Gradle passed: 60 suites / 303 tests, 0 failures/errors/skips; debug/AndroidTest builds, AndroidTest Kotlin compile passed; lint 0/63/3.
+
 ## ACT-0163 — Fully judged synthetic retrieval corpus
 
 The M20-04 regression now evaluates 31 queries in each AZ/RU/mixed class against explicit relevant IDs in a 30-task synthetic universe, including one broad multi-source query per class. Focused test passed: Recall@5 `1.000/1.000/0.984`, P@returned `0.423/0.815/0.399`, false-positive IDs `58/22/54`; one relevant mixed source is missing from top-5. Scope, source/revision provenance and duplicate-ID assertions remain in the test. No production ranking code changed. This is complete relevance labeling only for this small synthetic task corpus; semantic/paraphrase, person/project/time, natural user queries and target-device performance remain unvalidated. See [retrieval evaluation](MEMORY_RETRIEVAL_EVALUATION.md).
