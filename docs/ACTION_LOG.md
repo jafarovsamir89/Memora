@@ -1,3 +1,11 @@
+## ACT-0146 - 2026-11-03 - Verify BMW case finance semantics across SQLCipher reopen
+
+Extended M20-03 synthetic coverage with an owner-confirmed finance/domain PERSON bridge, a canonical project, an exact memory revision, a 300 AZN debt obligation and one 100 AZN receipt allocated to it. The remaining 200 AZN is asserted as outstanding debt, never as cash income. The fake-provider journey links the exact project, memory revision, receipt and obligation into the case; repository readback verifies original IDs and single canonical source rows.
+
+Extended `DatabaseStorageProbe.runMigration` on the isolated synthetic database. On the Android 14 emulator it migrated Room v1→v18, seeded the scoped case and source links, closed/reopened the SQLCipher file, then rechecked source IDs/revision, identity bridge, one receipt, 300 AZN obligation/200 AZN remainder and no duplicate project/memory rows. Instrumentation returned `status=passed`; the named synthetic database, envelope and Keystore alias were deleted in `finally`. No physical phone or user database was accessed. Full Gradle `testDebugUnitTest assembleDebug assembleDebugAndroidTest compileDebugAndroidTestKotlin lintDebug` passed: 58 suites / 292 tests, 0 failures/errors/skips; lint 0 errors / 60 warnings / 3 hints. APK v57/schema18 and product code are unchanged.
+
+Updated S46, TODO, validation matrix, product/engineering checkpoints, AGENTS and diary. Live Gemini intent selection and owner device acceptance remain open; M20-03 is partial. M20-02 protected export/recovery and M20-04 semantic/hybrid retrieval remain active. Changes committed locally; no push requested.
+
 ## ACT-0145 - 2026-11-03 - Verify canonical project and memory sources on a case
 
 Extended the synthetic fake-provider case journey to link one canonical PROJECT and one exact `memory_revision`, alongside the existing finance receipt. Readback verifies exact source IDs/revision, resolved title/text and one canonical row per source; no case-local copies are created. Compose coverage confirms the case exposes project and memory evidence and opens their details. No production source, schema or APK version changed.

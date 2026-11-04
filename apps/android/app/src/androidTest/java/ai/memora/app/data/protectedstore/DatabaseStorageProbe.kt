@@ -483,6 +483,7 @@ object DatabaseStorageProbe {
             verifyP3P6Domain(db!!)
             verifyFinanceClarificationChain(db!!)
             val aliasProbe = verifyPersonAliasChain(db!!)
+            seedCanonicalCaseContinuityProbe(db!!)
             runBlocking {
                 val archive = ProtectedConversationRepository(db!!)
                 val now = System.currentTimeMillis()
@@ -509,6 +510,7 @@ object DatabaseStorageProbe {
                 .setJournalMode(androidx.room.RoomDatabase.JournalMode.TRUNCATE)
                 .openHelperFactory(SupportOpenHelperFactory(reopenedKey, null, false)).build()
             db.openHelper.writableDatabase
+            verifyCanonicalCaseContinuityProbe(db!!)
             runBlocking {
                 val journal = RoomAgentRunJournal(db!!)
                 val interrupted = journal.interruptedTurns()
@@ -598,6 +600,7 @@ object DatabaseStorageProbe {
             result.putBoolean("p5_bounded_evidence_search", true)
             result.putBoolean("p6_exact_settlement_task_event_and_calendar_validation", true)
             result.putBoolean("financial_clarification_annotation_correction_and_restart_readback", true)
+            result.putBoolean("canonical_case_project_memory_identity_and_exact_finance_survive_sqlcipher_reopen", true)
             result.putBoolean("same_name_conflict_has_no_finance_write", true)
             result.putBoolean("p3_p6_data_survives_database_reopen", true)
             result.putBoolean("room_2_to_3_recovery_journal_survives_reopen", true)
@@ -759,6 +762,73 @@ object DatabaseStorageProbe {
         val retired = aliases.retire(scope, saved.aliasId, saved.version, nowMillis = 200)
         aliases.restore(scope, retired.aliasId, retired.version, nowMillis = 300)
         Triple(scope, personId, saved.aliasId)
+    }
+
+    /** Synthetic cross-domain BMW case with owner-confirmed identity and canonical, non-copied sources. */
+    private fun seedCanonicalCaseContinuityProbe(db: AgentDatabase) = runBlocking {
+        val scope = "synthetic-bmw-case-continuity"
+        val domain = ProtectedDomainRepository(db)
+        domain.createObject(scope, "synthetic-bmw-domain-person", DomainKind.PERSON, "Synthetic Elchin", null, null,
+            "2026-11-03T09:00:00Z")
+        domain.createObject(scope, "synthetic-bmw-project", DomainKind.PROJECT, "Synthetic BMW repair", "Fictional project source", null,
+            "2026-11-03T09:01:00Z")
+        val debt = domain.recordFinanceEvent(scope, "Synthetic Elchin", "debt", 30_000L, "AZN", "synthetic agreed repair total", null,
+            "synthetic-bmw-finance-person", "synthetic-bmw-obligation", "synthetic-bmw-obligation-command",
+            "2026-11-03T09:02:00Z", "2026-11-03T09:02:00Z")
+        val receipt = domain.recordFinanceEvent(scope, "Synthetic Elchin", "receipt", 10_000L, "AZN", "synthetic advance received", null,
+            "synthetic-bmw-finance-person", "synthetic-bmw-receipt", "synthetic-bmw-receipt-command",
+            "2026-11-03T09:03:00Z", "2026-11-03T09:03:00Z")
+        check(domain.recordSettlement(scope, "synthetic-bmw-settlement", "synthetic-bmw-settlement-command", debt.eventId,
+            10_000L, "AZN", "2026-11-03T09:03:00Z", "synthetic advance", receipt.eventId) == 20_000L)
+        db.protectedStoreDao().putSources(listOf(MemorySourceRow("synthetic-bmw-memory", "synthetic-bmw-memory-command",
+            null, "Asia/Baku", "voice", false, 1, scope)))
+        db.protectedStoreDao().putRevisions(listOf(MemoryRevisionRow("synthetic-bmw-memory", "synthetic-bmw-memory-revision",
+            1, "Synthetic note: replacement parts arrive Friday.", "2026-11-03T09:04:00Z")))
+
+        val cases = ProtectedCaseRepository(db)
+        cases.confirmFinancePersonIdentity(scope, "synthetic-bmw-finance-person", "synthetic-bmw-domain-person",
+            confirmedBy = "owner", now = "2026-11-03T09:05:00Z")
+        cases.createCase(scope, "synthetic-bmw-case", "Synthetic BMW repair", "Fictional repair details",
+            nextAction = "Wait for parts", sourceTurnId = "synthetic-bmw-source-turn", now = "2026-11-03T09:06:00Z")
+        cases.addParticipant(scope, "synthetic-bmw-case", "synthetic-bmw-domain-person", role = "customer",
+            participantId = "synthetic-bmw-participant", now = "2026-11-03T09:07:00Z")
+        cases.addEvidence(scope, "synthetic-bmw-case", "domain_object", "synthetic-bmw-project", "repair_project",
+            evidenceId = "synthetic-bmw-project-evidence", now = "2026-11-03T09:08:00Z")
+        cases.addEvidence(scope, "synthetic-bmw-case", "memory_revision", "synthetic-bmw-memory", "repair_note",
+            sourceRevisionId = "synthetic-bmw-memory-revision", evidenceId = "synthetic-bmw-memory-evidence",
+            now = "2026-11-03T09:09:00Z")
+        cases.addEvidence(scope, "synthetic-bmw-case", "money_event", debt.eventId, "agreed_total",
+            evidenceId = "synthetic-bmw-obligation-evidence", now = "2026-11-03T09:10:00Z")
+        cases.addEvidence(scope, "synthetic-bmw-case", "money_event", receipt.eventId, "advance_received",
+            evidenceId = "synthetic-bmw-receipt-evidence", now = "2026-11-03T09:11:00Z")
+        verifyCanonicalCaseContinuityProbe(db)
+    }
+
+    /** Re-run before and after reopening the SQLCipher file to prove canonical case-source continuity. */
+    private fun verifyCanonicalCaseContinuityProbe(db: AgentDatabase) = runBlocking {
+        val scope = "synthetic-bmw-case-continuity"
+        val snapshot = requireNotNull(ProtectedCaseRepository(db).caseSnapshot(scope, "synthetic-bmw-case"))
+        check(snapshot.participants.single().objectId == "synthetic-bmw-domain-person")
+        check(snapshot.record.title == "Synthetic BMW repair" && snapshot.record.nextAction == "Wait for parts")
+        check(snapshot.evidence.size == 4 && snapshot.evidence.all { it.sourceAvailable })
+        check(snapshot.evidence.any { it.evidence.sourceKind == "domain_object" &&
+            it.evidence.sourceId == "synthetic-bmw-project" && it.title == "Synthetic BMW repair" })
+        check(snapshot.evidence.any { it.evidence.sourceKind == "memory_revision" &&
+            it.evidence.sourceId == "synthetic-bmw-memory" && it.evidence.sourceRevisionId == "synthetic-bmw-memory-revision" &&
+            it.detail == "Synthetic note: replacement parts arrive Friday." })
+        check(snapshot.timeline.count { it.sourceKind == "money_event" } == 2)
+        val domain = ProtectedDomainRepository(db)
+        check(domain.outstandingDebtMinor(scope, "synthetic-bmw-obligation") == 20_000L)
+        val history = requireNotNull(domain.financeHistory(scope, "Synthetic Elchin"))
+        check(history.events.count { it.kind == "receipt" } == 1 && history.events.count { it.kind == "debt" } == 1)
+        check(history.events.single { it.kind == "receipt" }.minorUnits == 10_000L)
+        check(history.events.single { it.kind == "debt" }.minorUnits == 30_000L)
+        check(ProtectedCaseRepository(db).financePersonIdentityChoices(scope, "synthetic-bmw-finance-person")
+            ?.confirmedLink?.domainPersonId == "synthetic-bmw-domain-person")
+        check(db.protectedStoreDao().activeDomainObjects(scope, DomainKind.PROJECT.name, 10)
+            .count { it.objectId == "synthetic-bmw-project" } == 1)
+        check(db.protectedStoreDao().sources().count { it.sourceId == "synthetic-bmw-memory" } == 1)
+        check(db.protectedStoreDao().revisions().count { it.sourceId == "synthetic-bmw-memory" } == 1)
     }
 
     private fun createMigrationCoordinator(

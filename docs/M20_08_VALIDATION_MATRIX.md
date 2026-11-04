@@ -2,6 +2,10 @@
 
 Status as of 2026-11-03, APK v57 / 1.1.35-memory-correction-propagation, Room schema 18. This matrix records existing evidence and remaining work; it does not turn host tests into device or live-provider acceptance.
 
+## ACT-0146 — BMW case, exact payment allocation and SQLCipher reopen
+
+Extended M20-03 synthetic coverage to link an owner-confirmed finance/domain PERSON, canonical project, exact memory revision, one 300 AZN obligation and a single 100 AZN receipt allocated to that obligation. Readback keeps the 200 AZN outstanding balance separate from actual receipts. The manual synthetic Android 14 SQLCipher migration probe creates the same scoped case and sources in its isolated Room v18 database, closes/reopens the encrypted file, and rechecks source IDs/revision, identity, event count, receipt, debt balance and canonical row counts. Probe returned `status=passed` and deletes the named fixture DB/envelope/key. Full Gradle: 58 suites / 292 tests, 0 failures/errors/skips; debug/AndroidTest assembly, Kotlin compile and lint passed (0 errors / 60 warnings / 3 hints). This does not prove natural-language Gemini selection, owner-device acceptance or production readiness.
+
 ## ACT-0145 — Canonical project and memory evidence in cases
 
 The existing `link_case_source` path was exercised through the fake provider with a canonical finance event, one scoped `PROJECT` domain object, and one exact `memory_revision`. Repository readback confirmed the case references original source IDs/revision IDs, resolves project title and memory text, and leaves each canonical source row singular. Compose coverage opened the case and each project/memory evidence detail. No schema or product behavior changed. Full Gradle passed: 58 suites / 292 tests, 0 failures/errors/skips; debug and AndroidTest assemble tasks, AndroidTest Kotlin compilation, and lint passed (0 errors / 60 warnings / 3 hints). The test is synthetic host evidence only; owner BMW/Elchin acceptance, broader person identity links, process/device restart and native acceptance remain open.
