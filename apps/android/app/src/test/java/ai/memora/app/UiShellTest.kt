@@ -58,6 +58,25 @@ class UiShellTest {
         compose.onNodeWithTag("voice_revoke_consent").assertDoesNotExist()
     }
 
+    @Test fun portableBackupRequiresLongMatchingPassphraseBeforeLaunchingDocumentPicker() {
+        compose.setContent {
+            TestMemoraApp(initialRoute = "portable_backup", capturePersistenceOverride = captureStore,
+                appearanceStoreOverride = appearanceStore)
+        }
+        compose.onNodeWithTag("portable_backup_export").performScrollTo().performClick()
+        compose.onNodeWithTag("portable_backup_error").assertIsDisplayed()
+        val shortPasswordError = compose.onNodeWithTag("portable_backup_error").fetchSemanticsNode()
+            .config[SemanticsProperties.Text].joinToString { it.text }
+
+        compose.onNodeWithTag("portable_backup_password").performTextInput("memora test pass 12")
+        compose.onNodeWithTag("portable_backup_repeat_password").performTextInput("different password")
+        compose.onNodeWithTag("portable_backup_export").performScrollTo().performClick()
+        compose.onNodeWithTag("portable_backup_error").assertIsDisplayed()
+        val mismatchError = compose.onNodeWithTag("portable_backup_error").fetchSemanticsNode()
+            .config[SemanticsProperties.Text].joinToString { it.text }
+        Assert.assertNotEquals(shortPasswordError, mismatchError)
+    }
+
     @Test fun sqlcipherCommunityLicenseIsReachableFromAbout() {
         compose.setContent { TestMemoraApp(initialRoute = "home", initialLanguage = "az", capturePersistenceOverride = captureStore, appearanceStoreOverride = appearanceStore) }
         compose.onNodeWithTag("app_info").performClick()
@@ -134,6 +153,10 @@ class UiShellTest {
         compose.onNodeWithTag("more_tasks").performScrollTo().assertIsDisplayed()
         compose.onNodeWithTag("more_voice_memory").performScrollTo().assertIsDisplayed()
         compose.onNodeWithTag("more_people").performScrollTo().assertExists()
+        compose.onNodeWithTag("more_portable_backup").performScrollTo().performClick()
+        compose.onNodeWithTag("portable_backup_password").assertIsDisplayed()
+        compose.onNodeWithTag("portable_backup_export").performScrollTo().assertIsDisplayed()
+        compose.onNodeWithTag("portable_backup_import").performScrollTo().assertIsDisplayed()
         compose.onNodeWithTag("nav_cases").performClick()
         compose.onNodeWithTag("nav_cases").assertIsDisplayed()
         compose.onNodeWithTag("nav_memory").performClick()

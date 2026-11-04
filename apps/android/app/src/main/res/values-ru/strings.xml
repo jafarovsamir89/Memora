@@ -534,4 +534,25 @@
     <string name="app_check_debug_http_failed">Запрос Firebase App Check отклонён (HTTP %1$d). Проверьте регистрацию токена в Console.</string>
     <string name="app_check_debug_token_saved">Debug-токен сохранён на этом телефоне.</string>
     <string name="app_check_debug_token_removed">Токен Console удалён; будет использоваться автоматический debug provider.</string>
+    <string name="backup_title">Переносимая резервная копия</string>
+    <string name="backup_subtitle">Создайте или восстановите зашифрованную копию локальной базы Memora.</string>
+    <string name="backup_export">Создать зашифрованную копию</string>
+    <string name="backup_import">Выбрать файл копии</string>
+    <string name="backup_passphrase">Пароль копии</string>
+    <string name="backup_confirm_passphrase">Повторите пароль</string>
+    <string name="backup_passphrase_mismatch">Пароли не совпадают.</string>
+    <string name="backup_passphrase_short">Используйте не менее 12 символов.</string>
+    <string name="backup_password_requirements">Задайте пароль длиной не менее 12 символов. Memora не сможет восстановить забытый пароль.</string>
+    <string name="backup_encrypted_note">Копия содержит локальную базу данных и шифруется вашим паролем. Храните файл и пароль в безопасном месте.</string>
+    <string name="backup_export_success">Зашифрованная копия создана.</string>
+    <string name="backup_export_failed">Не удалось создать копию. Если остался неполный файл, удалите его в файловом приложении.</string>
+    <string name="backup_import_size">Файл слишком велик или его размер не удалось проверить.</string>
+    <string name="backup_import_failed">Не удалось проверить или открыть копию. Текущая база не изменена.</string>
+    <string name="backup_import_ready">Копия проверена. Она заменит текущую локальную базу данных.</string>
+    <string name="backup_replace_warning">Замена перезапишет текущую локальную базу Memora выбранной копией. Это нельзя отменить в приложении. Продолжайте, только если выбрали нужную копию.</string>
+    <string name="backup_restore">Заменить локальную базу</string>
+    <string name="backup_busy">Выполняется…</string>
+    <string name="backup_wrong_password">Пароль неверен или копия повреждена. Текущая база не изменена.</string>
+    <string name="backup_metadata">Схема Room %1$d • создана %2$s • таблиц: %3$d • %4$d байт</string>
+    <string name="backup_restart_failed">Восстановление подготовлено, но Memora не удалось перезапустить автоматически. Закройте и откройте приложение заново.</string>
 </resources>

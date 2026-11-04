@@ -92,6 +92,9 @@ fun MoreScreen(navigate: (String) -> Unit, about: () -> Unit, captureVoice: (() 
             MenuRow(Glyph.Folder, s(R.string.projects), s(R.string.projects_hint), 2) { navigate("projects") }
             HorizontalDivider(color = colors.line)
             MenuRow(Glyph.Grid, s(R.string.tables_title), s(R.string.tables_subtitle)) { navigate("tables") }
+            HorizontalDivider(color = colors.line)
+            MenuRow(Glyph.Shield, s(R.string.backup_title), s(R.string.backup_subtitle), onClick = { navigate("portable_backup") },
+                testTag = "more_portable_backup")
         }
         MemoraCard { MenuRow(Glyph.Settings, s(R.string.settings), s(R.string.settings_hint)) { navigate("settings") } }
         MemoraCard(tint = colors.softGreen, onClick = about) {

@@ -40,3 +40,7 @@ NIST SP 800-132 описывает PBKDF для защиты хранимых д
 ## Приёмка
 
 Host tests покрывают внешнюю криптографию (включая streaming round-trip, declared-length mismatch и неверный пароль), потоковое извлечение snapshot с digest verification/cleanup и inner-manifest rejection cases. Synthetic Android 14 probe проходит через exporter → importer → Room18 staged validator; подтверждает plaintext absence, 44 user tables, close/reopen, wrong password/key rejection и cleanup импортных/экспортных private files. Открыты: измерение времени KDF на Android 13/минимальном API; SAF пользовательская интеграция; проверка совместимости/миграции между форматами; corrupt/unsupported import UX; atomic active-DB import/cutover/restart; URI permissions, storage failure/disk-full; UX и owner acceptance. M20-02 не закрывать по одному synthetic probe.
+
+## User workflow checkpoint ACT-0158
+
+The UI is implemented in `PortableBackupScreen.kt` and reached from More. It uses SAF rather than broad storage permission, validates a known bounded document size before KDF, never changes the active DB during candidate preview, requires a separate final replacement confirmation, and restarts the process after arm so startup recovery precedes normal Room access. The host UI and synthetic storage probe pass, but the real document provider/device path is not yet accepted.

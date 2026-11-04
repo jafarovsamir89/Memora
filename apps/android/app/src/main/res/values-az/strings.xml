@@ -534,4 +534,25 @@
     <string name="app_check_debug_http_failed">Firebase App Check sorğusu alınmadı (HTTP %1$d). Tokenin Console-da qeydiyyatda olduğunu yoxlayın.</string>
     <string name="app_check_debug_token_saved">Debug token bu telefonda saxlanılıb.</string>
     <string name="app_check_debug_token_removed">Console token silindi; avtomatik debug provider istifadə olunacaq.</string>
+    <string name="backup_title">Daşınan ehtiyat nüsxə</string>
+    <string name="backup_subtitle">Memora yerli verilənlər bazasının şifrələnmiş nüsxəsini yaradın və ya bərpa edin.</string>
+    <string name="backup_export">Şifrələnmiş nüsxə yarat</string>
+    <string name="backup_import">Nüsxə faylını seç</string>
+    <string name="backup_passphrase">Nüsxə parolu</string>
+    <string name="backup_confirm_passphrase">Parolu təkrar yazın</string>
+    <string name="backup_passphrase_mismatch">Parollar uyğun gəlmir.</string>
+    <string name="backup_passphrase_short">Ən azı 12 simvol istifadə edin.</string>
+    <string name="backup_password_requirements">Ən azı 12 simvolluq parol seçin. Unutsanız, Memora onu bərpa edə bilməz.</string>
+    <string name="backup_encrypted_note">Nüsxədə yerli verilənlər bazanız var və o, seçdiyiniz parolla şifrələnir. Faylı və parolu təhlükəsiz saxlayın.</string>
+    <string name="backup_export_success">Şifrələnmiş nüsxə yaradıldı.</string>
+    <string name="backup_export_failed">Nüsxə yaradıla bilmədi. Qismən fayl qalıbsa, fayl tətbiqində silin.</string>
+    <string name="backup_import_size">Fayl çox böyükdür və ya ölçüsünü yoxlamaq mümkün olmadı.</string>
+    <string name="backup_import_failed">Nüsxəni təsdiqləmək və ya açmaq mümkün olmadı. Cari baza dəyişdirilmədi.</string>
+    <string name="backup_import_ready">Nüsxə yoxlanıldı. O, cari yerli verilənlər bazasını əvəz edəcək.</string>
+    <string name="backup_replace_warning">Əvəz etmə cari yerli Memora bazasını bu nüsxə ilə dəyişəcək. Tətbiqdə bunu geri qaytarmaq mümkün deyil. Yalnız seçdiyiniz nüsxədirsə davam edin.</string>
+    <string name="backup_restore">Yerli bazanı əvəz et</string>
+    <string name="backup_busy">İcra olunur…</string>
+    <string name="backup_wrong_password">Parol səhvdir və ya nüsxə zədələnib. Cari baza dəyişdirilmədi.</string>
+    <string name="backup_metadata">Room sxemi %1$d • yaradılıb %2$s • %3$d cədvəl • %4$d bayt</string>
+    <string name="backup_restart_failed">Bərpa hazırlanıb, lakin Memora avtomatik başlaya bilmədi. Davam etməzdən əvvəl tətbiqi bağlayıb yenidən açın.</string>
 </resources>

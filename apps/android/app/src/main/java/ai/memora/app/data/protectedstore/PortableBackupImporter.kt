@@ -10,6 +10,13 @@ import java.util.UUID
 
 /** Authenticates a portable backup into private temporary files without touching the active database. */
 internal object PortableBackupImporter {
+    /** Removes only stale private import candidates left if Android killed the process mid-preview. */
+    fun cleanupAbandonedCandidates(context: Context) {
+        context.noBackupFilesDir.listFiles().orEmpty()
+            .filter { it.name.startsWith("memora-portable-import-") }
+            .forEach { it.delete() }
+    }
+
     fun prepare(
         context: Context,
         source: InputStream,

@@ -231,6 +231,7 @@ internal class PortableBackupCipher(
         private const val MIN_PASSPHRASE_CHARS = 12
         private const val MAX_PASSPHRASE_CHARS = 1_024
         private const val MAX_PLAINTEXT_BYTES = 512 * 1024 * 1024
+        internal const val MAX_CONTAINER_BYTES = 512L * 1024 * 1024 + 57L
         private const val STREAM_BUFFER_BYTES = 64 * 1024
         private val MAGIC = byteArrayOf(0x4d, 0x45, 0x4d, 0x4f, 0x52, 0x41, 0x42, 0x4b) // MEMORABK
         private const val HEADER_BYTES = 8 + 1 + 4 + SALT_BYTES + IV_BYTES

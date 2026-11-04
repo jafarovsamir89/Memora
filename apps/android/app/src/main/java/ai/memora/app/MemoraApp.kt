@@ -189,6 +189,7 @@ fun MemoraApp(initialRoute: String = "home", initialTheme: String = "system", ca
                 "inbox" -> R.string.inbox; "notes" -> R.string.notes_title; "finance" -> R.string.finance; "calendar" -> R.string.calendar_title; "people" -> R.string.people
                 "projects" -> R.string.projects; "settings" -> R.string.settings; "chat" -> R.string.nav_secretary
                 "voice_memory" -> R.string.voice_memory_title; "tables" -> R.string.tables_title
+                "portable_backup" -> R.string.backup_title
                 "licenses" -> R.string.open_source_licenses
                 else -> R.string.app_name
             }
@@ -254,6 +255,7 @@ fun MemoraApp(initialRoute: String = "home", initialTheme: String = "system", ca
                             "voice_memory" -> VoiceMemoryScreen()
                             "notes" -> SavedObjectsScreen(DomainKind.NOTE)
                             "tables" -> TablesScreen()
+                            "portable_backup" -> PortableBackupScreen()
                             "licenses" -> OpenSourceLicensesScreen()
                             "inbox" -> InboxScreen(captureState.captures, captureState.loading, captureState.error && !captureState.ready,
                                 captureState.managementError || captureExportError,

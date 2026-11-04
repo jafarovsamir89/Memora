@@ -534,4 +534,25 @@
     <string name="app_check_debug_http_failed">Firebase App Check request failed (HTTP %1$d). Check that the token is registered in Console.</string>
     <string name="app_check_debug_token_saved">The debug token is saved on this phone.</string>
     <string name="app_check_debug_token_removed">Console token removed; the automatic debug provider will be used.</string>
+    <string name="backup_title">Portable backup</string>
+    <string name="backup_subtitle">Create or restore an encrypted copy of your local Memora database.</string>
+    <string name="backup_export">Create encrypted backup</string>
+    <string name="backup_import">Choose backup file</string>
+    <string name="backup_passphrase">Backup password</string>
+    <string name="backup_confirm_passphrase">Repeat backup password</string>
+    <string name="backup_passphrase_mismatch">The passwords do not match.</string>
+    <string name="backup_passphrase_short">Use at least 12 characters.</string>
+    <string name="backup_password_requirements">Use a password with at least 12 characters. Memora cannot recover it if you forget it.</string>
+    <string name="backup_encrypted_note">The backup contains your local database and is encrypted with your password. Keep the file and password in a safe place.</string>
+    <string name="backup_export_success">Encrypted backup created.</string>
+    <string name="backup_export_failed">Backup could not be created. If a partial file remains, delete it in the file app.</string>
+    <string name="backup_import_size">This file is too large or its size cannot be verified.</string>
+    <string name="backup_import_failed">This backup could not be authenticated or opened. Your current database was not changed.</string>
+    <string name="backup_import_ready">Backup verified. It will replace the current local database.</string>
+    <string name="backup_replace_warning">Replacing will replace the current local Memora database with this backup. This cannot be undone from the app. Continue only if this is the backup you chose.</string>
+    <string name="backup_restore">Replace local database</string>
+    <string name="backup_busy">Working…</string>
+    <string name="backup_wrong_password">Password is incorrect or the backup is damaged. The current database was not changed.</string>
+    <string name="backup_metadata">Room schema %1$d • created %2$s • %3$d tables • %4$d bytes</string>
+    <string name="backup_restart_failed">Restore is prepared, but Memora could not restart automatically. Close and reopen the app before continuing.</string>
 </resources>

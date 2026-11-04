@@ -56,10 +56,12 @@ internal object PortableBackupCutover {
         }
 
         var journalDurable = false
+        var databaseCloseAttempted = false
         try {
             copyAndSync(candidate.encryptedSnapshotFile, candidateFile)
             provider.preserveEnvelopeForPortableRollback()
             provider.stagePortableRestoreKey(candidate.snapshotKeyMaterial)
+            databaseCloseAttempted = true
             closeActiveDatabase()
             refuseUnexpectedSidecars(active)
             writeJournal(journal, Phase.PREPARED)
@@ -81,6 +83,7 @@ internal object PortableBackupCutover {
             throw PortableBackupCutoverException(
                 if (journalDurable) "Restore is pending startup recovery" else "Could not prepare portable restore",
                 error,
+                restartRequired = journalDurable || databaseCloseAttempted,
             )
         }
     }
@@ -373,5 +376,9 @@ internal object PortableBackupCutover {
     private val DATABASE_NAME_PATTERN = Regex("memora-[A-Za-z0-9._-]+\\.db")
 }
 
-internal class PortableBackupCutoverException(message: String, cause: Throwable? = null) :
+internal class PortableBackupCutoverException(
+    message: String,
+    cause: Throwable? = null,
+    val restartRequired: Boolean = false,
+) :
     IllegalStateException(message, cause)

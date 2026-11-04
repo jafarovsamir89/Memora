@@ -1,3 +1,5 @@
+**ACT-0158 update:** portable backup is connected to an AZ/RU/EN screen using Android SAF. The user sets a 12+ character password, selects a document, verifies import metadata and confirms replacement separately. Size is checked before KDF; failed output attempts partial-document deletion; restore reopens the application through startup recovery. Full host suite 60/302 and lint 0/63/3; synthetic Android14 storage/cutover probe passed. SAF provider interoperability and physical owner acceptance remain open, so M20-02 is partial.
+
 **ACT-0157 update:** active SQLCipher restore cutover and pre-Room startup recovery now exist behind an internal confirmation-gated API. Synthetic Android 14 passed a successful replacement, candidate-validation rollback, and injected restart recovery at three journal phases plus interrupted rollback cleanup; full suite 60/301, lint 0/60/3. The API is not connected to SAF/UI. Injected callback interruption does not prove force-stop or hard power-loss durability. M20-02 remains partial pending user workflow, device/owner acceptance and broader fault matrix.
 
 # MEMORA 2.0 — полное продуктовое видение и техническое задание
