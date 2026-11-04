@@ -4,7 +4,7 @@
 
 Фокусированный тест прошёл. Для AZ/RU/mixed: Recall@5 `1.000/1.000/1.000`; P@5 `0.200/0.200/0.200`; P@1 `1.000/1.000/0.967`; labeled P@returned `0.412/0.809/0.396`; mean result count `2.90/1.73/2.77`; MRR `1.000/1.000/0.983`; 0 scope/provenance/duplicate errors. Это поправляет интерпретацию P@5: знаменатель фиксирован равным 5, хотя task result list часто короче, поэтому 0.20 не доказывает, что четыре из пяти реально возвращённых результатов неверны. P@returned тоже ограничен текущей разметкой: один expected source/query, прочие источники не признаны ни relevant, ни irrelevant. Реальный ranker не менялся; semantic retrieval не добавлен.
 
-Синхронизированы retrieval evaluation, TODO, дневник, action log, validation matrix, engineering plan и AGENTS. Полная host suite/lint не запускались; изменение только в test source, focused Gradle target прошёл. Код/docs commit и новый action-log checkpoint будут записаны после локального коммита. Push не запрашивался. M20-02/03/04 остаются partial.
+Синхронизированы retrieval evaluation, TODO, дневник, action log, validation matrix, engineering plan и AGENTS. Полная host suite/lint не запускались; изменение только в test source, focused Gradle target прошёл. Код/docs пакет сохранён локально коммитом `372cae674bb6d1653560cf543f86c979a6020523` (`test(android): clarify lexical retrieval precision metrics`). Push не выполнялся и не запрашивался. M20-02/03/04 остаются partial.
 
 ## ACT-0160 - 2026-11-03 - Проверка запуска SAF picker на Android 14
 
