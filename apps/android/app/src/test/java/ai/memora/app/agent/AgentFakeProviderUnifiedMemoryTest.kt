@@ -12,6 +12,9 @@ import ai.memora.app.data.protectedstore.ProtectedProfileMemoryRepository
 import ai.memora.app.data.protectedstore.ProtectedCaseRepository
 import ai.memora.app.data.protectedstore.TaskEventRow
 import kotlinx.coroutines.runBlocking
+import java.time.Clock
+import java.time.Instant
+import java.time.ZoneOffset
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
@@ -206,7 +209,8 @@ class AgentFakeProviderUnifiedMemoryTest {
                 dueZone = "Asia/Baku", remind = false, personLabel = null, projectLabel = null),
         ))
         val handler = LocalMemoryTools(domain, ProtectedMemoryRepository(db), financeEnabled = true,
-            userTimeZoneId = "Asia/Baku")
+            userTimeZoneId = "Asia/Baku",
+            searchClock = Clock.fixed(Instant.parse("2026-11-03T10:30:00Z"), ZoneOffset.UTC))
             .handlers().single { it.descriptor.name == "search_memory" }
         val turn = AgentTurnRequest("synthetic-date-search-turn", scope, "synthetic-date-search-session",
             null, "az-AZ", "Find synthetic records on 2026-11-04")
@@ -225,6 +229,21 @@ class AgentFakeProviderUnifiedMemoryTest {
         assertFalse("next-day finance source must not match", "money_event:synthetic-next-day-receipt" in keys)
         assertFalse("next-day calendar source must not match", "calendar_event:synthetic-next-day-calendar" in keys)
         assertFalse("next-day task source must not match", "task:synthetic-next-day-task" in keys)
+
+        listOf("sabah", "tomorrow", "завтра").forEach { relativeDate ->
+            val relativeResult = handler.read(AgentModelToolCall("synthetic-relative-$relativeDate", "search_memory", 1,
+                mapOf("query" to relativeDate)), turn)
+            val relativeHits = relativeResult.modelData["activity"] as List<*>
+            val relativeKeys = relativeHits.map { row ->
+                val item = row as Map<*, *>
+                "${item["kind"]}:${item["source_id"]}"
+            }.toSet()
+            assertTrue("$relativeDate should use profile-local tomorrow: $relativeKeys",
+                "money_event:synthetic-date-receipt" in relativeKeys &&
+                    "calendar_event:synthetic-date-calendar" in relativeKeys &&
+                    "task:synthetic-date-task" in relativeKeys)
+            assertFalse("$relativeDate must exclude next local day", "task:synthetic-next-day-task" in relativeKeys)
+        }
     }
 
     @Test fun localMemoryRetrievalFindsExactAzerbaijaniRussianAndMixedButDoesNotClaimParaphraseRecall() = runBlocking {

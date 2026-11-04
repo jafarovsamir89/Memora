@@ -20,6 +20,7 @@ import ai.memora.app.domain.VoiceMoneyRules
 import java.security.MessageDigest
 import java.math.BigDecimal
 import java.text.Normalizer
+import java.time.Clock
 import java.time.Instant
 import java.time.LocalDateTime
 import java.time.LocalDate
@@ -36,7 +37,8 @@ internal class LocalMemoryTools(private val repository: ProtectedDomainRepositor
     private val conversations: ProtectedConversationRepository? = null,
     private val profileMemory: ProtectedProfileMemoryRepository? = null,
     private val personAliases: PersonAliasRepository? = null,
-    private val userTimeZoneId: String? = null) {
+    private val userTimeZoneId: String? = null,
+    private val searchClock: Clock = Clock.systemUTC()) {
     private val userTimeZone: ZoneId by lazy {
         runCatching { userTimeZoneId?.let(ZoneId::of) ?: ZoneId.of("UTC") }.getOrDefault(ZoneId.of("UTC"))
     }
@@ -439,12 +441,13 @@ internal class LocalMemoryTools(private val repository: ProtectedDomainRepositor
      */
     private suspend fun searchRelatedActivity(scope: String, terms: List<String>, query: String): UnifiedActivitySearch {
         val hits = mutableListOf<RankedActivity>()
-        val foldedTerms = terms.map(::normalizeMemorySearchText).distinct()
+        val relativeDates = resolveRelativeSearchDates(query)
+        val foldedTerms = (terms + relativeDates.flatMap(::memorySearchTerms)).map(::normalizeMemorySearchText).distinct()
         val explicitDates = ISO_LOCAL_DATE.findAll(query).mapNotNull { match ->
             runCatching { LocalDate.parse(match.value) }.getOrNull()?.toString()
-        }.toSet()
+        }.toSet() + relativeDates
 
-        val phraseTerms = memorySearchTerms(query)
+        val phraseTerms = memorySearchTerms((listOf(query) + relativeDates).joinToString(" "))
         val phrase = phraseTerms.joinToString(" ")
 
         fun score(fields: List<String>, title: String? = null): Int {
@@ -555,6 +558,17 @@ internal class LocalMemoryTools(private val repository: ProtectedDomainRepositor
             ranked.size > MAX_UNIFIED_ACTIVITY_HITS || caseCandidates.size == MAX_CASE_CANDIDATES)
     }
 
+    private fun resolveRelativeSearchDates(query: String): List<String> {
+        val words = RELATIVE_DATE_WORD.findAll(normalizeMemorySearchText(query)).map { it.value }.toSet()
+        if (words.isEmpty()) return emptyList()
+        val today = LocalDate.now(searchClock.withZone(userTimeZone))
+        return buildList {
+            if (words.any { it in TODAY_WORDS }) add(today.toString())
+            if (words.any { it in TOMORROW_WORDS }) add(today.plusDays(1).toString())
+            if (words.any { it in YESTERDAY_WORDS }) add(today.minusDays(1).toString())
+        }.distinct()
+    }
+
     private data class RankedActivity(val score: Int, val sortAt: String, val kind: String, val id: String, val data: Map<String, Any?>)
     private data class UnifiedActivitySearch(val items: List<Map<String, Any?>>, val truncated: Boolean)
 
@@ -588,6 +602,10 @@ internal class LocalMemoryTools(private val repository: ProtectedDomainRepositor
 
     private companion object {
         val ISO_LOCAL_DATE = Regex("(?<!\\d)\\d{4}-\\d{2}-\\d{2}(?!\\d)")
+        val RELATIVE_DATE_WORD = Regex("(?<![\\p{L}\\p{N}])(?:bu\\s+gun|bugun|sabah|dunen|dun|today|tomorrow|yesterday|сегодня|завтра|вчера)(?![\\p{L}\\p{N}])")
+        val TODAY_WORDS = setOf("bu gun", "bugun", "today", "сегодня")
+        val TOMORROW_WORDS = setOf("sabah", "tomorrow", "завтра")
+        val YESTERDAY_WORDS = setOf("dunen", "dun", "yesterday", "вчера")
         val MEMORY_SEARCH_SEPARATOR = Regex("[^\\p{L}\\p{N}]+")
         val MEMORY_SEARCH_MARKS = Regex("\\p{M}+")
         val MEMORY_SEARCH_STOP_WORDS = setOf("what", "whats", "find", "show", "about", "with", "the", "for", "and", "from",

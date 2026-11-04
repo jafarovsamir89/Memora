@@ -1,6 +1,10 @@
 # M20-04 local retrieval evaluation
 
-**Status:** lexical host harness evaluates 96 synthetic queries against explicit relevant sets over 30 in-scope task sources. ACT-0168 adds exact ISO-date retrieval across dated canonical activity, using the owner's profile timezone for instants and a strict adjacent-day exclusion. This does not implement natural-language date parsing, date ranges, or semantic retrieval. Last updated 2026-11-03.
+**Status:** lexical host harness evaluates 96 synthetic queries against explicit relevant sets over 30 in-scope task sources. ACT-0168 adds exact ISO-date retrieval; ACT-0169 adds only the explicit relative-day vocabulary documented below. Both normalize using the profile timezone and exclude adjacent days. No weekday/range parser or semantic retrieval exists. Last updated 2026-11-03.
+
+## ACT-0169 — Bounded relative-day phrases
+
+`search_memory` maps AZ `bugün` / `bu gün`, `sabah`, `dünən`; RU `сегодня`, `завтра`, `вчера`; and EN `today`, `tomorrow`, `yesterday` to a profile-local date. Matching stays strict across canonical finance, task due and calendar date sources. A fixed-clock synthetic test verifies `sabah` / `завтра` / `tomorrow` all resolve to 2026-11-04 in `Asia/Baku` while excluding 2026-11-05 sources. This is a small explicit vocabulary, not general language understanding: weekdays, “next week”, date ranges, historical dates, conversation timestamps and broader semantic relevance remain unimplemented or unevaluated.
 
 ## ACT-0168 — Strict explicit-date retrieval for canonical activity
 
