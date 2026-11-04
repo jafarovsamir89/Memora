@@ -142,3 +142,7 @@ Added a focused test that searches the same synthetic in-scope task records with
 ### ACT-0150 — Snapshot copy verification
 
 The synthetic Room v18 snapshot helper now checks source version, `integrity_check` on both source and exported DB, and matching user table names/row counts. Synthetic Android 14 export and reopen passed. This improves snapshot validation only; it does not supply the user-facing import or atomic database cutover required to complete M20-02.
+
+### ACT-0151 — Authenticated portable payload manifest
+
+Portable snapshot bytes now travel with a strict inner manifest for Room schema, app version, creation time, byte length and SHA-256, under the outer AES-GCM envelope. Parser rejects unsupported metadata and altered/truncated snapshots. The synthetic Android 14 export/wrap/parse/reopen probe and 60-suite host run passed; this remains probe-only and is not an import workflow.

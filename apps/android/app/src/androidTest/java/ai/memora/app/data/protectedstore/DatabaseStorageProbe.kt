@@ -4,6 +4,7 @@ import android.content.Context
 import android.os.Bundle
 import android.util.AtomicFile
 import android.util.Log
+import androidx.core.content.pm.PackageInfoCompat
 import androidx.room.Room
 import net.zetetic.database.sqlcipher.SupportOpenHelperFactory
 import ai.memora.app.data.EncryptedCaptureStore
@@ -102,13 +103,16 @@ object DatabaseStorageProbe {
             val plaintextMarkerAbsent = !snapshotBytes.toString(Charsets.ISO_8859_1).contains("synthetic-portable-snapshot-marker")
             check(plaintextMarkerAbsent)
             stage = "wrap_snapshot_in_portable_container"
-            val payload = ByteBuffer.allocate(4 + 1 + 4 + snapshotPassphrase.size + snapshotBytes.size)
-                .put(byteArrayOf(0x4d, 0x53, 0x4e, 0x50)) // MSNP
-                .put(1)
-                .putInt(snapshotPassphrase.size)
-                .put(snapshotPassphrase)
-                .put(snapshotBytes)
-                .array()
+            val appVersionCode = PackageInfoCompat.getLongVersionCode(
+                context.packageManager.getPackageInfo(context.packageName, 0),
+            ).toInt()
+            val payload = PortableBackupPayload.encode(
+                roomSchemaVersion = 18,
+                appVersionCode = appVersionCode,
+                createdAtEpochMillis = System.currentTimeMillis(),
+                snapshotKeyMaterial = snapshotKey,
+                encryptedSnapshot = snapshotBytes,
+            )
             val portablePassphrase = "synthetic portable backup passphrase".toCharArray()
             val portableFile = PortableBackupCipher().encrypt(payload, portablePassphrase)
             val encryptedContainerHasNoMarker = !portableFile.toString(Charsets.ISO_8859_1)
@@ -119,13 +123,16 @@ object DatabaseStorageProbe {
             payload.fill(0)
             portableFile.fill(0)
             check(encryptedContainerHasNoMarker)
-            val bundle = ByteBuffer.wrap(openedPayload)
-            check(bundle.getInt() == 0x4d534e50 && bundle.get().toInt() == 1)
-            val passphraseLength = bundle.int
-            check(passphraseLength in 32..128 && passphraseLength <= bundle.remaining())
-            val restoredPassphrase = ByteArray(passphraseLength).also(bundle::get)
-            val restoredSnapshotBytes = ByteArray(bundle.remaining()).also(bundle::get)
+            val decoded = PortableBackupPayload.decode(openedPayload)
             openedPayload.fill(0)
+            check(decoded.manifest.roomSchemaVersion == 18)
+            check(decoded.manifest.appVersionCode == appVersionCode)
+            check(decoded.manifest.encryptedSnapshotBytes == decoded.encryptedSnapshot.size)
+            result.putBoolean("manifest_schema_and_snapshot_length_verified", true)
+            val restoredPassphrase = decoded.snapshotKeyMaterial.joinToString("") { "%02x".format(it) }
+                .toByteArray(Charsets.UTF_8)
+            decoded.snapshotKeyMaterial.fill(0)
+            val restoredSnapshotBytes = decoded.encryptedSnapshot
             stage = "reopen_exported_database"
             source!!.close()
             source = null
