@@ -6,6 +6,7 @@ import android.net.Uri
 import android.provider.DocumentsContract
 import android.provider.OpenableColumns
 import android.os.Process
+import android.util.Log
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Arrangement
@@ -70,9 +71,7 @@ internal fun PortableBackupScreen() {
         withContext(Dispatchers.IO) { PortableBackupImporter.cleanupAbandonedCandidates(context.applicationContext) }
     }
 
-    DisposableEffect(candidate) {
-        onDispose { candidate?.close() }
-    }
+    PortableBackupCandidateLifecycle(candidate)
 
     val exportLauncher = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("application/octet-stream")) { uri ->
         val secret = pendingExportPassword
@@ -253,6 +252,10 @@ internal fun PortableBackupScreen() {
                                 busy = false
                                 issue = R.string.backup_restart_failed
                             } else {
+                                armResult.exceptionOrNull()?.let { error ->
+                                    val cutoverError = error as? PortableBackupCutoverException
+                                    Log.w("MemoraBackup", "restore_cutover_failed step=${cutoverError?.failureStep ?: "preflight"} cause=${error.cause?.javaClass?.simpleName ?: error.javaClass.simpleName}")
+                                }
                                 busy = false
                                 issue = R.string.backup_import_failed
                             }
@@ -264,6 +267,16 @@ internal fun PortableBackupScreen() {
             },
             dismissButton = { TextButton(onClick = { confirmReplacement = false }) { Text(s(R.string.task_cancel)) } },
         )
+    }
+}
+
+@Composable
+internal fun PortableBackupCandidateLifecycle(candidate: PortableBackupFileCandidate?) {
+    // Capture the candidate instance owned by this effect. The screen's mutable
+    // state may already contain a newer candidate when this effect is disposed.
+    val ownedCandidate = candidate
+    DisposableEffect(ownedCandidate) {
+        onDispose { ownedCandidate?.close() }
     }
 }
 

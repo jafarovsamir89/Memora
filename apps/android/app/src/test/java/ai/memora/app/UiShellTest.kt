@@ -7,7 +7,12 @@ import androidx.compose.ui.test.*
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.junit4.StateRestorationTester
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.unit.Density
 import org.junit.Rule
@@ -31,6 +36,8 @@ import ai.memora.app.data.LocalCapturePersistence
 import ai.memora.app.data.protectedstore.CalendarInput
 import ai.memora.app.data.protectedstore.ProtectedCaseRepository
 import ai.memora.app.data.protectedstore.ProtectedDomainRepository
+import ai.memora.app.data.protectedstore.PortableBackupFileCandidate
+import ai.memora.app.data.protectedstore.PortableBackupManifest
 import org.junit.Assert
 import org.junit.Before
 
@@ -75,6 +82,35 @@ class UiShellTest {
         val mismatchError = compose.onNodeWithTag("portable_backup_error").fetchSemanticsNode()
             .config[SemanticsProperties.Text].joinToString { it.text }
         Assert.assertNotEquals(shortPasswordError, mismatchError)
+    }
+
+    @Test fun portableBackupCandidateReplacementDisposesOnlyThePreviousCandidate() {
+        val context = ApplicationProvider.getApplicationContext<Context>()
+        fun candidate(): PortableBackupFileCandidate {
+            val snapshot = File(context.cacheDir, "portable-candidate-${UUID.randomUUID()}.db")
+                .apply { writeBytes(byteArrayOf(1, 2, 3)) }
+            return PortableBackupFileCandidate(
+                PortableBackupManifest(18, 1, 1, 3),
+                ByteArray(32) { 7 },
+                snapshot,
+            )
+        }
+        val previous = candidate()
+        val replacement = candidate()
+        compose.setContent {
+            var selected by remember { mutableStateOf<PortableBackupFileCandidate?>(previous) }
+            PortableBackupCandidateLifecycle(selected)
+            androidx.compose.material3.Button(
+                onClick = { selected = replacement },
+                modifier = androidx.compose.ui.Modifier.testTag("replace_candidate"),
+            ) { androidx.compose.material3.Text("Replace") }
+        }
+
+        compose.onNodeWithTag("replace_candidate").performClick()
+        compose.runOnIdle {
+            Assert.assertFalse(previous.encryptedSnapshotFile.exists())
+            Assert.assertTrue(replacement.encryptedSnapshotFile.exists())
+        }
     }
 
     @Test fun sqlcipherCommunityLicenseIsReachableFromAbout() {

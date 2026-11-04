@@ -28,14 +28,27 @@ internal object PortableBackupCutover {
         closeActiveDatabase: () -> Unit,
         afterDurableStep: (String) -> Unit = {},
     ) {
-        require(explicitUserConfirmation) { "Portable restore requires explicit confirmation" }
-        require(databaseName.matches(DATABASE_NAME_PATTERN)) { "Unsupported active database name" }
-        require(provider.databaseFile.canonicalFile == context.getDatabasePath(databaseName).canonicalFile) {
-            "Key provider does not target the requested database"
+        var failureStep = "user_confirmation"
+        try {
+            require(explicitUserConfirmation) { "Portable restore requires explicit confirmation" }
+            failureStep = "active_database_name"
+            require(databaseName.matches(DATABASE_NAME_PATTERN)) { "Unsupported active database name" }
+            failureStep = "database_key_provider_target"
+            require(provider.databaseFile.canonicalFile == context.getDatabasePath(databaseName).canonicalFile) {
+                "Key provider does not target the requested database"
+            }
+            failureStep = "room_schema_version"
+            require(candidate.manifest.roomSchemaVersion == PortableBackupPayload.SUPPORTED_ROOM_SCHEMA)
+            failureStep = "candidate_file_and_manifest_length"
+            require(candidate.encryptedSnapshotFile.isFile &&
+                candidate.encryptedSnapshotFile.length() == candidate.manifest.encryptedSnapshotBytes.toLong())
+        } catch (error: Exception) {
+            throw PortableBackupCutoverException(
+                "Portable restore preflight validation failed",
+                error,
+                failureStep = failureStep,
+            )
         }
-        require(candidate.manifest.roomSchemaVersion == PortableBackupPayload.SUPPORTED_ROOM_SCHEMA)
-        require(candidate.encryptedSnapshotFile.isFile &&
-            candidate.encryptedSnapshotFile.length() == candidate.manifest.encryptedSnapshotBytes.toLong())
 
         val active = provider.databaseFile.canonicalFile
         val candidateFile = sibling(active, CANDIDATE_SUFFIX)
@@ -57,22 +70,32 @@ internal object PortableBackupCutover {
 
         var journalDurable = false
         var databaseCloseAttempted = false
+        failureStep = "candidate_copy"
         try {
             copyAndSync(candidate.encryptedSnapshotFile, candidateFile)
+            failureStep = "preserve_rollback_key"
             provider.preserveEnvelopeForPortableRollback()
+            failureStep = "stage_restore_key"
             provider.stagePortableRestoreKey(candidate.snapshotKeyMaterial)
+            failureStep = "close_active_database"
             databaseCloseAttempted = true
             closeActiveDatabase()
+            failureStep = "check_database_sidecars"
             refuseUnexpectedSidecars(active)
+            failureStep = "write_prepared_journal"
             writeJournal(journal, Phase.PREPARED)
             journalDurable = true
             afterDurableStep("PREPARED")
+            failureStep = "rename_previous_database"
             atomicRename(active, rollbackFile)
             afterDurableStep("OLD_DB_RENAMED")
+            failureStep = "write_old_db_moved_journal"
             writeJournal(journal, Phase.OLD_DB_MOVED)
             afterDurableStep("OLD_DB_MOVED")
+            failureStep = "install_candidate_database"
             atomicRename(candidateFile, active)
             afterDurableStep("CANDIDATE_RENAMED")
+            failureStep = "write_candidate_installed_journal"
             writeJournal(journal, Phase.CANDIDATE_INSTALLED)
             afterDurableStep("CANDIDATE_INSTALLED")
         } catch (error: Exception) {
@@ -84,6 +107,7 @@ internal object PortableBackupCutover {
                 if (journalDurable) "Restore is pending startup recovery" else "Could not prepare portable restore",
                 error,
                 restartRequired = journalDurable || databaseCloseAttempted,
+                failureStep = failureStep,
             )
         }
     }
@@ -380,5 +404,6 @@ internal class PortableBackupCutoverException(
     message: String,
     cause: Throwable? = null,
     val restartRequired: Boolean = false,
+    val failureStep: String? = null,
 ) :
     IllegalStateException(message, cause)
