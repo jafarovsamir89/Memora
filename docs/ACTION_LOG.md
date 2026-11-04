@@ -1139,7 +1139,7 @@ Added host test `LocalProfileOnboardingTest.encryptedLocalStateIsExcludedFromClo
 
 Targeted test passed. Full Gradle `testDebugUnitTest` + `lintDebug`: 58 suites / 291 tests, 0 failures/errors/skips; lint 0 errors / 60 warnings / 3 hints. Product APK remains v56 / `1.1.34-calendar-person-links`, SHA-256 `d5ac59bedb28dbed9821fb7f472469a69a240911ae48a19e41c80b8a809c0610`. This does not exercise actual OS backup/transfer, uninstall/reinstall, key recovery or protected export/import. M20-02 remains partial and the user DB was not opened.
 
-Updated TODO, diary, engineering plan, M20 validation matrix, product checkpoint, AGENTS and this log. Git commit status: pending.
+Updated TODO, diary, engineering plan, M20 validation matrix, product checkpoint, AGENTS and this log. Test and documentation are committed locally as `9cfd8ca` (`test(android): verify local backup exclusions`); push was not requested in this task.
 
 ## ACT-0141 - 2026-11-03 - Explicit calendar-to-person association
 
