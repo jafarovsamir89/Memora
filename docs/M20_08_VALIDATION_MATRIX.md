@@ -2,6 +2,14 @@
 
 Status as of 2026-11-03, APK v57 / 1.1.35-memory-correction-propagation, Room schema 18. This matrix records existing evidence and remaining work; it does not turn host tests into device or live-provider acceptance.
 
+## ACT-0160 — SAF picker launch on Android 14 emulator
+
+The installed v57 app opened the backup screen and launched the platform `DocumentsUI` `PickActivity` from the import action after a synthetic in-memory passphrase was entered. The picker was cancelled without selecting a file; no import, database cutover, or file write occurred. This verifies only the Android 14 picker launch/return path. It does not exercise URI access, provider size metadata, actual backup import/export, force-stop, Redmi behavior, or owner acceptance. The app was returned to its home screen; no app data was cleared or inspected.
+
+## ACT-0159 — M20-04 lexical cutoff experiment rejected
+
+A temporary 75%-term-coverage threshold reduced Recall@5 to AZ `0.933`, RU `0.833`, mixed `0.867` and lowered Precision@5 to `0.187`, `0.167`, `0.173`; the code was reverted. Keep current lexical ranking; create complete relevance judgments before changing ranking policy. The baseline harness rerun after revert passed. Details: [retrieval evaluation](MEMORY_RETRIEVAL_EVALUATION.md).
+
 ## ACT-0154 — Streaming encrypted export coordinator
 
 Added streaming AES-GCM container operations and `PortableBackupExporter`, which creates a separately keyed SQLCipher snapshot, computes its manifest digest incrementally, encrypts to a private `AtomicFile`, then copies the completed envelope to a caller-owned stream. Buffers are bounded at 64 KiB; private files and temporary key material are cleared after completion or an output failure. Host tests cover streaming round-trip, wrong passphrase and declared-length mismatch. Synthetic Android 14 probe uses the coordinator end to end: Room schema18, 44 user tables, one synthetic marker, 581,778-byte envelope, manifest match, absence of the marker in encrypted layers, isolated validator close/reopen and wrong snapshot-key refusal. A synthetic destination failure left no private export artifacts. Full Gradle passed: 60 suites / 299 tests, 0 failures/errors/skips; debug/AndroidTest APK assembly and AndroidTest Kotlin compilation passed; lint 0 errors / 60 warnings / 3 hints. Debug APK SHA-256 `f7bf6ddcfdd4f6d7f1ff5b0297eb89957c7b245687eee8cc24092fe6d82be24b`. The probe ran only against a synthetic Android 14 emulator DB. SAF export/UI, authenticated streaming import, atomic active-DB cutover/recovery, physical-device KDF benchmark and owner acceptance remain open; M20-02 remains partial. Caller-owned output may contain partial bytes after a write failure and must be removed by the future SAF coordinator.

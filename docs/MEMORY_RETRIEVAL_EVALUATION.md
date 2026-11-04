@@ -35,6 +35,10 @@ Use only synthetic, reviewed records with stable expected source IDs. Include at
 
 Record lexical-only and lexical+semantic results on the same corpus. Report Recall@5, Precision@5, MRR, wrong-scope/source count, stale-revision count, provenance completeness, p50/p95 latency, peak memory and vector-index bytes. Acceptance targets for an eventual model path: Recall@5 ≥ 0.90 for AZ/RU/mixed independently, Precision@5 ≥ 0.90, zero cross-scope results, zero deleted-source results, 100% provenance for returned facts, and device resource use measured on the Redmi Android 13 class. These are proposed engineering exit criteria, not current test results.
 
+## ACT-0159 — Rejected lexical coverage cutoff experiment
+
+To reduce low-confidence lexical matches, the synthetic activity ranker was temporarily gated to require at least 75% of distinct query terms to match. On the same 90-query host corpus, Recall@5 fell from `1.000` to AZ `0.933`, RU `0.833`, and mixed `0.867`; Precision@5 also fell from `0.200` to `0.187`, `0.167`, and `0.173`. MRR fell in lockstep with recall. The filter was reverted and is not part of the product. This experiment shows that a simple term-coverage cutoff trades away expected retrieval without solving the low Precision@5 signal. Keep lexical behavior unchanged until the relevance judgments and appropriate `k` are clarified by a better corpus; do not claim semantic search.
+
 ## Model/runtime boundary
 
 - Keep embeddings local. Do not send personal memory to Gemini or another embedding API under this evaluation.

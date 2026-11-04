@@ -1,3 +1,13 @@
+## ACT-0160 - 2026-11-03 - Проверка запуска SAF picker на Android 14
+
+На установленном v57 APK `7bbf131f80e4f21e47e609639c56b37aaf5a802364cd1f0231989cfc1ff0b333` открыл More → portable backup, ввёл синтетический временный пароль и запустил import action. Android 14 открыл штатный `com.google.android.documentsui/.picker.PickActivity`; picker отменён без выбора URI, активная база и файлы не затрагивались. Приложение возвращено на главный экран. Проверен только запуск/возврат picker; экспорт, чтение/запись URI, импорт, force-stop/power loss, Redmi и owner acceptance остаются открытыми. Данные установленной emulator Memora не очищались и не читались.
+
+## ACT-0159 - 2026-11-03 - Эксперимент с lexical cutoff отменён
+
+Временно проверен порог `matched terms >= 75% distinct query terms` на существующем синтетическом corpus из 90 AZ/RU/mixed вариантов. Recall@5 стал `0.933/0.833/0.867`, Precision@5 — `0.187/0.167/0.173`, MRR — `0.933/0.833/0.867` вместо baseline `Recall@5=1.000`, `Precision@5=0.200`, `MRR=1.000/1.000/0.983`. Порог ухудшил recall и precision, поэтому temporary product-code изменение откачено полностью. Тот же focused baseline test после отката прошёл и воспроизвёл сохранённые metrics. Ранжирование не менялось; semantic retrieval не реализован. Следующий M20-04 шаг — полные relevance labels и уточнение k, а не tuning порога на неполной разметке.
+
+Обновлены дневник, TODO, validation matrix, retrieval evaluation, engineering plan, AGENTS и этот лог. Изменения этого пакета требуют локального документального commit; push не запрашивался. M20-02/03/04 и release readiness остаются partial. Пользовательский ADR-012 сохранён.
+
 ## ACT-0156 - 2026-11-03 - Измеримый lexical retrieval baseline AZ/RU/mixed
 
 Добавлен host regression corpus из 10 canonical synthetic tasks на язык и трёх query variants на task: 30 AZ, 30 RU и 30 mixed. Для 90 query cases считаются Recall@5/Precision@5/MRR; каждый результат проверяет точный source ID/revision, а одноимённый BMW row из другого scope не должен попадать в ответ.
