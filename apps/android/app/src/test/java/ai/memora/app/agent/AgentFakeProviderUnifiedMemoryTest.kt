@@ -277,16 +277,25 @@ class AgentFakeProviderUnifiedMemoryTest {
             ProtectedMemoryRepository(databaseRule.database)).handlers().single { it.descriptor.name == "search_memory" }
         val turn = AgentTurnRequest("retrieval-evaluation-turn", scope, "retrieval-evaluation-session", null,
             "az-AZ", "Synthetic retrieval evaluation")
-        val broadQueries = mapOf(
-            "az" to listOf(LabeledQuery("görüşlər", setOf("az-01", "az-04", "az-09"))),
-            "ru" to listOf(LabeledQuery("встречи", setOf("ru-01", "ru-04", "ru-09"))),
-            "mixed" to listOf(LabeledQuery("meeting", setOf("mx-04", "mx-09"))),
+        val additionalQueries = mapOf(
+            "az" to listOf(
+                LabeledQuery("görüşlər", setOf("az-01", "az-04", "az-09")),
+                LabeledQuery("BMW ödəniş", emptySet()),
+            ),
+            "ru" to listOf(
+                LabeledQuery("встречи", setOf("ru-01", "ru-04", "ru-09")),
+                LabeledQuery("BMW оплата", emptySet()),
+            ),
+            "mixed" to listOf(
+                LabeledQuery("meeting", setOf("mx-04", "mx-09")),
+                LabeledQuery("BMW payment", emptySet()),
+            ),
         )
         val relevantUniverse = corpus.values.flatten().map { it.id }.toSet()
         for ((language, records) in corpus) {
             val labeledQueries = records.flatMap { record ->
                 record.queries.map { query -> LabeledQuery(query, setOf(record.id)) }
-            } + broadQueries.getValue(language)
+            } + additionalQueries.getValue(language)
             val observations = labeledQueries.mapIndexed { index, query ->
                 val result = handler.read(AgentModelToolCall("retrieval-eval-$language-$index", "search_memory", 1,
                     mapOf("query" to query.text)), turn)
@@ -304,11 +313,13 @@ class AgentFakeProviderUnifiedMemoryTest {
                 assertTrue("unknown task source returned for '${query.text}'", ids.all { it in relevantUniverse })
                 Observation(query.relevantIds, ids)
             }
-            assertEquals("each language has 30 lexical variants plus one multi-source query", 31, observations.size)
-            val recallAt5 = observations.sumOf { observation ->
+            assertEquals("each language has 30 lexical variants, a multi-source query and a near-miss", 32, observations.size)
+            val positiveObservations = observations.filter { it.relevantIds.isNotEmpty() }
+            val negativeObservations = observations.filter { it.relevantIds.isEmpty() }
+            val recallAt5 = positiveObservations.sumOf { observation ->
                 observation.actual.take(5).count { it in observation.relevantIds }.toDouble() /
                     observation.relevantIds.size
-            } / observations.size
+            } / positiveObservations.size
             val precisionAt5 = observations.sumOf { observation ->
                 observation.actual.take(5).count { it in observation.relevantIds }.toDouble() / 5.0
             } / observations.size
@@ -324,10 +335,12 @@ class AgentFakeProviderUnifiedMemoryTest {
                 item.actual.indexOfFirst { it in item.relevantIds }.takeIf { it >= 0 }?.let { 1.0 / (it + 1) } ?: 0.0
             } / observations.size
             val falsePositiveIds = observations.sumOf { item -> item.actual.count { it !in item.relevantIds } }
+            val negativeQueryFalsePositiveCount = negativeObservations.count { it.actual.isNotEmpty() }
+            val negativeQueryFalsePositiveIds = negativeObservations.sumOf { it.actual.size }
             val missingRelevantAt5 = observations.sumOf { item ->
                 item.relevantIds.count { relevant -> relevant !in item.actual.take(5) }
             }
-            println("M20_04_JUDGED_METRICS language=$language queries=${observations.size} Recall@5=$recallAt5 Precision@5=$precisionAt5 Precision@1=$precisionAt1 Precision@returned=$precisionAtReturned meanReturned=$meanReturned MRR=$mrr falsePositiveIds=$falsePositiveIds missingRelevantAt5=$missingRelevantAt5")
+            println("M20_04_JUDGED_METRICS language=$language queries=${observations.size} positiveQueries=${positiveObservations.size} negativeQueries=${negativeObservations.size} Recall@5=$recallAt5 Precision@5=$precisionAt5 Precision@1=$precisionAt1 Precision@returned=$precisionAtReturned meanReturned=$meanReturned MRR=$mrr falsePositiveIds=$falsePositiveIds missingRelevantAt5=$missingRelevantAt5 negativeQueriesWithFalsePositives=$negativeQueryFalsePositiveCount negativeQueryFalsePositiveIds=$negativeQueryFalsePositiveIds")
         }
     }
 

@@ -1,20 +1,32 @@
 # M20-04 local retrieval evaluation
 
-**Status:** lexical host harness now evaluates 93 synthetic queries against explicit relevant sets over 30 in-scope task sources; semantic retrieval is not implemented. Last updated 2026-11-03.
+**Status:** lexical host harness now evaluates 96 synthetic queries against explicit relevant sets over 30 in-scope task sources, including one judged near-miss per AZ/RU/mixed class; semantic retrieval is not implemented. Last updated 2026-11-03.
+
+## ACT-0164 — Add a judged near-miss per language class
+
+Added negative queries `BMW ödəniş`, `BMW оплата`, and `BMW payment`, each labeled with an empty relevant-source set because the synthetic corpus has no BMW payment task. The 31 positive queries/class retain complete labels within the 30-task universe. Recall@5 is averaged over positive queries only; fixed P@5, P@1, P@returned, MRR and result counts include the negative query, which receives no relevant credit. The focused test passed:
+
+| Class | Positive Recall@5 | Fixed P@5 | P@1 | P@returned | Mean returned | MRR | False-positive IDs | Near-miss with any hit | Near-miss false-positive IDs |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| AZ | 1.000 | 0.206 | 0.969 | 0.409 | 2.97 | 0.969 | 62 | 1/1 | 4 |
+| RU | 1.000 | 0.206 | 0.969 | 0.790 | 1.81 | 0.969 | 25 | 1/1 | 3 |
+| Mixed AZ/RU/EN | 0.984 | 0.194 | 0.906 | 0.386 | 2.78 | 0.938 | 58 | 1/1 | 4 |
+
+Every class returns several tasks for its negative query. This confirms the current lexical search can surface unsupported candidates when a query combines a matching entity term (`BMW`) with a mismatched action (`payment`). The test documents a quality gap; it does not change the ranker or establish a suitable rejection threshold. All judgments remain synthetic, activity-only and narrow.
 
 ## ACT-0163 — Full judgments for the existing synthetic corpus
 
-The regression retains the existing 30 lexical variants per AZ/RU/mixed class and adds one broad multi-source query per class: `görüşlər` expects AZ tasks `az-01/04/09`, `встречи` expects `ru-01/04/09`, and `meeting` expects mixed tasks `mx-04/09`. For each query, `relevantIds` lists all expected task sources, and the other task IDs in the 30-source synthetic evaluation universe are treated as non-relevant. Every returned task is still checked for source/revision provenance, duplicate IDs, and cross-scope leakage. Thus precision is fully judged for this narrow synthetic corpus; this does not establish relevance completeness for real user intents.
+The regression retains the existing 30 lexical variants per AZ/RU/mixed class and adds one broad multi-source query per class: `görüşlər` expects AZ tasks `az-01/04/09`, `встречи` expects `ru-01/04/09`, and `meeting` expects mixed tasks `mx-04/09`. ACT-0164 also adds one empty-relevance near-miss per class. For each query, `relevantIds` lists all expected task sources, and the other task IDs in the 30-source synthetic evaluation universe are treated as non-relevant. Every returned task is still checked for source/revision provenance, duplicate IDs, and cross-scope leakage. Thus precision is fully judged for this narrow synthetic corpus; this does not establish relevance completeness for real user intents.
 
-Focused test `syntheticRetrievalCorpusReportsMetricsForThirtyAZRuAndMixedQueries` passed with 31 queries/class:
+Focused test `syntheticRetrievalCorpusReportsMetricsForThirtyAZRuAndMixedQueries` passed with 32 queries/class (31 positive, one near-miss):
 
 | Class | Recall@5 | Fixed P@5 | P@1 | P@returned | Mean returned | MRR | False-positive IDs | Relevant IDs missing at 5 |
 | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
-| AZ | 1.000 | 0.213 | 1.000 | 0.423 | 2.94 | 1.000 | 58 | 0 |
-| RU | 1.000 | 0.213 | 1.000 | 0.815 | 1.77 | 1.000 | 22 | 0 |
-| Mixed AZ/RU/EN | 0.984 | 0.200 | 0.935 | 0.399 | 2.74 | 0.968 | 54 | 1 |
+| AZ | 1.000 | 0.206 | 0.969 | 0.409 | 2.97 | 0.969 | 62 | 0 |
+| RU | 1.000 | 0.206 | 0.969 | 0.790 | 1.81 | 0.969 | 25 | 0 |
+| Mixed AZ/RU/EN | 0.984 | 0.194 | 0.906 | 0.386 | 2.78 | 0.938 | 58 | 1 |
 
-These results show multiple wrong task candidates and one missed member of the broad mixed-language relevant set in the current lexical ranker. They are not a reason to change ranking yet: the corpus has only 10 synthetic task intents/class plus one broad query, no real user evaluation, and only a single explicit multilingual query per class. The next useful step is expand independently reviewed broad/paraphrase/person/project/time query categories and source sets, then consider retrieval changes against those labels. No production ranking behavior, model, schema or vector index changed.
+These results include one near-miss per class (each with at least one hit and 3–4 incorrect candidates) plus one missed member of the broad mixed-language relevant set. They are not a reason to tune ranking yet: the corpus has only 10 synthetic task intents/class, one broad query and one near-miss per class, no real user evaluation, and no person/project/time cases. The next useful step is expand independently reviewed paraphrase/person/project/time query categories and source sets, then compare candidate retrieval changes against those labels. No production ranking behavior, model, schema or vector index changed.
 
 ## ACT-0156 — 90-query lexical baseline
 
