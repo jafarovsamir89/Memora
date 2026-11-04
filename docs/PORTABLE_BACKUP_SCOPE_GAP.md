@@ -13,6 +13,8 @@ The SAF screen exports the protected AgentDatabase snapshot. Several other activ
 
 The first item is proven missing from the user-facing backup. The other files are confirmed active code paths but were not individually round-trip tested in ACT-0165. Do not describe the current Room-only file as a complete export of all Memora data.
 
+ACT-0166 completed a read-only inventory of additional persisted state. Stable agent `scope-id`/`actor-id` must follow scoped conversation/journal records; language/theme can be carried as bounded optional settings. Cloud/voice/memory consent, Firebase/App Check installation state, Android permission grants, notification channels, scheduled alarms, local install lineage and device Keystore material are deliberately device-bound and must not transfer. Destination consent starts revoked; notification work is recomputed from restored source data and current OS/app grants. See [PORTABLE_BACKUP_STORE_INVENTORY.md](PORTABLE_BACKUP_STORE_INVENTORY.md). This inventory is design evidence only and adds no runtime backup coverage.
+
 ## Recommended engineering direction
 
 Extend portable backup into one authenticated, versioned bundle of every durable user-owned local store and its required key material, not a collection of separately restorable partial backups. Keep the current outer passphrase encryption and streaming model. Before opening any store on restore, authenticate and validate every manifest section, source schema, length and digest in isolated staging. Then stage all replacement files and key envelopes under one durable journal; startup recovery must activate the whole new generation or return to the whole previous generation. The app must not serve a mixed old/new set. The selected engineering direction is recorded in [ADR-013](adr/ADR-013-portable-backup-all-stores.md); inventory and implementation gates remain open.
@@ -21,10 +23,10 @@ Do not simply reuse the existing per-store JSON export methods: capture export o
 
 ## Acceptance required before M20-02 can claim portable backup completeness
 
-1. Inventory all persistent app-owned stores, keys, migrations, tombstones, revisions and data exclusions; map each owner-visible view to its source of truth.
-2. Seed one unique synthetic marker through each normal local write path, export with SAF, remove or change those markers, then import through the UI and verify all original markers after a cold process restart.
-3. Reject a wrong password, corrupt/missing section, unsupported store schema and incomplete file provider result without changing any active store.
-4. Inject process death at every durable bundle activation phase and verify restart observes either the complete prior generation or the complete restored generation, never a mixture.
-5. Verify clean-install emptiness, data-preserving APK update, cancellation/error states, alternate SAF providers and physical owner acceptance separately.
+1. [x] Read-only source inventory of active durable stores, keys, current consent/settings/identity/install state, and derived device state: [PORTABLE_BACKUP_STORE_INVENTORY.md](PORTABLE_BACKUP_STORE_INVENTORY.md). Runtime adapters and consistency barrier are still open.
+2. [ ] Seed one unique synthetic marker through each normal local write path, export with SAF, remove or change those markers, then import through the UI and verify all original markers after a cold process restart.
+3. [ ] Reject a wrong password, corrupt/missing section, unsupported store schema and incomplete file provider result without changing any active store.
+4. [ ] Inject process death at every durable bundle activation phase and verify restart observes either the complete prior generation or the complete restored generation, never a mixture.
+5. [ ] Verify clean-install emptiness, data-preserving APK update, cancellation/error states, alternate SAF providers and physical owner acceptance separately.
 
 M20-02 remains partial. The successful Room database cutover, isolated SQLCipher probes and UI export/import evidence remain valid for the Room database only; they do not establish whole-app backup coverage.

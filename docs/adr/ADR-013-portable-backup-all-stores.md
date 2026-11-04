@@ -19,6 +19,8 @@ Portable backup represents a consistent generation of every durable, user-owned 
 
 The existing passphrase-protected authenticated outer container remains the portability boundary. Export reads each store through a typed, complete snapshot API (including tombstones/revisions) and streams the bundle into that container; it never exports or copies Android Keystore key material. Import validates/authenticates every section in isolation, then writes replacement data using new or existing device-local Keystore keys. Restore stages every store and activates all of them as one recoverable generation. Startup recovery must finish activation of the complete candidate generation or restore the complete prior generation before any screen or agent can read data. Mixed generations are forbidden.
 
+The archive set also includes stable local `scope-id`/`actor-id` values because protected conversation and run-journal rows are scoped by those IDs; resetting them after restore would orphan existing history. Include the non-sensitive language/theme values from `appearance-settings-v1` as a bounded optional settings section. Do not include any cloud/voice/persisted-memory consent value: imported consent always starts revoked on the destination and requires a fresh user decision. Do not copy app-install lineage, Firebase/App Check installation tokens, Android permission grants, notification channels or scheduled AlarmManager objects. Reconcile notifications after restore from the restored source rows and destination OS permissions/opt-ins. The full repository evidence and path mapping live in [PORTABLE_BACKUP_STORE_INVENTORY.md](../PORTABLE_BACKUP_STORE_INVENTORY.md).
+
 The current importer writes the decrypted outer payload to an app-private temporary file before parsing. That is safe only while its inner payload remains independently encrypted. The full-store bundle must not put clear captures/tasks/voice-memory into that temporary file. Extend the container/parser so authenticated data is streamed into locally encrypted candidate stores, or use independently authenticated encrypted sections with a verified manifest. Plain user content may exist only in bounded process memory during conversion; cleanup must clear partial staging files and temporary key bytes.
 
 ## Alternatives considered
@@ -31,6 +33,7 @@ The current importer writes the decrypted outer payload to an app-private tempor
 ## Required implementation gates
 
 - Inventory every active and legacy store, key alias/envelope, schema, migration, retention/tombstone rule and source-of-truth screen before code changes.
+- Inventory device-bound versus portable state and specify consent, install-marker, SDK-token, permission and derived-notification behavior. ACT-0166 records the current inventory; it is a snapshot and must be updated when persistence changes.
 - Add a consistent snapshot barrier for foreground, background and scheduled writers.
 - Add typed, bounded adapters for each store; no raw Keystore key export and no plaintext disk staging outside protected app-private files.
 - Preserve tombstones and revisions; do not reuse current human-facing capture/task JSON exports as a complete backup format.
