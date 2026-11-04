@@ -117,6 +117,15 @@ class ProfileMemoryRepositoryTest {
         assertTrue(conversations.turn(scope, duplicateSource).any { it.role == "user" })
         assertTrue(conversations.turn(scope, correctionSource).any { it.role == "user" })
         assertEquals(listOf(1L, 2L), profiles.get(scope, fact.factId)?.revisions?.map { it.revision })
+
+        val correctionDerived = conversations.saveEpisode(scope, "Synthetic corrected preference",
+            "The owner now prefers detailed replies.", listOf(correctionSource), nowMillis = 8_000)
+        val manuallyEdited = profiles.editManually(scope, fact.factId, 2, "preference",
+            "Prefers detailed replies when a topic is complex", nowMillis = 9_000)
+        assertEquals(3L, manuallyEdited.revision)
+        assertEquals(listOf(1L, 2L, 3L), manuallyEdited.revisions.map { it.revision })
+        assertNull(conversations.episode(scope, correctionDerived.episodeId))
+        assertTrue(conversations.turn(scope, correctionSource).any { it.role == "user" })
     }
 
     @Test fun editedFactsCannotCollideAndSourceMessagesAreNotModelAuthored() = runBlocking {

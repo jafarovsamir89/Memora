@@ -21,4 +21,4 @@ This is conservative: an episode that also summarizes another topic from the sam
 
 ## Acceptance
 
-Synthetic repository tests prove that correcting a profile fact removes summaries citing prior supporting turns, preserves unrelated summaries and all source turns, and retains the new profile revision. Existing source-turn deletion/retention behavior and full suite remain green. This is host evidence, not physical-device or field acceptance.
+Synthetic repository tests prove that a conversation correction and an explicit manual edit each remove summaries citing superseded supporting turns, preserve unrelated summaries and all source turns, and retain profile revision history. Existing source-turn deletion/retention behavior and the full suite remain green. This is host evidence, not physical-device or field acceptance.
