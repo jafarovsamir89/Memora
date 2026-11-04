@@ -300,7 +300,16 @@
     <string name="assistant_tasks_title">AI köməkçisinin tapşırıqları</string>
     <string name="finance_expense_label">Xərc</string>
     <string name="finance_settlement_label">Borc ödənişi</string>
-    <string name="table_columns_help">Nümunə: Ad:TEXT, Tarix:DATE, Məbləğ:MONEY. Dəstəklənən tiplər: TEXT, INTEGER, DECIMAL, BOOLEAN, DATE, DATETIME, MONEY.</string>
+    <string name="table_columns_help">Nümunə: Ad:TEXT, Tarix:DATE, Məbləğ:MONEY, Əlaqə:PERSON_REF, Layihə:PROJECT_REF. Əlaqələri yaddaşda olan şəxslər və layihələr arasından seçin. Tiplər: TEXT, INTEGER, DECIMAL, BOOLEAN, DATE, DATETIME, MONEY, PERSON_REF, PROJECT_REF.</string>
+    <string name="table_select_person">Şəxsi seçin</string>
+    <string name="table_select_project">Layihəni seçin</string>
+    <string name="table_reference_search">Axtarış</string>
+    <string name="table_reference_choose">Əlaqə seçin</string>
+    <string name="table_reference_change">Əlaqəni dəyişin</string>
+    <string name="table_reference_clear">Əlaqəni silin</string>
+    <string name="table_reference_unselected">Əlaqəli qeyd seçilməyib</string>
+    <string name="table_reference_unavailable">Əlaqəli qeyd əlçatan deyil</string>
+    <string name="table_reference_empty">Uyğun qeydlər tapılmadı.</string>
     <string name="finance_reversed_label">Ləğv edilib</string>
     <string name="finance_debt_remaining">Qalan borc</string>
     <string name="finance_receipt_applied">Borcun ödənilməsinə yönəldilib</string>

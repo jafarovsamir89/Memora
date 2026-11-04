@@ -31,8 +31,11 @@ import androidx.compose.ui.unit.dp
 import ai.memora.app.data.protectedstore.AgentDatabase
 import ai.memora.app.data.protectedstore.ColumnSpec
 import ai.memora.app.data.protectedstore.ColumnType
+import ai.memora.app.data.protectedstore.DomainKind
+import ai.memora.app.data.protectedstore.DomainObjectRow
 import ai.memora.app.data.protectedstore.ProtectedDomainRepository
 import ai.memora.app.data.protectedstore.TableDataRow
+import ai.memora.app.data.protectedstore.TableColumnRow
 import ai.memora.app.data.protectedstore.TableSnapshot
 import ai.memora.app.ui.EmptyState
 import ai.memora.app.ui.MemoraCard
@@ -56,7 +59,8 @@ fun TablesScreen() {
     val context = LocalContext.current
     val processor = remember(context) { AgentVoiceTurnProcessor(context) }
     val scopeId = remember(processor) { processor.conversationScopeId() }
-    val repository = remember(context) { ProtectedDomainRepository(AgentDatabase.open(context)) }
+    val database = rememberUiAgentDatabase()
+    val repository = remember(database) { ProtectedDomainRepository(database) }
     val coroutineScope = rememberCoroutineScope()
     var tables by remember { mutableStateOf<List<TableSnapshot>>(emptyList()) }
     var selectedTableId by remember { mutableStateOf<String?>(null) }
@@ -67,6 +71,12 @@ fun TablesScreen() {
     var deleteRowTarget by remember { mutableStateOf<TableDataRow?>(null) }
     var editingRow by remember { mutableStateOf<TableDataRow?>(null) }
     var rowValues by remember { mutableStateOf<Map<String, String>>(emptyMap()) }
+    var referenceColumn by remember { mutableStateOf<TableColumnRow?>(null) }
+    var referenceQuery by remember { mutableStateOf("") }
+    var referenceOptions by remember { mutableStateOf<List<DomainObjectRow>>(emptyList()) }
+    var referenceLabels by remember { mutableStateOf<Map<String, String>>(emptyMap()) }
+    var referenceLoading by remember { mutableStateOf(false) }
+    var referenceError by remember { mutableStateOf(false) }
     var newTableTitle by remember { mutableStateOf("") }
     var newTableColumns by remember { mutableStateOf("") }
     var error by remember { mutableStateOf(false) }
@@ -80,8 +90,52 @@ fun TablesScreen() {
         } catch (_: Exception) { error = true }
     }
 
+    LaunchedEffect(scopeId, selectedTableId, tables, deletedRows) {
+        val table = tables.firstOrNull { it.table.tableId == selectedTableId }
+        if (table == null) {
+            referenceLabels = emptyMap()
+        } else {
+            val referenceColumns = table.columns.filter { it.valueType == ColumnType.PERSON_REF.name || it.valueType == ColumnType.PROJECT_REF.name }
+            val references = (table.rows + deletedRows).flatMap { row ->
+                val values = runCatching { JSONObject(row.valuesJson) }.getOrNull() ?: return@flatMap emptyList()
+                referenceColumns.mapNotNull { column ->
+                    val id = values.optString(column.columnId).takeIf(String::isNotBlank) ?: return@mapNotNull null
+                    val expectedKind = if (column.valueType == ColumnType.PERSON_REF.name) DomainKind.PERSON.name else DomainKind.PROJECT.name
+                    id to expectedKind
+                }
+            }.distinct()
+            referenceLabels = references.mapNotNull { (id, expectedKind) ->
+                val objectRow = runCatching { repository.domainObject(scopeId, id) }.getOrNull()
+                    ?.takeIf { it.kind == expectedKind && it.status == "active" && it.deletedAt == null }
+                objectRow?.let { id to it.title }
+            }.toMap()
+        }
+    }
+
+    LaunchedEffect(scopeId, referenceColumn?.columnId, referenceQuery) {
+        val column = referenceColumn ?: return@LaunchedEffect
+        referenceLoading = true
+        referenceError = false
+        try {
+            val kind = if (column.valueType == ColumnType.PERSON_REF.name) DomainKind.PERSON else DomainKind.PROJECT
+            referenceOptions = if (referenceQuery.isBlank()) repository.domainObjects(scopeId, kind, limit = 500)
+            else repository.search(scopeId, referenceQuery.trim(), kinds = setOf(kind), limit = 100).mapNotNull { hit ->
+                repository.domainObject(scopeId, hit.objectId)?.takeIf {
+                    it.status == "active" && it.deletedAt == null && it.kind == kind.name
+                }
+            }.distinctBy { it.objectId }
+            referenceError = false
+        } catch (_: Exception) {
+            referenceOptions = emptyList()
+            referenceError = true
+        } finally {
+            referenceLoading = false
+        }
+    }
+
     fun beginRowEdit(row: TableDataRow?) {
         val table = selected ?: return
+        error = false
         editingRow = row
         val stored = row?.let { runCatching { JSONObject(it.valuesJson) }.getOrNull() } ?: JSONObject()
         rowValues = table.columns.associate { column ->
@@ -95,6 +149,19 @@ fun TablesScreen() {
                 else -> value.toString()
             }
         }
+        rowDialog = true
+    }
+
+    fun openReferencePicker(column: TableColumnRow) {
+        referenceQuery = ""
+        referenceOptions = emptyList()
+        referenceColumn = column
+        rowDialog = false
+    }
+
+    fun closeReferencePicker() {
+        referenceColumn = null
+        referenceQuery = ""
         rowDialog = true
     }
 
@@ -114,7 +181,8 @@ fun TablesScreen() {
                 val name = pieces[0].trim()
                 val type = if (pieces.size == 1) ColumnType.TEXT else runCatching { ColumnType.valueOf(pieces[1].trim().uppercase()) }.getOrNull()
                 if (type == null || type !in setOf(ColumnType.TEXT, ColumnType.INTEGER, ColumnType.DECIMAL,
-                        ColumnType.BOOLEAN, ColumnType.DATE, ColumnType.DATETIME, ColumnType.MONEY)) null else name to type
+                        ColumnType.BOOLEAN, ColumnType.DATE, ColumnType.DATETIME, ColumnType.MONEY,
+                        ColumnType.PERSON_REF, ColumnType.PROJECT_REF)) null else name to type
             }
             if (newTableTitle.isBlank() || declarations.isEmpty() || declarations.size > 50 || declarations.any { it == null || it.first.isBlank() || it.first.length > 100 } ||
                 declarations.filterNotNull().map { it.first.lowercase() }.distinct().size != declarations.size) { error = true; return@TextButton }
@@ -133,23 +201,63 @@ fun TablesScreen() {
         dismissButton = { TextButton(onClick = { createTableDialog = false }) { Text(s(ai.memora.app.R.string.task_cancel)) } },
     )
 
+    if (referenceColumn != null) {
+        val column = referenceColumn!!
+        val selectedId = rowValues[column.columnId].orEmpty()
+        AlertDialog(
+            onDismissRequest = { closeReferencePicker() },
+            title = { Text(s(if (column.valueType == ColumnType.PERSON_REF.name) R.string.table_select_person else R.string.table_select_project)) },
+            text = { Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                androidx.compose.material3.OutlinedTextField(referenceQuery, { referenceQuery = it.take(100) },
+                    Modifier.fillMaxWidth().testTag("table_reference_search"), label = { Text(s(R.string.table_reference_search)) }, singleLine = true)
+                if (referenceLoading) Text(s(R.string.today_loading), color = colors.muted)
+                if (referenceError) Text(s(R.string.table_action_failed), color = androidx.compose.material3.MaterialTheme.colorScheme.error)
+                if (!column.required && selectedId.isNotEmpty()) TextButton(onClick = {
+                    rowValues = rowValues + (column.columnId to "")
+                    closeReferencePicker()
+                }, modifier = Modifier.testTag("table_reference_clear")) { Text(s(R.string.table_reference_clear)) }
+                if (!referenceLoading && !referenceError) referenceOptions.forEach { option ->
+                    TextButton(onClick = {
+                        rowValues = rowValues + (column.columnId to option.objectId)
+                        referenceLabels = referenceLabels + (option.objectId to option.title)
+                        closeReferencePicker()
+                    }, modifier = Modifier.fillMaxWidth().testTag("table_reference_${option.objectId}")) {
+                        Text(option.title, color = if (option.objectId == selectedId) colors.accent else colors.ink)
+                    }
+                }
+                if (!referenceLoading && !referenceError && referenceOptions.isEmpty()) Text(s(R.string.table_reference_empty), color = colors.muted)
+            } },
+            confirmButton = { TextButton(onClick = { closeReferencePicker() }) { Text(s(R.string.task_cancel)) } },
+        )
+    }
+
     if (rowDialog && selected != null) AlertDialog(
         onDismissRequest = { rowDialog = false },
         title = { Text(s(if (editingRow == null) ai.memora.app.R.string.table_add_row else ai.memora.app.R.string.table_edit_row)) },
         text = { Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            if (error) Text(s(R.string.table_action_failed), color = androidx.compose.material3.MaterialTheme.colorScheme.error)
             selected.columns.forEach { column ->
-                OutlinedTextField(rowValues[column.columnId].orEmpty(),
+                if (column.valueType == ColumnType.PERSON_REF.name || column.valueType == ColumnType.PROJECT_REF.name) {
+                    val id = rowValues[column.columnId].orEmpty()
+                    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                        Text("${column.name} (${column.valueType})", color = colors.muted)
+                        Text(if (id.isBlank()) s(R.string.table_reference_unselected)
+                            else referenceLabels[id] ?: s(R.string.table_reference_unavailable), color = colors.ink)
+                        OutlinedButton(onClick = { openReferencePicker(column) },
+                            modifier = Modifier.fillMaxWidth().testTag("table_cell_${column.columnId}")) {
+                            Text(s(if (id.isBlank()) R.string.table_reference_choose else R.string.table_reference_change))
+                        }
+                    }
+                } else OutlinedTextField(rowValues[column.columnId].orEmpty(),
                     { value -> rowValues = rowValues + (column.columnId to value.take(10_000)) },
                     Modifier.fillMaxWidth().testTag("table_cell_${column.columnId}"), label = { Text("${column.name} (${column.valueType})") }, maxLines = 3)
             }
         } },
         confirmButton = { TextButton(onClick = {
             val table = selected
-            if (table == null) { rowDialog = false; return@TextButton }
             val parsed = table.columns.associate { column -> column.columnId to parseTableInput(column.valueType, rowValues[column.columnId].orEmpty()) }
             if (parsed.values.any { !it.first }) { error = true; return@TextButton }
             val values: Map<String, Any?> = parsed.mapValues { it.value.second }
-            rowDialog = false
             coroutineScope.launch {
                 try {
                     val current = editingRow
@@ -158,6 +266,7 @@ fun TablesScreen() {
                     else repository.updateRow(scopeId, table.table.tableId, current.rowId, current.version,
                         table.table.schemaVersion, values)
                     tables = repository.tables(scopeId)
+                    rowDialog = false
                     error = false
                 } catch (_: Exception) { error = true }
             }
@@ -222,6 +331,9 @@ fun TablesScreen() {
                         val value = if (raw is JSONObject && column.valueType == ColumnType.MONEY.name) {
                             val minor = raw.optLong("minorUnits")
                             "${minor / 100}.${(minor % 100).toString().padStart(2, '0')} ${raw.optString("currency", "AZN")}"
+                        } else if (raw != null && raw != JSONObject.NULL &&
+                            (column.valueType == ColumnType.PERSON_REF.name || column.valueType == ColumnType.PROJECT_REF.name)) {
+                            referenceLabels[raw.toString()] ?: s(R.string.table_reference_unavailable)
                         } else raw?.takeUnless { it == JSONObject.NULL }?.toString().orEmpty()
                         if (value.isNotBlank()) Text("${column.name}: $value", color = colors.ink)
                     }

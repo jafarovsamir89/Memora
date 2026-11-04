@@ -498,7 +498,7 @@ internal class ProtectedDomainRepository(private val db: AgentDatabase) {
         val ids = hashSetOf<String>()
         val existingRows = dao.rows(tableId, scope).associateBy { it.rowId }
         val prepared = rowValues.map { (id, values) ->
-            require(id.isNotBlank() && ids.add(id)); validateRow(columns, values)
+            require(id.isNotBlank() && ids.add(id)); validateRow(scope, columns, values)
             val encoded = encodeValues(values)
             existingRows[id]?.let { existing -> check(existing.valuesJson == encoded) { "idempotency_conflict" } }
             existingRows[id] ?: TableDataRow(id, tableId, scope, 1, encoded, null)
@@ -519,7 +519,7 @@ internal class ProtectedDomainRepository(private val db: AgentDatabase) {
         val existing = dao.rows(tableId, scope).firstOrNull { it.rowId == rowId } ?: error("not_found")
         check(existing.version == expectedVersion && expectedVersion < Long.MAX_VALUE) { "version_conflict" }
         val columns = dao.columns(tableId).map { it.columnId to ColumnSpec(it.columnId, it.name, ColumnType.valueOf(it.valueType), it.required, JSONObject(it.configJson)) }.toMap()
-        validateRow(columns, values)
+        validateRow(scope, columns, values)
         val encoded = encodeValues(values)
         check(dao.updateTableRow(rowId, tableId, scope, expectedVersion, expectedVersion + 1, encoded) == 1)
         val expected = existing.copy(version = expectedVersion + 1, valuesJson = encoded)
@@ -615,7 +615,7 @@ internal class ProtectedDomainRepository(private val db: AgentDatabase) {
         val parsed = (0 until rawRows.length()).map { index ->
             val row = rawRows.getJSONObject(index); require(ids.add(row.getString("id")))
             val values = row.getJSONObject("values").let { obj -> obj.keys().asSequence().associateWith { key -> jsonValue(obj.get(key)) } }
-            validateRow(columns, values)
+            validateRow(scope, columns, values)
             deterministicImportId(tableId, row.getString("id")) to values
         }
         return ImportPreview(tableId, table.schemaVersion, parsed)
@@ -863,13 +863,21 @@ internal class ProtectedDomainRepository(private val db: AgentDatabase) {
         schema.forEach { col -> require(col.id.matches(Regex("[A-Za-z0-9_-]{1,64}"))); requireTitle(col.name); require(col.config.toString().length <= 1000) }
     }
 
-    private fun validateRow(columns: Map<String, ColumnSpec>, values: Map<String, Any?>) {
+    private suspend fun validateRow(scope: String, columns: Map<String, ColumnSpec>, values: Map<String, Any?>) {
         require(values.keys.all { it in columns })
         columns.forEach { (id, col) ->
             val value = values[id]
             if (value == null) { require(!col.required) { "required_value_missing" }; return@forEach }
             when (col.type) {
-                ColumnType.TEXT, ColumnType.PERSON_REF, ColumnType.PROJECT_REF -> require(value is String && value.length <= 10_000)
+                ColumnType.TEXT -> require(value is String && value.length <= 10_000)
+                ColumnType.PERSON_REF, ColumnType.PROJECT_REF -> {
+                    require(value is String && value.isNotBlank() && value.length <= 100) { "invalid_reference" }
+                    val target = dao.domainObject(scope, value) ?: error("invalid_reference")
+                    val expectedKind = if (col.type == ColumnType.PERSON_REF) DomainKind.PERSON else DomainKind.PROJECT
+                    require(target.kind == expectedKind.name && target.status == "active" && target.deletedAt == null) {
+                        "invalid_reference"
+                    }
+                }
                 ColumnType.INTEGER -> require(value is Int || value is Long)
                 ColumnType.DECIMAL -> require(value is String && runCatching { BigDecimal(value); true }.getOrDefault(false))
                 ColumnType.BOOLEAN -> require(value is Boolean)

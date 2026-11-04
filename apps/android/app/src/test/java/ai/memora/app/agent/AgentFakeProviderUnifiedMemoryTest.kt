@@ -246,6 +246,45 @@ class AgentFakeProviderUnifiedMemoryTest {
         }
     }
 
+    @Test fun typedTableReferencesRequireActiveSameScopeObjectsOfExpectedKind() = runBlocking {
+        val db = databaseRule.database
+        val domain = ProtectedDomainRepository(db)
+        val scope = "00000000-0000-4000-8000-000000000159"
+        val otherScope = "00000000-0000-4000-8000-000000000160"
+        domain.createObject(scope, "synthetic-ref-person", DomainKind.PERSON, "Synthetic person", null, null, "2026-11-03T10:00:00Z")
+        domain.createObject(scope, "synthetic-ref-project", DomainKind.PROJECT, "Synthetic project", null, null, "2026-11-03T10:00:00Z")
+        domain.createObject(scope, "synthetic-ref-note", DomainKind.NOTE, "Synthetic note", null, null, "2026-11-03T10:00:00Z")
+        domain.createObject(otherScope, "synthetic-ref-foreign-person", DomainKind.PERSON, "Foreign synthetic person", null, null, "2026-11-03T10:00:00Z")
+        domain.createTable(scope, "synthetic-linked-table", "Synthetic linked records", "editable", listOf(
+            ColumnSpec("person", "Person", ColumnType.PERSON_REF),
+            ColumnSpec("project", "Project", ColumnType.PROJECT_REF)))
+
+        val saved = domain.addRows(scope, "synthetic-linked-table", 1, listOf("synthetic-linked-row" to mapOf(
+            "person" to "synthetic-ref-person", "project" to "synthetic-ref-project")))
+        assertEquals(1, saved.size)
+        assertTrue(saved.single().valuesJson.contains("synthetic-ref-person"))
+        assertTrue(saved.single().valuesJson.contains("synthetic-ref-project"))
+
+        val invalidLinks = listOf(
+            "synthetic-ref-wrong-kind" to mapOf("person" to "synthetic-ref-project", "project" to "synthetic-ref-project"),
+            "synthetic-ref-foreign" to mapOf("person" to "synthetic-ref-foreign-person", "project" to "synthetic-ref-project"),
+            "synthetic-ref-missing" to mapOf("person" to "synthetic-does-not-exist", "project" to "synthetic-ref-project"),
+        )
+        invalidLinks.forEach { (id, values) ->
+            assertTrue("invalid reference row $id must be rejected", runCatching {
+                domain.addRows(scope, "synthetic-linked-table", 1, listOf(id to values))
+            }.isFailure)
+        }
+
+        val note = domain.domainObject(scope, "synthetic-ref-note")!!
+        domain.delete(scope, domain.previewDelete(scope, note.objectId, note.version), "2026-11-03T11:00:00Z")
+        assertTrue("soft-deleted reference must be rejected", runCatching {
+            domain.addRows(scope, "synthetic-linked-table", 1, listOf("synthetic-ref-deleted" to mapOf(
+                "person" to "synthetic-ref-person", "project" to "synthetic-ref-note")))
+        }.isFailure)
+        assertEquals(listOf("synthetic-linked-row"), domain.tables(scope).single().rows.map { it.rowId })
+    }
+
     @Test fun localMemoryRetrievalFindsExactAzerbaijaniRussianAndMixedButDoesNotClaimParaphraseRecall() = runBlocking {
         val db = databaseRule.database
         val scope = "00000000-0000-4000-8000-000000000155"

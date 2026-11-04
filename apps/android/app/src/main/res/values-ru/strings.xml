@@ -300,7 +300,16 @@
     <string name="assistant_tasks_title">Задачи AI-секретаря</string>
     <string name="finance_expense_label">Расход</string>
     <string name="finance_settlement_label">Погашение долга</string>
-    <string name="table_columns_help">Пример: Имя:TEXT, Дата:DATE, Сумма:MONEY. Типы: TEXT, INTEGER, DECIMAL, BOOLEAN, DATE, DATETIME, MONEY.</string>
+    <string name="table_columns_help">Пример: Имя:TEXT, Дата:DATE, Сумма:MONEY, Контакт:PERSON_REF, Проект:PROJECT_REF. Связи выбираются из сохранённых людей и проектов. Типы: TEXT, INTEGER, DECIMAL, BOOLEAN, DATE, DATETIME, MONEY, PERSON_REF, PROJECT_REF.</string>
+    <string name="table_select_person">Выбрать человека</string>
+    <string name="table_select_project">Выбрать проект</string>
+    <string name="table_reference_search">Поиск</string>
+    <string name="table_reference_choose">Привязать запись</string>
+    <string name="table_reference_change">Изменить привязку</string>
+    <string name="table_reference_clear">Убрать привязку</string>
+    <string name="table_reference_unselected">Связанная запись не выбрана</string>
+    <string name="table_reference_unavailable">Связанная запись недоступна</string>
+    <string name="table_reference_empty">Подходящие записи не найдены.</string>
     <string name="finance_reversed_label">Отменено</string>
     <string name="finance_debt_remaining">Остаток долга</string>
     <string name="finance_receipt_applied">Зачтено в погашение долга</string>

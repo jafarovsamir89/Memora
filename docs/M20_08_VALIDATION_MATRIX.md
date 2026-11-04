@@ -1,5 +1,9 @@
 # M20-08 Native validation matrix
 
+## ACT-0170 — Typed custom-table references
+
+Synthetic repository coverage creates a valid same-scope person/project reference and rejects wrong-kind, missing, cross-scope and soft-deleted targets. Final full host run: 60 suites / 305 tests, 0 failures/errors/skips; debug and AndroidTest APK builds, AndroidTest Kotlin compile and lint passed (0 errors / 63 warnings / 3 hints). APK SHA-256 `c2520ebe1693d19510df2a7e34553d76408c7058cef290dd273da691bdfa7081`. This validates repository behavior only; it does not close P4 UI acceptance. A focused Robolectric Compose interaction attempt timed out with `AppNotIdleException` at TextField entry. Physical-device selection/reading, TalkBack, layout, save-failure recovery, genuine linked views and owner review remain open.
+
 Status as of 2026-11-03, APK v57 / 1.1.35-memory-correction-propagation, Room schema 18. This matrix records existing evidence and remaining work; it does not turn host tests into device or live-provider acceptance.
 
 ## ACT-0168 — Exact local-date memory retrieval

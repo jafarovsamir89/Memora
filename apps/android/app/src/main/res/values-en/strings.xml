@@ -300,7 +300,16 @@
     <string name="assistant_tasks_title">AI assistant tasks</string>
     <string name="finance_expense_label">Expense</string>
     <string name="finance_settlement_label">Debt repayment</string>
-    <string name="table_columns_help">Example: Name:TEXT, Date:DATE, Amount:MONEY. Types: TEXT, INTEGER, DECIMAL, BOOLEAN, DATE, DATETIME, MONEY.</string>
+    <string name="table_columns_help">Example: Name:TEXT, Date:DATE, Amount:MONEY, Contact:PERSON_REF, Project:PROJECT_REF. Choose links from saved people and projects. Types: TEXT, INTEGER, DECIMAL, BOOLEAN, DATE, DATETIME, MONEY, PERSON_REF, PROJECT_REF.</string>
+    <string name="table_select_person">Select person</string>
+    <string name="table_select_project">Select project</string>
+    <string name="table_reference_search">Search</string>
+    <string name="table_reference_choose">Choose link</string>
+    <string name="table_reference_change">Change link</string>
+    <string name="table_reference_clear">Clear link</string>
+    <string name="table_reference_unselected">No linked record selected</string>
+    <string name="table_reference_unavailable">Linked record is unavailable</string>
+    <string name="table_reference_empty">No matching records found.</string>
     <string name="finance_reversed_label">Reversed</string>
     <string name="finance_debt_remaining">Remaining debt</string>
     <string name="finance_receipt_applied">Applied to debt repayment</string>

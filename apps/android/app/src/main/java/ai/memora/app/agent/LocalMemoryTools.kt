@@ -758,7 +758,8 @@ internal class LocalMemoryTools(private val repository: ProtectedDomainRepositor
                     val type = runCatching { ColumnType.valueOf(item.optString("type", "TEXT").uppercase()) }.getOrNull()
                         ?: return ToolPreparation.Rejected("invalid_column_type")
                     if (type !in setOf(ColumnType.TEXT, ColumnType.INTEGER, ColumnType.DECIMAL, ColumnType.BOOLEAN,
-                            ColumnType.DATE, ColumnType.DATETIME, ColumnType.MONEY) || name.isBlank() || name.length > 100)
+                            ColumnType.DATE, ColumnType.DATETIME, ColumnType.MONEY, ColumnType.PERSON_REF, ColumnType.PROJECT_REF) ||
+                        name.isBlank() || name.length > 100)
                         return ToolPreparation.Rejected("invalid_column")
                     ColumnSpec(UUID.randomUUID().toString(), name, type, item.optBoolean("required", false))
                 }

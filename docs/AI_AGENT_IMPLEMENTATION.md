@@ -269,6 +269,8 @@ Command: proposed → validated → awaiting_confirmation (если требуе
 
 ## 10. Пользовательские таблицы
 
+**ACT-0170 partial implementation checkpoint (2026-11-04):** editable custom tables accept `PERSON_REF` and `PROJECT_REF` columns. The Android editor selects a saved active same-scope object, stores its stable ID and displays the current title. Repository add/update/import validates target scope, kind, active status and non-deleted state. Synthetic repository coverage passes. A focused Robolectric Compose UI test timed out with `AppNotIdleException` during text-field input; the UI is not field-accepted. This does not implement the section's read-only `linked_view` / `viewSpec`, nor does it close P4.
+
 ### 10.1. Два режима
 
 **Editable table:** пользователь создаёт собственную структуру и строки. Типы v1: text, integer, decimal (строка точного значения), money (minorUnits + currency), boolean, localDate, zonedDateTime, enum, reference на разрешённый тип сущности. Каждая колонка имеет стабильный ID, имя, порядок, обязательность и ограничения; переименование не теряет значения. Произвольный JavaScript/SQL и исполняемые формулы не принимаются.

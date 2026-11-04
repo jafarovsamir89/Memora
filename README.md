@@ -12,6 +12,8 @@
 
 # Memora AI — Your Second Memory
 
+**ACT-0170 P4 checkpoint (2026-11-04):** typed custom-table references can point to existing active people/projects, persist stable local IDs, and display current names. Repository checks enforce kind and scope on add/update/import. Synthetic test verifies invalid/foreign/deleted references are rejected. Host suite 60/305 passed; lint 0/63/3. The attempted Compose UI interaction test timed out under Robolectric and is not claimed passed. P4 remains partial: read-only linked views, schema preview/undo, export/import, aggregates, accessibility and owner acceptance remain open.
+
 **Historical checkpoint ACT-0139:** Android v54 / 1.1.32-ranked-lexical-memory, Room schema 17. `search_memory` ranks local lexical matches by query coverage, title match and exact phrase; it does not claim semantic or embedding retrieval. Physical owner-device migration and acceptance remained open. See docs/AGENT_DIARY.md and docs/ACTION_LOG.md.
 
 **Historical implementation checkpoint ACT-0154 (2026-11-03):** M20-02 streaming protected SQLCipher export coordinator passed synthetic Android 14 end-to-end validation; full JVM suite 299/299; lint 0/60/3; debug APK SHA-256 `f7bf6ddcfdd4f6d7f1ff5b0297eb89957c7b245687eee8cc24092fe6d82be24b`. SAF picker/UI, streaming import, atomic active DB cutover/recovery and physical owner-device acceptance remain open. See docs/AGENT_DIARY.md and docs/ACTION_LOG.md for scope and evidence.
