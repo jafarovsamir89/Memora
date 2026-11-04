@@ -1,3 +1,11 @@
+## ACT-0156 - 2026-11-03 - Измеримый lexical retrieval baseline AZ/RU/mixed
+
+Добавлен host regression corpus из 10 canonical synthetic tasks на язык и трёх query variants на task: 30 AZ, 30 RU и 30 mixed. Для 90 query cases считаются Recall@5/Precision@5/MRR; каждый результат проверяет точный source ID/revision, а одноимённый BMW row из другого scope не должен попадать в ответ.
+
+Полный Gradle `testDebugUnitTest assembleDebug assembleDebugAndroidTest compileDebugAndroidTestKotlin lintDebug` успешен: 60 suites / 301 tests, 0 failures/errors/skips; lint 0/60/3. Результаты: AZ `1.000 / 0.200 / 1.000`, RU `1.000 / 0.200 / 1.000`, mixed `1.000 / 0.200 / 0.983` (Recall@5 / Precision@5 / MRR); scope leaks 0, missing/stale provenance 0. Precision 0.20 отражает один размеченный ожидаемый source при пяти возвращаемых результатах; engineering target ≥0.90 нельзя считать проверенным до более полной relevance labels или согласования k. Отрицательный paraphrase regression по-прежнему подтверждает lexical-only behavior. APK hash/schema/version не менялись: `d0b497621ff5a5be07f057e76eacf3bfd5ba8c4949dc39ceb44b31abad4ee03d`.
+
+Обновлены `MEMORY_RETRIEVAL_EVALUATION.md`, S51, TODO, validation matrix, README/engineering/product checkpoints, AGENTS, дневник и этот лог. Host synthetic evaluation only; Android-device latency/memory, embeddings, owner acceptance и M20-04 completion не заявляются. M20-02 cutover/SAF и M20-03 live Gemini/owner acceptance также открыты. Закрытие ACT-0156 будет закоммичено после проверки staged diff; push не запрашивался. Пользовательский ADR-012 не трогали.
+
 ## ACT-0155 - 2026-11-03 - Потоковый authenticated import в проверяемый candidate
 
 Добавлен `PortableBackupImporter.prepare`: размер контейнера ограничивается до PBKDF2, incremental AES-GCM decrypt пишет candidate только в app-private `AtomicFile`, а payload читается только после успешной GCM tag проверки. Потоковый parser проверяет schema/app/time/length и SHA-256 snapshot, затем извлекает SQLCipher candidate в отдельный файл без загрузки БД в память. `PortableBackupFileCandidate` владеет key/file до `close`; validator проверяет snapshot под отдельным UUID Room/SQLCipher именем. Активная база не переключается.

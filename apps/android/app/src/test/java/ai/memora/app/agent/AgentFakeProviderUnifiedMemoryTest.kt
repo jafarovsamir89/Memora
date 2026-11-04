@@ -219,6 +219,85 @@ class AgentFakeProviderUnifiedMemoryTest {
         assertTrue("lexical retrieval must not imply paraphrase recall", taskIds(paraphrase).isEmpty())
     }
 
+    @Test fun syntheticRetrievalCorpusReportsMetricsForThirtyAZRuAndMixedQueries() = runBlocking {
+        data class Record(val id: String, val title: String, val queries: List<String>)
+        data class Observation(val expected: String, val actual: List<String>)
+        val corpus = mapOf(
+            "az" to listOf(
+                Record("az-01", "BMW təmir görüşü cümə", listOf("BMW təmir görüşü", "bmw təmir görüşə", "BMW təmir görüşü cümə")),
+                Record("az-02", "müqavilə bank imzası", listOf("müqavilə bank imzası", "müqaviləni bank imzala", "bank müqavilə imza")),
+                Record("az-03", "mənzil kirayə depozit", listOf("mənzil kirayə depozit", "mənzilin kirayəsi depozit", "kirayə mənzil depoziti")),
+                Record("az-04", "Əli ilə nahar görüşü", listOf("Əli ilə nahar görüşü", "Əlinin nahar görüşü", "eli nahar gorus")),
+                Record("az-05", "həkim qəbulu çərşənbə", listOf("həkim qəbulu çərşənbə", "həkimin qəbuluna çərşənbə", "hekim qebul çərşənbə")),
+                Record("az-06", "çatdırılma ehtiyat hissə", listOf("çatdırılma ehtiyat hissə", "çatdırılmanın ehtiyat hissələri", "ehtiyat hissələrin çatdırılması")),
+                Record("az-07", "sığorta ödəniş tarixi", listOf("sığorta ödəniş tarixi", "sığortanın ödənişləri", "sigorta odeme tarixi")),
+                Record("az-08", "layihə təqdimat planı", listOf("layihə təqdimat planı", "layihənin təqdimatını planla", "layihe teqdimati plan")),
+                Record("az-09", "məktəb valideyn görüşü", listOf("məktəb valideyn görüşü", "məktəbdə valideynlərlə görüş", "mekteb valideyn gorus")),
+                Record("az-10", "səfər Bakı bilet", listOf("səfər Bakı bilet", "Bakı səfərinin bileti", "sefer bakı bilet")),
+            ),
+            "ru" to listOf(
+                Record("ru-01", "BMW ремонт встреча пятница", listOf("BMW ремонт встреча", "BMW ремонта встреча", "встреча по BMW ремонту")),
+                Record("ru-02", "договор банк подпись", listOf("договор банк подпись", "подписать договор в банке", "банковский договор подпись")),
+                Record("ru-03", "квартира аренда депозит", listOf("квартира аренда депозит", "депозит за квартиру аренды", "арендный депозит квартиры")),
+                Record("ru-04", "Али обед встреча", listOf("Али обед встреча", "встреча с Али на обеде", "обеденная встреча Али")),
+                Record("ru-05", "врач прием среда", listOf("врач прием среда", "запись к врачу на среду", "средний прием врача")),
+                Record("ru-06", "доставка запасные детали", listOf("доставка запасные детали", "доставить запасные детали", "запчасти доставка")),
+                Record("ru-07", "страховка дата платежа", listOf("страховка дата платежа", "платежи по страховке", "дата оплаты страховки")),
+                Record("ru-08", "проект план презентации", listOf("проект план презентации", "планировать презентацию проекта", "презентационный план проекта")),
+                Record("ru-09", "школа встреча родителей", listOf("школа встреча родителей", "родительское собрание в школе", "встреча родителей школа")),
+                Record("ru-10", "поездка Баку билет", listOf("поездка Баку билет", "билет для поездки в Баку", "бакинская поездка билет")),
+            ),
+            "mixed" to listOf(
+                Record("mx-01", "BMW təmir appointment Friday", listOf("BMW təmir appointment", "BMW təmir appointment Friday", "appointment BMW təmir Friday")),
+                Record("mx-02", "müqavilə bank meeting", listOf("müqavilə bank meeting", "bankda müqavilə meeting", "mugavile bank meeting")),
+                Record("mx-03", "mənzil rent depozit", listOf("mənzil rent depozit", "rent mənzilin depoziti", "menzil rent deposit")),
+                Record("mx-04", "Əli lunch görüşü", listOf("Əli lunch görüşü", "Əlinin lunch görüşü", "eli lunch gorus")),
+                Record("mx-05", "həkim appointment Wednesday", listOf("həkim appointment Wednesday", "həkimə appointment", "hekim appointment Wednesday")),
+                Record("mx-06", "ehtiyat hissə delivery", listOf("ehtiyat hissə delivery", "hissələrin delivery", "ehtiyat part delivery")),
+                Record("mx-07", "sığorta payment date", listOf("sığorta payment date", "sığortanın payment", "sigorta payment date")),
+                Record("mx-08", "layihə presentation plan", listOf("layihə presentation plan", "layihənin presentation", "layihe presentation plan")),
+                Record("mx-09", "məktəb parent meeting", listOf("məktəb parent meeting", "məktəbdə parent görüşü", "mekteb parent meeting")),
+                Record("mx-10", "səfər Bakı ticket", listOf("səfər Bakı ticket", "Bakı səfərinin ticket", "sefer bakı ticket")),
+            ),
+        )
+        val scope = "00000000-0000-4000-8000-000000000156"
+        val events = corpus.flatMap { (language, records) -> records.map { record ->
+            TaskEventRow(taskId = record.id, scopeId = scope, actorId = "synthetic-owner",
+                commandId = "$language-${record.id}-created", type = "created", previousVersion = null,
+                title = record.title, completed = null, dueLocal = null, dueZone = null, remind = null,
+                personLabel = null, projectLabel = null)
+        } } + TaskEventRow(taskId = "outside-scope-decoy", scopeId = "other-scope", actorId = "synthetic-owner",
+            commandId = "outside-scope-decoy-created", type = "created", previousVersion = null,
+            title = "BMW təmir görüşü", completed = null, dueLocal = null, dueZone = null, remind = null,
+            personLabel = null, projectLabel = null)
+        databaseRule.database.protectedStoreDao().putTaskEvents(events)
+        val handler = LocalMemoryTools(ProtectedDomainRepository(databaseRule.database),
+            ProtectedMemoryRepository(databaseRule.database)).handlers().single { it.descriptor.name == "search_memory" }
+        val turn = AgentTurnRequest("retrieval-evaluation-turn", scope, "retrieval-evaluation-session", null,
+            "az-AZ", "Synthetic retrieval evaluation")
+        for ((language, records) in corpus) {
+            val observations = records.flatMap { record -> record.queries.map { query -> query to record.id } }.mapIndexed { index, (query, expected) ->
+                val result = handler.read(AgentModelToolCall("retrieval-eval-$language-$index", "search_memory", 1,
+                    mapOf("query" to query)), turn)
+                assertEquals(ToolObservationStatus.APPLIED, result.status)
+                assertEquals("ranked_lexical", result.modelData["match_mode"])
+                val taskHits = (result.modelData["activity"] as List<*>).mapNotNull { item ->
+                    (item as? Map<*, *>)?.takeIf { it["kind"] == "task" }
+                }
+                assertTrue("cross-scope row leaked for '$query'", taskHits.none { it["task_id"] == "outside-scope-decoy" })
+                assertTrue("source/revision missing for '$query'", taskHits.all {
+                    it["source_id"] == it["task_id"] && it["source_revision_id"] == "${it["task_id"]}:1"
+                })
+                Observation(expected, taskHits.map { it["task_id"] as String })
+            }
+            assertEquals("each language has 30 query variants", 30, observations.size)
+            val recallAt5 = observations.count { it.actual.take(5).contains(it.expected) }.toDouble() / observations.size
+            val precisionAt5 = observations.sumOf { it.actual.take(5).count { id -> id == it.expected }.toDouble() / 5.0 } / observations.size
+            val mrr = observations.sumOf { item -> item.actual.indexOf(item.expected).takeIf { it >= 0 }?.let { 1.0 / (it + 1) } ?: 0.0 } / observations.size
+            println("M20_04_LEXICAL_METRICS language=$language queries=${observations.size} Recall@5=$recallAt5 Precision@5=$precisionAt5 MRR=$mrr")
+        }
+    }
+
     private class UnifiedMemoryProvider : AgentModelGateway {
         var answerReceivedEvidence: Map<*, *>? = null
         private var callIndex = 0
