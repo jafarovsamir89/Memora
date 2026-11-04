@@ -210,6 +210,8 @@ class CasesAndPersonCardTest {
             "2026-11-03T10:01:00Z", "2026-11-03T10:01:00Z")
         repository.createCalendarEvent(CalendarInput("synthetic-linked-calendar", scope, "Synthetic appointment",
             "2026-11-07T11:00", "2026-11-07T11:30", "Asia/Baku", "minute"))
+        assertEquals("Synthetic appointment", databaseRule.database.protectedStoreDao()
+            .calendarEvent(scope, "synthetic-linked-calendar")?.title)
         cases.createCase(scope, "synthetic-source-case", "Synthetic planning case", "Fictional planning summary",
             nextAction = "Wait for synthetic confirmation",
             sourceTurnId = "00000000-0000-4000-8000-000000000202", now = "2026-11-03T10:01:00Z")
@@ -267,6 +269,30 @@ class CasesAndPersonCardTest {
         compose.waitUntil(10_000) { compose.onAllNodesWithTag(directTaskLinkTag).fetchSemanticsNodes().isEmpty() }
         assertEquals(listOf("linked", "retired"), runBlocking {
             databaseRule.database.protectedStoreDao().taskPersonLinkRevisions(scope, taskPersonLink.linkId).map { it.action }
+        })
+        compose.waitUntil(10_000) {
+            compose.onAllNodes(hasTestTag("person_calendar_link_open") and androidx.compose.ui.test.isEnabled())
+                .fetchSemanticsNodes().isNotEmpty()
+        }
+        compose.onNodeWithTag("person_calendar_link_open").performScrollTo().performClick()
+        compose.onNodeWithTag("person_calendar_candidate_synthetic-linked-calendar").assertExists()
+        compose.onNodeWithTag("person_calendar_candidate_synthetic-linked-calendar").performClick()
+        compose.onNodeWithTag("person_calendar_link_confirm").performClick()
+        val directCalendarLinkTag = "person_calendar_link_synthetic-linked-calendar"
+        compose.waitUntil(10_000) { compose.onAllNodesWithTag(directCalendarLinkTag).fetchSemanticsNodes().isNotEmpty() }
+        compose.onNodeWithTag(directCalendarLinkTag).performScrollTo()
+        screenshot("27-person-calendar-direct-link")
+        val calendarPersonLink = requireNotNull(runBlocking {
+            databaseRule.database.protectedStoreDao().calendarPersonLink(scope, "synthetic-linked-calendar", "synthetic-source-person")
+        })
+        compose.onNodeWithTag("person_calendar_unlink_${calendarPersonLink.linkId}").performScrollTo().performClick()
+        compose.onNodeWithTag("person_calendar_unlink_confirm").performClick()
+        compose.waitUntil(10_000) { compose.onAllNodesWithTag(directCalendarLinkTag).fetchSemanticsNodes().isEmpty() }
+        assertEquals(listOf("linked", "retired"), runBlocking {
+            databaseRule.database.protectedStoreDao().calendarPersonLinkRevisions(scope, calendarPersonLink.linkId).map { it.action }
+        })
+        assertEquals("Synthetic appointment", runBlocking {
+            databaseRule.database.protectedStoreDao().calendarEvent(scope, "synthetic-linked-calendar")?.title
         })
         val taskStoryTag = "person_story_source-task-synthetic-linked-task-"
         val calendarStoryTag = "person_story_source-calendar_event-synthetic-linked-calendar-"

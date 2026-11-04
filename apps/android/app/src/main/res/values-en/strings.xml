@@ -350,6 +350,13 @@
     <string name="task_open">Open</string>
     <string name="person_task_link_confirm">Link “%1$s” to the person card “%2$s”?</string>
     <string name="person_task_unlink_confirm">Remove the link between “%1$s” and “%2$s”? The task will remain.</string>
+    <string name="person_calendar_events">Calendar events</string>
+    <string name="person_calendar_help">Choose an event and explicitly link it to this person. Matching names or labels never create a link.</string>
+    <string name="person_calendar_link_add">Link an event</string>
+    <string name="person_calendar_link_remove">Remove link</string>
+    <string name="person_calendar_link_empty">There are no active events available to link.</string>
+    <string name="person_calendar_link_confirm">Link “%1$s” to the person card “%2$s”?</string>
+    <string name="person_calendar_unlink_confirm">Remove the link between “%1$s” and “%2$s”? The calendar event will remain.</string>
     <string name="person_alias_add">Add name</string>
     <string name="person_alias_retire">Remove</string>
     <string name="person_alias_restore">Restore</string>

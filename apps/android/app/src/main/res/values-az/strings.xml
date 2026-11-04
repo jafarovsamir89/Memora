@@ -350,6 +350,13 @@
     <string name="task_open">Açıq</string>
     <string name="person_task_link_confirm">“%1$s” tapşırığını “%2$s” şəxs kartına bağlamağı təsdiqləyirsiniz?</string>
     <string name="person_task_unlink_confirm">“%1$s” tapşırığının “%2$s” ilə əlaqəsi silinsin? Tapşırıq özü qalacaq.</string>
+    <string name="person_calendar_events">Təqvim hadisələri</string>
+    <string name="person_calendar_help">Hadisəni seçib bu şəxsə açıq şəkildə bağlayın. Ad və etiket uyğunluğu əlaqə yaratmır.</string>
+    <string name="person_calendar_link_add">Hadisə bağla</string>
+    <string name="person_calendar_link_remove">Əlaqəni ləğv et</string>
+    <string name="person_calendar_link_empty">Bağlamaq üçün aktiv hadisə yoxdur.</string>
+    <string name="person_calendar_link_confirm">“%1$s” hadisəsini “%2$s” şəxsinə bağlamağı təsdiqləyirsiniz?</string>
+    <string name="person_calendar_unlink_confirm">“%1$s” hadisəsinin “%2$s” ilə əlaqəsi silinsin? Təqvim hadisəsi qalacaq.</string>
     <string name="person_alias_add">Ad əlavə et</string>
     <string name="person_alias_retire">Sil</string>
     <string name="person_alias_restore">Bərpa et</string>

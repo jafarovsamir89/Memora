@@ -350,6 +350,13 @@
     <string name="task_open">Открыта</string>
     <string name="person_task_link_confirm">Связать задачу «%1$s» с карточкой человека «%2$s»?</string>
     <string name="person_task_unlink_confirm">Убрать связь задачи «%1$s» с «%2$s»? Сама задача останется.</string>
+    <string name="person_calendar_events">События календаря</string>
+    <string name="person_calendar_help">Выберите событие и явно свяжите его с человеком. Совпадение имени или подписи не создаёт связь.</string>
+    <string name="person_calendar_link_add">Связать событие</string>
+    <string name="person_calendar_link_remove">Убрать связь</string>
+    <string name="person_calendar_link_empty">Нет активных событий для связи.</string>
+    <string name="person_calendar_link_confirm">Связать событие «%1$s» с карточкой человека «%2$s»?</string>
+    <string name="person_calendar_unlink_confirm">Убрать связь события «%1$s» с «%2$s»? Само событие останется.</string>
     <string name="person_alias_add">Добавить имя</string>
     <string name="person_alias_retire">Удалить</string>
     <string name="person_alias_restore">Восстановить</string>

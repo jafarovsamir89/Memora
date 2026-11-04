@@ -156,6 +156,17 @@ internal val AGENT_DB_16_TO_17 = androidx.room.migration.Migration(16, 17) { db 
     db.execSQL("CREATE INDEX IF NOT EXISTS index_task_person_link_revision_scopeId_domainPersonId_changedAt ON task_person_link_revision(scopeId, domainPersonId, changedAt)")
 }
 
+/** Add explicit calendar/person links; legacy display labels never create relation rows. */
+internal val AGENT_DB_17_TO_18 = androidx.room.migration.Migration(17, 18) { db ->
+    db.execSQL("CREATE TABLE IF NOT EXISTS calendar_person_link (linkId TEXT NOT NULL, scopeId TEXT NOT NULL, eventId TEXT NOT NULL, domainPersonId TEXT NOT NULL, relation TEXT NOT NULL, version INTEGER NOT NULL, confirmedBy TEXT NOT NULL, createdAt TEXT NOT NULL, updatedAt TEXT NOT NULL, deletedAt TEXT, PRIMARY KEY(linkId), FOREIGN KEY(eventId) REFERENCES local_calendar_event(eventId) ON UPDATE NO ACTION ON DELETE CASCADE, FOREIGN KEY(domainPersonId) REFERENCES domain_object(objectId) ON UPDATE NO ACTION ON DELETE CASCADE)")
+    db.execSQL("CREATE UNIQUE INDEX IF NOT EXISTS index_calendar_person_link_scopeId_eventId_domainPersonId ON calendar_person_link(scopeId, eventId, domainPersonId)")
+    db.execSQL("CREATE INDEX IF NOT EXISTS index_calendar_person_link_eventId ON calendar_person_link(eventId)")
+    db.execSQL("CREATE INDEX IF NOT EXISTS index_calendar_person_link_domainPersonId ON calendar_person_link(domainPersonId)")
+    db.execSQL("CREATE INDEX IF NOT EXISTS index_calendar_person_link_scopeId_domainPersonId_deletedAt ON calendar_person_link(scopeId, domainPersonId, deletedAt)")
+    db.execSQL("CREATE TABLE IF NOT EXISTS calendar_person_link_revision (linkId TEXT NOT NULL, version INTEGER NOT NULL, scopeId TEXT NOT NULL, eventId TEXT NOT NULL, domainPersonId TEXT NOT NULL, action TEXT NOT NULL, relation TEXT NOT NULL, confirmedBy TEXT NOT NULL, changedAt TEXT NOT NULL, PRIMARY KEY(linkId, version), FOREIGN KEY(linkId) REFERENCES calendar_person_link(linkId) ON UPDATE NO ACTION ON DELETE CASCADE)")
+    db.execSQL("CREATE INDEX IF NOT EXISTS index_calendar_person_link_revision_scopeId_domainPersonId_changedAt ON calendar_person_link_revision(scopeId, domainPersonId, changedAt)")
+}
+
 /** Minimal command journal. Only identifiers, digest, status and recovery versions are retained. */
 @Entity(tableName = "agent_command_journal")
 internal data class AgentCommandJournalRow(
@@ -362,6 +373,45 @@ internal data class MoneyAdjustmentRow(@PrimaryKey val eventId: String, val comm
 internal data class LocalCalendarEventRow(@PrimaryKey val eventId: String, val scopeId: String, val title: String,
     val startLocal: String, val endLocal: String?, val zoneId: String, val timePrecision: String,
     val version: Long, val status: String)
+
+/** Owner-confirmed direct relation between a canonical calendar event and canonical PERSON. */
+@Entity(tableName = "calendar_person_link", indices = [
+    androidx.room.Index(value = ["scopeId", "eventId", "domainPersonId"], unique = true),
+    androidx.room.Index(value = ["eventId"]),
+    androidx.room.Index(value = ["domainPersonId"]),
+    androidx.room.Index(value = ["scopeId", "domainPersonId", "deletedAt"]),
+], foreignKeys = [
+    androidx.room.ForeignKey(entity = LocalCalendarEventRow::class, parentColumns = ["eventId"], childColumns = ["eventId"], onDelete = androidx.room.ForeignKey.CASCADE),
+    androidx.room.ForeignKey(entity = DomainObjectRow::class, parentColumns = ["objectId"], childColumns = ["domainPersonId"], onDelete = androidx.room.ForeignKey.CASCADE),
+])
+internal data class CalendarPersonLinkRow(
+    @PrimaryKey val linkId: String,
+    val scopeId: String,
+    val eventId: String,
+    val domainPersonId: String,
+    val relation: String,
+    val version: Long,
+    val confirmedBy: String,
+    val createdAt: String,
+    val updatedAt: String,
+    val deletedAt: String?,
+)
+
+@Entity(tableName = "calendar_person_link_revision", primaryKeys = ["linkId", "version"],
+    foreignKeys = [androidx.room.ForeignKey(entity = CalendarPersonLinkRow::class, parentColumns = ["linkId"],
+        childColumns = ["linkId"], onDelete = androidx.room.ForeignKey.CASCADE)],
+    indices = [androidx.room.Index(value = ["scopeId", "domainPersonId", "changedAt"])])
+internal data class CalendarPersonLinkRevisionRow(
+    val linkId: String,
+    val version: Long,
+    val scopeId: String,
+    val eventId: String,
+    val domainPersonId: String,
+    val action: String,
+    val relation: String,
+    val confirmedBy: String,
+    val changedAt: String,
+)
 
 /** A single encrypted local profile; remoteAccountId stays null until a future accepted server phase. */
 @Entity(tableName = "local_profile")
@@ -641,6 +691,21 @@ internal interface ProtectedStoreDao {
     @androidx.room.Query("SELECT * FROM task_person_link_revision WHERE scopeId=:scope AND linkId=:id ORDER BY version")
     suspend fun taskPersonLinkRevisions(scope: String, id: String): List<TaskPersonLinkRevisionRow>
 
+    @androidx.room.Query("SELECT * FROM calendar_person_link WHERE scopeId=:scope AND eventId=:eventId AND domainPersonId=:personId")
+    suspend fun calendarPersonLink(scope: String, eventId: String, personId: String): CalendarPersonLinkRow?
+    @androidx.room.Query("SELECT * FROM calendar_person_link WHERE scopeId=:scope AND linkId=:id")
+    suspend fun calendarPersonLinkById(scope: String, id: String): CalendarPersonLinkRow?
+    @androidx.room.Query("SELECT l.* FROM calendar_person_link l JOIN local_calendar_event e ON e.eventId=l.eventId AND e.scopeId=l.scopeId WHERE l.scopeId=:scope AND l.domainPersonId=:personId AND l.deletedAt IS NULL AND e.status='active' ORDER BY e.startLocal, e.eventId")
+    suspend fun activeCalendarPersonLinks(scope: String, personId: String): List<CalendarPersonLinkRow>
+    @androidx.room.Insert(onConflict = androidx.room.OnConflictStrategy.ABORT) suspend fun insertCalendarPersonLink(row: CalendarPersonLinkRow)
+    @androidx.room.Query("UPDATE calendar_person_link SET version=:nextVersion, relation=:relation, updatedAt=:at, deletedAt=NULL WHERE scopeId=:scope AND linkId=:id AND version=:expected AND deletedAt IS NOT NULL")
+    suspend fun restoreCalendarPersonLink(scope: String, id: String, expected: Long, nextVersion: Long, relation: String, at: String): Int
+    @androidx.room.Query("UPDATE calendar_person_link SET version=:nextVersion, updatedAt=:at, deletedAt=:at WHERE scopeId=:scope AND linkId=:id AND version=:expected AND deletedAt IS NULL")
+    suspend fun retireCalendarPersonLink(scope: String, id: String, expected: Long, nextVersion: Long, at: String): Int
+    @androidx.room.Insert(onConflict = androidx.room.OnConflictStrategy.ABORT) suspend fun insertCalendarPersonLinkRevision(row: CalendarPersonLinkRevisionRow)
+    @androidx.room.Query("SELECT * FROM calendar_person_link_revision WHERE scopeId=:scope AND linkId=:id ORDER BY version")
+    suspend fun calendarPersonLinkRevisions(scope: String, id: String): List<CalendarPersonLinkRevisionRow>
+
     @androidx.room.Query("SELECT * FROM case_record WHERE scopeId=:scope AND caseId=:id") suspend fun caseRecord(scope: String, id: String): CaseRecordRow?
     @androidx.room.Query("SELECT * FROM case_record WHERE scopeId=:scope AND deletedAt IS NULL ORDER BY updatedAt DESC, caseId LIMIT :limit")
     suspend fun activeCases(scope: String, limit: Int): List<CaseRecordRow>
@@ -873,8 +938,9 @@ internal interface ProtectedStoreDao {
     TableDataRow::class, MoneyAdjustmentRow::class, LocalCalendarEventRow::class, TableSchemaRevisionRow::class,
     LocalProfileRow::class, PersonIdentityLinkRow::class, CaseRecordRow::class, CaseRevisionRow::class,
     CaseParticipantRow::class, CaseEvidenceRow::class, PersonAliasRow::class, PersonAliasRevisionRow::class,
-    TaskPersonLinkRow::class, TaskPersonLinkRevisionRow::class],
-    version = 17, exportSchema = true)
+    TaskPersonLinkRow::class, TaskPersonLinkRevisionRow::class,
+    CalendarPersonLinkRow::class, CalendarPersonLinkRevisionRow::class],
+    version = 18, exportSchema = true)
 internal abstract class AgentDatabase : RoomDatabase() {
     abstract fun protectedStoreDao(): ProtectedStoreDao
     companion object {
@@ -985,7 +1051,7 @@ internal abstract class AgentDatabase : RoomDatabase() {
                     .addMigrations(AGENT_DB_1_TO_2, AGENT_DB_2_TO_3, AGENT_DB_3_TO_4, AGENT_DB_4_TO_5,
                         AGENT_DB_5_TO_6, AGENT_DB_6_TO_7, AGENT_DB_7_TO_8, AGENT_DB_8_TO_9, AGENT_DB_9_TO_10,
                         AGENT_DB_10_TO_11, AGENT_DB_11_TO_12, AGENT_DB_12_TO_13, AGENT_DB_13_TO_14, AGENT_DB_14_TO_15,
-                        AGENT_DB_15_TO_16, AGENT_DB_16_TO_17)
+                        AGENT_DB_15_TO_16, AGENT_DB_16_TO_17, AGENT_DB_17_TO_18)
                     .setJournalMode(RoomDatabase.JournalMode.TRUNCATE)
                     // WAL remains disabled until P1 WAL/SHM privacy and recovery gates pass.
                     .openHelperFactory(SupportOpenHelperFactory(databaseKey, null, false))

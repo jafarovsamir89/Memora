@@ -431,7 +431,8 @@ object DatabaseStorageProbe {
             db = Room.databaseBuilder(context, AgentDatabase::class.java, dbName)
                 .addMigrations(AGENT_DB_1_TO_2, AGENT_DB_2_TO_3, AGENT_DB_3_TO_4, AGENT_DB_4_TO_5,
                     AGENT_DB_5_TO_6, AGENT_DB_6_TO_7, AGENT_DB_7_TO_8, AGENT_DB_8_TO_9, AGENT_DB_9_TO_10, AGENT_DB_10_TO_11,
-                    AGENT_DB_11_TO_12, AGENT_DB_12_TO_13, AGENT_DB_13_TO_14, AGENT_DB_14_TO_15, AGENT_DB_15_TO_16, AGENT_DB_16_TO_17)
+                    AGENT_DB_11_TO_12, AGENT_DB_12_TO_13, AGENT_DB_13_TO_14, AGENT_DB_14_TO_15, AGENT_DB_15_TO_16, AGENT_DB_16_TO_17,
+                    AGENT_DB_17_TO_18)
                 .setJournalMode(androidx.room.RoomDatabase.JournalMode.TRUNCATE)
                 .openHelperFactory(SupportOpenHelperFactory(key, null, false))
                 .build()
@@ -503,7 +504,8 @@ object DatabaseStorageProbe {
             db = Room.databaseBuilder(context, AgentDatabase::class.java, dbName)
                 .addMigrations(AGENT_DB_1_TO_2, AGENT_DB_2_TO_3, AGENT_DB_3_TO_4, AGENT_DB_4_TO_5,
                     AGENT_DB_5_TO_6, AGENT_DB_6_TO_7, AGENT_DB_7_TO_8, AGENT_DB_8_TO_9, AGENT_DB_9_TO_10, AGENT_DB_10_TO_11,
-                    AGENT_DB_11_TO_12, AGENT_DB_12_TO_13, AGENT_DB_13_TO_14, AGENT_DB_14_TO_15, AGENT_DB_15_TO_16, AGENT_DB_16_TO_17)
+                    AGENT_DB_11_TO_12, AGENT_DB_12_TO_13, AGENT_DB_13_TO_14, AGENT_DB_14_TO_15, AGENT_DB_15_TO_16, AGENT_DB_16_TO_17,
+                    AGENT_DB_17_TO_18)
                 .setJournalMode(androidx.room.RoomDatabase.JournalMode.TRUNCATE)
                 .openHelperFactory(SupportOpenHelperFactory(reopenedKey, null, false)).build()
             db.openHelper.writableDatabase
@@ -831,7 +833,8 @@ object DatabaseStorageProbe {
             val upgraded = Room.databaseBuilder(context, AgentDatabase::class.java, dbName)
                 .addMigrations(AGENT_DB_1_TO_2, AGENT_DB_2_TO_3, AGENT_DB_3_TO_4, AGENT_DB_4_TO_5,
                     AGENT_DB_5_TO_6, AGENT_DB_6_TO_7, AGENT_DB_7_TO_8, AGENT_DB_8_TO_9, AGENT_DB_9_TO_10, AGENT_DB_10_TO_11,
-                    AGENT_DB_11_TO_12, AGENT_DB_12_TO_13, AGENT_DB_13_TO_14, AGENT_DB_14_TO_15, AGENT_DB_15_TO_16, AGENT_DB_16_TO_17)
+                    AGENT_DB_11_TO_12, AGENT_DB_12_TO_13, AGENT_DB_13_TO_14, AGENT_DB_14_TO_15, AGENT_DB_15_TO_16, AGENT_DB_16_TO_17,
+                    AGENT_DB_17_TO_18)
                 .setJournalMode(androidx.room.RoomDatabase.JournalMode.TRUNCATE)
                 .openHelperFactory(SupportOpenHelperFactory(upgradedKey, null, false)).build()
             upgraded.openHelper.writableDatabase
@@ -840,17 +843,19 @@ object DatabaseStorageProbe {
                     check(cursor.moveToFirst())
                     cursor.getInt(0)
                 }
-                check(schemaVersion == 17)
+                check(schemaVersion == 18)
                 check(upgraded.protectedStoreDao().command("synthetic-v1-command")?.status == "pending")
                 check(upgraded.protectedStoreDao().migrations().isEmpty())
                 val linkTables = upgraded.openHelper.readableDatabase.query(
-                    "SELECT name FROM sqlite_master WHERE type='table' AND name IN (?, ?) ORDER BY name",
-                    arrayOf("task_person_link", "task_person_link_revision"),
+                    "SELECT name FROM sqlite_master WHERE type='table' AND name IN (?, ?, ?, ?) ORDER BY name",
+                    arrayOf("calendar_person_link", "calendar_person_link_revision", "task_person_link", "task_person_link_revision"),
                 ).use { cursor -> buildList { while (cursor.moveToNext()) add(cursor.getString(0)) } }
-                check(linkTables == listOf("task_person_link", "task_person_link_revision"))
-                check(upgraded.openHelper.readableDatabase.query("SELECT COUNT(*) FROM task_person_link").use { cursor ->
-                    check(cursor.moveToFirst()); cursor.getInt(0) == 0
-                })
+                check(linkTables == listOf("calendar_person_link", "calendar_person_link_revision", "task_person_link", "task_person_link_revision"))
+                for (table in listOf("calendar_person_link", "calendar_person_link_revision", "task_person_link", "task_person_link_revision")) {
+                    check(upgraded.openHelper.readableDatabase.query("SELECT COUNT(*) FROM `$table`").use { cursor ->
+                        check(cursor.moveToFirst()); cursor.getInt(0) == 0
+                    })
+                }
                 val migratedProfile = requireNotNull(upgraded.protectedStoreDao().localProfile())
                 check(runCatching { UUID.fromString(migratedProfile.localProfileId) }.isSuccess)
                 check(migratedProfile.toneStyle == "friendly" && migratedProfile.responseStyle == "balanced")

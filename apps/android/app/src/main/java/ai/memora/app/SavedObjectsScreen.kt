@@ -33,6 +33,9 @@ import ai.memora.app.data.protectedstore.PersonIdentityLinkRow
 import ai.memora.app.data.protectedstore.PersonAliasRepository
 import ai.memora.app.data.protectedstore.PersonAliasRow
 import ai.memora.app.data.protectedstore.ProtectedCaseRepository
+import ai.memora.app.data.protectedstore.CalendarPersonLinkRepository
+import ai.memora.app.data.protectedstore.CalendarPersonLinkRow
+import ai.memora.app.data.protectedstore.LocalCalendarEventRow
 import ai.memora.app.data.protectedstore.ProtectedDomainRepository
 import ai.memora.app.data.protectedstore.ProtectedMemoryRepository
 import ai.memora.app.data.protectedstore.TaskPersonLinkRow
@@ -249,6 +252,8 @@ private fun PersonCardSections(
     var candidates by remember(person.objectId) { mutableStateOf<List<FinancePersonIdentityChoices>>(emptyList()) }
     var tasks by remember(person.objectId) { mutableStateOf<List<Task>>(emptyList()) }
     var taskLinks by remember(person.objectId) { mutableStateOf<List<TaskPersonLinkRow>>(emptyList()) }
+    var calendarEvents by remember(person.objectId) { mutableStateOf<List<LocalCalendarEventRow>>(emptyList()) }
+    var calendarLinks by remember(person.objectId) { mutableStateOf<List<CalendarPersonLinkRow>>(emptyList()) }
     var historyByPersonId by remember(person.objectId) { mutableStateOf<Map<String, ai.memora.app.data.protectedstore.FinanceHistory>>(emptyMap()) }
     var relatedCases by remember(person.objectId) { mutableStateOf<List<CaseSnapshot>>(emptyList()) }
     var relatedObjects by remember(person.objectId) { mutableStateOf<List<LinkedDomainObject>>(emptyList()) }
@@ -261,6 +266,9 @@ private fun PersonCardSections(
     var taskPickerVisible by remember { mutableStateOf(false) }
     var pendingTask by remember { mutableStateOf<Task?>(null) }
     var pendingTaskUnlink by remember { mutableStateOf<TaskPersonLinkRow?>(null) }
+    var calendarPickerVisible by remember { mutableStateOf(false) }
+    var pendingCalendarEvent by remember { mutableStateOf<LocalCalendarEventRow?>(null) }
+    var pendingCalendarUnlink by remember { mutableStateOf<CalendarPersonLinkRow?>(null) }
     var actionFailed by remember { mutableStateOf(false) }
     var aliasActionFailed by remember { mutableStateOf(false) }
 
@@ -275,6 +283,8 @@ private fun PersonCardSections(
             candidates = matched
             tasks = ProtectedMemoryRepository(database).tasks().tasks
             taskLinks = database.protectedStoreDao().activeTaskPersonLinks(scopeId, person.objectId)
+            calendarEvents = database.protectedStoreDao().calendarEvents(scopeId).filter { it.status == "active" }
+            calendarLinks = database.protectedStoreDao().activeCalendarPersonLinks(scopeId, person.objectId)
             historyByPersonId = matched.filter { it.confirmedLink?.domainPersonId == person.objectId }
                 .mapNotNull { choice -> domainRepository.financeHistoryByPersonId(scopeId, choice.financePerson.personId)
                     ?.let { choice.financePerson.personId to it } }.toMap()
@@ -462,6 +472,98 @@ private fun PersonCardSections(
                 }) { Text(s(ai.memora.app.R.string.person_task_link_remove)) }
             },
             dismissButton = { TextButton(onClick = { pendingTaskUnlink = null }) { Text(s(ai.memora.app.R.string.close)) } },
+        )
+    }
+
+    val calendarEventById = calendarEvents.associateBy { it.eventId }
+    val linkedCalendarIds = calendarLinks.map { it.eventId }.toSet()
+    Text(s(ai.memora.app.R.string.person_calendar_events), modifier = Modifier.padding(top = 18.dp),
+        style = androidx.compose.material3.MaterialTheme.typography.titleSmall, color = colors.ink)
+    Text(s(ai.memora.app.R.string.person_calendar_help), color = colors.muted,
+        style = androidx.compose.material3.MaterialTheme.typography.bodySmall)
+    TextButton(modifier = Modifier.testTag("person_calendar_link_open"), enabled = !loading,
+        onClick = { calendarPickerVisible = true }) { Text(s(ai.memora.app.R.string.person_calendar_link_add)) }
+    if (calendarLinks.isEmpty() && !loading) Text(s(ai.memora.app.R.string.person_calendar_link_empty),
+        modifier = Modifier.padding(top = 4.dp), color = colors.muted)
+    calendarLinks.forEach { link ->
+        val event = calendarEventById[link.eventId] ?: return@forEach
+        androidx.compose.material3.Surface(
+            modifier = Modifier.fillMaxWidth().padding(top = 6.dp).testTag("person_calendar_link_${link.eventId}"),
+            color = colors.card, shape = androidx.compose.foundation.shape.RoundedCornerShape(12.dp),
+            border = androidx.compose.foundation.BorderStroke(1.dp, colors.line),
+        ) {
+            androidx.compose.foundation.layout.Row(
+                modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 8.dp),
+                horizontalArrangement = androidx.compose.foundation.layout.Arrangement.SpaceBetween,
+                verticalAlignment = androidx.compose.ui.Alignment.CenterVertically,
+            ) {
+                Column(Modifier.weight(1f)) {
+                    Text(event.title, color = colors.ink)
+                    Text("${event.startLocal} · ${event.zoneId}", color = colors.muted,
+                        style = androidx.compose.material3.MaterialTheme.typography.bodySmall)
+                }
+                TextButton(modifier = Modifier.testTag("person_calendar_unlink_${link.linkId}"),
+                    onClick = { pendingCalendarUnlink = link }) { Text(s(ai.memora.app.R.string.person_calendar_link_remove)) }
+            }
+        }
+    }
+    if (calendarPickerVisible) {
+        val availableEvents = calendarEvents.filter { it.eventId !in linkedCalendarIds }
+        androidx.compose.material3.AlertDialog(
+            onDismissRequest = { calendarPickerVisible = false },
+            title = { Text(s(ai.memora.app.R.string.person_calendar_link_add)) },
+            text = {
+                Column(Modifier.heightIn(max = 360.dp).verticalScroll(remember { ScrollState(0) })) {
+                    if (availableEvents.isEmpty()) Text(s(ai.memora.app.R.string.person_calendar_link_empty), color = colors.muted)
+                    availableEvents.forEach { event ->
+                        TextButton(modifier = Modifier.fillMaxWidth().testTag("person_calendar_candidate_${event.eventId}"),
+                            onClick = { calendarPickerVisible = false; pendingCalendarEvent = event }) {
+                            Text("${event.title} · ${event.startLocal}", color = colors.ink)
+                        }
+                    }
+                }
+            },
+            confirmButton = { TextButton(onClick = { calendarPickerVisible = false }) { Text(s(ai.memora.app.R.string.close)) } },
+        )
+    }
+    pendingCalendarEvent?.let { event ->
+        androidx.compose.material3.AlertDialog(
+            onDismissRequest = { pendingCalendarEvent = null },
+            title = { Text(s(ai.memora.app.R.string.person_calendar_link_add)) },
+            text = { Text(stringResource(ai.memora.app.R.string.person_calendar_link_confirm, event.title, person.title)) },
+            confirmButton = {
+                TextButton(modifier = Modifier.testTag("person_calendar_link_confirm"), onClick = {
+                    coroutineScope.launch {
+                        try {
+                            CalendarPersonLinkRepository(database).confirm(scopeId, event.eventId, person.objectId,
+                                confirmedBy = "owner")
+                            pendingCalendarEvent = null
+                            refreshVersion++
+                        } catch (_: Exception) { actionFailed = true; pendingCalendarEvent = null }
+                    }
+                }) { Text(s(ai.memora.app.R.string.person_calendar_link_add)) }
+            },
+            dismissButton = { TextButton(onClick = { pendingCalendarEvent = null }) { Text(s(ai.memora.app.R.string.close)) } },
+        )
+    }
+    pendingCalendarUnlink?.let { link ->
+        val eventTitle = calendarEventById[link.eventId]?.title.orEmpty()
+        androidx.compose.material3.AlertDialog(
+            onDismissRequest = { pendingCalendarUnlink = null },
+            title = { Text(s(ai.memora.app.R.string.person_calendar_link_remove)) },
+            text = { Text(stringResource(ai.memora.app.R.string.person_calendar_unlink_confirm, eventTitle, person.title)) },
+            confirmButton = {
+                TextButton(modifier = Modifier.testTag("person_calendar_unlink_confirm"), onClick = {
+                    coroutineScope.launch {
+                        try {
+                            CalendarPersonLinkRepository(database).retire(scopeId, link.linkId, confirmedBy = "owner")
+                            pendingCalendarUnlink = null
+                            refreshVersion++
+                        } catch (_: Exception) { actionFailed = true; pendingCalendarUnlink = null }
+                    }
+                }) { Text(s(ai.memora.app.R.string.person_calendar_link_remove)) }
+            },
+            dismissButton = { TextButton(onClick = { pendingCalendarUnlink = null }) { Text(s(ai.memora.app.R.string.close)) } },
         )
     }
 

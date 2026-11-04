@@ -19,8 +19,8 @@ android {
         applicationId = "ai.memora.app"
         minSdk = 26
         targetSdk = 36
-        versionCode = 55
-        versionName = "1.1.33-cases-empty-navigation"
+        versionCode = 56
+        versionName = "1.1.34-calendar-person-links"
         testInstrumentationRunner = "ai.memora.app.GeminiSyntheticProbe"
     }
     buildFeatures { compose = true }
