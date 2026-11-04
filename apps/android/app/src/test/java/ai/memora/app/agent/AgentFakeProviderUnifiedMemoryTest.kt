@@ -173,7 +173,7 @@ class AgentFakeProviderUnifiedMemoryTest {
         assertEquals(listOf("phrase-match", "scattered-match"), taskIds)
     }
 
-    @Test fun localMemoryRetrievalFindsSyntheticAzerbaijaniRussianAndMixedLanguageSources() = runBlocking {
+    @Test fun localMemoryRetrievalFindsExactAzerbaijaniRussianAndMixedButDoesNotClaimParaphraseRecall() = runBlocking {
         val db = databaseRule.database
         val scope = "00000000-0000-4000-8000-000000000155"
         db.protectedStoreDao().putTaskEvents(listOf(
@@ -209,11 +209,14 @@ class AgentFakeProviderUnifiedMemoryTest {
             mapOf("query" to "BMW ремонт встреча")), turn)
         val mixed = handler.read(AgentModelToolCall("mixed-retrieval", "search_memory", 1,
             mapOf("query" to "BMW təmir appointment")), turn)
+        val paraphrase = handler.read(AgentModelToolCall("paraphrase-retrieval", "search_memory", 1,
+            mapOf("query" to "car servicing meeting")), turn)
 
         assertTrue("AZ exact lexical source missing", "az-bmw-task" in taskIds(az))
         assertTrue("RU exact lexical source missing", "ru-bmw-task" in taskIds(ru))
         assertTrue("mixed AZ/EN exact-term source missing", "az-bmw-task" in taskIds(mixed))
         assertTrue("mixed AZ/EN exact-term source missing", "en-bmw-task" in taskIds(mixed))
+        assertTrue("lexical retrieval must not imply paraphrase recall", taskIds(paraphrase).isEmpty())
     }
 
     private class UnifiedMemoryProvider : AgentModelGateway {

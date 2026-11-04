@@ -24,6 +24,8 @@
 
 **Последний проверенный пакет ACT-0151:** добавлен строгий inner backup manifest/parser: формат и Room schema, app versionCode, время создания, длина snapshot и SHA-256. Он лежит внутри внешнего AES-GCM; parser отказывает на неизвестной версии/schema, повреждённой длине или digest. Synthetic Android 14 snapshot/wrap/reopen probe прошёл после исправления различия между 32-byte key material и SQLCipher hex passphrase: 45 таблиц, schema18, одна synthetic запись прочитана. Полный Gradle: 60 suites / 298 tests, 0 failures/errors/skips; lint 0/60/3. APK v57 SHA-256 `37f17b81e3383af6ca8befffd0f3fa5f5d86cb5727563cdd8bad6f2e054ad579`. User DB и телефон владельца не использовались. M20-02 partial.
 
+**Последний проверенный пакет ACT-0152:** к retrieval baseline добавлен отрицательный synthetic запрос-перефразировка: точные AZ/RU/mixed слова находит текущий `ranked_lexical`, но `car servicing meeting` не возвращает записей для `BMW təmir görüşü`. Полный Gradle: 60 suites / 298 tests, 0 failures/errors/skips; lint 0/60/3; APK не изменился. Это документирует реальный предел до реализации semantic retrieval; M20-04 остаётся partial.
+
 Следующий шаг: продолжать M20-02 с пользовательским export/import workflow и безопасным restore/cutover поверх synthetic-tested snapshot helper (transactional consistency, verify-before-activate, fail-closed); M20-03 code slice ACT-0145/0146 завершён, но live/owner BMW acceptance остаётся отдельным gate. Для M20-04 — построить синтетический AZ/RU/mixed evaluation и проверить подходящую local model/API, licence, memory/latency на target-class Android; до конкретного результата считать search lexical. M20-02/03/04, native acceptance и release readiness остаются partial.
 
 ### ACT-0150 — 2026-11-03 — Проверка целостности SQLCipher snapshot
@@ -35,6 +37,10 @@ Synthetic Android 14 instrumentation probe прошла: 45 таблиц, schema
 ### ACT-0151 — 2026-11-03 — Версионированный manifest для portable snapshot
 
 Внутренний payload теперь содержит schema version, app versionCode, creation timestamp, размер encrypted SQLCipher snapshot и SHA-256 digest; все эти поля и ключевой материал защищены внешним AES-GCM. Parser строго проверяет magic/version, schema18, положительные метаданные, точное совпадение размера и digest до выдачи snapshot/key bytes. Host tests покрывают round-trip, неподдерживаемую schema/version metadata, усечение и повреждённый digest. Synthetic Android 14 probe сохранила этот manifest внутрь password envelope, проверила metadata и заново открыла отдельную SQLCipher DB: 45 таблиц, user_version18, marker/profile fact прочитан, plaintext marker не найден. Первая probe попытка завершилась `SQLiteNotADatabaseException`: probe передал 32-byte key вместо hex passphrase representation для Room SQLCipher opener; это исправлено через локальное преобразование и повторная probe прошла. Полный Gradle: 60 suites / 298 tests, 0 failures/errors/skips; lint 0/60/3; APK SHA-256 `37f17b81e3383af6ca8befffd0f3fa5f5d86cb5727563cdd8bad6f2e054ad579`. Никакой user DB/owner device не использовались. M20-02 остаётся partial без end-user export/import, FileProvider/SAF и atomic recovery.
+
+### ACT-0152 — 2026-11-03 — Фиксация lexical recall boundary
+
+Расширен synthetic retrieval тест: alongside expected exact AZ/RU/mixed matches он запрашивает перефразировку `car servicing meeting` для сохранённой задачи `BMW təmir görüşü` и подтверждает отсутствие task hit. `match_mode` по-прежнему `ranked_lexical`; код поиска не менялся. Evaluation doc и S48 теперь явно отражают negative case. Targeted test и полный Gradle прошли: 60 suites / 298 tests, 0 failures/errors/skips; lint 0/60/3. Product APK hash unchanged. Это не semantic implementation и M20-04 partial.
 
 ### ACT-0149 — 2026-11-03 — Синтетический baseline поиска AZ/RU/mixed
 

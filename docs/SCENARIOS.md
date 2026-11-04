@@ -205,4 +205,4 @@ A user states a real-world financial fact in ordinary Azerbaijani, Russian, or m
 
 ## S48 — Базовый локальный поиск AZ/RU/mixed
 
-Локальный поиск по synthetic canonical task источникам должен находить точные азербайджанские слова `BMW təmir görüşü`, русские `BMW ремонт встреча` и смешанный запрос `BMW təmir appointment`, возвращая ожидаемые task IDs с `match_mode=ranked_lexical`. Это проверяет baseline языковой нормализации/ранжирования и не является проверкой semantic/paraphrase retrieval. Полный evaluation corpus и модельные метрики ведутся отдельно в `docs/MEMORY_RETRIEVAL_EVALUATION.md`.
+Локальный поиск по synthetic canonical task источникам должен находить точные азербайджанские слова `BMW təmir görüşü`, русские `BMW ремонт встреча` и смешанный запрос `BMW təmir appointment`, возвращая ожидаемые task IDs с `match_mode=ranked_lexical`. Перефразированный запрос `car servicing meeting` не имеет lexical hit и возвращает пустой task set — приложение не должно заявлять semantic recall. Полный evaluation corpus и модельные метрики ведутся отдельно в `docs/MEMORY_RETRIEVAL_EVALUATION.md`.

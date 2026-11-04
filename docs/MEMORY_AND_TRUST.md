@@ -146,3 +146,7 @@ The synthetic Room v18 snapshot helper now checks source version, `integrity_che
 ### ACT-0151 — Authenticated portable payload manifest
 
 Portable snapshot bytes now travel with a strict inner manifest for Room schema, app version, creation time, byte length and SHA-256, under the outer AES-GCM envelope. Parser rejects unsupported metadata and altered/truncated snapshots. The synthetic Android 14 export/wrap/parse/reopen probe and 60-suite host run passed; this remains probe-only and is not an import workflow.
+
+### ACT-0152 — Explicit semantic-search limitation
+
+Synthetic exact AZ/RU/mixed retrieval passes, but the lexical engine returns no task for `car servicing meeting` when the stored fact says `BMW təmir görüşü`. This negative result makes clear that semantic/paraphrase search is still outstanding; the search mode remains explicitly `ranked_lexical`.

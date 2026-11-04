@@ -4,15 +4,16 @@
 
 ## What the current test proves
 
-`AgentFakeProviderUnifiedMemoryTest.localMemoryRetrievalFindsSyntheticAzerbaijaniRussianAndMixedLanguageSources` seeds three synthetic task titles in the encrypted in-memory Room test DB:
+`AgentFakeProviderUnifiedMemoryTest.localMemoryRetrievalFindsExactAzerbaijaniRussianAndMixedButDoesNotClaimParaphraseRecall` seeds three synthetic task titles in the encrypted in-memory Room test DB:
 
 | Query | Expected source | Result |
 |---|---|---|
 | `BMW təmir görüşü` | `az-bmw-task` | Passed |
 | `BMW ремонт встреча` | `ru-bmw-task` | Passed |
 | `BMW təmir appointment` | `az-bmw-task` and `en-bmw-task` | Passed |
+| `car servicing meeting` | no lexical match | Passed (empty result) |
 
-The result reports `match_mode=ranked_lexical`. These are exact-word checks of the current normalizer/ranker. They do not establish paraphrase recall, cross-language semantic equivalence, production quality, or device performance.
+The result reports `match_mode=ranked_lexical`. These are exact-word checks of the current normalizer/ranker; the negative paraphrase case confirms that unrelated wording is not retrieved by current search. No semantic equivalence, production quality, or device performance is demonstrated.
 
 ## Evaluation corpus required before selecting an embedding model
 

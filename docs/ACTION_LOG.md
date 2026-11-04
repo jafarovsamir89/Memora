@@ -1232,3 +1232,9 @@ Added host tests for manifest round-trip, unsupported schema/metadata, truncatio
 Full Gradle `:app:testDebugUnitTest :app:assembleDebug :app:assembleDebugAndroidTest :app:compileDebugAndroidTestKotlin :app:lintDebug --no-daemon --console=plain --max-workers=2` passed. Fresh XML: 60 suites / 298 tests, 0 failures/errors/skips; lint 0 errors / 60 warnings / 3 hints. APK v57 SHA-256 `37f17b81e3383af6ca8befffd0f3fa5f5d86cb5727563cdd8bad6f2e054ad579`. `git diff --check` and commit status are verified separately.
 
 Updated ADR-017, S47, TODO, validation matrix, product/engineering checkpoints, MEMORY_AND_TRUST, AGENTS, diary and this log. M20-02 still lacks user-facing export/import, picker URI lifecycle, atomic verify-before-activate DB cutover, interrupted/failure/disk-full recovery and owner acceptance. The helper remains probe-only; do not claim M20-02 complete.
+
+## ACT-0152 — 2026-11-03 — Record lexical retrieval's paraphrase limit
+
+Extended the existing synthetic AZ/RU/mixed `search_memory` regression with the paraphrased query `car servicing meeting` against task `BMW təmir görüşü`. The current lexical implementation correctly returns no task hit and still identifies its mode as `ranked_lexical`; no search code changed. Updated S48 and `MEMORY_RETRIEVAL_EVALUATION.md` to preserve this as a negative baseline, so later semantic work can compare against explicit non-recall rather than misstate current capability.
+
+Targeted test passed. Full Gradle passed: 60 suites / 298 tests, 0 failures/errors/skips; debug and AndroidTest APKs assembled, AndroidTest Kotlin compiled, lint 0 errors / 60 warnings / 3 hints. Product APK remained v57, SHA-256 `37f17b81e3383af6ca8befffd0f3fa5f5d86cb5727563cdd8bad6f2e054ad579`. `git diff --check` passed. No device, user DB or personal data was used. M20-04 remains partial; semantic model selection/integration and target-device evaluation remain open.
