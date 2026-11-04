@@ -379,7 +379,9 @@ internal class LocalMemoryTools(private val repository: ProtectedDomainRepositor
             return ToolCommitResult(ToolObservationStatus.APPLIED, "tables_loaded", mapOf(
                 "table_count" to tables.size, "truncated" to (tables.size > selected.size),
                 "tables" to selected.map { item -> mapOf("id" to item.table.tableId, "title" to item.table.title.take(120),
-                    "schema_version" to item.table.schemaVersion, "row_count" to item.rows.size,
+                    "schema_version" to item.table.schemaVersion,
+                    "row_count" to if (item.table.mode == "linked_view") item.linkedRows.size else item.rows.size,
+                    "mode" to item.table.mode,
                     "schema_truncated" to (item.columns.size > 8),
                     "columns" to item.columns.take(8).map { mapOf("id" to it.columnId, "name" to it.name.take(80), "type" to it.valueType) }) }
             ))
@@ -397,14 +399,29 @@ internal class LocalMemoryTools(private val repository: ProtectedDomainRepositor
             if (tableId.isBlank() || query.length > 200) return rejected()
             val table = repository.tables(turn.scopeId).firstOrNull { it.table.tableId == tableId }
                 ?: return ToolCommitResult(ToolObservationStatus.REJECTED, "table_not_found")
-            val matchingRows = table.rows.filter { query.isBlank() || it.valuesJson.contains(query, ignoreCase = true) }
-            val rows = matchingRows.take(10).map { row -> mapOf("id" to row.rowId, "version" to row.version,
-                "values" to row.valuesJson.take(700), "values_truncated" to (row.valuesJson.length > 700)) }
+            val linkedView = table.table.mode == "linked_view"
+            val rows: List<Map<String, Any?>>
+            val matchingCount: Int
+            if (linkedView) {
+                val matching = table.linkedRows.filter { source -> query.isBlank() ||
+                    listOf(source.objectId, source.title, source.body.orEmpty(), source.status).any { it.contains(query, ignoreCase = true) } }
+                matchingCount = matching.size
+                rows = matching.take(10).map { source -> mapOf("id" to source.objectId,
+                    "version" to source.version, "source_kind" to source.kind,
+                    "values" to mapOf("source_id" to source.objectId, "title" to source.title, "body" to source.body,
+                        "status" to source.status, "version" to source.version), "source_id" to source.objectId) }
+            } else {
+                val matching = table.rows.filter { query.isBlank() || it.valuesJson.contains(query, ignoreCase = true) }
+                matchingCount = matching.size
+                rows = matching.take(10).map { row -> mapOf("id" to row.rowId, "version" to row.version,
+                    "values" to row.valuesJson.take(700), "values_truncated" to (row.valuesJson.length > 700)) }
+            }
             return ToolCommitResult(ToolObservationStatus.APPLIED, "table_rows_loaded", mapOf(
                 "table_id" to tableId, "title" to table.table.title.take(120),
+                "mode" to table.table.mode,
                 "columns" to table.columns.take(12).map { mapOf("id" to it.columnId, "name" to it.name.take(80), "type" to it.valueType) },
-                "rows" to rows, "returned" to rows.size, "matching_row_count" to matchingRows.size,
-                "truncated" to (matchingRows.size > rows.size),
+                "rows" to rows, "returned" to rows.size, "matching_row_count" to matchingCount,
+                "truncated" to (matchingCount > rows.size),
             ))
         }
         override suspend fun prepare(call: AgentModelToolCall, turn: AgentTurnRequest, commandId: String) = ToolPreparation.Rejected("read_only_tool")

@@ -5,6 +5,7 @@ import ai.memora.app.data.protectedstore.CalendarInput
 import ai.memora.app.data.protectedstore.ColumnSpec
 import ai.memora.app.data.protectedstore.ColumnType
 import ai.memora.app.data.protectedstore.DomainKind
+import ai.memora.app.data.protectedstore.LinkedViewSpec
 import ai.memora.app.data.protectedstore.ProtectedConversationRepository
 import ai.memora.app.data.protectedstore.ProtectedDomainRepository
 import ai.memora.app.data.protectedstore.ProtectedMemoryRepository
@@ -283,6 +284,46 @@ class AgentFakeProviderUnifiedMemoryTest {
                 "person" to "synthetic-ref-person", "project" to "synthetic-ref-note")))
         }.isFailure)
         assertEquals(listOf("synthetic-linked-row"), domain.tables(scope).single().rows.map { it.rowId })
+    }
+
+    @Test fun linkedDomainViewReadsLiveScopedSourcesWithoutCopyingOrEditingThem() = runBlocking {
+        val domain = ProtectedDomainRepository(databaseRule.database)
+        val scope = "synthetic-linked-view-scope"
+        val foreignScope = "synthetic-linked-view-foreign"
+        domain.createObject(scope, "synthetic-view-person", DomainKind.PERSON, "Before rename", "Synthetic body", null,
+            "2026-11-04T10:00:00Z")
+        val archived = domain.createObject(scope, "synthetic-view-archived", DomainKind.PERSON, "Archived person", null, null,
+            "2026-11-04T10:00:00Z")
+        domain.updateObject(scope, archived.objectId, archived.version, archived.title, archived.body, "archived", null,
+            "2026-11-04T10:30:00Z")
+        domain.createObject(foreignScope, "synthetic-view-foreign-person", DomainKind.PERSON, "Foreign person", null, null,
+            "2026-11-04T10:00:00Z")
+        domain.createObject(scope, "synthetic-view-project", DomainKind.PROJECT, "Unrelated project", null, null,
+            "2026-11-04T10:00:00Z")
+        domain.createTable(scope, "synthetic-person-view", "Synthetic linked people", "linked_view",
+            listOf(ColumnSpec("source", "Source", ColumnType.TEXT)),
+            viewSpec = LinkedViewSpec(DomainKind.PERSON))
+
+        val first = domain.tables(scope).single()
+        assertEquals("PERSON", first.table.viewSpecJson?.let { org.json.JSONObject(it).getString("sourceKind") })
+        assertEquals(listOf("synthetic-view-person"), first.linkedRows.map { it.objectId })
+        assertTrue(first.rows.isEmpty())
+        assertTrue(runCatching {
+            domain.addRows(scope, "synthetic-person-view", 1, listOf("synthetic-forbidden-row" to mapOf("source" to "copy")))
+        }.isFailure)
+        assertTrue("linked views must not be exported as empty editable tables", runCatching {
+            domain.exportTable(scope, "synthetic-person-view")
+        }.isFailure)
+        assertTrue("linked view schemas must remain source-spec controlled", runCatching {
+            domain.changeTableSchema(scope, "synthetic-person-view", 1,
+                listOf(ColumnSpec("source", "Source", ColumnType.TEXT), ColumnSpec("extra", "Extra", ColumnType.TEXT)),
+                "2026-11-04T10:30:00Z")
+        }.isFailure)
+
+        val original = domain.domainObject(scope, "synthetic-view-person")!!
+        domain.updateObject(scope, original.objectId, original.version, "Renamed source", original.body, original.status,
+            "synthetic-linked-view-update", "2026-11-04T11:00:00Z")
+        assertEquals("Renamed source", domain.tables(scope).single().linkedRows.single().title)
     }
 
     @Test fun localMemoryRetrievalFindsExactAzerbaijaniRussianAndMixedButDoesNotClaimParaphraseRecall() = runBlocking {

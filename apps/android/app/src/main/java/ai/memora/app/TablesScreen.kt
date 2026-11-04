@@ -13,6 +13,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.FilterChip
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
@@ -33,6 +34,7 @@ import ai.memora.app.data.protectedstore.ColumnSpec
 import ai.memora.app.data.protectedstore.ColumnType
 import ai.memora.app.data.protectedstore.DomainKind
 import ai.memora.app.data.protectedstore.DomainObjectRow
+import ai.memora.app.data.protectedstore.LinkedViewSpec
 import ai.memora.app.data.protectedstore.ProtectedDomainRepository
 import ai.memora.app.data.protectedstore.TableDataRow
 import ai.memora.app.data.protectedstore.TableColumnRow
@@ -79,6 +81,8 @@ fun TablesScreen() {
     var referenceError by remember { mutableStateOf(false) }
     var newTableTitle by remember { mutableStateOf("") }
     var newTableColumns by remember { mutableStateOf("") }
+    var linkedViewMode by remember { mutableStateOf(false) }
+    var linkedSourceKind by remember { mutableStateOf(DomainKind.PERSON) }
     var error by remember { mutableStateOf(false) }
     val selected = tables.firstOrNull { it.table.tableId == selectedTableId }
 
@@ -171,12 +175,32 @@ fun TablesScreen() {
         text = { Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(10.dp)) {
             OutlinedTextField(newTableTitle, { newTableTitle = it.take(200) }, Modifier.fillMaxWidth().testTag("table_new_title"),
                 label = { Text(s(ai.memora.app.R.string.table_title)) }, singleLine = true)
-            OutlinedTextField(newTableColumns, { newTableColumns = it.take(1200) }, Modifier.fillMaxWidth().testTag("table_new_columns"),
-                label = { Text(s(ai.memora.app.R.string.table_columns)) }, minLines = 2)
-            Text(s(R.string.table_columns_help), style = androidx.compose.material3.MaterialTheme.typography.bodySmall)
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                FilterChip(selected = !linkedViewMode, onClick = { linkedViewMode = false },
+                    label = { Text(s(R.string.table_mode_editable)) }, modifier = Modifier.testTag("table_mode_editable"))
+                FilterChip(selected = linkedViewMode, onClick = { linkedViewMode = true },
+                    label = { Text(s(R.string.table_mode_linked_view)) }, modifier = Modifier.testTag("table_mode_linked_view"))
+            }
+            if (linkedViewMode) {
+                Text(s(R.string.table_linked_view_explainer), style = androidx.compose.material3.MaterialTheme.typography.bodySmall)
+                Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    listOf(DomainKind.PERSON, DomainKind.PROJECT, DomainKind.NOTE).forEach { kind ->
+                        FilterChip(selected = linkedSourceKind == kind, onClick = { linkedSourceKind = kind },
+                        label = { Text(s(when (kind) {
+                                DomainKind.PERSON -> R.string.table_source_people
+                                DomainKind.PROJECT -> R.string.table_source_projects
+                                DomainKind.NOTE -> R.string.table_source_notes
+                            })) }, modifier = Modifier.testTag("table_source_${kind.name.lowercase()}"))
+                    }
+                }
+            } else {
+                OutlinedTextField(newTableColumns, { newTableColumns = it.take(1200) }, Modifier.fillMaxWidth().testTag("table_new_columns"),
+                    label = { Text(s(ai.memora.app.R.string.table_columns)) }, minLines = 2)
+                Text(s(R.string.table_columns_help), style = androidx.compose.material3.MaterialTheme.typography.bodySmall)
+            }
         } },
         confirmButton = { TextButton(onClick = {
-            val declarations = newTableColumns.split(',').map(String::trim).filter(String::isNotEmpty).map { token ->
+            val declarations = if (linkedViewMode) listOf("Source" to ColumnType.TEXT) else newTableColumns.split(',').map(String::trim).filter(String::isNotEmpty).map { token ->
                 val pieces = token.split(':', limit = 2)
                 val name = pieces[0].trim()
                 val type = if (pieces.size == 1) ColumnType.TEXT else runCatching { ColumnType.valueOf(pieces[1].trim().uppercase()) }.getOrNull()
@@ -187,11 +211,20 @@ fun TablesScreen() {
             if (newTableTitle.isBlank() || declarations.isEmpty() || declarations.size > 50 || declarations.any { it == null || it.first.isBlank() || it.first.length > 100 } ||
                 declarations.filterNotNull().map { it.first.lowercase() }.distinct().size != declarations.size) { error = true; return@TextButton }
             val id = UUID.randomUUID().toString()
-            val columns = declarations.filterNotNull().map { (name, type) -> ColumnSpec(UUID.randomUUID().toString(), name, type) }
+            val createLinkedView = linkedViewMode
+            val sourceKind = linkedSourceKind
+            val columns = if (createLinkedView) listOf(
+                ColumnSpec("source_id", "source_id", ColumnType.TEXT),
+                ColumnSpec("title", "title", ColumnType.TEXT),
+                ColumnSpec("body", "body", ColumnType.TEXT),
+                ColumnSpec("status", "status", ColumnType.TEXT),
+                ColumnSpec("version", "version", ColumnType.INTEGER),
+            ) else declarations.filterNotNull().map { (name, type) -> ColumnSpec(UUID.randomUUID().toString(), name, type) }
             createTableDialog = false
             coroutineScope.launch {
                 try {
-                    repository.createTable(scopeId, id, newTableTitle.trim(), "editable", columns)
+                    repository.createTable(scopeId, id, newTableTitle.trim(), if (createLinkedView) "linked_view" else "editable",
+                        columns, viewSpec = if (createLinkedView) LinkedViewSpec(sourceKind) else null)
                     selectedTableId = id
                     newTableTitle = ""; newTableColumns = ""; error = false
                     tables = repository.tables(scopeId)
@@ -309,15 +342,28 @@ fun TablesScreen() {
         tables.forEach { table ->
             MemoraCard(onClick = { selectedTableId = table.table.tableId }, modifier = Modifier.testTag("table_${table.table.tableId}")) {
                 Text(table.table.title, style = androidx.compose.material3.MaterialTheme.typography.titleMedium, color = colors.ink)
-                Text(LocalStrings.current.getString(ai.memora.app.R.string.table_summary, table.rows.size, table.columns.size), color = colors.muted)
+                Text(if (table.table.mode == "linked_view")
+                    LocalStrings.current.getString(R.string.table_linked_view_summary, table.linkedRows.size)
+                    else LocalStrings.current.getString(ai.memora.app.R.string.table_summary, table.rows.size, table.columns.size), color = colors.muted)
             }
         }
         if (selected != null) {
             Spacer(Modifier.height(4.dp))
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
                 Text(selected.table.title, style = androidx.compose.material3.MaterialTheme.typography.titleLarge, color = colors.ink)
-                TextButton(onClick = { beginRowEdit(null) }, modifier = Modifier.testTag("table_add_row")) { Text(s(R.string.table_add_row)) }
+                if (selected.table.mode == "editable") TextButton(onClick = { beginRowEdit(null) }, modifier = Modifier.testTag("table_add_row")) { Text(s(R.string.table_add_row)) }
             }
+            if (selected.table.mode == "linked_view") {
+                if (selected.linkedRows.isEmpty()) Text(s(R.string.table_linked_view_empty), color = colors.muted)
+                selected.linkedRows.forEach { source ->
+                    MemoraCard(modifier = Modifier.testTag("linked_view_source_${source.objectId}")) {
+                        Text(source.title, style = androidx.compose.material3.MaterialTheme.typography.titleMedium, color = colors.ink)
+                        source.body?.takeIf(String::isNotBlank)?.let { Text(it, color = colors.muted) }
+                        Text(LocalStrings.current.getString(R.string.table_linked_source_version, source.version),
+                            style = androidx.compose.material3.MaterialTheme.typography.labelSmall, color = colors.accent)
+                    }
+                }
+            } else {
             OutlinedButton(onClick = { showDeleted = !showDeleted }, modifier = Modifier.fillMaxWidth().testTag("table_show_deleted")) {
                 Text(s(if (showDeleted) R.string.table_show_active else R.string.table_show_deleted))
             }
@@ -354,6 +400,7 @@ fun TablesScreen() {
                         }
                     }
                 }
+            }
             }
         }
     }
