@@ -2,6 +2,10 @@
 
 Status as of 2026-11-03, APK v56 / 1.1.34-calendar-person-links, Room schema 18. This matrix records existing evidence and remaining work; it does not turn host tests into device or live-provider acceptance.
 
+## ACT-0142 update
+
+Added `LocalProfileOnboardingTest.encryptedLocalStateIsExcludedFromCloudBackupAndDeviceTransfer`. On the packaged host app it checks `ApplicationInfo.FLAG_ALLOW_BACKUP` is off; both cloud backup and device transfer exclude the root/file/database/shared-preference/external data domains; and the SQLCipher key envelope path is under `noBackupFilesDir`. Full host suite: 58 suites / 291 tests, 0 failures/errors/skips; `lintDebug` 0 errors / 60 warnings / 3 hints. No APK/schema change in this test-only package; product APK remains v56 with SHA-256 `d5ac59bedb28dbed9821fb7f472469a69a240911ae48a19e41c80b8a809c0610`. This verifies declared Android backup policy but does not exercise OS-level transfer, uninstall/reinstall, key recovery or protected export/import. M20-02 remains partial.
+
 ## ACT-0141 update
 
 Added an additive Room 17→18 schema for explicit owner-confirmed calendar-event/person associations, with scoped IDs, canonical person validation, relation revision history, retire/restore and a person-card chooser. Existing calendar labels are not migrated or treated as identity evidence; the calendar row stays canonical and is not copied. Host tests reject model confirmation, wrong scope/kind and missing event; they verify idempotency, active-link listing, retire/restore and revision readback. Compose coverage selects and confirms an event, removes the link, and verifies the event itself remains. Full Gradle: 58 suites / 290 tests, 0 failures/errors/skips; debug and AndroidTest APKs assembled; AndroidTest Kotlin compiled; lint 0 errors / 60 warnings / 3 hints. v56 SHA-256 `d5ac59bedb28dbed9821fb7f472469a69a240911ae48a19e41c80b8a809c0610`. The opt-in synthetic Android 14 SQLCipher probe passed migration Room v1→v18, retained the journal sentinel, verified both task/person and calendar/person relation tables existed and were empty, then cleaned fixtures. No owner database/device was used. M20-03 remains partial.

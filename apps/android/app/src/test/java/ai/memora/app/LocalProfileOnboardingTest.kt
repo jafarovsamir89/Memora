@@ -27,6 +27,7 @@ import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
+import org.xmlpull.v1.XmlPullParser
 
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [33])
@@ -66,6 +67,38 @@ class LocalProfileOnboardingTest {
         assertTrue(existingContext.getDatabasePath(DatabaseKeyProvider.DATABASE_NAME).createNewFile())
         val existingMarker = LocalInstallMarker(existingContext, File(existingRoot, "marker"))
         assertEquals(InstallDisposition.EXISTING, existingMarker.inspect())
+    }
+
+    @Test fun encryptedLocalStateIsExcludedFromCloudBackupAndDeviceTransfer() {
+        val context = ApplicationProvider.getApplicationContext<Context>()
+        val appInfo = context.packageManager.getApplicationInfo(context.packageName, 0)
+        assertEquals(false, appInfo.flags and ApplicationInfo.FLAG_ALLOW_BACKUP != 0)
+
+        val excludedBySection = mutableMapOf<String, MutableSet<String>>()
+        val parser = context.resources.getXml(R.xml.data_extraction_rules)
+        try {
+            var section: String? = null
+            while (parser.next() != XmlPullParser.END_DOCUMENT) {
+                if (parser.eventType != XmlPullParser.START_TAG) continue
+                when (parser.name) {
+                    "cloud-backup", "device-transfer" -> section = parser.name
+                    "exclude" -> {
+                        val domain = requireNotNull(parser.getAttributeValue(null, "domain"))
+                        val path = requireNotNull(parser.getAttributeValue(null, "path"))
+                        excludedBySection.getOrPut(requireNotNull(section)) { mutableSetOf() }.add("$domain:$path")
+                    }
+                }
+            }
+        } finally {
+            parser.close()
+        }
+        val expectedExcludedDomains = setOf(
+            "root:.", "file:.", "database:.", "sharedpref:.", "external:.",
+            "device_root:.", "device_file:.", "device_database:.", "device_sharedpref:.",
+        )
+        assertEquals(expectedExcludedDomains, excludedBySection["cloud-backup"])
+        assertEquals(expectedExcludedDomains, excludedBySection["device-transfer"])
+        assertEquals(context.noBackupFilesDir, File(context.noBackupFilesDir, DatabaseKeyProvider.KEY_ENVELOPE_NAME).parentFile)
     }
 
     @Test fun completedLocalProfilePreferencesRemainEditableAndEncryptedInRoom() = runBlocking {
