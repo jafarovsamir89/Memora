@@ -6,7 +6,7 @@
 
 Временно проверен порог `matched terms >= 75% distinct query terms` на существующем синтетическом corpus из 90 AZ/RU/mixed вариантов. Recall@5 стал `0.933/0.833/0.867`, Precision@5 — `0.187/0.167/0.173`, MRR — `0.933/0.833/0.867` вместо baseline `Recall@5=1.000`, `Precision@5=0.200`, `MRR=1.000/1.000/0.983`. Порог ухудшил recall и precision, поэтому temporary product-code изменение откачено полностью. Тот же focused baseline test после отката прошёл и воспроизвёл сохранённые metrics. Ранжирование не менялось; semantic retrieval не реализован. Следующий M20-04 шаг — полные relevance labels и уточнение k, а не tuning порога на неполной разметке.
 
-Обновлены дневник, TODO, validation matrix, retrieval evaluation, engineering plan, AGENTS и этот лог. Изменения этого пакета требуют локального документального commit; push не запрашивался. M20-02/03/04 и release readiness остаются partial. Пользовательский ADR-012 сохранён.
+Обновлены дневник, TODO, validation matrix, retrieval evaluation, engineering plan, AGENTS и этот лог. Документальный пакет сохранён локальным коммитом `84bff37354269d91955da96ae1ca451729d80ba9` (`docs: record SAF and retrieval evaluation checkpoint`); push не выполнялся и не запрашивался. M20-02/03/04 и release readiness остаются partial. Пользовательский ADR-012 сохранён.
 
 ## ACT-0156 - 2026-11-03 - Измеримый lexical retrieval baseline AZ/RU/mixed
 
