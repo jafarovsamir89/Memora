@@ -973,6 +973,20 @@ internal abstract class AgentDatabase : RoomDatabase() {
             return openWithKey(context, key, databaseName)
         }
 
+        /** Opens only a UUID-named staging DB for validation; never accepts the active app DB name. */
+        internal fun openPortableSnapshotForValidation(
+            context: Context,
+            databaseName: String,
+            passphraseBytes: ByteArray,
+        ): AgentDatabase {
+            require(databaseName.matches(Regex("memora-portable-validation-[0-9a-f-]{36}\\.db"))) {
+                "Portable snapshot validation requires an isolated staging database name"
+            }
+            require(databaseName != DatabaseKeyProvider.DATABASE_NAME)
+            System.loadLibrary("sqlcipher")
+            return openWithKey(context, passphraseBytes, databaseName)
+        }
+
         private fun openUsingProvider(
             context: Context,
             provider: DatabaseKeyProvider,

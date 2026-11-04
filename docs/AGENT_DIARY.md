@@ -26,6 +26,8 @@
 
 **Последний проверенный пакет ACT-0152:** к retrieval baseline добавлен отрицательный synthetic запрос-перефразировка: точные AZ/RU/mixed слова находит текущий `ranked_lexical`, но `car servicing meeting` не возвращает записей для `BMW təmir görüşü`. Полный Gradle: 60 suites / 298 tests, 0 failures/errors/skips; lint 0/60/3; APK не изменился. Это документирует реальный предел до реализации semantic retrieval; M20-04 остаётся partial.
 
+**Последний проверенный пакет ACT-0153:** добавлен изолированный staged snapshot validator. На synthetic Android 14 valid key открыл Room18, проверил integrity и 44 user tables, закрыл/открыл БД и удалил staging; неправильный ключ отвергнут, staging очищен. Полный Gradle 60 suites / 298 tests, lint 0/60/3; APK v57 SHA-256 `30e6d2911c058284d8a431bf805e94d9e09b53c19295083a15858c1d0bab85ff`. Active database не менялась; user export/import и cutover не реализованы.
+
 Следующий шаг: продолжать M20-02 с пользовательским export/import workflow и безопасным restore/cutover поверх synthetic-tested snapshot helper (transactional consistency, verify-before-activate, fail-closed); M20-03 code slice ACT-0145/0146 завершён, но live/owner BMW acceptance остаётся отдельным gate. Для M20-04 — построить синтетический AZ/RU/mixed evaluation и проверить подходящую local model/API, licence, memory/latency на target-class Android; до конкретного результата считать search lexical. M20-02/03/04, native acceptance и release readiness остаются partial.
 
 ### ACT-0150 — 2026-11-03 — Проверка целостности SQLCipher snapshot
@@ -41,6 +43,12 @@ Synthetic Android 14 instrumentation probe прошла: 45 таблиц, schema
 ### ACT-0152 — 2026-11-03 — Фиксация lexical recall boundary
 
 Расширен synthetic retrieval тест: alongside expected exact AZ/RU/mixed matches он запрашивает перефразировку `car servicing meeting` для сохранённой задачи `BMW təmir görüşü` и подтверждает отсутствие task hit. `match_mode` по-прежнему `ranked_lexical`; код поиска не менялся. Evaluation doc и S48 теперь явно отражают negative case. Targeted test и полный Gradle прошли: 60 suites / 298 tests, 0 failures/errors/skips; lint 0/60/3. Product APK hash unchanged. Это не semantic implementation и M20-04 partial.
+
+### ACT-0153 — 2026-11-03 — Изолированная проверка зашифрованного импорта
+
+Добавлен `PortableBackupValidator`: staged SQLCipher snapshot получает только случайное имя `memora-portable-validation-<UUID>.db`, хранится в приватной database directory, открывается существующей Room schema/migration цепочкой, проверяется integrity/schema/таблицы и row counts, закрывается и заново открывается. Успешный readback должен совпасть полностью; staging DB/journal/WAL/SHM удаляются в `finally`. `AgentDatabase.openPortableSnapshotForValidation` строго отклоняет имя основной базы и имена вне UUID staging формата. Это validation-only компонент; активный Room singleton и ключ не меняются.
+
+Synthetic Android 14 probe прошла: копия от 45 sqlite_master tables (44 user tables) открыта под отдельным snapshot key, schema18, marker/profile fact сохранён после close/reopen. Проба с заведомо неверным ключом отказала и проверила отсутствие оставшегося staging файла. Полный Gradle 60 suites / 298 tests, 0 failures/errors/skips; lint 0/60/3; APK v57 SHA-256 `30e6d2911c058284d8a431bf805e94d9e09b53c19295083a15858c1d0bab85ff`. Физический телефон и пользовательская БД не использовались. M20-02 остаётся partial до end-user export/import UI, atomic verify-before-activate cutover и recovery acceptance.
 
 ### ACT-0149 — 2026-11-03 — Синтетический baseline поиска AZ/RU/mixed
 

@@ -150,3 +150,7 @@ Portable snapshot bytes now travel with a strict inner manifest for Room schema,
 ### ACT-0152 — Explicit semantic-search limitation
 
 Synthetic exact AZ/RU/mixed retrieval passes, but the lexical engine returns no task for `car servicing meeting` when the stored fact says `BMW təmir görüşü`. This negative result makes clear that semantic/paraphrase search is still outstanding; the search mode remains explicitly `ranked_lexical`.
+
+### ACT-0153 — Candidate import inspection only
+
+Imported encrypted snapshots can now be opened under a UUID-named temporary SQLCipher/Room DB, checked, closed/reopened and deleted without opening or replacing the active app database. Valid synthetic input and wrong-key cleanup both passed. The active database stays untouched; this is not restore activation.

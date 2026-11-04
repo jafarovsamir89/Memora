@@ -71,14 +71,11 @@ object DatabaseStorageProbe {
         }
         val databaseName = "memora-portable-snapshot-source-probe.db"
         val snapshot = File(context.noBackupFilesDir, "memora-portable-snapshot-probe.db")
-        val restoreName = "memora-portable-snapshot-restore-probe.db"
-        val restoreFile = context.getDatabasePath(restoreName)
         val envelope = AtomicFile(File(context.noBackupFilesDir, "$databaseName.envelope"))
         val staged = AtomicFile(File(context.noBackupFilesDir, "$databaseName.envelope.rotation"))
         val alias = "ai.memora.app.test.portable-snapshot-probe.v1"
         val keyStore = KeyStore.getInstance("AndroidKeyStore").apply { load(null) }
         var source: AgentDatabase? = null
-        var restored: AgentDatabase? = null
         val snapshotKey = ByteArray(32).also(java.security.SecureRandom()::nextBytes)
         val snapshotPassphrase = snapshotKey.joinToString("") { "%02x".format(it) }.toByteArray(Charsets.UTF_8)
         var stage = "open_synthetic_source"
@@ -129,34 +126,36 @@ object DatabaseStorageProbe {
             check(decoded.manifest.appVersionCode == appVersionCode)
             check(decoded.manifest.encryptedSnapshotBytes == decoded.encryptedSnapshot.size)
             result.putBoolean("manifest_schema_and_snapshot_length_verified", true)
-            val restoredPassphrase = decoded.snapshotKeyMaterial.joinToString("") { "%02x".format(it) }
-                .toByteArray(Charsets.UTF_8)
-            decoded.snapshotKeyMaterial.fill(0)
-            val restoredSnapshotBytes = decoded.encryptedSnapshot
-            stage = "reopen_exported_database"
+            stage = "validate_imported_snapshot_in_isolated_room_database"
             source!!.close()
             source = null
-            restoreFile.writeBytes(restoredSnapshotBytes)
-            restoredSnapshotBytes.fill(0)
-
-            restored = AgentDatabase.openWithKeyForSyntheticProbe(context, restoreName, restoredPassphrase)
-            restoredPassphrase.fill(0)
-            stage = "verify_reopened_synthetic_marker"
-            val markerSurvived = restored!!.openHelper.readableDatabase.query(
-                "SELECT factId FROM profile_fact WHERE factId = 'synthetic-portable-snapshot-marker' AND fact = 'synthetic-portable-snapshot-marker'",
-            ).use { it.moveToFirst() }
-            val userVersion = restored!!.openHelper.readableDatabase.query("PRAGMA user_version").use {
-                check(it.moveToFirst()); it.getInt(0)
+            val validation = try {
+                PortableBackupValidator.validate(context, decoded)
+            } finally {
+                decoded.snapshotKeyMaterial.fill(0)
+                decoded.encryptedSnapshot.fill(0)
             }
+            val markerSurvived = validation.profileFactCount == 1L
             result.putBoolean("snapshot_marker_survived", markerSurvived)
-            result.putInt("snapshot_room_user_version", userVersion)
-            result.putInt("snapshot_synthetic_profile_fact_count", restored!!.openHelper.readableDatabase.query(
-                "SELECT COUNT(*) FROM profile_fact",
-            ).use { check(it.moveToFirst()); it.getInt(0) })
-            result.putInt("snapshot_table_count", restored!!.openHelper.readableDatabase.query(
-                "SELECT COUNT(*) FROM sqlite_master WHERE type = 'table'",
-            ).use { check(it.moveToFirst()); it.getInt(0) })
-            check(markerSurvived && userVersion == 18)
+            result.putInt("snapshot_room_user_version", validation.roomSchemaVersion)
+            result.putLong("snapshot_synthetic_profile_fact_count", validation.profileFactCount)
+            result.putInt("snapshot_table_count", validation.tableCount)
+            check(markerSurvived && validation.roomSchemaVersion == 18 && validation.tableCount == 44)
+            stage = "reject_wrong_snapshot_key_and_cleanup_staging_db"
+            val wrongKey = ByteArray(32) { (it + 1).toByte() }
+            val wrongKeyBackup = decoded.copy(
+                snapshotKeyMaterial = wrongKey,
+                encryptedSnapshot = snapshot.readBytes(),
+            )
+            val rejectedWrongKey = runCatching { PortableBackupValidator.validate(context, wrongKeyBackup) }.isFailure
+            wrongKey.fill(0)
+            wrongKeyBackup.encryptedSnapshot.fill(0)
+            val validationStagingFilesCleaned = context.databaseList().none {
+                it.startsWith("memora-portable-validation-")
+            }
+            check(rejectedWrongKey && validationStagingFilesCleaned)
+            result.putBoolean("wrong_snapshot_key_rejected", rejectedWrongKey)
+            result.putBoolean("failed_validation_staging_database_cleaned", validationStagingFilesCleaned)
             result.putBoolean("encrypted_snapshot_contains_no_plaintext_marker", plaintextMarkerAbsent)
             result.putBoolean("outer_portable_container_contains_no_plaintext_marker", encryptedContainerHasNoMarker)
             result.putBoolean("snapshot_reopened_with_separate_key_and_retained_synthetic_row", markerSurvived)
@@ -167,14 +166,11 @@ object DatabaseStorageProbe {
             result.putString("stage_error_type", error.javaClass.simpleName)
         } finally {
             runCatching { source?.close() }
-            runCatching { restored?.close() }
             snapshotKey.fill(0)
             snapshotPassphrase.fill(0)
             snapshot.delete()
             context.getDatabasePath(databaseName).delete()
             File(context.getDatabasePath(databaseName).path + "-journal").delete()
-            restoreFile.delete()
-            File(restoreFile.path + "-journal").delete()
             File(context.noBackupFilesDir, "$databaseName.envelope").delete()
             File(context.noBackupFilesDir, "$databaseName.envelope.bak").delete()
             File(context.noBackupFilesDir, "$databaseName.envelope.rotation").delete()

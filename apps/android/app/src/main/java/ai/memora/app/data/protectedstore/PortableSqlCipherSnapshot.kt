@@ -47,6 +47,11 @@ internal object PortableSqlCipherSnapshot {
         check(target.isFile && target.length() > 0L) { "SQLCipher snapshot was not created" }
     }
 
+    fun roomPassphraseBytes(snapshotKeyMaterial: ByteArray): ByteArray {
+        require(snapshotKeyMaterial.size == 32) { "Snapshot key material must be 256 bits" }
+        return snapshotKeyMaterial.joinToString("") { "%02x".format(it) }.toByteArray(Charsets.UTF_8)
+    }
+
     private fun userVersion(database: SupportSQLiteDatabase, schema: String): Int =
         database.query("PRAGMA $schema.user_version").use {
             check(it.moveToFirst()) { "Could not read Room schema version" }

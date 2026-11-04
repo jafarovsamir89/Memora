@@ -23,7 +23,7 @@ NIST SP 800-132 описывает PBKDF для защиты хранимых д
 
 1. Читать вход с жёстким лимитом, дешифровать в выделенный временный каталог приложения и никогда не писать plaintext-копию в общую память.
 2. Проверить AEAD, формат/manifest, поддерживаемую схему и SQLCipher integrity/migration на отдельной БД.
-3. Сверить число и идентификаторы объектов/связей по manifest без логирования содержимого.
+3. Открыть candidate только под отдельным UUID staging DB name через Room/SQLCipher, сверить версию/integrity и table/row readback по manifest без логирования содержимого.
 4. Только после успешного close/reopen переключать активную БД атомарным recoverable-маркером. Не удалять прежнюю базу до завершённой проверки нового хранилища.
 5. Неверный пароль, повреждение, неизвестная схема, нехватка места, остановка процесса или ошибка ключа оставляют исходную активную БД нетронутой; очистка только собственных временных артефактов.
 
@@ -36,4 +36,4 @@ NIST SP 800-132 описывает PBKDF для защиты хранимых д
 
 ## Приёмка
 
-Host tests покрывают внешнюю криптографию и inner-manifest round-trip, unsupported metadata/schema, truncation и altered snapshot digest. Synthetic Android 14 probe дополнительно экспортирует Room v18, проверяет integrity обоих файлов, все 45 таблиц и точное число строк на таблицу, помещает manifest под AES-GCM, затем открывает snapshot и читает synthetic marker после закрытия исходной базы. Открыты: измерение времени KDF на Android 13/минимальном API; пользовательская интеграция snapshot SQLCipher; проверка совместимости/миграции между форматами; corrupt/unsupported import UX; atomic import/cutover/restart; URI permissions, storage failure/disk-full; UX и owner acceptance. M20-02 не закрывать по одному synthetic probe.
+Host tests покрывают внешнюю криптографию и inner-manifest round-trip, unsupported metadata/schema, truncation и altered snapshot digest. Synthetic Android 14 probe экспортирует Room v18, проверяет целостность и 44 user tables/row counts, помещает manifest под AES-GCM, staged validator открывает candidate через Room, закрывает/открывает повторно и удаляет файл; wrong key отвергается с cleanup. Открыты: измерение времени KDF на Android 13/минимальном API; пользовательская интеграция snapshot SQLCipher; проверка совместимости/миграции между форматами; corrupt/unsupported import UX; atomic active-DB import/cutover/restart; URI permissions, storage failure/disk-full; UX и owner acceptance. M20-02 не закрывать по одному synthetic probe.

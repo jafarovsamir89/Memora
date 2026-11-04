@@ -12,6 +12,8 @@
 
 **ACT-0152:** M20-04 baseline now includes an explicit lexical negative: `car servicing meeting` does not retrieve Azerbaijani task `BMW təmir görüşü`; exact AZ/RU/mixed terms continue to pass. Full suite remains 60 / 298; APK unchanged. This fixes the current quality baseline but does not add semantic retrieval.
 
+**ACT-0153:** a parsed encrypted snapshot can now be opened in an isolated UUID-named Room/SQLCipher staging DB, checked, closed/reopened and cleaned without touching the active singleton. Wrong-key rejection/cleanup and the synthetic happy path passed on Android 14. Full Gradle: 60 suites / 298 tests, lint 0/60/3; APK v57 SHA-256 `30e6d2911c058284d8a431bf805e94d9e09b53c19295083a15858c1d0bab85ff`. Atomic replacement/rollback and end-user picker/UI remain unimplemented.
+
 **Архивный checkpoint ACT-0113:** APK v34 / 1.1.12-attention, Room schema 13; историческая проверка M20-07 и связанный статус оставлены ниже для журнала.
 
 **Актуальное дополнение ACT-0093 (2026-11-03):** исправлена сквозная запись Gemini в SQLCipher и task event readback; gateway использует `gemini-3.5-flash-lite`, а квотная ошибка отображается как `model_rate_limited`. APK versionCode 24 / `1.1.2-field-secretary` собран и установлен поверх данных на Redmi Android 13. 31 целевой unit test, lint и synthetic migration probe прошли. AZ/RU mutate E2E и локальные readbacks после process restart прошли на APK v23; AZ Gemini restart search прошёл, RU search ограничен подтверждённой квотой. Полный Gemini mutate на установленной v24 после квотного отказа не повторялся. Field acceptance и release gates остаются открытыми.

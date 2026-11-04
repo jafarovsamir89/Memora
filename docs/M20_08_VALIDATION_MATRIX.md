@@ -18,6 +18,10 @@ The outer AES-GCM encrypted payload now has a bounded inner manifest with suppor
 
 Extended M20-04 baseline with a nonmatching paraphrase (`car servicing meeting` for `BMW təmir görüşü`); exact AZ/RU/mixed queries still return expected tasks, while the paraphrase yields no lexical task result and remains labeled `ranked_lexical`. Full Gradle: 60 suites / 298 tests, 0 failures/errors/skips; lint 0/60/3. Product APK unchanged. This records a current capability gap, not a completed semantic retrieval feature.
 
+## ACT-0153 — Staged snapshot validation and wrong-key cleanup
+
+The synthetic Android 14 probe now exercises `PortableBackupValidator`: a candidate SQLCipher file opens in a UUID-named private staging database through the Room v18 path, passes integrity/table/row checks, closes/reopens with stable readback, then deletes staging artifacts. A wrong-key candidate fails closed and also leaves no staging DB. Probe passed: schema18, 44 user tables (45 including SQLite internals), one synthetic profile fact; no user DB. Full Gradle: 60 suites / 298 tests, lint 0/60/3; APK v57 SHA-256 `30e6d2911c058284d8a431bf805e94d9e09b53c19295083a15858c1d0bab85ff`. This does not switch the active DB or implement recovery UX; M20-02 remains partial.
+
 ## ACT-0147 — Portable backup cryptographic envelope foundation
 
 Added a versioned AES-256-GCM / PBKDF2-HMAC-SHA-256 container primitive. Host regressions cover round-trip, plaintext absence, wrong passphrase, header/ciphertext tampering, truncated input and bounded KDF parameters. Full Gradle passed: 59 suites / 295 tests, 0 failures/errors/skips; debug/AndroidTest builds, AndroidTest Kotlin compilation and lint passed (0/60/3). An opt-in instrumentation probe on the synthetic Android 14 emulator confirmed Android JCA round-trip and wrong-passphrase rejection. This probe used only a synthetic byte array; it did not access or write the app database. The container is not connected to SQLCipher snapshot/export, file UI or atomic restore, so M20-02 remains partial. APK was built (SHA-256 `e0fc91a48f85633b41c4c8eed4fd63e77738fc07565c804dc6a171160a0d6b33`) but not installed on an owner device.
