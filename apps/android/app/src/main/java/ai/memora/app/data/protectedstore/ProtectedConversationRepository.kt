@@ -20,6 +20,13 @@ internal data class ConversationTurnEvidence(
     val matchedSnippet: String?,
 )
 
+internal data class ConversationTurnPage(
+    val turns: List<ConversationTurnEvidence>,
+    val nextBeforeSequence: Long?,
+) {
+    val hasMore: Boolean get() = nextBeforeSequence != null
+}
+
 internal data class ConversationEpisodeEvidence(
     val episodeId: String,
     val title: String,
@@ -56,6 +63,53 @@ internal class ProtectedConversationRepository(private val db: AgentDatabase) {
         val rows = dao.recentConversationMessages(scopeId, limit * 2)
         return rows.groupBy { it.turnId }.values.mapNotNull(::toTurnEvidence)
             .sortedByDescending { it.createdAtMillis }.take(limit)
+    }
+
+    /**
+     * Returns exhaustive, newest-first archive pages. The cursor is the user-message sequence of the
+     * last displayed turn, so a look-ahead match is deliberately reconsidered on the next request.
+     * Search stays local and does not inherit the smaller candidate cap used for model context.
+     */
+    suspend fun conversationTurnPage(
+        scopeId: String,
+        query: String,
+        beforeSequence: Long? = null,
+        limit: Int = 30,
+    ): ConversationTurnPage {
+        require(scopeId.isNotBlank() && query.length <= 300 && (beforeSequence == null || beforeSequence > 0) && limit in 1..100)
+        val foldedQuery = fold(query.trim())
+        val terms = TOKEN.findAll(foldedQuery).map { fold(it.value) }.filter { it.length > 1 && it !in STOP_WORDS }.distinct().take(12).toList()
+        if (query.isNotBlank() && terms.isEmpty()) return ConversationTurnPage(emptyList(), null)
+
+        val matches = mutableListOf<Pair<Long, ConversationTurnEvidence>>()
+        var cursor = beforeSequence
+        while (true) {
+            val page = dao.conversationPage(scopeId, cursor, PAGE_SIZE)
+            if (page.isEmpty()) return ConversationTurnPage(matches.map { it.second }, null)
+            cursor = page.last().sequence
+            for (message in page) {
+                if (message.role != "user") continue
+                val turnRows = dao.conversationMessagesForTurn(scopeId, message.turnId)
+                    .filter { it.scopeId == scopeId && it.turnId == message.turnId }
+                val turn = toTurnEvidence(turnRows) ?: continue
+                val evidenceText = listOf(turn.userMessage, turn.assistantMessage).joinToString("\n")
+                val snippet = if (terms.isEmpty()) null else {
+                    val tokens = TOKEN.findAll(evidenceText).toList()
+                    val firstMatch = tokens.firstOrNull { token ->
+                        val candidate = fold(token.value)
+                        terms.any { term -> searchTokenMatches(term, candidate) }
+                    } ?: continue
+                    val start = (firstMatch.range.first - 180).coerceAtLeast(0)
+                    evidenceText.substring(start, (start + 900).coerceAtMost(evidenceText.length))
+                }
+                matches += message.sequence to turn.copy(matchedSnippet = snippet)
+                if (matches.size > limit) {
+                    val visible = matches.take(limit)
+                    return ConversationTurnPage(visible.map { it.second }, visible.last().first)
+                }
+            }
+            if (page.size < PAGE_SIZE) return ConversationTurnPage(matches.map { it.second }, null)
+        }
     }
 
     /** Search every retained page locally; returned evidence remains bounded and source-linked by turn ID. */

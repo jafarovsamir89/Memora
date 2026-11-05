@@ -33,6 +33,30 @@ class ProtectedConversationRepositoryTest {
         assertEquals(100, repository.recentTurns("scope-memory", 100).size)
     }
 
+    @Test fun archivePagesRemainExhaustivePastModelSearchCandidateLimit() = runBlocking {
+        val repository = ProtectedConversationRepository(databaseRule.database)
+        repeat(165) { index ->
+            repository.appendTurn("scope-paged-archive", "paged-turn-$index", "synthetic user turn $index",
+                "synthetic archive needle reply $index", 1_800_000_000_000L + index)
+        }
+        repository.appendTurn("other-scope", "paged-foreign-turn", "synthetic user", "synthetic archive needle reply")
+
+        val collected = mutableListOf<String>()
+        var cursor: Long? = null
+        do {
+            val page = repository.conversationTurnPage("scope-paged-archive", "archive needle", cursor, limit = 30)
+            assertTrue(page.turns.size <= 30)
+            collected += page.turns.map { it.turnId }
+            cursor = page.nextBeforeSequence
+        } while (cursor != null)
+
+        assertEquals(165, collected.size)
+        assertEquals(165, collected.distinct().size)
+        assertEquals("paged-turn-164", collected.first())
+        assertEquals("paged-turn-0", collected.last())
+        assertFalse(collected.contains("paged-foreign-turn"))
+    }
+
     @Test fun deletingTurnRemovesUserAndAssistantTogetherOnlyInRequestedScope() = runBlocking {
         val repository = ProtectedConversationRepository(databaseRule.database)
         repository.appendTurn("scope-a", "same-turn-id", "synthetic first user", "synthetic first answer")

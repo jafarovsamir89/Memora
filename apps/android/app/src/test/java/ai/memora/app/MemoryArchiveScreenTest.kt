@@ -3,6 +3,7 @@ package ai.memora.app
 import android.content.Context
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.junit4.v2.createComposeRule
 import androidx.compose.ui.test.onAllNodesWithTag
 import androidx.compose.ui.test.onNodeWithTag
@@ -56,6 +57,33 @@ class MemoryArchiveScreenTest {
 
         compose.waitUntil(10_000) { runBlocking { repository.turn(scopeId, "synthetic-memory-turn").isEmpty() } }
         assertTrue(repository.turn(scopeId, "synthetic-memory-turn").isEmpty())
+    }
+
+    @Test fun olderConversationPageCanBeOpenedFromMemoryScreen() = runBlocking<Unit> {
+        val context = ApplicationProvider.getApplicationContext<Context>()
+        val scopeId = AgentVoiceTurnProcessor(context).conversationScopeId()
+        val repository = ProtectedConversationRepository(databaseRule.database)
+        repeat(35) { index ->
+            repository.appendTurn(scopeId, "synthetic-page-turn-$index", "Synthetic conversation $index", "Synthetic reply $index")
+        }
+
+        compose.setContent {
+            CompositionLocalProvider(LocalAgentDatabaseOverride provides databaseRule.database) {
+                CompositionLocalProvider(LocalStrings provides context.resources) {
+                    MemoraTheme("light") {
+                        WorkingMemoryScreen(CaptureSessionState(ready = true, loading = false), {}, {}, {})
+                    }
+                }
+            }
+        }
+        compose.waitUntil(10_000) {
+            compose.onAllNodesWithTag("memory_turn_synthetic-page-turn-5").fetchSemanticsNodes().isNotEmpty()
+        }
+        compose.onAllNodesWithTag("memory_turn_synthetic-page-turn-0").assertCountEquals(0)
+        compose.onNodeWithTag("memory_conversation_load_more").performScrollTo().performClick()
+        compose.waitUntil(10_000) {
+            compose.onAllNodesWithTag("memory_turn_synthetic-page-turn-0").fetchSemanticsNodes().isNotEmpty()
+        }
     }
 
     @Test fun finiteRetentionChoiceShowsWarningBeforePruning() = runBlocking<Unit> {

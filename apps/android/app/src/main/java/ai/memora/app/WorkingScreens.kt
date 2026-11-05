@@ -186,6 +186,8 @@ internal fun WorkingMemoryScreen(state: CaptureSessionState, detail: (String) ->
     var profileFacts by remember { mutableStateOf<List<ProfileFactEvidence>>(emptyList()) }
     var archiveReady by remember { mutableStateOf(false) }
     var archiveLoading by remember { mutableStateOf(false) }
+    var conversationPageLoading by remember { mutableStateOf(false) }
+    var conversationNextCursor by remember { mutableStateOf<Long?>(null) }
     var archiveError by remember { mutableStateOf(false) }
     var retentionDays by remember { mutableIntStateOf(0) }
     var refreshVersion by remember { mutableIntStateOf(0) }
@@ -221,7 +223,11 @@ internal fun WorkingMemoryScreen(state: CaptureSessionState, detail: (String) ->
         try {
             val conversations = conversationRepository ?: error("protected_memory_unavailable")
             val domain = domainRepository ?: error("protected_memory_unavailable")
-            conversationTurns = conversations.searchTurns(scopeId, query.trim(), limit = 30)
+            conversationTurns = emptyList()
+            conversationNextCursor = null
+            val conversationPage = conversations.conversationTurnPage(scopeId, query.trim(), limit = 30)
+            conversationTurns = conversationPage.turns
+            conversationNextCursor = conversationPage.nextBeforeSequence
             conversationEpisodes = conversations.searchEpisodes(scopeId, query.trim(), limit = 30)
             domainFacts = if (query.isBlank()) {
                 DomainKind.entries.flatMap { kind -> domain.domainObjects(scopeId, kind, 12).map(::MemoryDomainFact) }
@@ -234,6 +240,24 @@ internal fun WorkingMemoryScreen(state: CaptureSessionState, detail: (String) ->
             archiveError = true
         } finally {
             archiveLoading = false
+        }
+    }
+
+    fun loadMoreConversationTurns() {
+        val cursor = conversationNextCursor ?: return
+        if (conversationPageLoading) return
+        coroutineScope.launch {
+            conversationPageLoading = true
+            try {
+                val conversations = conversationRepository ?: error("protected_memory_unavailable")
+                val page = conversations.conversationTurnPage(scopeId, query.trim(), cursor, limit = 30)
+                conversationTurns = (conversationTurns + page.turns).distinctBy { it.turnId }
+                conversationNextCursor = page.nextBeforeSequence
+            } catch (_: Exception) {
+                archiveError = true
+            } finally {
+                conversationPageLoading = false
+            }
         }
     }
 
@@ -533,6 +557,15 @@ internal fun WorkingMemoryScreen(state: CaptureSessionState, detail: (String) ->
                 Text(turn.matchedSnippet ?: turn.userMessage.take(280), color = colors.ink, style = MaterialTheme.typography.bodyLarge)
                 Text(DateFormatters.memoryDate(turn.createdAtMillis), style = MaterialTheme.typography.bodySmall, color = colors.muted)
                 Text(s(R.string.memory_open_dialogue), style = MaterialTheme.typography.labelSmall, color = colors.accent)
+            }
+        }
+        if (conversationNextCursor != null) {
+            OutlinedButton(
+                onClick = ::loadMoreConversationTurns,
+                enabled = !conversationPageLoading,
+                modifier = Modifier.fillMaxWidth().testTag("memory_conversation_load_more"),
+            ) {
+                Text(if (conversationPageLoading) s(R.string.capture_loading) else s(R.string.memory_conversation_load_more))
             }
         }
         OutlinedButton(onClick = manage, modifier = Modifier.fillMaxWidth().testTag("memory_manage")) { Text(s(R.string.working_manage)) }
