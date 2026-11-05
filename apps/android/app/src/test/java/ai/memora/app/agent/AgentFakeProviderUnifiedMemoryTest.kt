@@ -14,6 +14,7 @@ import ai.memora.app.data.protectedstore.ProtectedDomainRepository
 import ai.memora.app.data.protectedstore.ProtectedMemoryRepository
 import ai.memora.app.data.protectedstore.ProtectedProfileMemoryRepository
 import ai.memora.app.data.protectedstore.ProtectedCaseRepository
+import ai.memora.app.data.protectedstore.PersonAliasRepository
 import ai.memora.app.data.protectedstore.TaskEventRow
 import kotlinx.coroutines.runBlocking
 import java.time.Clock
@@ -34,6 +35,45 @@ import org.robolectric.annotation.Config
 @Config(sdk = [33])
 class AgentFakeProviderUnifiedMemoryTest {
     @get:Rule val databaseRule = UiAgentDatabaseRule()
+
+    @Test fun searchMemoryFindsOnlyActiveSameScopeAliasPhrasesInsideNaturalQueries() = runBlocking {
+        val db = databaseRule.database
+        val scope = "00000000-0000-4000-8000-000000000193"
+        val otherScope = "00000000-0000-4000-8000-000000000194"
+        val domain = ProtectedDomainRepository(db)
+        val aliases = PersonAliasRepository(db)
+        domain.createObject(scope, "synthetic-person-alias-active", DomainKind.PERSON, "Synthetic Canonical Person",
+            null, null, "2026-11-04T08:00:00Z")
+        domain.createObject(scope, "synthetic-person-alias-retired", DomainKind.PERSON, "Synthetic Retired Person",
+            null, null, "2026-11-04T08:00:00Z")
+        domain.createObject(otherScope, "synthetic-person-alias-foreign", DomainKind.PERSON, "Synthetic Foreign Person",
+            null, null, "2026-11-04T08:00:00Z")
+        aliases.add(scope, "synthetic-person-alias-active", "Samir Ustad", sourceTurnId = "synthetic-alias-source")
+        val retired = aliases.add(scope, "synthetic-person-alias-retired", "Old Samir")
+        aliases.retire(scope, retired.aliasId, retired.version)
+        aliases.add(otherScope, "synthetic-person-alias-foreign", "Samir Ustad")
+        val handler = LocalMemoryTools(domain, ProtectedMemoryRepository(db), personAliases = aliases).handlers()
+            .single { it.descriptor.name == "search_memory" }
+
+        val result = handler.read(AgentModelToolCall("synthetic-alias-query", "search_memory", 1,
+            mapOf("query" to "What did Samir, Ustad promise?")), AgentTurnRequest(
+            "synthetic-alias-turn", scope, "synthetic-alias-session", null, "en-US", "Synthetic query"))
+        val aliasHits = result.modelData["person_aliases"] as List<*>
+        assertEquals(1, aliasHits.size)
+        val hit = aliasHits.single() as Map<*, *>
+        assertEquals("synthetic-person-alias-active", hit["person_id"])
+        assertEquals("Synthetic Canonical Person", hit["canonical_name"])
+        assertEquals("exact_alias_phrase", hit["match_mode"])
+        assertEquals("synthetic-alias-source", hit["source_turn_id"])
+        assertEquals(1, aliases.list(scope, "synthetic-person-alias-active").size)
+
+        domain.createObject(scope, "synthetic-canonical-alias-collision", DomainKind.PERSON, "Samir Ustad",
+            null, null, "2026-11-04T08:01:00Z")
+        val ambiguousResult = handler.read(AgentModelToolCall("synthetic-alias-ambiguous-query", "search_memory", 1,
+            mapOf("query" to "What did Samir Ustad promise?")), AgentTurnRequest(
+            "synthetic-alias-ambiguous-turn", scope, "synthetic-alias-session", null, "en-US", "Synthetic ambiguous query"))
+        assertTrue((ambiguousResult.modelData["person_aliases"] as List<*>).isEmpty())
+    }
 
     @Test fun caseSearchPagesBeyondTheNewestHundredRecords() = runBlocking {
         val scope = "00000000-0000-4000-8000-000000000190"

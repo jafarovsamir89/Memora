@@ -151,6 +151,21 @@ internal class PersonAliasRepository(private val db: AgentDatabase) {
         return dao.personAliasesForExactAlias(scope, normalized).filter { it.deletedAtMillis == null }
     }
 
+    /** Finds active owner-entered aliases that occur as a whole contiguous phrase in a natural query. */
+    suspend fun activeAliasesMentionedInQuery(scope: String, raw: String): List<PersonAliasRow> {
+        require(scope.isNotBlank() && raw.length <= 200)
+        val queryTokens = phraseTokens(raw)
+        if (queryTokens.isEmpty()) return emptyList()
+        val canonicalNames = dao.activeObjects(scope)
+            .filter { it.kind == DomainKind.PERSON.name && it.deletedAt == null }
+            .map { normalizeAlias(it.title) }
+            .toSet()
+        return dao.activePersonAliases(scope).filter { alias ->
+            val aliasTokens = phraseTokens(alias.normalizedAlias)
+            alias.normalizedAlias !in canonicalNames && aliasTokens.isNotEmpty() && queryTokens.containsPhrase(aliasTokens)
+        }
+    }
+
     private fun PersonAliasRow.revision(action: String, at: Long) = PersonAliasRevisionRow(
         aliasId = aliasId, version = version, scopeId = scopeId, domainPersonId = domainPersonId,
         action = action, aliasText = aliasText, normalizedAlias = normalizedAlias, actorId = actorId,
@@ -160,6 +175,14 @@ internal class PersonAliasRepository(private val db: AgentDatabase) {
     private fun activeKey(scope: String, normalized: String) = "${scope.length}:$scope:$normalized"
 
     companion object {
+        private val phraseSeparator = Regex("[^\\p{L}\\p{N}]+")
+
+        private fun phraseTokens(value: String): List<String> = normalizeAlias(value)
+            .split(phraseSeparator).filter(String::isNotEmpty)
+
+        private fun List<String>.containsPhrase(phrase: List<String>): Boolean =
+            phrase.size <= size && windowed(phrase.size).any { it == phrase }
+
         internal fun normalizeAlias(value: String): String = Normalizer.normalize(
             Normalizer.normalize(value, Normalizer.Form.NFC).trim().replace(Regex("\\s+"), " ").lowercase(Locale.ROOT),
             Normalizer.Form.NFC,

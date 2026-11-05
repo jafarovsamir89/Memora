@@ -76,10 +76,11 @@ internal class LocalMemoryTools(private val repository: ProtectedDomainRepositor
             val episodes = conversations?.searchEpisodes(turn.scopeId, query, limit = 5).orEmpty()
             val conversationTurns = conversations?.search(turn.scopeId, query, limit = 5).orEmpty()
             val profileFacts = profileMemory?.list(turn.scopeId, query, limit = 8).orEmpty()
-            val aliasHits = personAliases?.exactActiveMatches(turn.scopeId, query).orEmpty().mapNotNull { alias ->
+            val aliasHits = personAliases?.activeAliasesMentionedInQuery(turn.scopeId, query).orEmpty().mapNotNull { alias ->
                 repository.domainObject(turn.scopeId, alias.domainPersonId)?.takeIf { it.kind == DomainKind.PERSON.name && it.deletedAt == null }
                     ?.let { mapOf("person_id" to it.objectId, "canonical_name" to it.title, "alias" to alias.aliasText,
-                        "revision" to alias.version, "source_turn_id" to alias.sourceTurnId) }
+                        "revision" to alias.version, "source_turn_id" to alias.sourceTurnId,
+                        "match_mode" to "exact_alias_phrase") }
             }
             val activity = searchRelatedActivity(turn.scopeId, terms, query)
             return ToolCommitResult(ToolObservationStatus.APPLIED, "evidence_found", mapOf(

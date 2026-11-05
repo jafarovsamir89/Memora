@@ -12,6 +12,8 @@ Synthetic Compose coverage creates 50 same-person cases, checks that an older re
 
 # M20-08 Native validation matrix
 
+**Verified ACT-0200 (2026-11-04):** exact active alias phrase retrieval inside ordinary local memory queries; synthetic checks cover punctuation, retired/foreign-scope/canonical-name collision exclusions plus canonical provenance. Full Gradle: 63 suites / 330 tests; lint 0/73/3; debug/AndroidTest builds and Kotlin compile passed. APK v73 / `1.1.51-memory-alias-search`, SHA-256 `4a58bd16f39aff121c6816c32ede901a940c48fcea66a7ab80f81b84cb7f2bfb`. Host-only; no ADB device. ADR-029/S67. This does not close native acceptance or broad M20-04 retrieval quality.
+
 ## ACT-0192 — Verified: Cases list search and status filters
 
 The local Cases screen has scope-bound search over all non-deleted cases in 100-row pages within one Room read transaction; the UI returns top-30 results, searches exact recent source wording, supports status-filtered repository queries, and has translated empty/clear/limit states. Compose and repository regressions cover source-only queries and a match beyond the first 100 cases. Full Gradle: 63 suites / 328 tests, 0 failures/errors/skips; debug/AndroidTest builds and Kotlin compile passed; lint 0/73/3. APK v69 / `1.1.47-case-search-ui`, SHA-256 `c0cea8fe9234a633c76c2f95bae7cfc2f90236c1369559444463aefae1e763fc`. No schema change. Host synthetic only; ADB empty, no screenshot/device/TalkBack/owner acceptance. This UI slice does not close M20-05.

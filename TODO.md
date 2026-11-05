@@ -1,5 +1,7 @@
 # Memora — полный рабочий чек-лист от идеи до production
 
+**Последний проверенный пакет ACT-0200:** поиск памяти находит точный активный person alias внутри естественного запроса, включая пунктуационные границы; retired и cross-scope alias исключены. Gradle: 63 suites / 330 tests, 0 failures/errors/skips; debug и AndroidTest сборки/Kotlin compile прошли; lint 0/73/3. APK v73 `1.1.51-memory-alias-search`, SHA-256 `4a58bd16f39aff121c6816c32ede901a940c48fcea66a7ab80f81b84cb7f2bfb`. Только synthetic host; устройство не подключено, owner acceptance не заявляется. См. ADR-029/S67. M20-03/04 и P3/P4 остаются частичными.
+
 **Последний проверенный пакет ACT-0198:** Person task picker now promotes tasks whose saved `personLabel` exactly matches the person’s current name or active owner-confirmed alias, using the alias normalization rule. Suggestions are labeled as unconfirmed; the existing owner-confirm dialog remains the only path that writes a revisioned `task_person_link`. Other tasks remain available separately. Full Gradle: 63 suites / 329 tests, 0 failures/errors/skips; debug/AndroidTest builds and AndroidTest Kotlin compile passed; lint 0/73/3. APK v72 / `1.1.50-person-task-link-suggestions`, SHA-256 `9a02e9fbde5da7b6815dd2c8bfd75cceede669353c1eeac57d40d260d059b251`. No schema change; ADB empty, no device/TalkBack/owner acceptance. See ADR-028/S66; M20-03 remains partial.
 
 **Предыдущий пакет ACT-0196:** Person timeline reveals all loaded entries in batches of 40 instead of silently truncating at 40. Full Gradle 63/329, lint 0/73/3; APK v71 `1.1.49-person-history-pages`, SHA-256 `6c04e21787f7978dbe7e63d8fbaa68bd5c32dd57288972334b0bb671b78269d0`. Synthetic Compose only; no device/TalkBack/owner acceptance. M20-05 remains partial; see ADR-027/S65.
@@ -562,3 +564,10 @@
 ### ACT-0198 — M20-03 exact task-label suggestions
 
 - [x] **ACT-0198:** Person task picker promotes tasks whose stored person label exactly matches the selected PERSON title or an active owner-managed alias. These remain visibly unconfirmed suggestions, require the existing explicit owner confirmation to persist `task_person_link`, and do not hide other tasks. Synthetic Compose test uses a normalized exact name plus an unrelated task, verifies both sections, confirms no link exists before user confirmation, then exercises the existing confirmation/link flow. Full Gradle: 63 suites / 329 tests, 0 failures/errors/skips; debug/AndroidTest APK builds and AndroidTest Kotlin compilation passed; lint 0/73/3. APK v72 / `1.1.50-person-task-link-suggestions`, SHA-256 `9a02e9fbde5da7b6815dd2c8bfd75cceede669353c1eeac57d40d260d059b251`. No schema change. ADB empty; device/TalkBack/owner acceptance open. See ADR-028/S66; M20-03 remains partial.
+
+## ACT-0200 — Verified: exact person aliases inside natural memory queries
+
+- [x] `search_memory` detects active owner-managed aliases as complete contiguous Unicode letter/number phrases inside a query, with case/whitespace normalization and punctuation boundaries. Returned identity evidence includes canonical person ID/name, alias revision and source turn.
+- [x] Synthetic host test verifies an embedded alias phrase with punctuation and excludes retired, foreign-scope and canonical-name-colliding aliases.
+- [x] Full Gradle: 63 suites / 330 tests, 0 failures/errors/skips; debug and AndroidTest builds, AndroidTest Kotlin compile; lint 0 errors / 73 warnings / 3 hints. APK v73 / `1.1.51-memory-alias-search`, SHA-256 `4a58bd16f39aff121c6816c32ede901a940c48fcea66a7ab80f81b84cb7f2bfb`.
+- [x] No migration or inferred relationship. ADB empty; no physical-device/TalkBack/owner acceptance. Broad retrieval quality remains open. ADR-029/S67.
