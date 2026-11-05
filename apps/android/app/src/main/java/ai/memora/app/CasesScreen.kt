@@ -48,6 +48,10 @@ import java.util.UUID
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.delay
 
+private const val CASES_PAGE_SIZE = 30
+private const val CASES_MAX_SEARCH_OFFSET = 1_020
+private const val CASES_MAX_LIST_OFFSET = 99_990
+
 /** A local, source-linked view over cases written by the same secretary tools. */
 @Composable
 internal fun CasesScreen(onOpenSecretary: () -> Unit = {}) {
@@ -60,6 +64,8 @@ internal fun CasesScreen(onOpenSecretary: () -> Unit = {}) {
     var records by remember(scopeId) { mutableStateOf<List<CaseRecordRow>>(emptyList()) }
     var query by remember(scopeId) { mutableStateOf("") }
     var statusFilter by remember(scopeId) { mutableStateOf("all") }
+    var pageOffset by remember(scopeId) { mutableIntStateOf(0) }
+    var hasMore by remember(scopeId) { mutableStateOf(false) }
     var refreshVersion by remember(scopeId) { mutableIntStateOf(0) }
     var selected by remember { mutableStateOf<CaseSnapshot?>(null) }
     var selectedSource by remember { mutableStateOf<CaseEvidenceView?>(null) }
@@ -67,13 +73,18 @@ internal fun CasesScreen(onOpenSecretary: () -> Unit = {}) {
     var failed by remember(scopeId) { mutableStateOf(false) }
     var actionFailed by remember { mutableStateOf(false) }
 
-    LaunchedEffect(scopeId, query, statusFilter, refreshVersion) {
+    LaunchedEffect(scopeId, query, statusFilter, refreshVersion, pageOffset) {
         loading = true
         if (query.isNotBlank()) delay(250)
         try {
             val selectedStatus = statusFilter.takeUnless { it == "all" }
-            records = if (query.isBlank()) repository.cases(scopeId, limit = 100, status = selectedStatus)
-                else repository.searchCases(scopeId, query.trim(), limit = 30, status = selectedStatus)
+            val page = if (query.isBlank()) repository.cases(scopeId, limit = CASES_PAGE_SIZE + 1,
+                status = selectedStatus, offset = pageOffset)
+                else repository.searchCases(scopeId, query.trim(), limit = CASES_PAGE_SIZE + 1,
+                    status = selectedStatus, offset = pageOffset)
+            val visiblePage = page.take(CASES_PAGE_SIZE)
+            hasMore = page.size > CASES_PAGE_SIZE
+            records = visiblePage
             failed = false
         } catch (_: Exception) {
             failed = true
@@ -89,6 +100,7 @@ internal fun CasesScreen(onOpenSecretary: () -> Unit = {}) {
                     snapshot.record.title, snapshot.record.summary, status, snapshot.record.nextAction,
                     sourceTurnId = "owner-ui-${UUID.randomUUID()}", now = Instant.now().toString())
                 refreshVersion++
+                pageOffset = 0
                 selected = repository.caseSnapshot(scopeId, snapshot.record.caseId)
                 actionFailed = false
             } catch (_: Exception) {
@@ -103,7 +115,7 @@ internal fun CasesScreen(onOpenSecretary: () -> Unit = {}) {
             style = androidx.compose.material3.MaterialTheme.typography.bodyMedium)
         OutlinedTextField(
             value = query,
-            onValueChange = { query = it.take(200) },
+            onValueChange = { query = it.take(200); pageOffset = 0 },
             modifier = Modifier.fillMaxWidth().padding(top = 12.dp).testTag("cases_search"),
             label = { Text(s(R.string.cases_search_label)) },
             singleLine = true,
@@ -116,14 +128,15 @@ internal fun CasesScreen(onOpenSecretary: () -> Unit = {}) {
             listOf("all", "open", "waiting", "completed", "cancelled").forEach { status ->
                 FilterChip(
                     selected = statusFilter == status,
-                    onClick = { statusFilter = status },
+                    onClick = { statusFilter = status; pageOffset = 0 },
                     label = { Text(caseFilterLabel(status)) },
                     modifier = Modifier.testTag("cases_filter_$status"),
                 )
             }
         }
         when {
-            loading -> Text(s(R.string.ai_loading), color = colors.muted, modifier = Modifier.testTag("cases_loading"))
+            loading && (pageOffset == 0 || records.isEmpty()) -> Text(s(R.string.ai_loading), color = colors.muted,
+                modifier = Modifier.testTag("cases_loading"))
             failed -> EmptyState(s(R.string.working_no_data), s(R.string.cases_load_error))
             records.isEmpty() && query.isBlank() && statusFilter == "all" -> {
                 EmptyState(s(R.string.working_no_data), s(R.string.cases_empty))
@@ -139,27 +152,46 @@ internal fun CasesScreen(onOpenSecretary: () -> Unit = {}) {
                     TextButton(modifier = Modifier.testTag("cases_clear_filters"), onClick = {
                         query = ""
                         statusFilter = "all"
+                        pageOffset = 0
                     }) { Text(s(R.string.cases_clear_filters)) }
                 }
             }
-            else -> records.forEach { record ->
-                MemoraCard(
-                    onClick = {
-                        coroutineScope.launch { selected = repository.caseSnapshot(scopeId, record.caseId) }
-                    },
-                    modifier = Modifier.testTag("case_${record.caseId}"),
-                ) {
-                    Text(record.title, color = colors.ink, style = androidx.compose.material3.MaterialTheme.typography.titleMedium)
-                    Text(caseStatusLabel(record.status), color = colors.green,
-                        style = androidx.compose.material3.MaterialTheme.typography.labelMedium)
-                    record.summary?.takeIf(String::isNotBlank)?.let { summary ->
-                        Text(summary.take(360) + if (summary.length > 360) "…" else "", color = colors.muted,
-                            style = androidx.compose.material3.MaterialTheme.typography.bodyMedium)
+            else -> {
+                if (!loading && pageOffset > 0) {
+                    TextButton(modifier = Modifier.testTag("cases_load_newer"), onClick = {
+                        pageOffset = (pageOffset - CASES_PAGE_SIZE).coerceAtLeast(0)
+                    }) { Text(s(R.string.cases_load_newer)) }
+                }
+                records.forEach { record ->
+                    MemoraCard(
+                        onClick = {
+                            coroutineScope.launch { selected = repository.caseSnapshot(scopeId, record.caseId) }
+                        },
+                        modifier = Modifier.testTag("case_${record.caseId}"),
+                    ) {
+                        Text(record.title, color = colors.ink, style = androidx.compose.material3.MaterialTheme.typography.titleMedium)
+                        Text(caseStatusLabel(record.status), color = colors.green,
+                            style = androidx.compose.material3.MaterialTheme.typography.labelMedium)
+                        record.summary?.takeIf(String::isNotBlank)?.let { summary ->
+                            Text(summary.take(360) + if (summary.length > 360) "…" else "", color = colors.muted,
+                                style = androidx.compose.material3.MaterialTheme.typography.bodyMedium)
+                        }
+                        record.nextAction?.takeIf(String::isNotBlank)?.let { action ->
+                            Text("${s(R.string.case_next_action)}: $action", color = colors.ink,
+                                style = androidx.compose.material3.MaterialTheme.typography.bodyMedium)
+                        }
                     }
-                    record.nextAction?.takeIf(String::isNotBlank)?.let { action ->
-                        Text("${s(R.string.case_next_action)}: $action", color = colors.ink,
-                            style = androidx.compose.material3.MaterialTheme.typography.bodyMedium)
-                    }
+                }
+                val maxOffset = if (query.isBlank()) CASES_MAX_LIST_OFFSET else CASES_MAX_SEARCH_OFFSET
+                if (loading && pageOffset > 0) {
+                    Text(s(R.string.ai_loading), color = colors.muted, modifier = Modifier.testTag("cases_loading_more"))
+                } else if (hasMore && pageOffset < maxOffset) {
+                    TextButton(modifier = Modifier.testTag("cases_load_older"), onClick = {
+                        pageOffset = (pageOffset + CASES_PAGE_SIZE).coerceAtMost(maxOffset)
+                    }) { Text(s(R.string.cases_load_older)) }
+                } else if (hasMore) {
+                    Text(s(R.string.cases_list_limit_reached), color = colors.muted,
+                        modifier = Modifier.testTag("cases_list_limit_reached"))
                 }
             }
         }

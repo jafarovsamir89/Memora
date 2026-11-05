@@ -375,7 +375,10 @@
     <string name="saved_objects_details_truncated">Only the beginning of this long record is shown.</string>
     <string name="cases_subtitle">Ongoing cases and their verified linked sources.</string>
     <string name="cases_search_label">Search cases, people, or source quotes</string>
-    <string name="cases_search_limit_hint">Search shows up to 30 closest matches.</string>
+    <string name="cases_search_limit_hint">Search results are shown 30 cases at a time.</string>
+    <string name="cases_load_older">Show older cases</string>
+    <string name="cases_load_newer">Show newer cases</string>
+    <string name="cases_list_limit_reached">The display limit was reached. Narrow your search.</string>
     <string name="cases_filter_all">All</string>
     <string name="cases_no_matches">No cases match this search and filter.</string>
     <string name="cases_clear_filters">Clear filters</string>

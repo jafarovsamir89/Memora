@@ -326,9 +326,10 @@ internal class ProtectedCaseRepository(private val db: AgentDatabase) {
         check(dao.caseEvidence(scope, caseId).none { it.evidenceId == row.evidenceId }) { "case_source_remove_readback_mismatch" }
     }
 
-    suspend fun cases(scope: String, limit: Int = 30, status: String? = null): List<CaseRecordRow> {
-        require(scope.isNotBlank() && limit in 1..100 && (status == null || status in CASE_STATUSES))
-        return if (status == null) dao.activeCases(scope, limit) else dao.casesByStatus(scope, status, limit)
+    suspend fun cases(scope: String, limit: Int = 30, status: String? = null, offset: Int = 0): List<CaseRecordRow> {
+        require(scope.isNotBlank() && limit in 1..100 && offset in 0..MAX_CASE_LIST_OFFSET &&
+            (status == null || status in CASE_STATUSES))
+        return dao.activeCasesPage(scope, status, limit, offset)
     }
 
     /** Returns the newest active cases explicitly linked to a person, independent of other cases in the scope. */
@@ -382,16 +383,20 @@ internal class ProtectedCaseRepository(private val db: AgentDatabase) {
         return CaseSnapshot(record, participants, evidence, timeline)
     }
 
-    suspend fun searchCases(scope: String, query: String, limit: Int = 8, status: String? = null): List<CaseRecordRow> {
-        require(scope.isNotBlank() && query.length <= 200 && limit in 1..30 && (status == null || status in CASE_STATUSES))
+    suspend fun searchCases(scope: String, query: String, limit: Int = 8, status: String? = null,
+        offset: Int = 0): List<CaseRecordRow> {
+        require(scope.isNotBlank() && query.length <= 200 && limit in 1..31 && offset in 0..MAX_CASE_SEARCH_OFFSET &&
+            offset + limit <= MAX_CASE_SEARCH_OFFSET + 31 && (status == null || status in CASE_STATUSES))
         val terms = caseSearchTerms(query)
-        if (terms.isEmpty()) return if (query.isBlank()) cases(scope, limit, status) else emptyList()
+        if (terms.isEmpty()) return if (query.isBlank()) cases(scope, limit, status, offset) else emptyList()
+        val pageOffset = offset
+        val windowEnd = pageOffset + limit
         return db.withTransaction {
             val bestMatches = mutableListOf<Pair<CaseRecordRow, Int>>()
-            var offset = 0
+            var scanOffset = 0
             var page: List<CaseRecordRow>
             do {
-                page = dao.activeCasesPage(scope, status, CASE_SEARCH_PAGE_SIZE, offset)
+                page = dao.activeCasesPage(scope, status, CASE_SEARCH_PAGE_SIZE, scanOffset)
                 val recentRevisionsByCase = page.associate { record ->
                     record.caseId to dao.caseRevisions(record.caseId).takeLast(MAX_CASE_SOURCE_SEARCH_REVISIONS)
                 }
@@ -420,13 +425,13 @@ internal class ProtectedCaseRepository(private val db: AgentDatabase) {
                         bestMatches += record to (matched * 100 / terms.size + titleMatches * 15)
                     }
                 }
-                val rankedPage = bestMatches.sortedWith(CASE_SEARCH_RANKING).take(limit)
+                val rankedPage = bestMatches.sortedWith(CASE_SEARCH_RANKING).take(windowEnd)
                 bestMatches.clear()
                 bestMatches.addAll(rankedPage)
-                offset += page.size
+                scanOffset += page.size
             }
             while (page.size == CASE_SEARCH_PAGE_SIZE)
-            bestMatches.sortedWith(CASE_SEARCH_RANKING).map { it.first }
+            bestMatches.sortedWith(CASE_SEARCH_RANKING).drop(pageOffset).take(limit).map { it.first }
         }
     }
 
@@ -539,10 +544,13 @@ internal class ProtectedCaseRepository(private val db: AgentDatabase) {
     private fun sortTime(value: String): Long = runCatching { Instant.parse(value).toEpochMilli() }.getOrDefault(0L)
 
     private companion object {
+        const val MAX_CASE_LIST_OFFSET = 99_990
+        const val MAX_CASE_SEARCH_OFFSET = 1_020
         const val MAX_CASE_SOURCE_SEARCH_REVISIONS = 3
         const val CASE_SEARCH_PAGE_SIZE = 100
         val CASE_SEARCH_RANKING = compareByDescending<Pair<CaseRecordRow, Int>> { it.second }
             .thenByDescending { it.first.updatedAt }.thenBy { it.first.title.lowercase(Locale.ROOT) }
+            .thenBy { it.first.caseId }
         val CASE_STATUSES = setOf("open", "waiting", "completed", "cancelled")
         val CASE_SEARCH_SEPARATOR = Regex("[^\\p{L}\\p{N}]+")
         val CASE_SEARCH_MARKS = Regex("\\p{M}+")

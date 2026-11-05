@@ -9,6 +9,7 @@ import androidx.compose.ui.test.*
 import androidx.compose.ui.test.junit4.v2.createComposeRule
 import androidx.test.core.app.ApplicationProvider
 import ai.memora.app.data.protectedstore.DomainKind
+import ai.memora.app.data.protectedstore.CaseRecordRow
 import ai.memora.app.data.protectedstore.MemoryRevisionRow
 import ai.memora.app.data.protectedstore.MemorySourceRow
 import ai.memora.app.data.protectedstore.CalendarInput
@@ -37,6 +38,69 @@ import java.io.File
 class CasesAndPersonCardTest {
     @get:Rule(order = 0) val databaseRule = UiAgentDatabaseRule()
     @get:Rule(order = 1) val compose = createComposeRule()
+
+    @Test fun caseSearchPagesKeepStableRankOrderWithoutDuplicateRows() = runBlocking {
+        val scope = AgentVoiceTurnProcessor(ApplicationProvider.getApplicationContext<Context>()).conversationScopeId()
+        val dao = databaseRule.database.protectedStoreDao()
+        repeat(67) { index ->
+            val time = java.time.Instant.parse("2026-11-04T08:00:00Z").plusSeconds(index.toLong()).toString()
+            dao.insertCase(CaseRecordRow("synthetic-case-search-page-%02d".format(index), scope,
+                "Synthetic gearbox case", "Fictional result", "open", null, 1,
+                "synthetic-case-search-page-source-$index", time, time, null))
+        }
+
+        val repository = ProtectedCaseRepository(databaseRule.database)
+        val first = repository.searchCases(scope, "gearbox", limit = 31, offset = 0).take(30)
+        val second = repository.searchCases(scope, "gearbox", limit = 31, offset = 30).take(30)
+        val third = repository.searchCases(scope, "gearbox", limit = 31, offset = 60).take(30)
+        assertEquals(30, first.size)
+        assertEquals(30, second.size)
+        assertEquals(7, third.size)
+        assertEquals(emptySet<String>(), first.map { it.caseId }.toSet().intersect(second.map { it.caseId }.toSet()))
+        assertEquals("synthetic-case-search-page-66", first.first().caseId)
+        assertEquals("synthetic-case-search-page-36", second.first().caseId)
+        assertEquals("synthetic-case-search-page-06", third.first().caseId)
+    }
+
+    @Test fun casesScreenCanRevealSearchMatchesPastFirstThirty() = runBlocking<Unit> {
+        val context = ApplicationProvider.getApplicationContext<Context>()
+        val scope = AgentVoiceTurnProcessor(context).conversationScopeId()
+        val dao = databaseRule.database.protectedStoreDao()
+        repeat(35) { index ->
+            val time = java.time.Instant.parse("2026-11-04T08:00:00Z").plusSeconds(index.toLong()).toString()
+            dao.insertCase(CaseRecordRow("synthetic-case-screen-page-%02d".format(index), scope,
+                "Synthetic gearbox case", "Fictional result", "open", null, 1,
+                "synthetic-case-screen-page-source-$index", time, time, null))
+        }
+        compose.setContent {
+            CompositionLocalProvider(LocalStrings provides context.resources, LocalAgentDatabaseOverride provides databaseRule.database) {
+                MemoraTheme("light") { CasesScreen() }
+            }
+        }
+        compose.waitUntil(10_000) {
+            compose.onAllNodesWithTag("case_synthetic-case-screen-page-34").fetchSemanticsNodes().isNotEmpty()
+        }
+        compose.onNodeWithTag("cases_search").performTextInput("gearbox")
+        compose.waitUntil(10_000) {
+            compose.onAllNodesWithTag("cases_load_older").fetchSemanticsNodes().isNotEmpty() &&
+                compose.onAllNodesWithTag("cases_loading").fetchSemanticsNodes().isEmpty()
+        }
+        compose.onNodeWithTag("case_synthetic-case-screen-page-00").assertDoesNotExist()
+        compose.onNodeWithTag("cases_load_older").performScrollTo().performClick()
+        compose.waitUntil(10_000) {
+            compose.onAllNodesWithTag("case_synthetic-case-screen-page-00").fetchSemanticsNodes().isNotEmpty() &&
+                compose.onAllNodesWithTag("cases_loading_more").fetchSemanticsNodes().isEmpty()
+        }
+        compose.onNodeWithTag("case_synthetic-case-screen-page-00").assertExists()
+        compose.onNodeWithTag("case_synthetic-case-screen-page-34").assertDoesNotExist()
+        compose.onNodeWithTag("cases_load_newer").performScrollTo().performClick()
+        compose.waitUntil(10_000) {
+            compose.onAllNodesWithTag("case_synthetic-case-screen-page-34").fetchSemanticsNodes().isNotEmpty() &&
+                compose.onAllNodesWithTag("cases_loading_more").fetchSemanticsNodes().isEmpty()
+        }
+        compose.onNodeWithTag("case_synthetic-case-screen-page-00").assertDoesNotExist()
+        compose.onNodeWithTag("case_synthetic-case-screen-page-34").assertExists()
+    }
 
     @Test fun casesScreenSearchesVerifiedSourceWordingAndFiltersStatus() = runBlocking<Unit> {
         val context = ApplicationProvider.getApplicationContext<Context>()

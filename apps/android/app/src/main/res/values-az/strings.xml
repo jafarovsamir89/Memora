@@ -375,7 +375,10 @@
     <string name="saved_objects_details_truncated">Uzun qeydin ilk hissəsi göstərilir.</string>
     <string name="cases_subtitle">Davam edən işlər və onlara bağlı təsdiqlənmiş mənbələr.</string>
     <string name="cases_search_label">İş, iştirakçı və ya mənbədə axtar</string>
-    <string name="cases_search_limit_hint">Axtarış ən uyğun 30 işi göstərir.</string>
+    <string name="cases_search_limit_hint">Axtarış nəticələri 30-luq hissələrlə göstərilir.</string>
+    <string name="cases_load_older">Daha köhnə işləri göstər</string>
+    <string name="cases_load_newer">Daha yeni işləri göstər</string>
+    <string name="cases_list_limit_reached">Göstərmə həddinə çatdınız. Axtarışı dəqiqləşdirin.</string>
     <string name="cases_filter_all">Hamısı</string>
     <string name="cases_no_matches">Bu axtarış və filtrə uyğun iş tapılmadı.</string>
     <string name="cases_clear_filters">Filtrləri təmizlə</string>

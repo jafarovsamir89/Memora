@@ -375,7 +375,10 @@
     <string name="saved_objects_details_truncated">Показано начало длинной записи.</string>
     <string name="cases_subtitle">Текущие дела и связанные подтверждённые источники.</string>
     <string name="cases_search_label">Поиск по делам, участникам и цитатам</string>
-    <string name="cases_search_limit_hint">Поиск показывает до 30 наиболее подходящих дел.</string>
+    <string name="cases_search_limit_hint">Результаты поиска показываются страницами по 30 дел.</string>
+    <string name="cases_load_older">Показать более старые дела</string>
+    <string name="cases_load_newer">Показать более новые дела</string>
+    <string name="cases_list_limit_reached">Достигнут предел выдачи. Уточните поиск.</string>
     <string name="cases_filter_all">Все</string>
     <string name="cases_no_matches">По этому запросу и фильтру дел не найдено.</string>
     <string name="cases_clear_filters">Сбросить фильтры</string>
