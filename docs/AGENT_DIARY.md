@@ -1061,3 +1061,7 @@ ACT-0176 implementation and evidence were committed as `cea4906aec0cd5778c339794
 ### ACT-0179 · 2026-11-04 · Git handoff ACT-0178
 
 ACT-0178 was committed as `811273c989386dc1d8ad2ac82b3cab413752ed7a` (`fix(memory): guard archive page refresh`) and pushed to `origin/main`. After `git fetch`, local HEAD, `origin/main`, and `git ls-remote origin refs/heads/main` match this commit. Only owner-owned untracked ADR-012 remains; it is untouched and unstaged. APK v62 / `1.1.40-memory-archive-robustness`, SHA-256 `3533b9ddbe6f5cd7f9bfa7b45cdd51d63cd9fbf0f30638c95c57030727579903`; full suite 60/310 and lint 0/72/3 passed. The archive work is a P3 slice, not closure. Next engineering work should continue open P3/P4 acceptance; consult relevant contracts before moving to a new phase.
+
+### ACT-0187 — Git handoff for ACT-0186
+
+Implementation/docs commit `2c283e7a6c11b3a1229367c9106a04f14258ff3b` (`feat(memory): anchor profile facts to exact source spans`) was pushed to `origin/main`. `git fetch`, local HEAD, `origin/main`, and `git ls-remote origin refs/heads/main` agreed at this hash. Owner-owned untracked ADR-012 remains untouched and excluded. ACT-0186 verification and limitations remain as recorded above; P3/P4 and device acceptance remain open.

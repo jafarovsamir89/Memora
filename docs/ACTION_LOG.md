@@ -1468,3 +1468,7 @@ Final comprehensive command `JAVA_TOOL_OPTIONS='-XX:TieredStopAtLevel=1' ./gradl
 ### ACT-0186 verification closeout
 
 Final comprehensive verification passed as recorded above. `git diff --check` is clean, Room schema 20 contains nullable `sourceStartUtf16`/`sourceEndUtf16`, and `aapt dump badging` confirms package `ai.memora.app`, versionCode 66 and versionName `1.1.44-profile-source-spans`. Worktree currently contains only the implementation/docs for this package plus pre-existing owner-owned untracked ADR-012. Commit/push confirmation will be recorded separately after Git commands.
+
+### ACT-0187 — 2026-11-04 — Git handoff for ACT-0186
+
+Implementation/docs commit `2c283e7a6c11b3a1229367c9106a04f14258ff3b` (`feat(memory): anchor profile facts to exact source spans`) was pushed to `origin/main`. After push and fetch, local HEAD, `origin/main`, and `git ls-remote origin refs/heads/main` all matched. The pre-existing owner-owned untracked ADR-012 was left untouched and excluded. Worktree before this handoff contained only those two status docs plus ADR-012; no code changed after the full verification run. Next P3/P4 tasks and limitations are in ACT-0186 / current diary checkpoint.
