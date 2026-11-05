@@ -1,10 +1,12 @@
 # Memora — дневник ведущего инженера
 
-### ACT-0186 — Exact source spans for profile memory
+### Current checkpoint — ACT-0188
 
 **Current verified checkpoint ACT-0188 (2026-11-04):** case create/update tools may provide an optional exact excerpt from the current user message. The repository verifies exact contiguous text locally, stores nullable UTF-16 start/end-exclusive offsets on each revision, and UI/timeline/tool reads derive text from the canonical local conversation. Missing/mismatched quotes retain normal turn provenance without exact excerpt. Room migration 20→21 is additive; schema21 is generated and shows both fields nullable. Review found portable backup still pinned to Room18 though current DB had reached schema20. New exports now use schema21; parser accepts current21 and legacy18 only, staged Room migration/readback requires current21. Room19/20 were never the active export format and remain rejected. Full command `JAVA_TOOL_OPTIONS='-XX:TieredStopAtLevel=1' ./gradlew :app:testDebugUnitTest :app:assembleDebug :app:assembleDebugAndroidTest :app:compileDebugAndroidTestKotlin :app:lintDebug --no-daemon --console=plain --max-workers=1` passed: 63 suites / 326 tests, 0 failures/errors/skips; debug and AndroidTest APK builds, AndroidTest Kotlin compile passed; lint 0 errors / 73 warnings / 3 hints. APK `ai.memora.app` v67 / `1.1.45-case-source-spans`, SHA-256 `9954707dfbbf0b3d747718f1379cfab224d6b811849cd090cfc1ee1f82c3eabb`; `aapt` confirmed package/version. Host tests cover quote mismatch and source excerpt, payload compatibility. Android SQLCipher migration/legacy import probe compiled but was not run; `adb devices -l` is empty. No device, TalkBack, owner acceptance, or portable legacy round-trip is claimed. Quote match indicates source location, not semantic truth/confidence. P3/P4 and whole-app backup remain open. Owner-owned ADR-012 remains untouched and excluded. Next: consider next independent source-integrity or case correction slice, then run one combined verification/build pass.
 
-**Previous verified checkpoint ACT-0186 (2026-11-04):** profile-memory exact-source span implementation and verification evidence are preserved below in ACT-0186/action log; MEM-12.13/P3 remains open. See ADR-022 and S60.
+**Git handoff ACT-0189:** ACT-0188 commit `a7b2de1145899591c687de41b3f9e62c6a4a63b2` is on `origin/main`; fetch, local HEAD, tracking ref, and `git ls-remote` matched. Owner-owned ADR-012 remains untracked and untouched. Working tree has no project changes pending other than that pre-existing file.
+
+**Previous verified checkpoint ACT-0186 (2026-11-04):** profile-memory exact-source span implementation and verification evidence are preserved in the action log. MEM-12.13/P3 remains open. See ADR-022 and S60.
 
 ### ACT-0184 — Table schema preview, history and reversible restore
 
