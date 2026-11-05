@@ -430,6 +430,7 @@
     <string name="case_reopen">Открыть снова</string>
     <string name="case_update_error">Не удалось сохранить изменение. Обновите дело.</string>
     <string name="case_timeline_update">Дело обновлено</string>
+    <string name="case_source_exact_excerpt">Точная цитата: «%1$s»</string>
     <string name="person_timeline">История человека</string>
     <string name="person_related_records">Связанные записи</string>
     <string name="person_related_kind_person">Человек</string>

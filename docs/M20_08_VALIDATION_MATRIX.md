@@ -1,5 +1,11 @@
 # M20-08 Native validation matrix
 
+## ACT-0188 — Case source spans and backup schema compatibility
+
+Case `create_case` / substantive `update_case` may provide an optional exact quote from the current user turn. Exact substring matching occurs locally; only nullable UTF-16 offsets are persisted on `case_revision`, and the excerpt is derived from canonical conversation text in case timeline/UI/tool reads. A mismatch remains unanchored. Room 20→21 is additive; generated schema21 confirms nullable offsets. New portable SQLCipher snapshots use current schema21. Parser accepts schema21 and legacy18 only; staged Room validation must migrate/read back as21. Room19/20 snapshots are not accepted because they were not produced by the pinned historical backup exporter. This schema compatibility change does not make the Room-only artifact a full all-store Memora backup.
+
+Full Gradle command passed: 63 suites / 326 tests, 0 failures/errors/skips; debug and AndroidTest APK builds, AndroidTest Kotlin compile passed; lint 0 errors / 73 warnings / 3 hints. APK v67 / `1.1.45-case-source-spans`, SHA-256 `9954707dfbbf0b3d747718f1379cfab224d6b811849cd090cfc1ee1f82c3eabb`. Host synthetic tests and build only. Android migration/Room18 legacy-import probe compiled but was not run; no ADB device, owner or TalkBack acceptance. P3/P4 remain open.
+
 ## ACT-0184 — Table schema preview and restore
 
 Additive-field preview, schema revision history, confirmed restore as a new revision and hidden row JSON preservation through edits are implemented. Full Gradle passed: 63 suites / 324 tests, 0 failures/errors/skips; debug/AndroidTest builds and AndroidTest Kotlin compilation passed; lint 0/73/3. APK v65 SHA-256 `c63e99cda02c55f9c416de85a15b95284260a0c9001589c0b0391728f0da71b8`. Synthetic host coverage proves add/undo/redo, hidden row value retention, stale-version/scope/linked-view rejection and Compose preview/history. Device/TalkBack/owner acceptance remains separate.

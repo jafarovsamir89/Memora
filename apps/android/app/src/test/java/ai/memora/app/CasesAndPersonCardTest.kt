@@ -52,7 +52,8 @@ class CasesAndPersonCardTest {
             "2026-11-03T09:10:00Z", "2026-11-03T09:10:00Z")
         cases.createCase(scope, "synthetic-case-bmw", "Synthetic BMW repair", "Fictional repair details",
             nextAction = "Wait for fictional parts", sourceTurnId = "00000000-0000-4000-8000-000000000201",
-            now = "2026-11-03T09:00:00Z")
+            now = "2026-11-03T09:00:00Z", sourceText = "Synthetic: the blue replacement part arrives Friday.",
+            sourceQuote = "the blue replacement part arrives Friday")
         cases.addParticipant(scope, "synthetic-case-bmw", "synthetic-case-person", role = "mechanic",
             participantId = "synthetic-participant", now = "2026-11-03T09:01:00Z")
         cases.addEvidence(scope, "synthetic-case-bmw", "money_event", "synthetic-case-receipt", "advance",
@@ -76,6 +77,7 @@ class CasesAndPersonCardTest {
         compose.onNodeWithTag("case_synthetic-case-bmw").performScrollTo().performClick()
         compose.waitUntil(10_000) { compose.onAllNodesWithText("Money received: Synthetic Mechanic").fetchSemanticsNodes().size == 2 }
         compose.onNodeWithTag("case_detail_title").assertTextEquals("Synthetic BMW repair")
+        compose.onNodeWithTag("case_timeline_exact_excerpt_case:synthetic-case-bmw:1").assertExists()
         compose.onNodeWithText("Synthetic Mechanic").assertExists()
         compose.onAllNodesWithText("Money received: Synthetic Mechanic").assertCountEquals(2)
         compose.onAllNodesWithText("250 AZN").assertCountEquals(2)

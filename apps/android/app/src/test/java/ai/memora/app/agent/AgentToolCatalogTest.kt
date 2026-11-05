@@ -75,6 +75,9 @@ class AgentToolCatalogTest {
 
         val createCase = requireNotNull(AgentToolCatalog.find("create_case", 1))
         assertEquals(setOf("title"), createCase.parameters.filterNot { it.optional }.map { it.name }.toSet())
+        assertTrue(createCase.optionalParameters.contains("source_quote"))
+        val updateCase = requireNotNull(AgentToolCatalog.find("update_case", 1))
+        assertTrue(updateCase.optionalParameters.contains("source_quote"))
         val linkSource = requireNotNull(AgentToolCatalog.find("link_case_source", 1))
         assertEquals(setOf("case_id", "source_kind", "source_id"), linkSource.parameters.filterNot { it.optional }.map { it.name }.toSet())
         assertEquals(setOf("money_event", "domain_object", "calendar_event", "task", "memory_revision"),

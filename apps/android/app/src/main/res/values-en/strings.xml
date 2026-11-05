@@ -430,6 +430,7 @@
     <string name="case_reopen">Reopen</string>
     <string name="case_update_error">The change could not be saved. Reload the case.</string>
     <string name="case_timeline_update">Case updated</string>
+    <string name="case_source_exact_excerpt">Exact source: “%1$s”</string>
     <string name="person_timeline">Person timeline</string>
     <string name="person_related_records">Linked records</string>
     <string name="person_related_kind_person">Person</string>

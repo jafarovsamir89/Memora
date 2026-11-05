@@ -34,6 +34,7 @@ internal data class CaseTimelineEntry(
     val sourceId: String,
     val sourceRevisionId: String?,
     val eventKind: String? = null,
+    val sourceExcerpt: String? = null,
 )
 
 internal data class CaseSnapshot(
@@ -181,8 +182,14 @@ internal class ProtectedCaseRepository(private val db: AgentDatabase) {
         nextAction: String? = null,
         sourceTurnId: String,
         now: String = Instant.now().toString(),
+        sourceText: String? = null,
+        sourceQuote: String? = null,
     ): CaseRecordRow = db.withTransaction {
         validateCase(scope, caseId, title, summary, status, nextAction, sourceTurnId, now)
+        val sourceRange = sourceText?.let { text ->
+            ensureCaseSourceTurn(scope, sourceTurnId, text, Instant.parse(now).toEpochMilli())
+            exactSourceRange(text, sourceQuote)
+        }
         val normalizedTitle = title.trim()
         val normalizedSummary = summary.normalizedOptional()
         val normalizedNextAction = nextAction.normalizedOptional()
@@ -195,7 +202,7 @@ internal class ProtectedCaseRepository(private val db: AgentDatabase) {
         val row = CaseRecordRow(caseId, scope, normalizedTitle, normalizedSummary, status, normalizedNextAction,
             1, sourceTurnId, now, now, null)
         dao.insertCase(row)
-        val revision = caseRevision(row, sourceTurnId, now)
+        val revision = caseRevision(row, sourceTurnId, now, sourceRange?.first, sourceRange?.second)
         dao.insertCaseRevision(revision)
         check(dao.caseRecord(scope, caseId) == row && dao.caseRevisions(caseId).singleOrNull() == revision) { "case_create_readback_mismatch" }
         row
@@ -211,10 +218,16 @@ internal class ProtectedCaseRepository(private val db: AgentDatabase) {
         nextAction: String?,
         sourceTurnId: String,
         now: String = Instant.now().toString(),
+        sourceText: String? = null,
+        sourceQuote: String? = null,
     ): CaseRecordRow = db.withTransaction {
         val current = dao.caseRecord(scope, caseId) ?: error("case_not_found")
         check(current.deletedAt == null && current.version == expectedVersion && expectedVersion < Long.MAX_VALUE) { "case_version_conflict" }
         validateCase(scope, caseId, title, summary, status, nextAction, sourceTurnId, now)
+        val sourceRange = sourceText?.let { text ->
+            ensureCaseSourceTurn(scope, sourceTurnId, text, Instant.parse(now).toEpochMilli())
+            exactSourceRange(text, sourceQuote)
+        }
         val nextVersion = expectedVersion + 1
         val normalizedTitle = title.trim()
         val normalizedSummary = summary.normalizedOptional()
@@ -222,7 +235,7 @@ internal class ProtectedCaseRepository(private val db: AgentDatabase) {
         check(dao.updateCase(scope, caseId, expectedVersion, nextVersion, normalizedTitle, normalizedSummary,
             status, normalizedNextAction, now) == 1) { "case_version_conflict" }
         val updated = requireNotNull(dao.caseRecord(scope, caseId))
-        val revision = caseRevision(updated, sourceTurnId, now)
+        val revision = caseRevision(updated, sourceTurnId, now, sourceRange?.first, sourceRange?.second)
         dao.insertCaseRevision(revision)
         check(dao.caseRevisions(caseId).lastOrNull() == revision && updated.version == nextVersion) { "case_update_readback_mismatch" }
         updated
@@ -342,9 +355,17 @@ internal class ProtectedCaseRepository(private val db: AgentDatabase) {
         val timeline = buildList {
             dao.caseRevisions(caseId).forEach { revision ->
                 val payload = runCatching { JSONObject(revision.payloadJson) }.getOrNull()
+                val sourceText = dao.conversationMessagesForTurn(scope, revision.sourceTurnId)
+                    .firstOrNull { it.role == "user" }?.message
+                val sourceExcerpt = sourceText?.let { text ->
+                    val start = revision.sourceStartUtf16
+                    val end = revision.sourceEndUtf16
+                    if (start != null && end != null && start >= 0 && end > start && end <= text.length) text.substring(start, end) else null
+                }
                 add(CaseTimelineEntry("case:${revision.caseId}:${revision.version}", revision.changedAt,
                     payload?.optString("title")?.takeIf(String::isNotBlank).orEmpty(),
-                    payload?.optString("summary")?.takeIf(String::isNotBlank), "case_revision", revision.caseId, revision.sourceTurnId))
+                    payload?.optString("summary")?.takeIf(String::isNotBlank), "case_revision", revision.caseId,
+                    revision.sourceTurnId, sourceExcerpt = sourceExcerpt))
             }
             evidence.filter { it.sourceAvailable }.forEach { item ->
                 add(CaseTimelineEntry("evidence:${item.evidence.evidenceId}", item.evidence.occurredAt,
@@ -448,13 +469,33 @@ internal class ProtectedCaseRepository(private val db: AgentDatabase) {
         Instant.parse(now)
     }
 
-    private fun caseRevision(row: CaseRecordRow, sourceTurnId: String, now: String) = CaseRevisionRow(
+    private suspend fun ensureCaseSourceTurn(scope: String, turnId: String, sourceText: String, nowMillis: Long) {
+        require(turnId.isNotBlank() && turnId.length <= 120 && sourceText.isNotBlank() && sourceText.length <= 20_000)
+        val existing = dao.conversationMessagesForTurn(scope, turnId)
+        val user = existing.firstOrNull { it.role == "user" }
+        if (user == null) {
+            check(existing.isEmpty()) { "case_source_turn_conflict" }
+            dao.putConversationMessages(listOf(AgentConversationMessageRow(scopeId = scope, turnId = turnId,
+                role = "user", message = sourceText, createdAtMillis = nowMillis)))
+        } else {
+            check(user.scopeId == scope && user.turnId == turnId && user.message == sourceText) { "case_source_turn_conflict" }
+        }
+    }
+
+    private fun exactSourceRange(sourceText: String, quote: String?): Pair<Int, Int>? {
+        if (quote.isNullOrBlank() || quote.length > 2_000) return null
+        val start = sourceText.indexOf(quote)
+        return if (start < 0) null else start to (start + quote.length)
+    }
+
+    private fun caseRevision(row: CaseRecordRow, sourceTurnId: String, now: String,
+        sourceStartUtf16: Int? = null, sourceEndUtf16: Int? = null) = CaseRevisionRow(
         row.caseId, row.version, JSONObject()
             .put("title", row.title)
             .put("summary", row.summary)
             .put("status", row.status)
             .put("next_action", row.nextAction)
-            .toString(), sourceTurnId, now,
+            .toString(), sourceTurnId, now, sourceStartUtf16, sourceEndUtf16,
     )
 
     private fun String?.normalizedOptional(): String? = this?.trim()?.ifEmpty { null }

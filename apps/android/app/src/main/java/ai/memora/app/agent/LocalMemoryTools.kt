@@ -670,21 +670,25 @@ internal class LocalMemoryTools(private val repository: ProtectedDomainRepositor
             val title = call.arguments["title"] as? String ?: return ToolPreparation.Rejected("invalid_title")
             val summary = call.arguments["summary"] as? String
             val nextAction = call.arguments["next_action"] as? String
+            val sourceQuote = call.arguments["source_quote"] as? String
             if (title.isBlank() || title.length > 200 || summary?.length?.let { it > 4_000 } == true ||
                 nextAction?.length?.let { it > 500 } == true) return ToolPreparation.Rejected("invalid_case")
-            val digest = sha256("case_create\u0000${turn.scopeId}\u0000$title\u0000${summary.orEmpty()}\u0000${nextAction.orEmpty()}\u0000${turn.turnId}")
+            val digest = sha256("case_create\u0000${turn.scopeId}\u0000$title\u0000${summary.orEmpty()}\u0000${nextAction.orEmpty()}\u0000${turn.turnId}\u0000${sourceQuote.orEmpty()}")
             return ToolPreparation.Prepared(PreparedAgentCommand(commandId, digest, emptyMap(), false,
                 CreateCasePayload(turn.scopeId, commandId, title.trim(), summary?.trim()?.ifEmpty { null },
-                    nextAction?.trim()?.ifEmpty { null }, turn.turnId)))
+                    nextAction?.trim()?.ifEmpty { null }, turn.turnId, turn.text, sourceQuote)))
         }
         override suspend fun commit(command: PreparedAgentCommand): ToolCommitResult {
             val payload = command.opaquePayload as? CreateCasePayload ?: return rejected()
             return try {
                 val saved = cases.createCase(payload.scope, payload.caseId, payload.title, payload.summary,
-                    nextAction = payload.nextAction, sourceTurnId = payload.sourceTurnId)
+                    nextAction = payload.nextAction, sourceTurnId = payload.sourceTurnId,
+                    sourceText = payload.sourceText, sourceQuote = payload.sourceQuote)
+                val sourceQuoteVerified = payload.sourceQuote != null && cases.caseSnapshot(payload.scope, payload.caseId)
+                    ?.timeline?.any { it.sourceRevisionId == payload.sourceTurnId && it.sourceExcerpt == payload.sourceQuote } == true
                 ToolCommitResult(ToolObservationStatus.APPLIED, "case_created", mapOf("case_id" to saved.caseId,
                     "title" to saved.title, "status" to saved.status, "version" to saved.version,
-                    "next_action" to saved.nextAction))
+                    "next_action" to saved.nextAction, "source_quote_verified" to sourceQuoteVerified))
             } catch (_: Exception) { ToolCommitResult(ToolObservationStatus.FAILED, "case_create_failed") }
         }
     }
@@ -705,7 +709,9 @@ internal class LocalMemoryTools(private val repository: ProtectedDomainRepositor
                         "detail" to source.detail?.take(300), "available" to source.sourceAvailable) },
                     "timeline" to snapshot.timeline.takeLast(12).map { entry -> mapOf("at" to entry.at,
                         "kind" to entry.sourceKind, "source_id" to entry.sourceId, "revision_id" to entry.sourceRevisionId,
-                        "title" to entry.title, "detail" to entry.detail?.take(300)) })
+                        "title" to entry.title, "detail" to entry.detail?.take(300),
+                        "source_excerpt" to entry.sourceExcerpt?.take(500),
+                        "source_excerpt_verified" to (entry.sourceExcerpt != null)) })
             } }
             return ToolCommitResult(ToolObservationStatus.APPLIED, "cases_loaded", mapOf(
                 "count" to items.size, "truncated" to (matches.size > items.size || items.size >= 8), "cases" to items))
@@ -722,22 +728,28 @@ internal class LocalMemoryTools(private val repository: ProtectedDomainRepositor
             val title = (call.arguments["title"] as? String)?.trim()?.takeIf(String::isNotEmpty) ?: current.title
             val summary = (call.arguments["summary"] as? String)?.trim()?.ifEmpty { null } ?: current.summary
             val status = (call.arguments["status"] as? String) ?: current.status
+            val sourceQuote = call.arguments["source_quote"] as? String
             val clearNext = call.arguments["clear_next_action"] as? Boolean ?: false
             val next = if (clearNext) null else (call.arguments["next_action"] as? String)?.trim()?.ifEmpty { null } ?: current.nextAction
             val hasUpdate = title != current.title || summary != current.summary || status != current.status || next != current.nextAction
             if (!hasUpdate || title.length > 200 || summary?.length?.let { it > 4_000 } == true || next?.length?.let { it > 500 } == true ||
                 status !in setOf("open", "waiting", "completed", "cancelled")) return ToolPreparation.Rejected("invalid_case_update")
-            val digest = sha256("case_update\u0000${turn.scopeId}\u0000$id\u0000${current.version}\u0000$title\u0000${summary.orEmpty()}\u0000$status\u0000${next.orEmpty()}")
+            val digest = sha256("case_update\u0000${turn.scopeId}\u0000$id\u0000${current.version}\u0000$title\u0000${summary.orEmpty()}\u0000$status\u0000${next.orEmpty()}\u0000${sourceQuote.orEmpty()}")
             return ToolPreparation.Prepared(PreparedAgentCommand(commandId, digest, mapOf(id to current.version), false,
-                UpdateCasePayload(turn.scopeId, id, current.version, title, summary, status, next, turn.turnId)))
+                UpdateCasePayload(turn.scopeId, id, current.version, title, summary, status, next, turn.turnId,
+                    turn.text, sourceQuote)))
         }
         override suspend fun commit(command: PreparedAgentCommand): ToolCommitResult {
             val payload = command.opaquePayload as? UpdateCasePayload ?: return rejected()
             return try {
                 val updated = cases.updateCase(payload.scope, payload.caseId, payload.version, payload.title, payload.summary,
-                    payload.status, payload.nextAction, payload.sourceTurnId)
+                    payload.status, payload.nextAction, payload.sourceTurnId,
+                    sourceText = payload.sourceText, sourceQuote = payload.sourceQuote)
+                val sourceQuoteVerified = payload.sourceQuote != null && cases.caseSnapshot(payload.scope, payload.caseId)
+                    ?.timeline?.any { it.sourceRevisionId == payload.sourceTurnId && it.sourceExcerpt == payload.sourceQuote } == true
                 ToolCommitResult(ToolObservationStatus.APPLIED, "case_updated", mapOf("case_id" to updated.caseId,
-                    "status" to updated.status, "version" to updated.version, "next_action" to updated.nextAction))
+                    "status" to updated.status, "version" to updated.version, "next_action" to updated.nextAction,
+                    "source_quote_verified" to sourceQuoteVerified))
             } catch (_: Exception) { ToolCommitResult(ToolObservationStatus.CONFLICT, "case_update_conflict") }
         }
     }
@@ -1694,9 +1706,10 @@ internal class LocalMemoryTools(private val repository: ProtectedDomainRepositor
         val person: String?, val project: String?)
     private data class LinkPayload(val scope: String, val id: String, val from: String, val to: String, val relation: String)
     private data class CreateCasePayload(val scope: String, val caseId: String, val title: String, val summary: String?,
-        val nextAction: String?, val sourceTurnId: String)
+        val nextAction: String?, val sourceTurnId: String, val sourceText: String, val sourceQuote: String?)
     private data class UpdateCasePayload(val scope: String, val caseId: String, val version: Long, val title: String,
-        val summary: String?, val status: String, val nextAction: String?, val sourceTurnId: String)
+        val summary: String?, val status: String, val nextAction: String?, val sourceTurnId: String,
+        val sourceText: String, val sourceQuote: String?)
     private data class AddCaseParticipantPayload(val scope: String, val caseId: String, val personId: String,
         val role: String, val id: String)
     private data class LinkCaseSourcePayload(val scope: String, val caseId: String, val kind: String, val sourceId: String,

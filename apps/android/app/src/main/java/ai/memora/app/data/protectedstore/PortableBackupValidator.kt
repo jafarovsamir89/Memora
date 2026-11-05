@@ -30,7 +30,7 @@ internal object PortableBackupValidator {
     }
 
     fun validate(context: Context, backup: PortableBackupFileCandidate): PortableBackupValidationResult {
-        require(backup.manifest.roomSchemaVersion == PortableBackupPayload.SUPPORTED_ROOM_SCHEMA) {
+        require(PortableBackupPayload.isImportableRoomSchema(backup.manifest.roomSchemaVersion)) {
             "Unsupported Room schema version"
         }
         require(backup.encryptedSnapshotFile.isFile &&
@@ -56,8 +56,8 @@ internal object PortableBackupValidator {
                 firstPassphrase.fill(0)
             }
             val firstReadback = inspect(staged.openHelper.writableDatabase)
-            check(firstReadback.roomSchemaVersion == backup.manifest.roomSchemaVersion) {
-                "Opened snapshot schema does not match manifest"
+            check(firstReadback.roomSchemaVersion == AGENT_DB_SCHEMA_VERSION) {
+                "Opened snapshot did not migrate to the current Room schema"
             }
             staged.close()
             staged = null

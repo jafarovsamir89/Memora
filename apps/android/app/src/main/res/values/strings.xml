@@ -430,6 +430,7 @@
     <string name="case_reopen">Yenidən aç</string>
     <string name="case_update_error">Dəyişiklik saxlanmadı. Yenidən yükləyin.</string>
     <string name="case_timeline_update">İş yeniləndi</string>
+    <string name="case_source_exact_excerpt">Dəqiq mənbə: “%1$s”</string>
     <string name="person_timeline">Şəxsin tarixçəsi</string>
     <string name="person_related_records">Bağlı qeydlər</string>
     <string name="person_related_kind_person">Şəxs</string>

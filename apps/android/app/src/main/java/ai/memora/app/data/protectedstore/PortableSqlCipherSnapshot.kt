@@ -7,7 +7,7 @@ import java.io.File
 /** Creates and validates an encrypted SQLCipher snapshot in app-private no-backup storage. */
 internal object PortableSqlCipherSnapshot {
     private const val ATTACHED_ALIAS = "memora_portable_snapshot"
-    private const val EXPECTED_ROOM_SCHEMA = 18
+    private const val EXPECTED_ROOM_SCHEMA = AGENT_DB_SCHEMA_VERSION
 
     fun export(source: SupportSQLiteDatabase, context: Context, destination: File, snapshotKeyMaterial: ByteArray) {
         require(snapshotKeyMaterial.size == 32) { "Snapshot key material must be 256 bits" }

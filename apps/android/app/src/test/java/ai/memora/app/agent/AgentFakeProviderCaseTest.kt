@@ -97,6 +97,7 @@ class AgentFakeProviderCaseTest {
             "case_source_linked", "case_source_linked", "cases_loaded"),
             result.toolResults.map { it.code })
         assertTrue(result.toolResults.all { it.status == ToolObservationStatus.APPLIED })
+        assertEquals(true, result.toolResults.single { it.name == "create_case" }.modelData["source_quote_verified"])
         val caseId = provider.caseId
         assertNotNull(caseId)
         val snapshot = requireNotNull(ProtectedCaseRepository(db).caseSnapshot(scope, requireNotNull(caseId)))
@@ -127,6 +128,8 @@ class AgentFakeProviderCaseTest {
             .confirmedLink
         assertEquals("synthetic-person-object", confirmedIdentity?.domainPersonId)
         assertTrue(snapshot.timeline.any { it.sourceKind == "case_revision" })
+        assertEquals("track a fictional BMW repair case",
+            snapshot.timeline.single { it.sourceKind == "case_revision" }.sourceExcerpt)
     }
 
     @Test fun caseUpdatesAppendRevisionsRejectStaleWritesAndRespectScope() = runBlocking {
@@ -134,8 +137,14 @@ class AgentFakeProviderCaseTest {
         val scope = "00000000-0000-4000-8000-000000000105"
         val otherScope = "00000000-0000-4000-8000-000000000106"
         val createdAt = "2026-11-03T11:00:00Z"
+        val firstSource = "🙂 Synthetic: confirm delivery of the blue replacement part."
         val first = repository.createCase(scope, "synthetic-case-revision", "Synthetic supply", "Fictional order",
-            nextAction = "Confirm delivery", sourceTurnId = "synthetic-turn-1", now = createdAt)
+            nextAction = "Confirm delivery", sourceTurnId = "synthetic-turn-1", now = createdAt,
+            sourceText = firstSource, sourceQuote = "confirm delivery of the blue replacement part")
+        val firstRevision = databaseRule.database.protectedStoreDao().caseRevisions(first.caseId).single()
+        assertEquals(firstSource.indexOf("confirm delivery"), firstRevision.sourceStartUtf16)
+        assertEquals(firstSource.indexOf("confirm delivery") + "confirm delivery of the blue replacement part".length,
+            firstRevision.sourceEndUtf16)
         assertEquals(first, repository.createCase(scope, first.caseId, first.title, first.summary,
             nextAction = first.nextAction, sourceTurnId = first.sourceTurnId, now = createdAt))
         assertEquals("case_idempotency_conflict", runCatching {
@@ -145,15 +154,27 @@ class AgentFakeProviderCaseTest {
 
         val updated = repository.updateCase(scope, first.caseId, expectedVersion = 1, title = first.title,
             summary = "Fictional order confirmed", status = "waiting", nextAction = "Ask for delivery date",
-            sourceTurnId = "synthetic-turn-2", now = "2026-11-03T11:10:00Z")
+            sourceTurnId = "synthetic-turn-2", now = "2026-11-03T11:10:00Z",
+            sourceText = "Synthetic correction: the blue part will arrive Friday.",
+            sourceQuote = "the blue part will arrive Friday")
         assertEquals(2L, updated.version)
         assertEquals("waiting", updated.status)
+        val snapshot = requireNotNull(repository.caseSnapshot(scope, first.caseId))
+        assertEquals("the blue part will arrive Friday",
+            snapshot.timeline.single { it.sourceRevisionId == "synthetic-turn-2" }.sourceExcerpt)
         assertEquals(2, databaseRule.database.protectedStoreDao().caseRevisions(first.caseId).size)
         assertEquals("case_version_conflict", runCatching {
             repository.updateCase(scope, first.caseId, expectedVersion = 1, title = first.title,
                 summary = first.summary, status = "open", nextAction = first.nextAction,
                 sourceTurnId = "synthetic-stale-turn", now = "2026-11-03T11:11:00Z")
         }.exceptionOrNull()?.message)
+        val unmatched = repository.createCase(scope, "synthetic-case-unmatched-quote", "Synthetic unanchored case", null,
+            sourceTurnId = "synthetic-turn-unmatched", now = "2026-11-03T11:12:00Z",
+            sourceText = "Synthetic current message", sourceQuote = "a quote that was never said")
+        val unmatchedRevision = databaseRule.database.protectedStoreDao().caseRevisions(unmatched.caseId).single()
+        assertNull(unmatchedRevision.sourceStartUtf16)
+        assertNull(unmatchedRevision.sourceEndUtf16)
+        assertNull(requireNotNull(repository.caseSnapshot(scope, unmatched.caseId)).timeline.single().sourceExcerpt)
         assertNull(repository.caseSnapshot(otherScope, first.caseId))
         assertTrue(repository.searchCases(otherScope, "Synthetic").isEmpty())
         assertEquals(2L, requireNotNull(repository.caseSnapshot(scope, first.caseId)).record.version)
@@ -166,7 +187,8 @@ class AgentFakeProviderCaseTest {
             request.tools.forEach(AgentToolCatalog::require)
             return when (call++) {
                 0 -> AgentModelReply.Calls(listOf(AgentModelToolCall("case-create", "create_case", 1,
-                    mapOf("title" to "Synthetic BMW repair", "summary" to "Fictional repair for a test", "next_action" to "Wait for synthetic parts"))))
+                    mapOf("title" to "Synthetic BMW repair", "summary" to "Fictional repair for a test",
+                        "next_action" to "Wait for synthetic parts", "source_quote" to "track a fictional BMW repair case"))))
                 1 -> {
                     caseId = request.previousToolResults.last { it.name == "create_case" }.modelData["case_id"] as String
                     AgentModelReply.Calls(listOf(AgentModelToolCall("case-person", "add_case_participant", 1,

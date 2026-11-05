@@ -8,6 +8,8 @@ import androidx.room.Room
 import androidx.room.RoomDatabase
 import net.zetetic.database.sqlcipher.SupportOpenHelperFactory
 
+internal const val AGENT_DB_SCHEMA_VERSION = 21
+
 internal val AGENT_DB_1_TO_2 = androidx.room.migration.Migration(1, 2) { db ->
     db.execSQL("CREATE TABLE IF NOT EXISTS memory_draft (id INTEGER NOT NULL, text TEXT NOT NULL, version INTEGER NOT NULL, PRIMARY KEY(id))")
     db.execSQL("CREATE TABLE IF NOT EXISTS memory_source (sourceId TEXT NOT NULL, commandId TEXT NOT NULL, draftVersion INTEGER, zone TEXT NOT NULL, origin TEXT NOT NULL, archived INTEGER NOT NULL, organizationVersion INTEGER NOT NULL, scopeId TEXT NOT NULL, PRIMARY KEY(sourceId))")
@@ -176,6 +178,12 @@ internal val AGENT_DB_18_TO_19 = androidx.room.migration.Migration(18, 19) { db 
 internal val AGENT_DB_19_TO_20 = androidx.room.migration.Migration(19, 20) { db ->
     db.execSQL("ALTER TABLE profile_fact_source ADD COLUMN sourceStartUtf16 INTEGER")
     db.execSQL("ALTER TABLE profile_fact_source ADD COLUMN sourceEndUtf16 INTEGER")
+}
+
+/** Add nullable verified source ranges to each case revision. */
+internal val AGENT_DB_20_TO_21 = androidx.room.migration.Migration(20, 21) { db ->
+    db.execSQL("ALTER TABLE case_revision ADD COLUMN sourceStartUtf16 INTEGER")
+    db.execSQL("ALTER TABLE case_revision ADD COLUMN sourceEndUtf16 INTEGER")
 }
 
 /** Minimal command journal. Only identifiers, digest, status and recovery versions are retained. */
@@ -560,6 +568,8 @@ internal data class CaseRevisionRow(
     val payloadJson: String,
     val sourceTurnId: String,
     val changedAt: String,
+    val sourceStartUtf16: Int? = null,
+    val sourceEndUtf16: Int? = null,
 )
 
 @Entity(tableName = "case_participant", indices = [
@@ -961,7 +971,7 @@ internal interface ProtectedStoreDao {
     CaseParticipantRow::class, CaseEvidenceRow::class, PersonAliasRow::class, PersonAliasRevisionRow::class,
     TaskPersonLinkRow::class, TaskPersonLinkRevisionRow::class,
     CalendarPersonLinkRow::class, CalendarPersonLinkRevisionRow::class],
-    version = 20, exportSchema = true)
+    version = AGENT_DB_SCHEMA_VERSION, exportSchema = true)
 internal abstract class AgentDatabase : RoomDatabase() {
     abstract fun protectedStoreDao(): ProtectedStoreDao
     companion object {
@@ -1114,7 +1124,7 @@ internal abstract class AgentDatabase : RoomDatabase() {
                         AGENT_DB_5_TO_6, AGENT_DB_6_TO_7, AGENT_DB_7_TO_8, AGENT_DB_8_TO_9, AGENT_DB_9_TO_10,
                         AGENT_DB_10_TO_11, AGENT_DB_11_TO_12, AGENT_DB_12_TO_13, AGENT_DB_13_TO_14, AGENT_DB_14_TO_15,
                         AGENT_DB_15_TO_16, AGENT_DB_16_TO_17, AGENT_DB_17_TO_18, AGENT_DB_18_TO_19,
-                        AGENT_DB_19_TO_20)
+                        AGENT_DB_19_TO_20, AGENT_DB_20_TO_21)
                     .setJournalMode(RoomDatabase.JournalMode.TRUNCATE)
                     // WAL remains disabled until P1 WAL/SHM privacy and recovery gates pass.
                     .openHelperFactory(SupportOpenHelperFactory(databaseKey, null, false))
@@ -1134,7 +1144,7 @@ internal abstract class AgentDatabase : RoomDatabase() {
             val firstReadback = try {
                 first = openWithKey(context, firstKey, databaseName)
                 PortableBackupValidator.inspectOpenedDatabase(first!!.openHelper.writableDatabase).also {
-                    check(it.roomSchemaVersion == PortableBackupPayload.SUPPORTED_ROOM_SCHEMA) {
+                    check(it.roomSchemaVersion == AGENT_DB_SCHEMA_VERSION) {
                         "Portable restore candidate schema is unsupported"
                     }
                 }

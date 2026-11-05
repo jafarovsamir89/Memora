@@ -150,7 +150,7 @@ object DatabaseStorageProbe {
             check(encryptedContainerHasNoMarker)
             val decoded = PortableBackupPayload.decode(openedPayload)
             openedPayload.fill(0)
-            check(decoded.manifest.roomSchemaVersion == 18)
+            check(decoded.manifest.roomSchemaVersion == AGENT_DB_SCHEMA_VERSION)
             check(decoded.manifest.appVersionCode == appVersionCode)
             check(decoded.manifest.encryptedSnapshotBytes == decoded.encryptedSnapshot.size)
             check(exportResult.manifest == decoded.manifest)
@@ -208,7 +208,7 @@ object DatabaseStorageProbe {
             result.putInt("snapshot_room_user_version", validation.roomSchemaVersion)
             result.putLong("snapshot_synthetic_profile_fact_count", validation.profileFactCount)
             result.putInt("snapshot_table_count", validation.tableCount)
-            check(markerSurvived && validation.roomSchemaVersion == 18 && validation.tableCount == 44)
+            check(markerSurvived && validation.roomSchemaVersion == AGENT_DB_SCHEMA_VERSION && validation.tableCount == 44)
             stage = "reject_wrong_snapshot_key_and_cleanup_staging_db"
             val wrongKey = ByteArray(32) { (it + 1).toByte() }
             val wrongKeyBackup = decoded.copy(
@@ -308,7 +308,7 @@ object DatabaseStorageProbe {
                 val reopened = AgentDatabase.openWithKeyForSyntheticProbe(context, name, key.copyOf())
                 try {
                     val verified = PortableBackupValidator.inspectOpenedDatabase(reopened.openHelper.writableDatabase)
-                    check(verified.roomSchemaVersion == 18 && verified.profileFactCount == 1L)
+                    check(verified.roomSchemaVersion == AGENT_DB_SCHEMA_VERSION && verified.profileFactCount == 1L)
                 } finally {
                     reopened.close()
                 }
@@ -820,7 +820,7 @@ object DatabaseStorageProbe {
                 .addMigrations(AGENT_DB_1_TO_2, AGENT_DB_2_TO_3, AGENT_DB_3_TO_4, AGENT_DB_4_TO_5,
                     AGENT_DB_5_TO_6, AGENT_DB_6_TO_7, AGENT_DB_7_TO_8, AGENT_DB_8_TO_9, AGENT_DB_9_TO_10, AGENT_DB_10_TO_11,
                     AGENT_DB_11_TO_12, AGENT_DB_12_TO_13, AGENT_DB_13_TO_14, AGENT_DB_14_TO_15, AGENT_DB_15_TO_16, AGENT_DB_16_TO_17,
-                    AGENT_DB_17_TO_18, AGENT_DB_18_TO_19, AGENT_DB_19_TO_20)
+                    AGENT_DB_17_TO_18, AGENT_DB_18_TO_19, AGENT_DB_19_TO_20, AGENT_DB_20_TO_21)
                 .setJournalMode(androidx.room.RoomDatabase.JournalMode.TRUNCATE)
                 .openHelperFactory(SupportOpenHelperFactory(key, null, false))
                 .build()
@@ -894,7 +894,7 @@ object DatabaseStorageProbe {
                 .addMigrations(AGENT_DB_1_TO_2, AGENT_DB_2_TO_3, AGENT_DB_3_TO_4, AGENT_DB_4_TO_5,
                     AGENT_DB_5_TO_6, AGENT_DB_6_TO_7, AGENT_DB_7_TO_8, AGENT_DB_8_TO_9, AGENT_DB_9_TO_10, AGENT_DB_10_TO_11,
                     AGENT_DB_11_TO_12, AGENT_DB_12_TO_13, AGENT_DB_13_TO_14, AGENT_DB_14_TO_15, AGENT_DB_15_TO_16, AGENT_DB_16_TO_17,
-                    AGENT_DB_17_TO_18)
+                    AGENT_DB_17_TO_18, AGENT_DB_18_TO_19, AGENT_DB_19_TO_20, AGENT_DB_20_TO_21)
                 .setJournalMode(androidx.room.RoomDatabase.JournalMode.TRUNCATE)
                 .openHelperFactory(SupportOpenHelperFactory(reopenedKey, null, false)).build()
             db.openHelper.writableDatabase
@@ -1292,7 +1292,7 @@ object DatabaseStorageProbe {
                 .addMigrations(AGENT_DB_1_TO_2, AGENT_DB_2_TO_3, AGENT_DB_3_TO_4, AGENT_DB_4_TO_5,
                     AGENT_DB_5_TO_6, AGENT_DB_6_TO_7, AGENT_DB_7_TO_8, AGENT_DB_8_TO_9, AGENT_DB_9_TO_10, AGENT_DB_10_TO_11,
                     AGENT_DB_11_TO_12, AGENT_DB_12_TO_13, AGENT_DB_13_TO_14, AGENT_DB_14_TO_15, AGENT_DB_15_TO_16, AGENT_DB_16_TO_17,
-                    AGENT_DB_17_TO_18)
+                    AGENT_DB_17_TO_18, AGENT_DB_18_TO_19, AGENT_DB_19_TO_20, AGENT_DB_20_TO_21)
                 .setJournalMode(androidx.room.RoomDatabase.JournalMode.TRUNCATE)
                 .openHelperFactory(SupportOpenHelperFactory(upgradedKey, null, false)).build()
             upgraded.openHelper.writableDatabase
@@ -1301,7 +1301,7 @@ object DatabaseStorageProbe {
                     check(cursor.moveToFirst())
                     cursor.getInt(0)
                 }
-                check(schemaVersion == 20)
+                check(schemaVersion == 21)
                 check(upgraded.protectedStoreDao().command("synthetic-v1-command")?.status == "pending")
                 check(upgraded.protectedStoreDao().migrations().isEmpty())
                 val linkTables = upgraded.openHelper.readableDatabase.query(
@@ -1343,6 +1343,14 @@ object DatabaseStorageProbe {
                     "Synthetic correction: detailed replies are better.", nowMillis = 1_800_000_001_000L)
                 check(correctedFact.revision == 2L && correctedFact.revisions.size == 2)
                 check(correctedFact.revisions.last().sourceTurnId == profileCorrectionSource)
+                val caseRepository = ProtectedCaseRepository(upgraded)
+                val caseText = "Synthetic migration probe: the blue part arrives Friday."
+                val case = caseRepository.createCase(profileScope, "synthetic-migrated-case", "Synthetic parts",
+                    "Synthetic repair follow-up", sourceTurnId = UUID.randomUUID().toString(),
+                    now = "2026-11-04T12:00:00Z", sourceText = caseText,
+                    sourceQuote = "the blue part arrives Friday")
+                check(caseRepository.caseSnapshot(profileScope, case.caseId)?.timeline
+                    ?.single { it.sourceKind == "case_revision" }?.sourceExcerpt == "the blue part arrives Friday")
                 check(ProtectedConversationRepository(upgraded).deleteTurn(profileScope, profileSource))
                 check(profileRepository.get(profileScope, profileFact.factId) == null)
             }

@@ -38,7 +38,7 @@ internal object PortableBackupCutover {
                 "Key provider does not target the requested database"
             }
             failureStep = "room_schema_version"
-            require(candidate.manifest.roomSchemaVersion == PortableBackupPayload.SUPPORTED_ROOM_SCHEMA)
+            require(PortableBackupPayload.isImportableRoomSchema(candidate.manifest.roomSchemaVersion))
             failureStep = "candidate_file_and_manifest_length"
             require(candidate.encryptedSnapshotFile.isFile &&
                 candidate.encryptedSnapshotFile.length() == candidate.manifest.encryptedSnapshotBytes.toLong())

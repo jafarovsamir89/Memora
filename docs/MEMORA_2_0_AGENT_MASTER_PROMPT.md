@@ -85,7 +85,7 @@ Native/local-first is required until owner accepts all native functionality at M
 11. Changing finance record updates derived summaries and keeps immutable audit/rollback.
 12. No cloud account, paid provider, web search, or release readiness claim before implemented and approved.
 
-For EACH: test name, fixtures, expected state, actual DB readback, failure behavior, assertions, UI screenshot if relevant, logs with no personally identifiable content. Document partial implementations honestly.
+For EACH: test name, fixtures, expected state, actual DB readback, failure behavior, assertions, UI screenshot if relevant, logs with no personally identifiable content. Where a case or profile fact is derived from a user turn, preserve optional exact source spans only after local exact-match verification; do not treat a quote match as semantic truth. Document partial implementations honestly.
 
 ## SHIPPING DISCIPLINE
 

@@ -9,7 +9,7 @@ The SAF screen exports the protected AgentDatabase snapshot. Several other activ
 - Inbox/capture history: `captures-prototype.bin` through `EncryptedCaptureStore` / `CaptureStoreKey`.
 - Local task events: `tasks-prototype.bin` through `EncryptedTaskStore` / `TaskStoreKey`.
 - Voice-memory entries: `voice-memory.bin` through `VoiceMoneyStore` / `VoiceMoneyKey`.
-- Protected agent data: Room 18 / SQLCipher database plus its database-key envelope.
+- Protected agent data: current Room 21 / SQLCipher database plus its database-key envelope; Room 18 remains the legacy portable-snapshot import version migrated forward in isolated staging.
 
 The first item is proven missing from the user-facing backup. The other files are confirmed active code paths but were not individually round-trip tested in ACT-0165. Do not describe the current Room-only file as a complete export of all Memora data.
 

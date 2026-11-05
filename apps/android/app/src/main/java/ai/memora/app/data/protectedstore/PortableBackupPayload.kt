@@ -22,7 +22,7 @@ internal object PortableBackupPayload {
         snapshotKeyMaterial: ByteArray,
         encryptedSnapshot: ByteArray,
     ): ByteArray {
-        require(roomSchemaVersion == SUPPORTED_ROOM_SCHEMA) { "Unsupported Room schema version" }
+        require(isImportableRoomSchema(roomSchemaVersion)) { "Unsupported Room schema version" }
         require(appVersionCode > 0) { "Invalid app version" }
         require(createdAtEpochMillis > 0) { "Invalid backup creation time" }
         require(snapshotKeyMaterial.size == SNAPSHOT_KEY_BYTES) { "Snapshot key must be 256 bits" }
@@ -54,7 +54,7 @@ internal object PortableBackupPayload {
         if (!magic.contentEquals(MAGIC)) throw PortableBackupFormatException("Unrecognized backup payload")
         if (input.get() != FORMAT_VERSION) throw PortableBackupFormatException("Unsupported backup payload version")
         val schemaVersion = input.int
-        if (schemaVersion != SUPPORTED_ROOM_SCHEMA) {
+        if (!isImportableRoomSchema(schemaVersion)) {
             throw PortableBackupFormatException("Unsupported Room schema version")
         }
         val appVersionCode = input.int
@@ -90,7 +90,7 @@ internal object PortableBackupPayload {
         snapshotKeyMaterial: ByteArray,
         encryptedSnapshotFile: File,
     ): PreparedPortableBackupPayload {
-        require(roomSchemaVersion == SUPPORTED_ROOM_SCHEMA) { "Unsupported Room schema version" }
+        require(isImportableRoomSchema(roomSchemaVersion)) { "Unsupported Room schema version" }
         require(appVersionCode > 0) { "Invalid app version" }
         require(createdAtEpochMillis > 0) { "Invalid backup creation time" }
         require(snapshotKeyMaterial.size == SNAPSHOT_KEY_BYTES) { "Snapshot key must be 256 bits" }
@@ -158,7 +158,7 @@ internal object PortableBackupPayload {
                 if (!magic.contentEquals(MAGIC)) throw PortableBackupFormatException("Unrecognized backup payload")
                 if (parsed.get() != FORMAT_VERSION) throw PortableBackupFormatException("Unsupported backup payload version")
                 val schemaVersion = parsed.int
-                if (schemaVersion != SUPPORTED_ROOM_SCHEMA) {
+                if (!isImportableRoomSchema(schemaVersion)) {
                     throw PortableBackupFormatException("Unsupported Room schema version")
                 }
                 val appVersionCode = parsed.int
@@ -225,7 +225,11 @@ internal object PortableBackupPayload {
         }
     }
 
-    const val SUPPORTED_ROOM_SCHEMA = 18
+    const val SUPPORTED_ROOM_SCHEMA = AGENT_DB_SCHEMA_VERSION
+    private const val LEGACY_IMPORTABLE_ROOM_SCHEMA = 18
+
+    fun isImportableRoomSchema(version: Int): Boolean =
+        version == SUPPORTED_ROOM_SCHEMA || version == LEGACY_IMPORTABLE_ROOM_SCHEMA
 }
 
 internal data class PortableBackupManifest(

@@ -33,6 +33,7 @@ import ai.memora.app.data.protectedstore.CaseEvidenceView
 import ai.memora.app.data.protectedstore.CaseTimelineEntry
 import ai.memora.app.data.protectedstore.ProtectedCaseRepository
 import ai.memora.app.ui.EmptyState
+import ai.memora.app.ui.LocalStrings
 import ai.memora.app.ui.MemoraCard
 import ai.memora.app.ui.ScreenColumn
 import ai.memora.app.ui.colors
@@ -197,6 +198,11 @@ internal fun CasesScreen(onOpenSecretary: () -> Unit = {}) {
                                 Text(caseTimelineTitle(event), color = colors.ink, style = androidx.compose.material3.MaterialTheme.typography.bodyMedium)
                                 Text(event.at, color = colors.muted, style = androidx.compose.material3.MaterialTheme.typography.labelSmall)
                                 event.detail?.takeIf(String::isNotBlank)?.let { Text(it.take(300), color = colors.muted) }
+                                event.sourceExcerpt?.let { excerpt ->
+                                    Text(LocalStrings.current.getString(R.string.case_source_exact_excerpt, excerpt), color = colors.accent,
+                                        style = androidx.compose.material3.MaterialTheme.typography.bodySmall,
+                                        modifier = Modifier.testTag("case_timeline_exact_excerpt_${event.id}"))
+                                }
                                 if (linkedSource != null) {
                                     Text(s(R.string.case_source_open_details), color = colors.accent,
                                         style = androidx.compose.material3.MaterialTheme.typography.labelSmall)
