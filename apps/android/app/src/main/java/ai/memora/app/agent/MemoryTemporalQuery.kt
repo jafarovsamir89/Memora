@@ -7,11 +7,37 @@ import java.time.temporal.TemporalAdjusters
 import java.util.Locale
 
 /** Conservative, deterministic calendar phrases used only to filter local memory search. */
-internal data class MemoryTemporalQuery(val dates: Set<LocalDate>, val lexicalQuery: String) {
+internal data class MemoryTemporalQuery(
+    val dates: Set<LocalDate>,
+    val lexicalQuery: String,
+    val invalidRange: Boolean = false,
+) {
     companion object {
         fun parse(query: String, today: LocalDate): MemoryTemporalQuery {
             var remaining = normalize(query)
             val dates = linkedSetOf<LocalDate>()
+
+            val rangeMatch = DATE_RANGES.firstNotNullOfOrNull { it.find(remaining) }
+            if (rangeMatch != null) {
+                val match = rangeMatch
+                val start = runCatching { LocalDate.parse(match.groupValues[1]) }.getOrNull()
+                val end = runCatching { LocalDate.parse(match.groupValues[2]) }.getOrNull()
+                remaining = remaining.replaceRange(match.range, " ")
+                if (start == null || end == null) {
+                    return MemoryTemporalQuery(emptySet(), remaining.replace(WHITESPACE, " ").trim(), invalidRange = true)
+                }
+                val startDate = requireNotNull(start)
+                val endDate = requireNotNull(end)
+                val days = java.time.temporal.ChronoUnit.DAYS.between(startDate, endDate) + 1
+                if (days <= 0 || days > MAX_RANGE_DAYS) {
+                    return MemoryTemporalQuery(emptySet(), remaining.replace(WHITESPACE, " ").trim(), invalidRange = true)
+                }
+                var date: LocalDate = startDate
+                while (!date.isAfter(endDate)) {
+                    dates += date
+                    date = date.plusDays(1)
+                }
+            }
 
             WEEK_RANGES.forEach { (phrase, weekOffset) ->
                 val regex = phraseRegex(phrase)
@@ -50,6 +76,17 @@ internal data class MemoryTemporalQuery(val dates: Set<LocalDate>, val lexicalQu
         )
 
         private enum class WeekdayMode { PREVIOUS, THIS_WEEK, NEXT }
+
+        private const val MAX_RANGE_DAYS = 366L
+        private const val ISO_DATE = "(\\d{4}-\\d{2}-\\d{2})"
+        private val DATE_RANGES = listOf(
+            Regex("(?<![\\p{L}\\p{N}])between\\s+$ISO_DATE\\s+and\\s+$ISO_DATE(?![\\p{L}\\p{N}])"),
+            Regex("(?<![\\p{L}\\p{N}])from\\s+$ISO_DATE\\s+to\\s+$ISO_DATE(?![\\p{L}\\p{N}])"),
+            Regex("(?<![\\p{L}\\p{N}])с\\s+$ISO_DATE\\s+по\\s+$ISO_DATE(?![\\p{L}\\p{N}])"),
+            Regex("(?<![\\p{L}\\p{N}])между\\s+$ISO_DATE\\s+и\\s+$ISO_DATE(?![\\p{L}\\p{N}])"),
+            Regex("(?<![\\p{L}\\p{N}])$ISO_DATE\\s+ile\\s+$ISO_DATE\\s+arasinda(?![\\p{L}\\p{N}])"),
+            Regex("(?<!\\d)$ISO_DATE\\s*(?:\\.\\.|–|—)\\s*$ISO_DATE(?!\\d)"),
+        )
 
         // Week ranges use ISO weeks (Monday through Sunday). Relative weekday phrases are
         // intentionally explicit: an unqualified weekday is ambiguous between past and future.

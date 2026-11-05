@@ -67,7 +67,9 @@ internal class LocalMemoryTools(private val repository: ProtectedDomainRepositor
             val query = call.arguments["query"] as? String ?: return rejected()
             if (query.isBlank() || query.length > 200) return rejected()
             val temporal = MemoryTemporalQuery.parse(query, LocalDate.now(searchClock.withZone(userTimeZone)))
-            val terms = memorySearchTerms(temporal.lexicalQuery)
+            if (temporal.invalidRange) return ToolCommitResult(ToolObservationStatus.REJECTED, "date_range_invalid_or_too_wide",
+                mapOf("max_inclusive_days" to 366))
+            val terms = memorySearchTerms(RELATIVE_DATE_WORD.replace(temporal.lexicalQuery, " "))
             val relativeDates = resolveRelativeSearchDates(query)
             if (terms.isEmpty() && temporal.dates.isEmpty() && relativeDates.isEmpty()) return ToolCommitResult(ToolObservationStatus.APPLIED, "evidence_found", mapOf(
                 "count" to 0, "match_mode" to "ranked_lexical", "evidence" to emptyList<Any>(), "episodes" to emptyList<Any>(),
@@ -510,18 +512,19 @@ internal class LocalMemoryTools(private val repository: ProtectedDomainRepositor
             runCatching { LocalDate.parse(match.value) }.getOrNull()
         }.toSet() + relativeDates.mapNotNull { runCatching { LocalDate.parse(it) }.getOrNull() } + temporalDates
         val dateStrings = explicitDates.map(LocalDate::toString)
-        val foldedTerms = (terms + dateStrings.flatMap(::memorySearchTerms)).map(::normalizeMemorySearchText).distinct()
+        val foldedTerms = terms.map(::normalizeMemorySearchText).distinct()
         val explicitDateStrings = dateStrings.toSet()
         val phraseTerms = terms
         val phrase = phraseTerms.joinToString(" ")
 
         fun score(fields: List<String>, title: String? = null): Int {
             if (explicitDateStrings.isNotEmpty() && fields.none { field -> field in explicitDateStrings }) return 0
+            if (terms.isEmpty() && explicitDates.isNotEmpty()) return 100
             val fieldTerms = fields.map(::memorySearchTerms)
             val tokens = fieldTerms.flatten().toSet()
             val matchedTerms = foldedTerms.filter { term -> tokens.any { token -> memorySearchTokenMatches(term, token) } }
             val matched = matchedTerms.size
-            if (matched == 0) return if (terms.isEmpty() && explicitDates.isNotEmpty()) 100 else 0
+            if (matched == 0) return 0
             val titleTokens = title?.let(::memorySearchTerms).orEmpty()
             val titleMatches = matchedTerms.count { term -> titleTokens.any { memorySearchTokenMatches(term, it) } }
             val exactPhrase = phraseTerms.size > 1 && fieldTerms.any { it.windowed(phraseTerms.size)

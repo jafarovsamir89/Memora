@@ -544,6 +544,90 @@ class AgentFakeProviderUnifiedMemoryTest {
             "calendar_event:synthetic-last-week-calendar" in lastFridayRu)
     }
 
+    @Test fun explicitDateRangesRetrieveInclusiveLocalActivityAcrossAzRuAndEn() = runBlocking {
+        val db = databaseRule.database
+        val scope = "00000000-0000-4000-8000-000000000199"
+        val domain = ProtectedDomainRepository(db)
+        listOf(
+            Triple("start", "2026-10-30", "2026-10-30T12:00:00Z"),
+            Triple("inside", "2026-11-01", "2026-11-01T12:00:00Z"),
+            Triple("end", "2026-11-02", "2026-11-02T12:00:00Z"),
+            Triple("before", "2026-10-29", "2026-10-29T12:00:00Z"),
+            Triple("after", "2026-11-03", "2026-11-03T12:00:00Z"),
+        ).forEach { (label, localDate, instant) ->
+            domain.recordFinanceEvent(scope, "Synthetic customer", "receipt", 1_000, "AZN", "Synthetic range $label",
+                null, "synthetic-range-person", "synthetic-range-money-$label", "synthetic-range-money-$label-command",
+                instant, instant)
+            domain.createCalendarEvent(CalendarInput("synthetic-range-calendar-$label", scope, "Synthetic range appointment",
+                "${localDate}T10:00", null, "Asia/Baku", "minute"))
+            db.protectedStoreDao().putTaskEvents(listOf(
+                TaskEventRow(taskId = "synthetic-range-task-$label", scopeId = scope, actorId = "synthetic-owner",
+                    commandId = "synthetic-range-task-$label-created", type = "created", previousVersion = null,
+                    title = "Synthetic range follow-up", completed = null, dueLocal = null, dueZone = null,
+                    remind = null, personLabel = null, projectLabel = null),
+                TaskEventRow(taskId = "synthetic-range-task-$label", scopeId = scope, actorId = "synthetic-owner",
+                    commandId = "synthetic-range-task-$label-due", type = "details", previousVersion = 1,
+                    title = null, completed = null, dueLocal = "${localDate}T09:00", dueZone = "Asia/Baku",
+                    remind = false, personLabel = null, projectLabel = null),
+            ))
+        }
+        val handler = LocalMemoryTools(domain, ProtectedMemoryRepository(db), financeEnabled = true,
+            userTimeZoneId = "Asia/Baku", searchClock = Clock.fixed(Instant.parse("2026-11-04T10:00:00Z"), ZoneOffset.UTC))
+            .handlers().single { it.descriptor.name == "search_memory" }
+        val turn = AgentTurnRequest("synthetic-range-turn", scope, "synthetic-range-session", null,
+            "az-AZ", "Synthetic date range search")
+        val queries = listOf(
+            "between 2026-10-30 and 2026-11-02",
+            "from 2026-10-30 to 2026-11-02",
+            "с 2026-10-30 по 2026-11-02",
+            "между 2026-10-30 и 2026-11-02",
+            "2026-10-30 ilə 2026-11-02 arasında",
+            "2026-10-30 – 2026-11-02",
+            "2026-10-30..2026-11-02",
+        )
+        val expected = setOf("start", "inside", "end").flatMap { label -> listOf(
+            "money_event:synthetic-range-money-$label",
+            "calendar_event:synthetic-range-calendar-$label",
+            "task:synthetic-range-task-$label",
+        ) }.toSet()
+        queries.forEach { query ->
+            val result = handler.read(AgentModelToolCall("synthetic-range-${query.hashCode()}", "search_memory", 1,
+                mapOf("query" to query)), turn)
+            assertEquals("date range should be accepted: $query", ToolObservationStatus.APPLIED, result.status)
+            val hits = (result.modelData["activity"] as List<*>).mapNotNull { (it as? Map<*, *>) }
+                .map { "${it["kind"]}:${it["source_id"]}" }.toSet()
+            assertTrue("both inclusive range boundaries should return finance/task/calendar: $query $hits",
+                hits.containsAll(expected))
+            assertFalse("date before range leaked for $query", hits.any { it.contains("-before") })
+            assertFalse("date after range leaked for $query", hits.any { it.contains("-after") })
+        }
+
+        val maxAllowed = handler.read(AgentModelToolCall("synthetic-range-max-allowed", "search_memory", 1,
+            mapOf("query" to "from 2025-11-01 to 2026-11-01")), turn)
+        assertEquals("exactly 366 inclusive days should be accepted", ToolObservationStatus.APPLIED, maxAllowed.status)
+        val maxRangeHits = (maxAllowed.modelData["activity"] as List<*>).mapNotNull { it as? Map<*, *> }
+            .map { "${it["kind"]}:${it["source_id"]}" }.toSet()
+        assertTrue("date-only max range must still retrieve dated rows: $maxRangeHits",
+            "money_event:synthetic-range-money-start" in maxRangeHits &&
+                "calendar_event:synthetic-range-calendar-inside" in maxRangeHits &&
+                "task:synthetic-range-task-inside" in maxRangeHits)
+        assertFalse("max range end must remain inclusive only through November 1: $maxRangeHits",
+            "money_event:synthetic-range-money-end" in maxRangeHits)
+
+        val tooWide = handler.read(AgentModelToolCall("synthetic-range-too-wide", "search_memory", 1,
+            mapOf("query" to "from 2020-01-01 to 2026-11-01")), turn)
+        assertEquals(ToolObservationStatus.REJECTED, tooWide.status)
+        assertEquals("date_range_invalid_or_too_wide", tooWide.code)
+        val reversed = handler.read(AgentModelToolCall("synthetic-range-reversed", "search_memory", 1,
+            mapOf("query" to "between 2026-11-02 and 2026-10-30")), turn)
+        assertEquals(ToolObservationStatus.REJECTED, reversed.status)
+        assertEquals("date_range_invalid_or_too_wide", reversed.code)
+        val malformed = handler.read(AgentModelToolCall("synthetic-range-invalid-date", "search_memory", 1,
+            mapOf("query" to "between 2026-02-30 and 2026-03-01")), turn)
+        assertEquals(ToolObservationStatus.REJECTED, malformed.status)
+        assertEquals("date_range_invalid_or_too_wide", malformed.code)
+    }
+
     @Test fun typedTableReferencesRequireActiveSameScopeObjectsOfExpectedKind() = runBlocking {
         val db = databaseRule.database
         val domain = ProtectedDomainRepository(db)
