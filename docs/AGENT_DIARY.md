@@ -1198,3 +1198,7 @@ ACT-0210 code and synchronized documentation committed as `d22b36a06e986ecdb4228
 ### ACT-0215 · 2026-11-05 · Git-передача ACT-0214
 
 ACT-0214 зафиксирован коммитом `c358a86ff87bc4d88a12bcd3fe66c619127c7c81` (`fix(android): adapt nav labels for large text`) и отправлен в `origin/main`. После проверки local HEAD, fetched `origin/main` и `git ls-remote origin refs/heads/main` совпали. Независимый untracked `docs/adr/ADR-012-keystore-wrapping-key-rotation.md` оставлен без изменений и не включён. Для этого документационного handoff Gradle повторно не запускался; полная проверка и устройство ACT-0214 описаны выше. Продолжать незакрытые native/accessibility acceptance и M20 gates; новая проверка данных на телефоне должна выполняться только с синтетическими записями и явным согласием внутри приложения.
+
+### ACT-0219 — 2026-11-05 — Git handoff for ACT-0218
+
+ACT-0218 implementation and synchronized project docs are committed as `b07a860fc4ca9949b054c109768d33d4e722a449` (`fix(android): route voice transcription through supported Firebase model`) and pushed to `origin/main`. After push and fetch, local HEAD, `origin/main`, and remote branch SHA agreed. Owner-owned untracked `docs/adr/ADR-012-keystore-wrapping-key-rotation.md` remains untouched and excluded. No tests rerun for documentation only. On the next turn, ask for the owner's one synthetic post-v81 Azerbaijani voice result before claiming that STT works; MEM-13.08/09 stay open.
