@@ -60,7 +60,9 @@
 
 **Исполнение:** основной [TODO.md](../TODO.md) раскрывает этапы E0–E7 в задачи с постоянными ID, зависимостями и условиями приёмки. Здесь хранится обоснование и порядок; там — фактические галочки; в дневнике — контекст, проверки и следующий шаг. Сохранение списка не означает выполнения будущих работ.
 
-**ACT-0173 (2026-11-04):** P4 linked views now have filter/sort/25-row UI paging, active-source totals and a visible 500-source limit. The agent read tool supports bounded offset/limit and reports truncation. Synthetic regression plus full Gradle passed: 60 suites / 308 tests, lint 0 errors / 72 warnings / 3 hints. APK v59 hash and limitations are in TODO and the validation matrix. P3/P4 remain open; no Redmi or owner acceptance.
+**Historical ACT-0173 (2026-11-04; superseded by ACT-0174):** P4 linked views now have filter/sort/25-row UI paging, active-source totals and a visible 500-source limit. The agent read tool supports bounded offset/limit and reports truncation. Synthetic regression plus full Gradle passed: 60 suites / 308 tests, lint 0 errors / 72 warnings / 3 hints. APK v59 hash and limitations are in TODO and the validation matrix. P3/P4 remain open; no Redmi or owner acceptance.
+
+**ACT-0174 (2026-11-04):** P4 linked views now page and search across the full active source set: DAO reads 200-row chunks inside one Room transaction, filtering in Kotlin preserves AZ/RU/EN case-insensitivity, and a bounded priority queue retains only the requested locale-sorted window. UI pages 25 records; agent accepts exact offset/limit. Full Gradle 60 suites / 308 tests, lint 0/72/3; APK v60 hash is in TODO and validation matrix. Offset cap 100,000 is explicit. P3/P4 remain partial; no owner/device acceptance.
 
 ## 1. Основание и принятые решения
 

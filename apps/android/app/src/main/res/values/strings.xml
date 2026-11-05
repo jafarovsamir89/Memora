@@ -312,7 +312,8 @@
     <string name="table_linked_view_sort_ascending">Sort by name: A–Z</string>
     <string name="table_linked_view_sort_descending">Sort by name: Z–A</string>
     <string name="table_linked_view_count">Showing %1$d of %2$d active records</string>
-    <string name="table_linked_view_limit">Search and pages cover the first 500 active records.</string>
+    <string name="table_linked_view_loading">Loading matching records…</string>
+    <string name="table_linked_view_page_limit">Paging is capped at offset 100,000.</string>
     <string name="table_linked_view_previous">Previous</string>
     <string name="table_linked_view_next">Next</string>
     <string name="table_linked_view_page">Page %1$d of %2$d</string>

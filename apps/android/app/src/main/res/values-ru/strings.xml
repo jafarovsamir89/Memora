@@ -312,7 +312,8 @@
     <string name="table_linked_view_sort_ascending">По имени: А–Я</string>
     <string name="table_linked_view_sort_descending">По имени: Я–А</string>
     <string name="table_linked_view_count">Показано %1$d из %2$d активных записей</string>
-    <string name="table_linked_view_limit">Поиск и страницы охватывают первые 500 активных записей.</string>
+    <string name="table_linked_view_loading">Загружаю подходящие записи…</string>
+    <string name="table_linked_view_page_limit">Постраничный просмотр ограничен смещением 100 000.</string>
     <string name="table_linked_view_previous">Назад</string>
     <string name="table_linked_view_next">Далее</string>
     <string name="table_linked_view_page">Страница %1$d из %2$d</string>

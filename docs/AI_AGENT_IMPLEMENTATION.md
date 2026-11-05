@@ -273,7 +273,7 @@ Command: proposed → validated → awaiting_confirmation (если требуе
 
 **Historical ACT-0172 partial implementation checkpoint (2026-11-04; superseded by ACT-0173):** custom table mode `linked_view` stores a versioned source-kind spec and reads active same-scope PERSON/PROJECT/NOTE objects live; no duplicate row copy is persisted. UI and `read_table_rows` expose source IDs/current canonical values, while linked views reject row/schema mutation. Room 18→19 migration is additive. Full host suite 60/306 and lint 0/70/3 passed; APK v58 upgraded/launched on emulator without data clearing. Migration readback, field UI/TalkBack, export/import, preview/undo, aggregates and owner acceptance remain unverified; this does not close P4.
 
-**ACT-0173:** linked-view screen filters and sorts the loaded source set, pages 25 rows at a time, and shows the count plus 500-record boundary. `read_table_rows` takes bounded `offset` and `limit`, and returns source truncation metadata so the agent cannot imply complete coverage when more than 500 records exist. The implementation remains a partial P4 slice; linked-view import/export and larger source retrieval remain open.
+**Historical ACT-0173:** the first browsing pass added filter/sort and paging over a 500-source slice. ACT-0174 supersedes that bound: linked views now read all active sources through SQL chunks in one transaction, filter across Unicode AZ/RU/EN, and locale-sort a bounded priority window. The UI and agent share full-source counts; agent paging uses exact offsets. A safety cap at offset 100,000 is disclosed and reported. Export/import and broader P4 acceptance remain open.
 
 ### 10.1. Два режима
 

@@ -32,24 +32,42 @@ internal data class DeletePreview(val objectId: String, val expectedVersion: Lon
 internal data class LinkedDomainObject(val link: DomainLinkRow, val objectRecord: DomainObjectRow)
 internal data class ImportPreview(val tableId: String, val schemaVersion: Long, val rows: List<Pair<String, Map<String, Any?>>>)
 internal data class TableSnapshot(val table: UserTableRow, val columns: List<TableColumnRow>, val rows: List<TableDataRow>,
-    val linkedRows: List<DomainObjectRow> = emptyList(), val linkedTotalCount: Int = linkedRows.size)
+    val linkedTotalCount: Int = 0)
 internal data class LinkedViewSpec(val sourceKind: DomainKind)
-internal data class LinkedViewPage(val rows: List<DomainObjectRow>, val matchingCount: Int, val pageIndex: Int, val pageCount: Int)
+internal data class LinkedViewPage(val rows: List<DomainObjectRow>, val matchingCount: Int, val totalCount: Int,
+    val offset: Int, val limit: Int, val nextOffset: Int?, val continuationLimitReached: Boolean)
 
-internal fun linkedViewPage(sources: List<DomainObjectRow>, query: String, ascending: Boolean, requestedPage: Int,
-    pageSize: Int = 25): LinkedViewPage {
-    require(requestedPage >= 0 && pageSize in 1..100)
-    val needle = query.trim()
-    val collator = java.text.Collator.getInstance(java.util.Locale.getDefault())
-    val matching = sources.asSequence().filter { source -> needle.isBlank() ||
-        listOf(source.objectId, source.title, source.body.orEmpty(), source.status).any { it.contains(needle, ignoreCase = true) } }
-        .toList().sortedWith { a, b ->
-            val titleOrder = collator.compare(a.title, b.title).let { if (ascending) it else -it }
-            if (titleOrder != 0) titleOrder else a.objectId.compareTo(b.objectId)
+internal const val LINKED_VIEW_MAX_OFFSET = 100_000
+
+private class LinkedViewCollector(query: String, ascending: Boolean, private val capacity: Int, locale: java.util.Locale) {
+    private val needle = query.trim()
+    private val collator = java.text.Collator.getInstance(locale)
+    private val order = Comparator<DomainObjectRow> { a, b ->
+        val titleOrder = collator.compare(a.title, b.title).let { if (ascending) it else -it }
+        if (titleOrder != 0) titleOrder else a.objectId.compareTo(b.objectId)
+    }
+    private val best = java.util.PriorityQueue<DomainObjectRow>(capacity.coerceAtLeast(1), order.reversed())
+    var matchingCount: Int = 0
+        private set
+
+    fun add(rows: List<DomainObjectRow>) {
+        rows.forEach { row ->
+            if (needle.isNotBlank() && listOf(row.objectId, row.title, row.body.orEmpty(), row.status)
+                    .none { it.contains(needle, ignoreCase = true) }) return@forEach
+            matchingCount++
+            if (best.size < capacity) best.add(row)
+            else if (order.compare(row, best.peek()) < 0) { best.poll(); best.add(row) }
         }
-    val pageCount = (matching.size + pageSize - 1) / pageSize
-    val pageIndex = requestedPage.coerceIn(0, (pageCount - 1).coerceAtLeast(0))
-    return LinkedViewPage(matching.drop(pageIndex * pageSize).take(pageSize), matching.size, pageIndex, pageCount)
+    }
+
+    fun page(totalCount: Int, requestedOffset: Int, limit: Int): LinkedViewPage {
+        val offset = requestedOffset.coerceAtMost(matchingCount)
+        val rows = best.toList().sortedWith(order).drop(offset).take(limit)
+        val candidateNext = offset + rows.size
+        val hasMore = candidateNext < matchingCount
+        val next = candidateNext.takeIf { hasMore && it <= LINKED_VIEW_MAX_OFFSET }
+        return LinkedViewPage(rows, matchingCount, totalCount, offset, limit, next, hasMore && next == null)
+    }
 }
 
 private val LINKABLE_DOMAIN_KINDS = setOf(DomainKind.PERSON, DomainKind.PROJECT, DomainKind.NOTE)
@@ -367,15 +385,32 @@ internal class ProtectedDomainRepository(private val db: AgentDatabase) {
     }
 
     suspend fun tables(scope: String): List<TableSnapshot> = dao.activeUserTables(scope).map { table ->
-        val linkedRows = if (table.mode == "linked_view") {
-            val spec = decodeLinkedViewSpec(table.viewSpecJson ?: error("linked_view_spec_missing"))
-            dao.activeDomainObjects(scope, spec.sourceKind.name, 501).take(500)
-        } else emptyList()
         val linkedTotalCount = if (table.mode == "linked_view") {
             val spec = decodeLinkedViewSpec(table.viewSpecJson ?: error("linked_view_spec_missing"))
             dao.countActiveDomainObjects(scope, spec.sourceKind.name)
         } else 0
-        TableSnapshot(table, dao.columns(table.tableId), dao.rows(table.tableId, scope), linkedRows, linkedTotalCount)
+        TableSnapshot(table, dao.columns(table.tableId), dao.rows(table.tableId, scope), linkedTotalCount = linkedTotalCount)
+    }
+
+    suspend fun linkedViewPage(scope: String, tableId: String, query: String, ascending: Boolean, offset: Int, limit: Int,
+        locale: java.util.Locale = java.util.Locale.getDefault()): LinkedViewPage {
+        require(scope.isNotBlank() && tableId.isNotBlank() && query.length <= 200 && offset in 0..LINKED_VIEW_MAX_OFFSET && limit in 1..50)
+        return db.withTransaction {
+            val table = dao.userTable(scope, tableId)?.takeIf { it.deletedAt == null && it.mode == "linked_view" }
+                ?: error("linked_view_not_found")
+            val spec = decodeLinkedViewSpec(table.viewSpecJson ?: error("linked_view_spec_missing"))
+            val totalCount = dao.countActiveDomainObjects(scope, spec.sourceKind.name)
+            val collector = LinkedViewCollector(query, ascending, offset + limit, locale)
+            var readOffset = 0
+            while (true) {
+                val chunk = dao.activeDomainObjectsPage(scope, spec.sourceKind.name, 200, readOffset)
+                if (chunk.isEmpty()) break
+                collector.add(chunk)
+                readOffset += chunk.size
+                if (chunk.size < 200) break
+            }
+            collector.page(totalCount, offset, limit)
+        }
     }
 
     suspend fun deletedRows(scope: String, tableId: String): List<TableDataRow> = dao.deletedRows(tableId, scope)

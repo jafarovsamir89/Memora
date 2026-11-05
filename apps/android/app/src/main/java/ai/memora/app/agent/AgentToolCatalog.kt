@@ -133,7 +133,7 @@ internal object AgentToolCatalog {
                 "source_id" to str), optional = mapOf("relation" to str, "source_revision_id" to str)),
         tool("list_tables", "List local tables, their columns, and a bounded set of rows."),
         tool("read_table_rows",
-            "Read a bounded page of rows from one local table, optionally filtering by a literal cell substring. Use offset and limit to continue. Linked views expose at most 500 active records per call; check source_set_truncated before claiming completeness.",
+            "Read a bounded page of rows from one local table, optionally filtering by a literal cell substring. Use offset and limit to continue; matching counts cover the full same-scope table/view and results are read from one consistent local snapshot. Offset is capped at 100000; inspect continuation_limit_reached.",
             required = mapOf("table_id" to str), optional = mapOf("query" to str, "offset" to int, "limit" to int)),
         tool("create_table",
             "Create a local editable typed table. Prefer columns_json objects with name, type, and optional required; supported types are TEXT, INTEGER, DECIMAL, BOOLEAN, DATE, DATETIME and MONEY. Legacy comma-separated columns create TEXT columns.",

@@ -7,7 +7,6 @@ import ai.memora.app.data.protectedstore.ColumnType
 import ai.memora.app.data.protectedstore.DomainKind
 import ai.memora.app.data.protectedstore.LinkedViewSpec
 import ai.memora.app.data.protectedstore.DomainObjectRow
-import ai.memora.app.data.protectedstore.linkedViewPage
 import ai.memora.app.data.protectedstore.ProtectedConversationRepository
 import ai.memora.app.data.protectedstore.ProtectedDomainRepository
 import ai.memora.app.data.protectedstore.ProtectedMemoryRepository
@@ -308,9 +307,9 @@ class AgentFakeProviderUnifiedMemoryTest {
 
         val first = domain.tables(scope).single()
         assertEquals("PERSON", first.table.viewSpecJson?.let { org.json.JSONObject(it).getString("sourceKind") })
-        assertEquals(listOf("synthetic-view-person"), first.linkedRows.map { it.objectId })
         assertEquals(1, first.linkedTotalCount)
         assertTrue(first.rows.isEmpty())
+        assertEquals(listOf("synthetic-view-person"), domain.linkedViewPage(scope, first.table.tableId, "", true, 0, 25).rows.map { it.objectId })
         assertTrue(runCatching {
             domain.addRows(scope, "synthetic-person-view", 1, listOf("synthetic-forbidden-row" to mapOf("source" to "copy")))
         }.isFailure)
@@ -326,27 +325,59 @@ class AgentFakeProviderUnifiedMemoryTest {
         val original = domain.domainObject(scope, "synthetic-view-person")!!
         domain.updateObject(scope, original.objectId, original.version, "Renamed source", original.body, original.status,
             "synthetic-linked-view-update", "2026-11-04T11:00:00Z")
-        assertEquals("Renamed source", domain.tables(scope).single().linkedRows.single().title)
+        assertEquals("Renamed source", domain.linkedViewPage(scope, first.table.tableId, "", true, 0, 25).rows.single().title)
     }
 
-    @Test fun linkedViewFilteringSortingAndPagingAreStableAndBounded() {
-        val sources = (0 until 61).map { index ->
-            DomainObjectRow("view-%03d".format(index), "synthetic-view-scope", "PERSON", "Person %03d".format(index),
-                if (index % 2 == 0) "Target group" else "Other group", "active", 1, null)
+    @Test fun linkedViewPagesAndSearchCoverMoreThanFiveHundredActiveSources() = runBlocking {
+        val db = databaseRule.database
+        val domain = ProtectedDomainRepository(db)
+        val scope = "synthetic-large-linked-view-scope"
+        val sources = (0..600).map { index ->
+            val id = "synthetic-large-view-%03d".format(index)
+            DomainObjectRow(id, scope, "PERSON", "Person %03d".format(index),
+                if (index == 600) "Əli QƏRAR" else "Group A", "active", 1, null)
         }
-        val secondPage = linkedViewPage(sources, "", ascending = true, requestedPage = 1, pageSize = 25)
-        assertEquals(61, secondPage.matchingCount)
-        assertEquals(3, secondPage.pageCount)
-        assertEquals(1, secondPage.pageIndex)
-        assertEquals(25, secondPage.rows.size)
-        assertEquals("view-025", secondPage.rows.first().objectId)
+        db.protectedStoreDao().insertDomainObjects(sources +
+            DomainObjectRow("synthetic-large-view-archived", scope, "PERSON", "Archived source", null, "archived", 1, null) +
+            DomainObjectRow("synthetic-large-view-deleted", scope, "PERSON", "Deleted source", null, "active", 1, "2026-11-04T12:00:00Z"))
+        domain.createTable(scope, "synthetic-large-person-view", "Synthetic people", "linked_view",
+            listOf(ColumnSpec("source", "Source", ColumnType.TEXT)), viewSpec = LinkedViewSpec(DomainKind.PERSON))
 
-        val filtered = linkedViewPage(sources, "target", ascending = false, requestedPage = 9, pageSize = 25)
-        assertEquals(31, filtered.matchingCount)
-        assertEquals(2, filtered.pageCount)
-        assertEquals(1, filtered.pageIndex)
-        assertEquals(listOf("view-010", "view-008", "view-006", "view-004", "view-002", "view-000"),
-            filtered.rows.map { it.objectId })
+        val snapshot = domain.tables(scope).single()
+        assertEquals(601, snapshot.linkedTotalCount)
+        val finalPage = domain.linkedViewPage(scope, snapshot.table.tableId, "", ascending = true, offset = 600, limit = 25)
+        assertEquals(601, finalPage.totalCount)
+        assertEquals(601, finalPage.matchingCount)
+        assertEquals(600, finalPage.offset)
+        assertEquals(listOf("synthetic-large-view-600"), finalPage.rows.map { it.objectId })
+        assertEquals(null, finalPage.nextOffset)
+
+        val descending = domain.linkedViewPage(scope, snapshot.table.tableId, "Group A", ascending = false, offset = 25, limit = 25)
+        assertEquals(600, descending.matchingCount)
+        assertEquals("synthetic-large-view-574", descending.rows.first().objectId)
+        assertEquals("synthetic-large-view-550", descending.rows.last().objectId)
+
+        val azSearch = domain.linkedViewPage(scope, snapshot.table.tableId, "əli", ascending = true, offset = 0, limit = 25)
+        assertEquals(1, azSearch.matchingCount)
+        assertEquals(listOf("synthetic-large-view-600"), azSearch.rows.map { it.objectId })
+        assertEquals("Əli QƏRAR", azSearch.rows.single().body)
+
+        val tools = LocalMemoryTools(domain, ProtectedMemoryRepository(db)).handlers()
+        val listResult = tools.single { it.descriptor.name == "list_tables" }.read(
+            AgentModelToolCall("large-list", "list_tables", 1, emptyMap()),
+            AgentTurnRequest("large-view-turn", scope, "synthetic-owner", null, "az-AZ", "list tables"))
+        @Suppress("UNCHECKED_CAST")
+        val listedTable = (listResult.modelData["tables"] as List<Map<String, Any?>>).single()
+        assertEquals(601, listedTable["row_count"])
+        val agentSearch = tools.single { it.descriptor.name == "read_table_rows" }.read(
+            AgentModelToolCall("large-search", "read_table_rows", 1,
+                mapOf("table_id" to snapshot.table.tableId, "query" to "əli", "limit" to 5)),
+            AgentTurnRequest("large-view-turn", scope, "synthetic-owner", null, "az-AZ", "search table"))
+        assertEquals(1, agentSearch.modelData["matching_row_count"])
+        assertEquals(false, agentSearch.modelData["source_set_truncated"])
+        @Suppress("UNCHECKED_CAST")
+        val agentRows = agentSearch.modelData["rows"] as List<Map<String, Any?>>
+        assertEquals("synthetic-large-view-600", agentRows.single()["source_id"])
     }
 
     @Test fun agentCanReadLinkedViewPagesAndReportsWhetherSourcesAreTruncated() = runBlocking {
@@ -376,6 +407,9 @@ class AgentFakeProviderUnifiedMemoryTest {
         val invalid = handler.read(AgentModelToolCall("page-invalid", "read_table_rows", 1,
             mapOf("table_id" to "synthetic-agent-linked-page", "limit" to 51)), turn)
         assertEquals(ToolObservationStatus.REJECTED, invalid.status)
+        val invalidOffset = handler.read(AgentModelToolCall("page-offset-invalid", "read_table_rows", 1,
+            mapOf("table_id" to "synthetic-agent-linked-page", "offset" to 100_001)), turn)
+        assertEquals(ToolObservationStatus.REJECTED, invalidOffset.status)
     }
 
     @Test fun localMemoryRetrievalFindsExactAzerbaijaniRussianAndMixedButDoesNotClaimParaphraseRecall() = runBlocking {

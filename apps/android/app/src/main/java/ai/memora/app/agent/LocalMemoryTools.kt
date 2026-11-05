@@ -1,6 +1,7 @@
 package ai.memora.app.agent
 
 import ai.memora.app.data.protectedstore.DomainKind
+import ai.memora.app.data.protectedstore.LINKED_VIEW_MAX_OFFSET
 import ai.memora.app.data.protectedstore.ColumnSpec
 import ai.memora.app.data.protectedstore.ColumnType
 import ai.memora.app.data.protectedstore.FinanceAnalytics
@@ -388,8 +389,7 @@ internal class LocalMemoryTools(private val repository: ProtectedDomainRepositor
                 "tables" to selected.map { item -> mapOf("id" to item.table.tableId, "title" to item.table.title.take(120),
                     "schema_version" to item.table.schemaVersion,
                     "row_count" to if (item.table.mode == "linked_view") item.linkedTotalCount else item.rows.size,
-                    "loaded_row_count" to if (item.table.mode == "linked_view") item.linkedRows.size else item.rows.size,
-                    "rows_truncated" to (item.table.mode == "linked_view" && item.linkedTotalCount > item.linkedRows.size),
+                    "source_count" to if (item.table.mode == "linked_view") item.linkedTotalCount else null,
                     "mode" to item.table.mode,
                     "schema_truncated" to (item.columns.size > 8),
                     "columns" to item.columns.take(8).map { mapOf("id" to it.columnId, "name" to it.name.take(80), "type" to it.valueType) }) }
@@ -405,7 +405,7 @@ internal class LocalMemoryTools(private val repository: ProtectedDomainRepositor
         override suspend fun read(call: AgentModelToolCall, turn: AgentTurnRequest): ToolCommitResult {
             val tableId = call.arguments["table_id"] as? String ?: return rejected()
             val query = call.arguments["query"] as? String ?: ""
-            val offset = call.arguments["offset"].asBoundedInteger(default = 0, minimum = 0, maximum = 100_000)
+            val offset = call.arguments["offset"].asBoundedInteger(default = 0, minimum = 0, maximum = LINKED_VIEW_MAX_OFFSET)
                 ?: return ToolCommitResult(ToolObservationStatus.REJECTED, "invalid_offset")
             val limit = call.arguments["limit"].asBoundedInteger(default = 10, minimum = 1, maximum = 50)
                 ?: return ToolCommitResult(ToolObservationStatus.REJECTED, "invalid_limit")
@@ -416,14 +416,17 @@ internal class LocalMemoryTools(private val repository: ProtectedDomainRepositor
             val rows: List<Map<String, Any?>>
             val matchingCount: Int
             val sourceCount: Int
-            val sourceSetTruncated: Boolean
+            val effectiveOffset: Int
+            val nextOffset: Int?
+            val continuationLimitReached: Boolean
             if (linkedView) {
-                val matching = table.linkedRows.filter { source -> query.isBlank() ||
-                    listOf(source.objectId, source.title, source.body.orEmpty(), source.status).any { it.contains(query, ignoreCase = true) } }
-                matchingCount = matching.size
-                sourceCount = table.linkedTotalCount
-                sourceSetTruncated = table.linkedTotalCount > table.linkedRows.size
-                rows = matching.drop(offset).take(limit).map { source -> mapOf("id" to source.objectId,
+                val result = repository.linkedViewPage(turn.scopeId, tableId, query, ascending = true, offset = offset, limit = limit)
+                matchingCount = result.matchingCount
+                sourceCount = result.totalCount
+                effectiveOffset = result.offset
+                nextOffset = result.nextOffset
+                continuationLimitReached = result.continuationLimitReached
+                rows = result.rows.map { source -> mapOf("id" to source.objectId,
                     "version" to source.version, "source_kind" to source.kind,
                     "values" to mapOf("source_id" to source.objectId, "title" to source.title, "body" to source.body,
                         "status" to source.status, "version" to source.version), "source_id" to source.objectId) }
@@ -431,19 +434,23 @@ internal class LocalMemoryTools(private val repository: ProtectedDomainRepositor
                 val matching = table.rows.filter { query.isBlank() || it.valuesJson.contains(query, ignoreCase = true) }
                 matchingCount = matching.size
                 sourceCount = table.rows.size
-                sourceSetTruncated = false
-                rows = matching.drop(offset).take(limit).map { row -> mapOf("id" to row.rowId, "version" to row.version,
+                effectiveOffset = offset.coerceAtMost(if (matching.isEmpty()) 0 else ((matching.size - 1) / limit) * limit)
+                rows = matching.drop(effectiveOffset).take(limit).map { row -> mapOf("id" to row.rowId, "version" to row.version,
                     "values" to row.valuesJson.take(700), "values_truncated" to (row.valuesJson.length > 700)) }
+                val candidateNext = effectiveOffset + rows.size
+                nextOffset = candidateNext.takeIf { it < matchingCount && it <= LINKED_VIEW_MAX_OFFSET }
+                continuationLimitReached = candidateNext < matchingCount && nextOffset == null
             }
             return ToolCommitResult(ToolObservationStatus.APPLIED, "table_rows_loaded", mapOf(
                 "table_id" to tableId, "title" to table.table.title.take(120),
                 "mode" to table.table.mode,
                 "columns" to table.columns.take(12).map { mapOf("id" to it.columnId, "name" to it.name.take(80), "type" to it.valueType) },
                 "rows" to rows, "returned" to rows.size, "matching_row_count" to matchingCount,
-                "source_row_count" to sourceCount, "source_set_truncated" to sourceSetTruncated,
-                "offset" to offset, "limit" to limit,
-                "next_offset" to if (offset + rows.size < matchingCount) offset + rows.size else null,
-                "truncated" to (offset + rows.size < matchingCount || sourceSetTruncated),
+                "source_row_count" to sourceCount, "source_set_truncated" to false,
+                "offset" to effectiveOffset, "limit" to limit,
+                "next_offset" to nextOffset,
+                "continuation_limit_reached" to continuationLimitReached,
+                "truncated" to (nextOffset != null || continuationLimitReached),
             ))
         }
         override suspend fun prepare(call: AgentModelToolCall, turn: AgentTurnRequest, commandId: String) = ToolPreparation.Rejected("read_only_tool")

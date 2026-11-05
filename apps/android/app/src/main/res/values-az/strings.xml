@@ -312,7 +312,8 @@
     <string name="table_linked_view_sort_ascending">Ada görə sırala: A–Z</string>
     <string name="table_linked_view_sort_descending">Ada görə sırala: Z–A</string>
     <string name="table_linked_view_count">%2$d aktiv qeyddən %1$d göstərilir</string>
-    <string name="table_linked_view_limit">Axtarış və səhifələr ilk 500 aktiv qeydi əhatə edir.</string>
+    <string name="table_linked_view_loading">Uyğun qeydlər yüklənir…</string>
+    <string name="table_linked_view_page_limit">Səhifələmə 100 000 qeyddən sonra məhdudlaşır.</string>
     <string name="table_linked_view_previous">Əvvəlki</string>
     <string name="table_linked_view_next">Növbəti</string>
     <string name="table_linked_view_page">%1$d / %2$d səhifə</string>

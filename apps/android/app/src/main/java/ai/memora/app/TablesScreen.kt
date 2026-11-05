@@ -28,6 +28,7 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalLocale
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
 import ai.memora.app.data.protectedstore.AgentDatabase
@@ -36,7 +37,8 @@ import ai.memora.app.data.protectedstore.ColumnType
 import ai.memora.app.data.protectedstore.DomainKind
 import ai.memora.app.data.protectedstore.DomainObjectRow
 import ai.memora.app.data.protectedstore.LinkedViewSpec
-import ai.memora.app.data.protectedstore.linkedViewPage
+import ai.memora.app.data.protectedstore.LinkedViewPage
+import ai.memora.app.data.protectedstore.LINKED_VIEW_MAX_OFFSET
 import ai.memora.app.data.protectedstore.ProtectedDomainRepository
 import ai.memora.app.data.protectedstore.TableDataRow
 import ai.memora.app.data.protectedstore.TableColumnRow
@@ -49,6 +51,7 @@ import ai.memora.app.ui.ScreenHeading
 import ai.memora.app.ui.colors
 import ai.memora.app.ui.s
 import ai.memora.app.voice.AgentVoiceTurnProcessor
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.launch
 import org.json.JSONObject
 import java.util.UUID
@@ -65,6 +68,7 @@ fun TablesScreen() {
     val scopeId = remember(processor) { processor.conversationScopeId() }
     val database = rememberUiAgentDatabase()
     val repository = remember(database) { ProtectedDomainRepository(database) }
+    val activeLocale = LocalLocale.current.platformLocale
     val coroutineScope = rememberCoroutineScope()
     var tables by remember { mutableStateOf<List<TableSnapshot>>(emptyList()) }
     var selectedTableId by remember { mutableStateOf<String?>(null) }
@@ -88,6 +92,8 @@ fun TablesScreen() {
     var linkedQuery by remember { mutableStateOf("") }
     var linkedPage by remember { mutableIntStateOf(0) }
     var linkedSortAscending by remember { mutableStateOf(true) }
+    var linkedPageResult by remember { mutableStateOf<LinkedViewPage?>(null) }
+    var linkedPageLoading by remember { mutableStateOf(false) }
     var error by remember { mutableStateOf(false) }
     val selected = tables.firstOrNull { it.table.tableId == selectedTableId }
 
@@ -103,6 +109,29 @@ fun TablesScreen() {
             deletedRows = selectedTableId?.let { repository.deletedRows(scopeId, it) }.orEmpty()
             error = false
         } catch (_: Exception) { error = true }
+    }
+
+    LaunchedEffect(scopeId, selectedTableId, tables, linkedQuery, linkedPage, linkedSortAscending, activeLocale) {
+        val table = tables.firstOrNull { it.table.tableId == selectedTableId && it.table.mode == "linked_view" }
+        if (table == null) {
+            linkedPageResult = null
+            linkedPageLoading = false
+            return@LaunchedEffect
+        }
+        linkedPageResult = null
+        linkedPageLoading = true
+        try {
+            linkedPageResult = repository.linkedViewPage(scopeId, table.table.tableId, linkedQuery, linkedSortAscending,
+                (linkedPage * 25).coerceAtMost(LINKED_VIEW_MAX_OFFSET), 25, activeLocale)
+            error = false
+        } catch (cancelled: CancellationException) {
+            throw cancelled
+        } catch (_: Exception) {
+            linkedPageResult = null
+            error = true
+        } finally {
+            linkedPageLoading = false
+        }
     }
 
     LaunchedEffect(scopeId, selectedTableId, tables, deletedRows) {
@@ -354,7 +383,7 @@ fun TablesScreen() {
             MemoraCard(onClick = { selectedTableId = table.table.tableId }, modifier = Modifier.testTag("table_${table.table.tableId}")) {
                 Text(table.table.title, style = androidx.compose.material3.MaterialTheme.typography.titleMedium, color = colors.ink)
                 Text(if (table.table.mode == "linked_view")
-                    LocalStrings.current.getString(R.string.table_linked_view_summary, table.linkedRows.size)
+                    LocalStrings.current.getString(R.string.table_linked_view_summary, table.linkedTotalCount)
                     else LocalStrings.current.getString(ai.memora.app.R.string.table_summary, table.rows.size, table.columns.size), color = colors.muted)
             }
         }
@@ -373,14 +402,17 @@ fun TablesScreen() {
                     Text(s(if (linkedSortAscending) R.string.table_linked_view_sort_ascending else R.string.table_linked_view_sort_descending))
                 }
                 val pageSize = 25
-                val viewPage = linkedViewPage(selected.linkedRows, linkedQuery, linkedSortAscending, linkedPage, pageSize)
-                Text(LocalStrings.current.getString(R.string.table_linked_view_count, viewPage.matchingCount, selected.linkedTotalCount),
+                val viewPage = linkedPageResult
+                if (linkedPageLoading) Text(s(R.string.table_linked_view_loading), color = colors.muted)
+                else if (viewPage == null) Text(s(R.string.table_action_failed), color = androidx.compose.material3.MaterialTheme.colorScheme.error)
+                val pageCount = viewPage?.let { (it.matchingCount + pageSize - 1) / pageSize } ?: 0
+                val pageIndex = viewPage?.let { if (it.matchingCount == 0) 0 else it.offset / pageSize } ?: 0
+                Text(LocalStrings.current.getString(R.string.table_linked_view_count,
+                    viewPage?.matchingCount ?: 0, viewPage?.totalCount ?: selected.linkedTotalCount),
                     color = colors.muted)
-                if (selected.linkedTotalCount > selected.linkedRows.size) {
-                    Text(s(R.string.table_linked_view_limit), color = colors.muted)
-                }
-                if (viewPage.rows.isEmpty()) Text(s(R.string.table_linked_view_empty), color = colors.muted)
-                viewPage.rows.forEach { source ->
+                if (viewPage?.continuationLimitReached == true) Text(s(R.string.table_linked_view_page_limit), color = colors.muted)
+                if (!linkedPageLoading && viewPage?.rows.isNullOrEmpty()) Text(s(R.string.table_linked_view_empty), color = colors.muted)
+                viewPage?.rows.orEmpty().forEach { source ->
                     MemoraCard(modifier = Modifier.testTag("linked_view_source_${source.objectId}")) {
                         Text(source.title, style = androidx.compose.material3.MaterialTheme.typography.titleMedium, color = colors.ink)
                         source.body?.takeIf(String::isNotBlank)?.let { Text(it, color = colors.muted) }
@@ -388,12 +420,12 @@ fun TablesScreen() {
                             style = androidx.compose.material3.MaterialTheme.typography.labelSmall, color = colors.accent)
                     }
                 }
-                if (viewPage.pageCount > 1) {
+                if (pageCount > 1) {
                     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                        TextButton(onClick = { linkedPage = (viewPage.pageIndex - 1).coerceAtLeast(0) }, enabled = viewPage.pageIndex > 0,
+                        TextButton(onClick = { linkedPage = (pageIndex - 1).coerceAtLeast(0) }, enabled = pageIndex > 0,
                             modifier = Modifier.testTag("linked_view_previous")) { Text(s(R.string.table_linked_view_previous)) }
-                        Text(LocalStrings.current.getString(R.string.table_linked_view_page, viewPage.pageIndex + 1, viewPage.pageCount), color = colors.muted)
-                        TextButton(onClick = { linkedPage = (viewPage.pageIndex + 1).coerceAtMost(viewPage.pageCount - 1) }, enabled = viewPage.pageIndex + 1 < viewPage.pageCount,
+                        Text(LocalStrings.current.getString(R.string.table_linked_view_page, pageIndex + 1, pageCount), color = colors.muted)
+                        TextButton(onClick = { linkedPage = (pageIndex + 1).coerceAtMost(pageCount - 1) }, enabled = viewPage?.nextOffset != null,
                             modifier = Modifier.testTag("linked_view_next")) { Text(s(R.string.table_linked_view_next)) }
                     }
                 }
