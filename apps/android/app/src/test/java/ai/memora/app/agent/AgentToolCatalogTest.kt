@@ -44,6 +44,8 @@ class AgentToolCatalogTest {
         assertEquals(setOf("fact_id", "expected_revision", "fact"), editProfileFact.parameters.filterNot { it.optional }.map { it.name }.toSet())
         assertTrue(editProfileFact.optionalParameters.contains("source_quote"))
         assertEquals(AgentToolValueType.INTEGER, editProfileFact.parameters.single { it.name == "expected_revision" }.type)
+        assertTrue(requireNotNull(AgentToolCatalog.find("search_memory", 1)).description
+            .contains("exact user-message excerpts"))
     }
 
     @Test fun requiredAndOptionalFieldsMatchLocalHandlerContracts() {

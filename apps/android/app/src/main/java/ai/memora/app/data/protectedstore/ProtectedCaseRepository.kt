@@ -380,12 +380,29 @@ internal class ProtectedCaseRepository(private val db: AgentDatabase) {
         require(scope.isNotBlank() && query.length <= 200 && limit in 1..30)
         val terms = caseSearchTerms(query)
         if (terms.isEmpty()) return if (query.isBlank()) dao.activeCases(scope, limit) else emptyList()
-        return dao.activeCases(scope, 100).mapNotNull { record ->
+        val activeRecords = dao.activeCases(scope, 100)
+        val recentRevisionsByCase = activeRecords.associate { record ->
+            record.caseId to dao.caseRevisions(record.caseId).takeLast(MAX_CASE_SOURCE_SEARCH_REVISIONS)
+        }
+        val sourceTurns = recentRevisionsByCase.values.flatten().map { it.sourceTurnId }.distinct()
+        val userMessagesByTurn = if (sourceTurns.isEmpty()) emptyMap() else dao
+            .conversationMessagesForTurns(scope, sourceTurns)
+            .filter { it.role == "user" }
+            .associateBy { it.turnId }
+        return activeRecords.mapNotNull { record ->
             val participantNames = dao.caseParticipants(scope, record.caseId).mapNotNull { participant ->
                 dao.domainObject(scope, participant.domainPersonId)?.takeIf { it.deletedAt == null }?.title
             }
             val titleTokens = caseSearchTerms(record.title)
-            val allTokens = (listOfNotNull(record.title, record.summary, record.nextAction) + participantNames).flatMap(::caseSearchTerms).distinct()
+            val sourceTexts = recentRevisionsByCase[record.caseId].orEmpty().mapNotNull { revision ->
+                val text = userMessagesByTurn[revision.sourceTurnId]?.message ?: return@mapNotNull null
+                val start = revision.sourceStartUtf16
+                val end = revision.sourceEndUtf16
+                if (start == null || end == null || start < 0 || end <= start || end > text.length) null
+                else text.substring(start, end)
+            }
+            val allTokens = (listOfNotNull(record.title, record.summary, record.nextAction) + participantNames + sourceTexts)
+                .flatMap(::caseSearchTerms).distinct()
             val matched = terms.count { term -> allTokens.any { caseSearchTokenMatches(term, it) } }
             if (matched == 0) null else {
                 val titleMatches = terms.count { term -> titleTokens.any { caseSearchTokenMatches(term, it) } }
@@ -505,6 +522,7 @@ internal class ProtectedCaseRepository(private val db: AgentDatabase) {
     private fun sortTime(value: String): Long = runCatching { Instant.parse(value).toEpochMilli() }.getOrDefault(0L)
 
     private companion object {
+        const val MAX_CASE_SOURCE_SEARCH_REVISIONS = 3
         val CASE_STATUSES = setOf("open", "waiting", "completed", "cancelled")
         val CASE_SEARCH_SEPARATOR = Regex("[^\\p{L}\\p{N}]+")
         val CASE_SEARCH_MARKS = Regex("\\p{M}+")

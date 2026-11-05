@@ -587,12 +587,27 @@ internal class LocalMemoryTools(private val repository: ProtectedDomainRepositor
         caseCandidates.forEach caseLoop@{ record ->
             val snapshot = cases.caseSnapshot(scope, record.caseId) ?: return@caseLoop
             val participants = snapshot.participants.map { mapOf("person_object_id" to it.objectId, "name" to it.title) }
-            val relevance = score(listOfNotNull(record.title, record.summary, record.nextAction) + snapshot.participants.map { it.title }, record.title)
+            val caseSourceExcerpts = snapshot.timeline.asSequence()
+                .filter { it.sourceKind == "case_revision" }
+                .mapNotNull { it.sourceExcerpt }
+                .toList()
+            val relevance = score(listOfNotNull(record.title, record.summary, record.nextAction) +
+                snapshot.participants.map { it.title } + caseSourceExcerpts, record.title)
             if (relevance > 0) hits += RankedActivity(relevance, record.updatedAt, "case", record.caseId,
                 mapOf("kind" to "case", "source_id" to record.caseId, "source_revision_id" to "${record.caseId}:${record.version}",
                     "case_id" to record.caseId, "version" to record.version, "title" to record.title,
                     "summary" to record.summary?.take(240), "status" to record.status,
                     "next_action" to record.nextAction?.take(180), "participants" to participants.take(8),
+                    "source_quotes" to snapshot.timeline.asReversed().asSequence()
+                        .filter { it.sourceKind == "case_revision" && it.sourceExcerpt != null }
+                        .take(3)
+                        .map { entry -> mapOf("revision_id" to entry.id, "source_turn_id" to entry.sourceRevisionId,
+                            "excerpt" to entry.sourceExcerpt,
+                            "exact_match_verified" to true) }
+                        .toList(),
+                    "source_quotes_truncated" to (snapshot.timeline.count {
+                        it.sourceKind == "case_revision" && it.sourceExcerpt != null
+                    } > 3),
                     "sources" to snapshot.evidence.filter { it.sourceAvailable }.take(8).map { source -> mapOf(
                         "source_kind" to source.evidence.sourceKind, "source_id" to source.evidence.sourceId,
                         "source_revision_id" to source.evidence.sourceRevisionId, "relation" to source.evidence.relation,

@@ -1,5 +1,9 @@
 # M20-08 Native validation matrix
 
+## ACT-0190 — Verified case-source retrieval in unified memory search
+
+`search_memory` can find a case by exact wording in its three newest locally anchored revision excerpts and returns up to three verified excerpts, same-scope source-turn IDs and truncation metadata. Synthetic cross-domain regression passed. Full Gradle: 63 suites / 326 tests, 0 failures/errors/skips; debug/AndroidTest APK builds and AndroidTest Kotlin compile passed; lint 0 errors / 73 warnings / 3 hints. APK v68 / `1.1.46-case-source-retrieval`, SHA-256 `a1b2b698bd8c94b1b69893de7762b8670b4341f8aa93cfe92d393bc0171c62f2`. No schema change. Host synthetic only; ADB empty, no device/TalkBack/live Gemini/owner acceptance. Lexical retrieval and source wording do not establish semantic truth. M20-04/P3 remains partial.
+
 ## ACT-0188 — Case source spans and backup schema compatibility
 
 Case `create_case` / substantive `update_case` may provide an optional exact quote from the current user turn. Exact substring matching occurs locally; only nullable UTF-16 offsets are persisted on `case_revision`, and the excerpt is derived from canonical conversation text in case timeline/UI/tool reads. A mismatch remains unanchored. Room 20→21 is additive; generated schema21 confirms nullable offsets. New portable SQLCipher snapshots use current schema21. Parser accepts schema21 and legacy18 only; staged Room validation must migrate/read back as21. Room19/20 snapshots are not accepted because they were not produced by the pinned historical backup exporter. This schema compatibility change does not make the Room-only artifact a full all-store Memora backup.

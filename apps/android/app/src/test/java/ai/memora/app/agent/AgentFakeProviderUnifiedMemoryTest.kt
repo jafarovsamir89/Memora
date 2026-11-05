@@ -49,7 +49,9 @@ class AgentFakeProviderUnifiedMemoryTest {
             "Synthetic BMW engine repair deposit", null, "synthetic-finance-elchin", "synthetic-bmw-expense",
             "synthetic-bmw-expense-command", "2026-11-03T09:00:00Z", "2026-11-03T09:00:00Z")
         cases.createCase(scope, "synthetic-bmw-case", "Synthetic BMW repair", "Fictional work with Synthetic Elchin",
-            nextAction = "Confirm test drive", sourceTurnId = "synthetic-case-source", now = "2026-11-03T09:10:00Z")
+            nextAction = "Confirm test drive", sourceTurnId = "synthetic-case-source", now = "2026-11-03T09:10:00Z",
+            sourceText = "Synthetic owner update: replacement parts for the BMW arrive Friday.",
+            sourceQuote = "replacement parts for the BMW arrive Friday")
         cases.addParticipant(scope, "synthetic-bmw-case", "synthetic-elchin-person", "customer",
             "synthetic-bmw-participant", now = "2026-11-03T09:11:00Z")
         cases.addEvidence(scope, "synthetic-bmw-case", "money_event", "synthetic-bmw-expense", "repair_deposit",
@@ -125,6 +127,14 @@ class AgentFakeProviderUnifiedMemoryTest {
         assertFalse(observation.modelData["activity_truncated"] as Boolean)
         val caseHit = activity.map { it as Map<*, *> }.single { it["kind"] == "case" }
         assertEquals("synthetic-bmw-case:1", caseHit["source_revision_id"])
+        val caseQuotes = caseHit["source_quotes"] as List<*>
+        assertEquals(1, caseQuotes.size)
+        val caseQuote = caseQuotes.single() as Map<*, *>
+        assertEquals("case:synthetic-bmw-case:1", caseQuote["revision_id"])
+        assertEquals("synthetic-case-source", caseQuote["source_turn_id"])
+        assertEquals("replacement parts for the BMW arrive Friday", caseQuote["excerpt"])
+        assertEquals(true, caseQuote["exact_match_verified"])
+        assertEquals(false, caseHit["source_quotes_truncated"])
         val caseSources = caseHit["sources"] as List<*>
         assertEquals("synthetic-bmw-expense", ((caseSources.single() as Map<*, *>)["source_id"]))
         val moneyHit = activity.map { it as Map<*, *> }.single { it["kind"] == "money_event" }
@@ -132,7 +142,7 @@ class AgentFakeProviderUnifiedMemoryTest {
         assertEquals(5_000L, moneyHit["minor_units"])
         assertEquals(true, moneyHit["exact_financial_totals_require_search_money"])
         val conversationTurns = observation.modelData["conversation_turns"] as List<*>
-        assertEquals("synthetic-bmw-conversation", ((conversationTurns.single() as Map<*, *>)["turn_id"]))
+        assertTrue(conversationTurns.map { (it as Map<*, *>)["turn_id"] }.contains("synthetic-bmw-conversation"))
         val profileFacts = observation.modelData["profile_facts"] as List<*>
         assertEquals("synthetic-bmw-conversation", (((profileFacts.single() as Map<*, *>)["source_turn_ids"] as List<*>).single()))
         assertNotNull(provider.answerReceivedEvidence)
@@ -150,6 +160,15 @@ class AgentFakeProviderUnifiedMemoryTest {
         assertTrue("unexpected AZ name results: $azKinds", azKinds.containsAll(setOf("money_event", "case", "task", "table_row")))
         assertTrue((inflectedName.modelData["evidence"] as List<*>).isNotEmpty())
         assertTrue((inflectedName.modelData["conversation_turns"] as List<*>).isNotEmpty())
+
+        val sourcePhraseSearch = searchHandler.read(AgentModelToolCall("synthetic-case-source-search", "search_memory", 1,
+            mapOf("query" to "replacement parts arrive Friday")), turnRequest)
+        assertEquals(ToolObservationStatus.APPLIED, sourcePhraseSearch.status)
+        val sourcePhraseHits = sourcePhraseSearch.modelData["activity"] as List<*>
+        val sourcePhraseCase = sourcePhraseHits.map { it as Map<*, *> }
+            .single { it["kind"] == "case" && it["source_id"] == "synthetic-bmw-case" }
+        assertEquals("replacement parts for the BMW arrive Friday",
+            ((sourcePhraseCase["source_quotes"] as List<*>).single() as Map<*, *>)["excerpt"])
     }
 
     @Test fun exactPhraseAndTitleMatchesRankAheadOfScatteredFieldMatches() = runBlocking {
