@@ -82,7 +82,10 @@ internal class LocalMemoryTools(private val repository: ProtectedDomainRepositor
                         "revision" to alias.version, "source_turn_id" to alias.sourceTurnId,
                         "match_mode" to "exact_alias_phrase") }
             }
-            val activity = searchRelatedActivity(turn.scopeId, terms, query)
+            val matchedPersonIds = (hits.filter { it.kind == DomainKind.PERSON &&
+                PersonAliasRepository.queryContainsExactPhrase(query, it.title) }.map { it.objectId } +
+                aliasHits.mapNotNull { it["person_id"] as? String }).distinct()
+            val activity = searchRelatedActivity(turn.scopeId, terms, query, matchedPersonIds)
             return ToolCommitResult(ToolObservationStatus.APPLIED, "evidence_found", mapOf(
                 "count" to (hits.size + episodes.size + conversationTurns.size + profileFacts.size + aliasHits.size + activity.items.size),
                 "match_mode" to "ranked_lexical",
@@ -488,7 +491,8 @@ internal class LocalMemoryTools(private val repository: ProtectedDomainRepositor
      * Adds bounded, phrase- and title-weighted lexical references from canonical domain stores to memory search.
      * Exact finance totals and full case timelines remain the responsibility of their specialist tools.
      */
-    private suspend fun searchRelatedActivity(scope: String, terms: List<String>, query: String): UnifiedActivitySearch {
+    private suspend fun searchRelatedActivity(scope: String, terms: List<String>, query: String,
+        matchedPersonIds: List<String> = emptyList()): UnifiedActivitySearch {
         val hits = mutableListOf<RankedActivity>()
         val relativeDates = resolveRelativeSearchDates(query)
         val foldedTerms = (terms + relativeDates.flatMap(::memorySearchTerms)).map(::normalizeMemorySearchText).distinct()
@@ -585,19 +589,40 @@ internal class LocalMemoryTools(private val repository: ProtectedDomainRepositor
         }
 
         val caseCandidates = cases.searchCases(scope, query, limit = 20)
-        caseCandidates.forEach caseLoop@{ record ->
+        val personLinkedCaseRecords = linkedMapOf<String, ai.memora.app.data.protectedstore.CaseRecordRow>()
+        val personLinkedCaseIds = linkedMapOf<String, MutableSet<String>>()
+        val boundedPersonIds = matchedPersonIds.distinct().take(MAX_PERSON_CASE_LOOKUPS)
+        var linkedCaseSearchTruncated = matchedPersonIds.distinct().size > MAX_PERSON_CASE_LOOKUPS
+        boundedPersonIds.forEach { personId ->
+            val personCases = cases.casesForPerson(scope, personId, limit = 100)
+            if (personCases.size == 100) linkedCaseSearchTruncated = true
+            personCases.forEach { record ->
+                personLinkedCaseRecords[record.caseId] = record
+                personLinkedCaseIds.getOrPut(record.caseId) { linkedSetOf() }.add(personId)
+            }
+        }
+        val boundedLinkedCaseRecords = personLinkedCaseRecords.values
+            .sortedWith(compareByDescending<ai.memora.app.data.protectedstore.CaseRecordRow> { it.updatedAt }.thenBy { it.caseId })
+            .take(MAX_PERSON_CASE_CANDIDATES)
+        if (personLinkedCaseRecords.size > MAX_PERSON_CASE_CANDIDATES) linkedCaseSearchTruncated = true
+        val casesToRead = (caseCandidates + boundedLinkedCaseRecords).distinctBy { it.caseId }
+        casesToRead.forEach caseLoop@{ record ->
             val snapshot = cases.caseSnapshot(scope, record.caseId) ?: return@caseLoop
             val participants = snapshot.participants.map { mapOf("person_object_id" to it.objectId, "name" to it.title) }
             val caseSourceExcerpts = snapshot.timeline.asSequence()
                 .filter { it.sourceKind == "case_revision" }
                 .mapNotNull { it.sourceExcerpt }
                 .toList()
-            val relevance = score(listOfNotNull(record.title, record.summary, record.nextAction) +
-                snapshot.participants.map { it.title } + caseSourceExcerpts, record.title)
+            val explicitlyLinkedPersonIds = personLinkedCaseIds[record.caseId].orEmpty().toList()
+            val relevance = maxOf(score(listOfNotNull(record.title, record.summary, record.nextAction) +
+                snapshot.participants.map { it.title } + caseSourceExcerpts, record.title),
+                if (explicitlyLinkedPersonIds.isNotEmpty()) 150 else 0)
             if (relevance > 0) hits += RankedActivity(relevance, record.updatedAt, "case", record.caseId,
                 mapOf("kind" to "case", "source_id" to record.caseId, "source_revision_id" to "${record.caseId}:${record.version}",
                     "case_id" to record.caseId, "version" to record.version, "title" to record.title,
                     "summary" to record.summary?.take(240), "status" to record.status,
+                    "retrieval_reason" to if (explicitlyLinkedPersonIds.isNotEmpty()) "explicit_person_case_link" else "ranked_lexical",
+                    "matched_person_ids" to explicitlyLinkedPersonIds,
                     "next_action" to record.nextAction?.take(180), "participants" to participants.take(8),
                     "source_quotes" to snapshot.timeline.asReversed().asSequence()
                         .filter { it.sourceKind == "case_revision" && it.sourceExcerpt != null }
@@ -619,7 +644,7 @@ internal class LocalMemoryTools(private val repository: ProtectedDomainRepositor
         val ranked = hits.sortedWith(compareByDescending<RankedActivity> { it.score }
             .thenByDescending { it.sortAt }.thenBy { it.kind }.thenBy { it.id })
         return UnifiedActivitySearch(ranked.take(MAX_UNIFIED_ACTIVITY_HITS).map { it.data },
-            ranked.size > MAX_UNIFIED_ACTIVITY_HITS || caseCandidates.size == MAX_CASE_CANDIDATES)
+            ranked.size > MAX_UNIFIED_ACTIVITY_HITS || caseCandidates.size == MAX_CASE_CANDIDATES || linkedCaseSearchTruncated)
     }
 
     private fun resolveRelativeSearchDates(query: String): List<String> {
@@ -665,6 +690,8 @@ internal class LocalMemoryTools(private val repository: ProtectedDomainRepositor
         else localDate(value, sourceZoneId)
 
     private companion object {
+        const val MAX_PERSON_CASE_LOOKUPS = 3
+        const val MAX_PERSON_CASE_CANDIDATES = 20
         val ISO_LOCAL_DATE = Regex("(?<!\\d)\\d{4}-\\d{2}-\\d{2}(?!\\d)")
         val RELATIVE_DATE_WORD = Regex("(?<![\\p{L}\\p{N}])(?:bu\\s+gun|bugun|sabah|dunen|dun|today|tomorrow|yesterday|сегодня|завтра|вчера)(?![\\p{L}\\p{N}])")
         val TODAY_WORDS = setOf("bu gun", "bugun", "today", "сегодня")

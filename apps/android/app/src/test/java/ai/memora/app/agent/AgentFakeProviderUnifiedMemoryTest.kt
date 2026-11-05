@@ -75,6 +75,43 @@ class AgentFakeProviderUnifiedMemoryTest {
         assertTrue((ambiguousResult.modelData["person_aliases"] as List<*>).isEmpty())
     }
 
+    @Test fun searchMemoryFollowsMatchedPersonToOnlyExplicitlyLinkedCases() = runBlocking {
+        val db = databaseRule.database
+        val scope = "00000000-0000-4000-8000-000000000195"
+        val foreignScope = "00000000-0000-4000-8000-000000000196"
+        val domain = ProtectedDomainRepository(db)
+        val aliases = PersonAliasRepository(db)
+        val cases = ProtectedCaseRepository(db)
+        domain.createObject(scope, "synthetic-linked-person", DomainKind.PERSON, "Synthetic Canonical Person",
+            null, null, "2026-11-04T09:00:00Z")
+        domain.createObject(foreignScope, "synthetic-foreign-person", DomainKind.PERSON, "Synthetic Foreign Person",
+            null, null, "2026-11-04T09:00:00Z")
+        aliases.add(scope, "synthetic-linked-person", "Samir Ustad", sourceTurnId = "synthetic-linked-alias-source")
+        cases.createCase(scope, "synthetic-linked-case", "Synthetic turbine repair", "Fictional engine repair context",
+            nextAction = "Confirm delivery", sourceTurnId = "synthetic-linked-case-source",
+            now = "2026-11-04T09:10:00Z")
+        cases.addParticipant(scope, "synthetic-linked-case", "synthetic-linked-person", "customer",
+            "synthetic-linked-participant", now = "2026-11-04T09:11:00Z")
+        cases.createCase(scope, "synthetic-unlinked-case", "Synthetic unrelated delivery", "No person participant",
+            sourceTurnId = "synthetic-unlinked-case-source", now = "2026-11-04T09:12:00Z")
+        cases.createCase(foreignScope, "synthetic-foreign-linked-case", "Synthetic foreign matter", "Foreign scope",
+            sourceTurnId = "synthetic-foreign-case-source", now = "2026-11-04T09:13:00Z")
+        cases.addParticipant(foreignScope, "synthetic-foreign-linked-case", "synthetic-foreign-person", "customer",
+            "synthetic-foreign-participant", now = "2026-11-04T09:14:00Z")
+
+        val handler = LocalMemoryTools(domain, ProtectedMemoryRepository(db), personAliases = aliases).handlers()
+            .single { it.descriptor.name == "search_memory" }
+        val result = handler.read(AgentModelToolCall("synthetic-linked-person-query", "search_memory", 1,
+            mapOf("query" to "What did Samir Ustad promise?")), AgentTurnRequest(
+            "synthetic-linked-person-turn", scope, "synthetic-linked-person-session", null, "en-US", "Synthetic query"))
+        val activity = result.modelData["activity"] as List<*>
+        val caseHits = activity.mapNotNull { it as? Map<*, *> }.filter { it["kind"] == "case" }
+        assertEquals(listOf("synthetic-linked-case"), caseHits.mapNotNull { it["case_id"] as? String })
+        assertEquals("explicit_person_case_link", caseHits.single()["retrieval_reason"])
+        assertEquals(listOf("synthetic-linked-person"), caseHits.single()["matched_person_ids"])
+        assertEquals(1, cases.casesForPerson(scope, "synthetic-linked-person").size)
+    }
+
     @Test fun caseSearchPagesBeyondTheNewestHundredRecords() = runBlocking {
         val scope = "00000000-0000-4000-8000-000000000190"
         val dao = databaseRule.database.protectedStoreDao()

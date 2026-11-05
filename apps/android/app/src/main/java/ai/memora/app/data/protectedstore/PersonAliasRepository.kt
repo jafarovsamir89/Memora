@@ -177,6 +177,12 @@ internal class PersonAliasRepository(private val db: AgentDatabase) {
     companion object {
         private val phraseSeparator = Regex("[^\\p{L}\\p{N}]+")
 
+        internal fun queryContainsExactPhrase(query: String, phrase: String): Boolean {
+            val queryTokens = phraseTokens(query)
+            val phraseTokens = phraseTokens(phrase)
+            return queryTokens.isNotEmpty() && phraseTokens.isNotEmpty() && queryTokens.containsPhrase(phraseTokens)
+        }
+
         private fun phraseTokens(value: String): List<String> = normalizeAlias(value)
             .split(phraseSeparator).filter(String::isNotEmpty)
 
