@@ -256,6 +256,7 @@ private fun PersonCardSections(
     var calendarLinks by remember(person.objectId) { mutableStateOf<List<CalendarPersonLinkRow>>(emptyList()) }
     var historyByPersonId by remember(person.objectId) { mutableStateOf<Map<String, ai.memora.app.data.protectedstore.FinanceHistory>>(emptyMap()) }
     var relatedCases by remember(person.objectId) { mutableStateOf<List<CaseSnapshot>>(emptyList()) }
+    var showAllRelatedCases by remember(person.objectId) { mutableStateOf(false) }
     var relatedObjects by remember(person.objectId) { mutableStateOf<List<LinkedDomainObject>>(emptyList()) }
     var aliases by remember(person.objectId) { mutableStateOf<List<PersonAliasRow>>(emptyList()) }
     var newAlias by remember(person.objectId) { mutableStateOf("") }
@@ -288,7 +289,7 @@ private fun PersonCardSections(
             historyByPersonId = matched.filter { it.confirmedLink?.domainPersonId == person.objectId }
                 .mapNotNull { choice -> domainRepository.financeHistoryByPersonId(scopeId, choice.financePerson.personId)
                     ?.let { choice.financePerson.personId to it } }.toMap()
-            relatedCases = caseRepository.cases(scopeId, 100).mapNotNull { case ->
+            relatedCases = caseRepository.casesForPerson(scopeId, person.objectId, 100).mapNotNull { case ->
                 caseRepository.caseSnapshot(scopeId, case.caseId)?.takeIf { snapshot ->
                     snapshot.participants.any { it.objectId == person.objectId }
                 }
@@ -689,7 +690,7 @@ private fun PersonCardSections(
     if (relatedCases.isNotEmpty()) {
         Text(s(ai.memora.app.R.string.cases), modifier = Modifier.padding(top = 18.dp),
             style = androidx.compose.material3.MaterialTheme.typography.titleSmall, color = colors.ink)
-        relatedCases.take(8).forEach { snapshot ->
+        relatedCases.take(if (showAllRelatedCases) relatedCases.size else 8).forEach { snapshot ->
             MemoraCard(modifier = Modifier.padding(top = 8.dp)
                 .testTag("person_related_case_${snapshot.record.caseId}"),
                 onClick = { onOpenCaseDetails(snapshot) }) {
@@ -702,6 +703,15 @@ private fun PersonCardSections(
                     Text("${event.title} · ${event.at}", color = colors.muted,
                         style = androidx.compose.material3.MaterialTheme.typography.bodySmall)
                 }
+            }
+        }
+        if (relatedCases.size > 8) {
+            TextButton(
+                modifier = Modifier.testTag("person_related_cases_toggle"),
+                onClick = { showAllRelatedCases = !showAllRelatedCases },
+            ) {
+                Text(s(if (showAllRelatedCases) ai.memora.app.R.string.person_cases_show_fewer
+                    else ai.memora.app.R.string.person_cases_show_all))
             }
         }
     }

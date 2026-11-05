@@ -306,6 +306,13 @@ class CasesAndPersonCardTest {
             evidenceId = "synthetic-task-evidence-2", now = "2026-11-03T10:07:00Z")
         cases.addEvidence(scope, "synthetic-source-case-2", "money_event", "synthetic-planner-receipt", "advance",
             evidenceId = "synthetic-planner-receipt-evidence-2", now = "2026-11-03T10:07:30Z")
+        repeat(7) { index ->
+            val caseId = "synthetic-expanded-case-$index"
+            val at = "2026-11-03T10:${(8 + index).toString().padStart(2, '0')}:00Z"
+            cases.createCase(scope, caseId, "Synthetic expanded case $index", null,
+                sourceTurnId = "synthetic-expanded-source-$index", now = at)
+            cases.addParticipant(scope, caseId, "synthetic-source-person", now = at)
+        }
 
         compose.setContent {
             CompositionLocalProvider(LocalAgentDatabaseOverride provides databaseRule.database) {
@@ -318,6 +325,16 @@ class CasesAndPersonCardTest {
             compose.onAllNodesWithTag("saved_object_synthetic-source-person").fetchSemanticsNodes().isNotEmpty()
         }
         compose.onNodeWithTag("saved_object_synthetic-source-person").performScrollTo().performClick()
+        compose.waitUntil(10_000) {
+            compose.onAllNodesWithTag("person_related_cases_toggle").fetchSemanticsNodes().isNotEmpty()
+        }
+        compose.onNodeWithTag("person_related_case_synthetic-source-case").assertDoesNotExist()
+        compose.onNodeWithTag("person_related_cases_toggle").performScrollTo().performClick()
+        compose.waitUntil(10_000) {
+            compose.onAllNodesWithTag("person_related_case_synthetic-source-case").fetchSemanticsNodes().isNotEmpty()
+        }
+        compose.onNodeWithTag("person_related_case_synthetic-source-case").assertExists()
+        compose.onNodeWithTag("person_related_cases_toggle").assertExists()
         compose.waitUntil(10_000) {
             compose.onAllNodes(hasTestTag("person_task_link_open") and androidx.compose.ui.test.isEnabled())
                 .fetchSemanticsNodes().isNotEmpty()
@@ -380,6 +397,9 @@ class CasesAndPersonCardTest {
         compose.onAllNodesWithTag(taskStoryTag).assertCountEquals(1)
         compose.onAllNodesWithTag(calendarStoryTag).assertCountEquals(1)
         assertEquals(1, runBlocking { databaseRule.database.protectedStoreDao().moneyEvents(scope).size })
+        if (compose.onAllNodesWithTag("person_related_case_synthetic-source-case").fetchSemanticsNodes().isEmpty()) {
+            compose.onNodeWithTag("person_related_cases_toggle").performScrollTo().performClick()
+        }
         compose.onNodeWithTag("person_related_case_synthetic-source-case").assertExists()
         compose.onNodeWithTag("person_related_case_synthetic-source-case-2").assertExists()
         compose.onNodeWithTag(taskStoryTag).performScrollTo()
@@ -392,6 +412,12 @@ class CasesAndPersonCardTest {
         screenshot("25-person-single-receipt-source")
         compose.onNodeWithTag("saved_object_detail_back").performClick()
         compose.onNodeWithTag("saved_object_detail_title").assertTextEquals("Synthetic Planner")
+        compose.waitUntil(10_000) {
+            compose.onAllNodesWithTag("person_related_cases_toggle").fetchSemanticsNodes().isNotEmpty()
+        }
+        if (compose.onAllNodesWithTag("person_related_case_synthetic-source-case").fetchSemanticsNodes().isEmpty()) {
+            compose.onNodeWithTag("person_related_cases_toggle").performScrollTo().performClick()
+        }
         compose.waitUntil(10_000) {
             compose.onAllNodesWithTag("person_related_case_synthetic-source-case").fetchSemanticsNodes().isNotEmpty()
         }

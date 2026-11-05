@@ -437,6 +437,8 @@
     <string name="case_timeline_update">Дело обновлено</string>
     <string name="case_source_exact_excerpt">Точная цитата: «%1$s»</string>
     <string name="person_timeline">История человека</string>
+    <string name="person_cases_show_all">Показать все связанные дела</string>
+    <string name="person_cases_show_fewer">Показать меньше</string>
     <string name="person_related_records">Связанные записи</string>
     <string name="person_related_kind_person">Человек</string>
     <string name="person_related_kind_project">Проект</string>

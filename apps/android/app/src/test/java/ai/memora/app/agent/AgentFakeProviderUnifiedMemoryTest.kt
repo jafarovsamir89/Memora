@@ -3,6 +3,7 @@ package ai.memora.app.agent
 import ai.memora.app.UiAgentDatabaseRule
 import ai.memora.app.data.protectedstore.CalendarInput
 import ai.memora.app.data.protectedstore.CaseRecordRow
+import ai.memora.app.data.protectedstore.CaseParticipantRow
 import ai.memora.app.data.protectedstore.ColumnSpec
 import ai.memora.app.data.protectedstore.ColumnType
 import ai.memora.app.data.protectedstore.DomainKind
@@ -50,6 +51,30 @@ class AgentFakeProviderUnifiedMemoryTest {
 
         val matches = ProtectedCaseRepository(databaseRule.database).searchCases(scope, "gearbox delivery", limit = 30)
         assertEquals(listOf("synthetic-case-page-0"), matches.map { it.caseId })
+    }
+
+    @Test fun personLinkedCasesAreNotHiddenByUnrelatedRecentCases() = runBlocking {
+        val scope = "00000000-0000-4000-8000-000000000191"
+        val otherScope = "00000000-0000-4000-8000-000000000192"
+        val dao = databaseRule.database.protectedStoreDao()
+        val base = Instant.parse("2026-11-03T00:00:00Z")
+        repeat(105) { index ->
+            val updatedAt = base.plusSeconds(index.toLong()).toString()
+            dao.insertCase(CaseRecordRow("synthetic-unrelated-$index", scope, "Synthetic unrelated $index",
+                null, "open", null, 1, "synthetic-unrelated-source-$index", updatedAt, updatedAt, null))
+        }
+        val olderCaseTime = base.minusSeconds(1).toString()
+        dao.insertCase(CaseRecordRow("synthetic-person-older-case", scope, "Synthetic older linked case",
+            null, "open", null, 1, "synthetic-person-case-source", olderCaseTime, olderCaseTime, null))
+        dao.insertCaseParticipant(CaseParticipantRow("synthetic-person-old-link", scope,
+            "synthetic-person-older-case", "synthetic-person-191", "contact", olderCaseTime, null))
+        dao.insertCase(CaseRecordRow("synthetic-foreign-person-case", otherScope, "Synthetic foreign linked case",
+            null, "open", null, 1, "synthetic-foreign-source", olderCaseTime, olderCaseTime, null))
+        dao.insertCaseParticipant(CaseParticipantRow("synthetic-foreign-person-link", otherScope,
+            "synthetic-foreign-person-case", "synthetic-person-191", "contact", olderCaseTime, null))
+
+        val matches = ProtectedCaseRepository(databaseRule.database).casesForPerson(scope, "synthetic-person-191")
+        assertEquals(listOf("synthetic-person-older-case"), matches.map { it.caseId })
     }
 
     @Test fun naturalCrossDomainSearchReturnsScopedCanonicalSourcesAndLeavesStoresUnchanged() = runBlocking {

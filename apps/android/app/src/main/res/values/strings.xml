@@ -437,6 +437,8 @@
     <string name="case_timeline_update">İş yeniləndi</string>
     <string name="case_source_exact_excerpt">Dəqiq mənbə: “%1$s”</string>
     <string name="person_timeline">Şəxsin tarixçəsi</string>
+    <string name="person_cases_show_all">Bütün əlaqəli işləri göstər</string>
+    <string name="person_cases_show_fewer">Daha az göstər</string>
     <string name="person_related_records">Bağlı qeydlər</string>
     <string name="person_related_kind_person">Şəxs</string>
     <string name="person_related_kind_project">Layihə</string>

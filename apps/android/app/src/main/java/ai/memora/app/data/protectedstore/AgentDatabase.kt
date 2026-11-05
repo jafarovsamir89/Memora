@@ -732,6 +732,8 @@ internal interface ProtectedStoreDao {
     @androidx.room.Query("SELECT * FROM case_record WHERE scopeId=:scope AND caseId=:id") suspend fun caseRecord(scope: String, id: String): CaseRecordRow?
     @androidx.room.Query("SELECT * FROM case_record WHERE scopeId=:scope AND deletedAt IS NULL ORDER BY updatedAt DESC, caseId LIMIT :limit")
     suspend fun activeCases(scope: String, limit: Int): List<CaseRecordRow>
+    @androidx.room.Query("SELECT c.* FROM case_record c INNER JOIN case_participant p ON p.scopeId=c.scopeId AND p.caseId=c.caseId WHERE c.scopeId=:scope AND c.deletedAt IS NULL AND p.domainPersonId=:personId AND p.deletedAt IS NULL ORDER BY c.updatedAt DESC, c.caseId LIMIT :limit")
+    suspend fun activeCasesForPerson(scope: String, personId: String, limit: Int): List<CaseRecordRow>
     @androidx.room.Query("SELECT * FROM case_record WHERE scopeId=:scope AND deletedAt IS NULL AND status=:status ORDER BY updatedAt DESC, caseId LIMIT :limit")
     suspend fun casesByStatus(scope: String, status: String, limit: Int): List<CaseRecordRow>
     @androidx.room.Query("SELECT * FROM case_record WHERE scopeId=:scope AND deletedAt IS NULL AND (:status IS NULL OR status=:status) ORDER BY updatedAt DESC, caseId LIMIT :limit OFFSET :offset")

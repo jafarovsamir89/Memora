@@ -175,7 +175,7 @@ Memora не всезнающая и не всегда точнее челове�
 - M20-00 — code/data/UI baseline, migration/backup risk inventory, gap assessment, проверка существующих тестов.
 - M20-01 — provider abstraction, persona, natural conversation/advice vs action, correct tool routing; alternate fake provider contract tests.
 - M20-02 — first-run onboarding, пустая новая БД, non-destructive upgrade, Android backup/restore policy.
-- M20-03 — PersonIdentity/cases/relations unified bridge, карточка человека, BMW/Эльчин cross-domain timeline.
+- M20-03 — PersonIdentity/cases/relations unified bridge, карточка человека, BMW/Эльчин cross-domain timeline. Person detail retrieves cases by explicit participant identity within the active scope, and the bounded related-case list must be expandable so unrelated newer work or an arbitrary short preview does not conceal linked history.
 - M20-04 — personal/episodic memory, semantic+keyword search, evidence, retention and forgetting, multi-turn continuity.
 - M20-05 — premium Today/Secretary/Cases/Memory/People/Reports UI, rich result cards, screenshots/accessibility.
 - M20-06 — exact analytics, advice, approved external search, gifts/business examples.

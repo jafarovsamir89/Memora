@@ -331,6 +331,12 @@ internal class ProtectedCaseRepository(private val db: AgentDatabase) {
         return if (status == null) dao.activeCases(scope, limit) else dao.casesByStatus(scope, status, limit)
     }
 
+    /** Returns the newest active cases explicitly linked to a person, independent of other cases in the scope. */
+    suspend fun casesForPerson(scope: String, personId: String, limit: Int = 100): List<CaseRecordRow> {
+        require(scope.isNotBlank() && personId.isNotBlank() && limit in 1..100)
+        return dao.activeCasesForPerson(scope, personId, limit)
+    }
+
     suspend fun openCaseCount(scope: String): Int {
         require(scope.isNotBlank())
         return dao.openCaseCount(scope)
