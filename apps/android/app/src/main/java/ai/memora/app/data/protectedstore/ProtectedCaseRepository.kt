@@ -326,9 +326,9 @@ internal class ProtectedCaseRepository(private val db: AgentDatabase) {
         check(dao.caseEvidence(scope, caseId).none { it.evidenceId == row.evidenceId }) { "case_source_remove_readback_mismatch" }
     }
 
-    suspend fun cases(scope: String, limit: Int = 30): List<CaseRecordRow> {
-        require(scope.isNotBlank() && limit in 1..100)
-        return dao.activeCases(scope, limit)
+    suspend fun cases(scope: String, limit: Int = 30, status: String? = null): List<CaseRecordRow> {
+        require(scope.isNotBlank() && limit in 1..100 && (status == null || status in CASE_STATUSES))
+        return if (status == null) dao.activeCases(scope, limit) else dao.casesByStatus(scope, status, limit)
     }
 
     suspend fun openCaseCount(scope: String): Int {
@@ -376,41 +376,52 @@ internal class ProtectedCaseRepository(private val db: AgentDatabase) {
         return CaseSnapshot(record, participants, evidence, timeline)
     }
 
-    suspend fun searchCases(scope: String, query: String, limit: Int = 8): List<CaseRecordRow> {
-        require(scope.isNotBlank() && query.length <= 200 && limit in 1..30)
+    suspend fun searchCases(scope: String, query: String, limit: Int = 8, status: String? = null): List<CaseRecordRow> {
+        require(scope.isNotBlank() && query.length <= 200 && limit in 1..30 && (status == null || status in CASE_STATUSES))
         val terms = caseSearchTerms(query)
-        if (terms.isEmpty()) return if (query.isBlank()) dao.activeCases(scope, limit) else emptyList()
-        val activeRecords = dao.activeCases(scope, 100)
-        val recentRevisionsByCase = activeRecords.associate { record ->
-            record.caseId to dao.caseRevisions(record.caseId).takeLast(MAX_CASE_SOURCE_SEARCH_REVISIONS)
+        if (terms.isEmpty()) return if (query.isBlank()) cases(scope, limit, status) else emptyList()
+        return db.withTransaction {
+            val bestMatches = mutableListOf<Pair<CaseRecordRow, Int>>()
+            var offset = 0
+            var page: List<CaseRecordRow>
+            do {
+                page = dao.activeCasesPage(scope, status, CASE_SEARCH_PAGE_SIZE, offset)
+                val recentRevisionsByCase = page.associate { record ->
+                    record.caseId to dao.caseRevisions(record.caseId).takeLast(MAX_CASE_SOURCE_SEARCH_REVISIONS)
+                }
+                val sourceTurns = recentRevisionsByCase.values.flatten().map { it.sourceTurnId }.distinct()
+                val userMessagesByTurn = if (sourceTurns.isEmpty()) emptyMap() else dao
+                    .conversationMessagesForTurns(scope, sourceTurns)
+                    .filter { it.role == "user" }
+                    .associateBy { it.turnId }
+                page.forEach { record ->
+                    val participantNames = dao.caseParticipants(scope, record.caseId).mapNotNull { participant ->
+                        dao.domainObject(scope, participant.domainPersonId)?.takeIf { it.deletedAt == null }?.title
+                    }
+                    val titleTokens = caseSearchTerms(record.title)
+                    val sourceTexts = recentRevisionsByCase[record.caseId].orEmpty().mapNotNull { revision ->
+                        val text = userMessagesByTurn[revision.sourceTurnId]?.message ?: return@mapNotNull null
+                        val start = revision.sourceStartUtf16
+                        val end = revision.sourceEndUtf16
+                        if (start == null || end == null || start < 0 || end <= start || end > text.length) null
+                        else text.substring(start, end)
+                    }
+                    val allTokens = (listOfNotNull(record.title, record.summary, record.nextAction) + participantNames + sourceTexts)
+                        .flatMap(::caseSearchTerms).distinct()
+                    val matched = terms.count { term -> allTokens.any { caseSearchTokenMatches(term, it) } }
+                    if (matched > 0) {
+                        val titleMatches = terms.count { term -> titleTokens.any { caseSearchTokenMatches(term, it) } }
+                        bestMatches += record to (matched * 100 / terms.size + titleMatches * 15)
+                    }
+                }
+                val rankedPage = bestMatches.sortedWith(CASE_SEARCH_RANKING).take(limit)
+                bestMatches.clear()
+                bestMatches.addAll(rankedPage)
+                offset += page.size
+            }
+            while (page.size == CASE_SEARCH_PAGE_SIZE)
+            bestMatches.sortedWith(CASE_SEARCH_RANKING).map { it.first }
         }
-        val sourceTurns = recentRevisionsByCase.values.flatten().map { it.sourceTurnId }.distinct()
-        val userMessagesByTurn = if (sourceTurns.isEmpty()) emptyMap() else dao
-            .conversationMessagesForTurns(scope, sourceTurns)
-            .filter { it.role == "user" }
-            .associateBy { it.turnId }
-        return activeRecords.mapNotNull { record ->
-            val participantNames = dao.caseParticipants(scope, record.caseId).mapNotNull { participant ->
-                dao.domainObject(scope, participant.domainPersonId)?.takeIf { it.deletedAt == null }?.title
-            }
-            val titleTokens = caseSearchTerms(record.title)
-            val sourceTexts = recentRevisionsByCase[record.caseId].orEmpty().mapNotNull { revision ->
-                val text = userMessagesByTurn[revision.sourceTurnId]?.message ?: return@mapNotNull null
-                val start = revision.sourceStartUtf16
-                val end = revision.sourceEndUtf16
-                if (start == null || end == null || start < 0 || end <= start || end > text.length) null
-                else text.substring(start, end)
-            }
-            val allTokens = (listOfNotNull(record.title, record.summary, record.nextAction) + participantNames + sourceTexts)
-                .flatMap(::caseSearchTerms).distinct()
-            val matched = terms.count { term -> allTokens.any { caseSearchTokenMatches(term, it) } }
-            if (matched == 0) null else {
-                val titleMatches = terms.count { term -> titleTokens.any { caseSearchTokenMatches(term, it) } }
-                (record to (matched * 100 / terms.size + titleMatches * 15))
-            }
-        }.sortedWith(compareByDescending<Pair<CaseRecordRow, Int>> { it.second }
-            .thenByDescending { it.first.updatedAt }.thenBy { it.first.title.lowercase(Locale.ROOT) })
-            .take(limit).map { it.first }
     }
 
     private fun caseSearchTerms(value: String): List<String> = foldCaseSearch(value)
@@ -523,6 +534,9 @@ internal class ProtectedCaseRepository(private val db: AgentDatabase) {
 
     private companion object {
         const val MAX_CASE_SOURCE_SEARCH_REVISIONS = 3
+        const val CASE_SEARCH_PAGE_SIZE = 100
+        val CASE_SEARCH_RANKING = compareByDescending<Pair<CaseRecordRow, Int>> { it.second }
+            .thenByDescending { it.first.updatedAt }.thenBy { it.first.title.lowercase(Locale.ROOT) }
         val CASE_STATUSES = setOf("open", "waiting", "completed", "cancelled")
         val CASE_SEARCH_SEPARATOR = Regex("[^\\p{L}\\p{N}]+")
         val CASE_SEARCH_MARKS = Regex("\\p{M}+")

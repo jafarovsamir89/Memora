@@ -1492,3 +1492,13 @@ The first comprehensive run exposed a stale test expectation: adding the source-
 ### ACT-0191 — 2026-11-04 — Git handoff for ACT-0190
 
 Implementation/docs commit `d6ad681c6c78e3d03e82a379afc61d063f1759b3` (`feat(memory): retrieve cases from exact source excerpts`) was pushed to `origin/main`. After push/fetch, local `HEAD`, `origin/main`, and `git ls-remote origin refs/heads/main` all matched. The only remaining untracked path is owner-owned ADR-012; it was not staged, modified, or pushed. ACT-0190 verification, APK and remaining device/acceptance limits are recorded above.
+
+### ACT-0192 — 2026-11-04 — Verified searchable/filterable Cases screen
+
+The Cases screen now has debounced AZ/RU/EN local search across all non-deleted same-scope cases, including title, summary, next action, participants and up to three newest exact source excerpts. `ProtectedCaseRepository.searchCases` scans records in 100-row pages inside a consistent Room read transaction, resolves anchored quotes using batched same-scope canonical USER messages, and retains only the top 30 ranked results. Status filtering is applied in repository/SQL for both search and no-query list. No-query lists are limited to the newest 100 records for the selected status. UI query cap is 200 characters; no network/model call or persistence changes. ADR-025/S63 records the contract and bounds.
+
+Synthetic Compose regression verifies source-only search, status switching, no-match state and clearing filters. A repository regression confirms a matching case beyond the newest 100 records is returned. First full pass exposed stale list content during debounce; loading now starts as soon as query effect begins. Focused UI and repository regressions passed. Second full pass exposed five missing AZ locale entries in Android `values-az`; all five were added. Final comprehensive command `JAVA_TOOL_OPTIONS='-XX:TieredStopAtLevel=1' ./gradlew :app:testDebugUnitTest :app:assembleDebug :app:assembleDebugAndroidTest :app:compileDebugAndroidTestKotlin :app:lintDebug --no-daemon --console=plain --max-workers=1` passed: 63 suites / 328 tests, 0 failures/errors/skips; debug and AndroidTest builds/Kotlin compile passed; lint 0 errors / 73 warnings / 3 hints. APK package/version `ai.memora.app`, v69 / `1.1.47-case-search-ui`, SHA-256 `c0cea8fe9234a633c76c2f95bae7cfc2f90236c1369559444463aefae1e763fc`; aapt confirmed package/version. `git diff --check` passed after docs cleanup. ADB has no devices; no visual screenshot, device/TalkBack/owner acceptance is claimed. M20-05 remains partial; M20-04 retrieval remains lexical. Commit/push confirmation follows in ACT-0193.
+
+### ACT-0193 — 2026-11-04 — Git handoff for ACT-0192
+
+Pending implementation/docs commit and remote verification.

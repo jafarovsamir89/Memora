@@ -374,6 +374,11 @@
     <string name="saved_objects_no_details">Əlavə məlumat yoxdur.</string>
     <string name="saved_objects_details_truncated">Uzun qeydin ilk hissəsi göstərilir.</string>
     <string name="cases_subtitle">Davam edən işlər və onlara bağlı təsdiqlənmiş mənbələr.</string>
+    <string name="cases_search_label">İş, iştirakçı və ya mənbədə axtar</string>
+    <string name="cases_search_limit_hint">Axtarış ən uyğun 30 işi göstərir.</string>
+    <string name="cases_filter_all">Hamısı</string>
+    <string name="cases_no_matches">Bu axtarış və filtrə uyğun iş tapılmadı.</string>
+    <string name="cases_clear_filters">Filtrləri təmizlə</string>
     <string name="cases_empty">Hələ davam edən iş yoxdur. Memora-dan təmir, razılaşma və ya gözləyən məsələni izləməsini istəyin.</string>
     <string name="cases_empty_action">Katibəyə danışın</string>
     <string name="cases_load_error">İşləri yükləmək mümkün olmadı. Yenidən cəhd edin.</string>

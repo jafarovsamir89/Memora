@@ -8,10 +8,13 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
+import androidx.compose.material3.FilterChip
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -19,6 +22,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
@@ -42,6 +46,7 @@ import ai.memora.app.voice.AgentVoiceTurnProcessor
 import java.time.Instant
 import java.util.UUID
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.delay
 
 /** A local, source-linked view over cases written by the same secretary tools. */
 @Composable
@@ -53,27 +58,29 @@ internal fun CasesScreen(onOpenSecretary: () -> Unit = {}) {
     val repository = remember(database) { ProtectedCaseRepository(database) }
     val coroutineScope = rememberCoroutineScope()
     var records by remember(scopeId) { mutableStateOf<List<CaseRecordRow>>(emptyList()) }
+    var query by remember(scopeId) { mutableStateOf("") }
+    var statusFilter by remember(scopeId) { mutableStateOf("all") }
+    var refreshVersion by remember(scopeId) { mutableIntStateOf(0) }
     var selected by remember { mutableStateOf<CaseSnapshot?>(null) }
     var selectedSource by remember { mutableStateOf<CaseEvidenceView?>(null) }
     var loading by remember(scopeId) { mutableStateOf(true) }
     var failed by remember(scopeId) { mutableStateOf(false) }
     var actionFailed by remember { mutableStateOf(false) }
 
-    fun refresh() {
-        coroutineScope.launch {
-            loading = true
-            try {
-                records = repository.cases(scopeId, limit = 100)
-                failed = false
-            } catch (_: Exception) {
-                failed = true
-            } finally {
-                loading = false
-            }
+    LaunchedEffect(scopeId, query, statusFilter, refreshVersion) {
+        loading = true
+        if (query.isNotBlank()) delay(250)
+        try {
+            val selectedStatus = statusFilter.takeUnless { it == "all" }
+            records = if (query.isBlank()) repository.cases(scopeId, limit = 100, status = selectedStatus)
+                else repository.searchCases(scopeId, query.trim(), limit = 30, status = selectedStatus)
+            failed = false
+        } catch (_: Exception) {
+            failed = true
+        } finally {
+            loading = false
         }
     }
-
-    LaunchedEffect(scopeId) { refresh() }
 
     fun changeCaseStatus(snapshot: CaseSnapshot, status: String) {
         coroutineScope.launch {
@@ -81,7 +88,7 @@ internal fun CasesScreen(onOpenSecretary: () -> Unit = {}) {
                 repository.updateCase(scopeId, snapshot.record.caseId, snapshot.record.version,
                     snapshot.record.title, snapshot.record.summary, status, snapshot.record.nextAction,
                     sourceTurnId = "owner-ui-${UUID.randomUUID()}", now = Instant.now().toString())
-                records = repository.cases(scopeId, limit = 100)
+                refreshVersion++
                 selected = repository.caseSnapshot(scopeId, snapshot.record.caseId)
                 actionFailed = false
             } catch (_: Exception) {
@@ -94,15 +101,45 @@ internal fun CasesScreen(onOpenSecretary: () -> Unit = {}) {
     ScreenColumn(modifier = Modifier.testTag("cases_screen")) {
         Text(s(R.string.cases_subtitle), color = colors.muted,
             style = androidx.compose.material3.MaterialTheme.typography.bodyMedium)
+        OutlinedTextField(
+            value = query,
+            onValueChange = { query = it.take(200) },
+            modifier = Modifier.fillMaxWidth().padding(top = 12.dp).testTag("cases_search"),
+            label = { Text(s(R.string.cases_search_label)) },
+            singleLine = true,
+        )
+        if (query.isNotBlank()) Text(s(R.string.cases_search_limit_hint),
+            modifier = Modifier.padding(start = 4.dp, top = 4.dp), color = colors.muted,
+            style = androidx.compose.material3.MaterialTheme.typography.bodySmall)
+        Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
+            horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            listOf("all", "open", "waiting", "completed", "cancelled").forEach { status ->
+                FilterChip(
+                    selected = statusFilter == status,
+                    onClick = { statusFilter = status },
+                    label = { Text(caseFilterLabel(status)) },
+                    modifier = Modifier.testTag("cases_filter_$status"),
+                )
+            }
+        }
         when {
-            loading -> Text(s(R.string.ai_loading), color = colors.muted)
+            loading -> Text(s(R.string.ai_loading), color = colors.muted, modifier = Modifier.testTag("cases_loading"))
             failed -> EmptyState(s(R.string.working_no_data), s(R.string.cases_load_error))
-            records.isEmpty() -> {
+            records.isEmpty() && query.isBlank() && statusFilter == "all" -> {
                 EmptyState(s(R.string.working_no_data), s(R.string.cases_empty))
                 Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
                     Button(onClick = onOpenSecretary, modifier = Modifier.testTag("cases_empty_open_secretary")) {
                         Text(s(R.string.cases_empty_action))
                     }
+                }
+            }
+            records.isEmpty() -> {
+                EmptyState(s(R.string.working_no_data), s(R.string.cases_no_matches))
+                if (query.isNotBlank() || statusFilter != "all") {
+                    TextButton(modifier = Modifier.testTag("cases_clear_filters"), onClick = {
+                        query = ""
+                        statusFilter = "all"
+                    }) { Text(s(R.string.cases_clear_filters)) }
                 }
             }
             else -> records.forEach { record ->
@@ -245,6 +282,15 @@ private fun caseStatusLabel(status: String): String = s(when (status) {
     "completed" -> R.string.case_status_completed
     "cancelled" -> R.string.case_status_cancelled
     else -> R.string.case_status_open
+})
+
+@Composable
+private fun caseFilterLabel(status: String): String = s(when (status) {
+    "open" -> R.string.case_status_open
+    "waiting" -> R.string.case_status_waiting
+    "completed" -> R.string.case_status_completed
+    "cancelled" -> R.string.case_status_cancelled
+    else -> R.string.cases_filter_all
 })
 
 @Composable

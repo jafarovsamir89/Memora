@@ -2,6 +2,7 @@ package ai.memora.app.agent
 
 import ai.memora.app.UiAgentDatabaseRule
 import ai.memora.app.data.protectedstore.CalendarInput
+import ai.memora.app.data.protectedstore.CaseRecordRow
 import ai.memora.app.data.protectedstore.ColumnSpec
 import ai.memora.app.data.protectedstore.ColumnType
 import ai.memora.app.data.protectedstore.DomainKind
@@ -32,6 +33,24 @@ import org.robolectric.annotation.Config
 @Config(sdk = [33])
 class AgentFakeProviderUnifiedMemoryTest {
     @get:Rule val databaseRule = UiAgentDatabaseRule()
+
+    @Test fun caseSearchPagesBeyondTheNewestHundredRecords() = runBlocking {
+        val scope = "00000000-0000-4000-8000-000000000190"
+        val dao = databaseRule.database.protectedStoreDao()
+        repeat(105) { index ->
+            val updatedAt = Instant.parse("2026-11-03T00:00:00Z").plusSeconds(index.toLong()).toString()
+            dao.insertCase(CaseRecordRow(
+                caseId = "synthetic-case-page-$index", scopeId = scope,
+                title = if (index == 0) "Synthetic gearbox delivery" else "Synthetic unrelated case $index",
+                summary = null, status = "open", nextAction = null, version = 1,
+                sourceTurnId = "synthetic-case-page-source-$index", createdAt = updatedAt,
+                updatedAt = updatedAt, deletedAt = null,
+            ))
+        }
+
+        val matches = ProtectedCaseRepository(databaseRule.database).searchCases(scope, "gearbox delivery", limit = 30)
+        assertEquals(listOf("synthetic-case-page-0"), matches.map { it.caseId })
+    }
 
     @Test fun naturalCrossDomainSearchReturnsScopedCanonicalSourcesAndLeavesStoresUnchanged() = runBlocking {
         val db = databaseRule.database

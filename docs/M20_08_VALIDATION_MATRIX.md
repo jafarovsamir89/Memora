@@ -1,5 +1,9 @@
 # M20-08 Native validation matrix
 
+## ACT-0192 — Verified: Cases list search and status filters
+
+The local Cases screen has scope-bound search over all non-deleted cases in 100-row pages within one Room read transaction; the UI returns top-30 results, searches exact recent source wording, supports status-filtered repository queries, and has translated empty/clear/limit states. Compose and repository regressions cover source-only queries and a match beyond the first 100 cases. Full Gradle: 63 suites / 328 tests, 0 failures/errors/skips; debug/AndroidTest builds and Kotlin compile passed; lint 0/73/3. APK v69 / `1.1.47-case-search-ui`, SHA-256 `c0cea8fe9234a633c76c2f95bae7cfc2f90236c1369559444463aefae1e763fc`. No schema change. Host synthetic only; ADB empty, no screenshot/device/TalkBack/owner acceptance. This UI slice does not close M20-05.
+
 ## ACT-0190 — Verified case-source retrieval in unified memory search
 
 `search_memory` can find a case by exact wording in its three newest locally anchored revision excerpts and returns up to three verified excerpts, same-scope source-turn IDs and truncation metadata. Synthetic cross-domain regression passed. Full Gradle: 63 suites / 326 tests, 0 failures/errors/skips; debug/AndroidTest APK builds and AndroidTest Kotlin compile passed; lint 0 errors / 73 warnings / 3 hints. APK v68 / `1.1.46-case-source-retrieval`, SHA-256 `a1b2b698bd8c94b1b69893de7762b8670b4341f8aa93cfe92d393bc0171c62f2`. No schema change. Host synthetic only; ADB empty, no device/TalkBack/live Gemini/owner acceptance. Lexical retrieval and source wording do not establish semantic truth. M20-04/P3 remains partial.

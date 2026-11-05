@@ -732,6 +732,10 @@ internal interface ProtectedStoreDao {
     @androidx.room.Query("SELECT * FROM case_record WHERE scopeId=:scope AND caseId=:id") suspend fun caseRecord(scope: String, id: String): CaseRecordRow?
     @androidx.room.Query("SELECT * FROM case_record WHERE scopeId=:scope AND deletedAt IS NULL ORDER BY updatedAt DESC, caseId LIMIT :limit")
     suspend fun activeCases(scope: String, limit: Int): List<CaseRecordRow>
+    @androidx.room.Query("SELECT * FROM case_record WHERE scopeId=:scope AND deletedAt IS NULL AND status=:status ORDER BY updatedAt DESC, caseId LIMIT :limit")
+    suspend fun casesByStatus(scope: String, status: String, limit: Int): List<CaseRecordRow>
+    @androidx.room.Query("SELECT * FROM case_record WHERE scopeId=:scope AND deletedAt IS NULL AND (:status IS NULL OR status=:status) ORDER BY updatedAt DESC, caseId LIMIT :limit OFFSET :offset")
+    suspend fun activeCasesPage(scope: String, status: String?, limit: Int, offset: Int): List<CaseRecordRow>
     @androidx.room.Query("SELECT * FROM case_record WHERE scopeId=:scope AND deletedAt IS NULL AND status NOT IN ('completed','archived','cancelled') ORDER BY updatedAt DESC, caseId LIMIT :limit")
     suspend fun openCases(scope: String, limit: Int): List<CaseRecordRow>
     @androidx.room.Query("SELECT COUNT(*) FROM case_record WHERE scopeId=:scope AND deletedAt IS NULL AND status NOT IN ('completed','archived','cancelled')")

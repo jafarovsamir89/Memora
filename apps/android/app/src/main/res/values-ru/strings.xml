@@ -374,6 +374,11 @@
     <string name="saved_objects_no_details">Дополнительных сведений нет.</string>
     <string name="saved_objects_details_truncated">Показано начало длинной записи.</string>
     <string name="cases_subtitle">Текущие дела и связанные подтверждённые источники.</string>
+    <string name="cases_search_label">Поиск по делам, участникам и цитатам</string>
+    <string name="cases_search_limit_hint">Поиск показывает до 30 наиболее подходящих дел.</string>
+    <string name="cases_filter_all">Все</string>
+    <string name="cases_no_matches">По этому запросу и фильтру дел не найдено.</string>
+    <string name="cases_clear_filters">Сбросить фильтры</string>
     <string name="cases_empty">Пока текущих дел нет. Попросите Memora следить за ремонтом, договорённостью или открытым вопросом.</string>
     <string name="cases_empty_action">Обратиться к секретарю</string>
     <string name="cases_load_error">Не удалось загрузить дела. Попробуйте ещё раз.</string>

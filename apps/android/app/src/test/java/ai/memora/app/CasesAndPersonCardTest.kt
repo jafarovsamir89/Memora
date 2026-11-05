@@ -38,6 +38,58 @@ class CasesAndPersonCardTest {
     @get:Rule(order = 0) val databaseRule = UiAgentDatabaseRule()
     @get:Rule(order = 1) val compose = createComposeRule()
 
+    @Test fun casesScreenSearchesVerifiedSourceWordingAndFiltersStatus() = runBlocking<Unit> {
+        val context = ApplicationProvider.getApplicationContext<Context>()
+        val scope = AgentVoiceTurnProcessor(context).conversationScopeId()
+        val cases = ProtectedCaseRepository(databaseRule.database)
+        cases.createCase(scope, "synthetic-search-bmw", "Synthetic engine repair", "Fictional repair",
+            sourceTurnId = "synthetic-search-bmw-source", now = "2026-11-03T09:00:00Z",
+            sourceText = "Synthetic: replacement gearbox arrives Friday.",
+            sourceQuote = "replacement gearbox arrives Friday")
+        cases.createCase(scope, "synthetic-search-waiting", "Synthetic travel booking", "Fictional booking",
+            status = "waiting", sourceTurnId = "synthetic-search-waiting-source", now = "2026-11-03T10:00:00Z")
+
+        compose.setContent {
+            CompositionLocalProvider(LocalStrings provides context.resources, LocalAgentDatabaseOverride provides databaseRule.database) {
+                MemoraTheme("light") { CasesScreen() }
+            }
+        }
+        compose.waitUntil(10_000) {
+            compose.onAllNodesWithTag("case_synthetic-search-bmw").fetchSemanticsNodes().isNotEmpty() &&
+                compose.onAllNodesWithTag("case_synthetic-search-waiting").fetchSemanticsNodes().isNotEmpty()
+        }
+
+        compose.onNodeWithTag("cases_filter_waiting").performClick()
+        compose.waitUntil(10_000) {
+            compose.onAllNodesWithTag("case_synthetic-search-waiting").fetchSemanticsNodes().isNotEmpty() &&
+                compose.onAllNodesWithTag("cases_loading").fetchSemanticsNodes().isEmpty()
+        }
+        compose.onNodeWithTag("case_synthetic-search-waiting").assertExists()
+        compose.onNodeWithTag("case_synthetic-search-bmw").assertDoesNotExist()
+
+        compose.onNodeWithTag("cases_filter_all").performClick()
+        compose.onNodeWithTag("cases_search").performTextInput("gearbox arrives Friday")
+        compose.waitUntil(10_000) {
+            compose.onAllNodesWithTag("case_synthetic-search-bmw").fetchSemanticsNodes().isNotEmpty() &&
+                compose.onAllNodesWithTag("cases_loading").fetchSemanticsNodes().isEmpty()
+        }
+        compose.onNodeWithTag("case_synthetic-search-bmw").assertIsDisplayed()
+        compose.onNodeWithTag("case_synthetic-search-waiting").assertDoesNotExist()
+
+        compose.onNodeWithTag("cases_filter_waiting").performClick()
+        compose.waitUntil(10_000) {
+            compose.onAllNodesWithTag("cases_clear_filters").fetchSemanticsNodes().isNotEmpty()
+        }
+        compose.onNodeWithTag("case_synthetic-search-bmw").assertDoesNotExist()
+        compose.onNodeWithTag("cases_clear_filters").performClick()
+        compose.waitUntil(10_000) {
+            compose.onAllNodesWithTag("case_synthetic-search-waiting").fetchSemanticsNodes().isNotEmpty() &&
+                compose.onAllNodesWithTag("case_synthetic-search-bmw").fetchSemanticsNodes().isNotEmpty() &&
+                compose.onAllNodesWithTag("cases_loading").fetchSemanticsNodes().isEmpty()
+        }
+        compose.onNodeWithTag("case_synthetic-search-bmw").assertExists()
+    }
+
     @Test fun casesScreenOpensCaseWithSourceTimeline() = runBlocking<Unit> {
         val context = ApplicationProvider.getApplicationContext<Context>()
         val scope = AgentVoiceTurnProcessor(context).conversationScopeId()
