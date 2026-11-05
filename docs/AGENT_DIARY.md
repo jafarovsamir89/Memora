@@ -1089,3 +1089,7 @@ Implementation/docs commit `2c283e7a6c11b3a1229367c9106a04f14258ff3b` (`feat(mem
 ### ACT-0195 — 2026-11-04 — Git handoff for ACT-0194
 
 Implementation and documentation commit `3eaad875f25e1ae35b33feda7bd4dd3dc588adbb` (`feat(people): show complete linked case history`) was pushed to `origin/main`. After push and fetch, local `HEAD`, `origin/main`, and `git ls-remote origin refs/heads/main` all matched `3eaad875f25e1ae35b33feda7bd4dd3dc588adbb`. Only the pre-existing owner-owned untracked `docs/adr/ADR-012-keystore-wrapping-key-rotation.md` remains outside the commit; it was untouched and unstaged. ACT-0194 verification evidence and device/owner limitations are recorded in the checkpoint above.
+
+### ACT-0197 — 2026-11-04 — Git handoff for ACT-0196
+
+Implementation and documentation commit `bc65af6b867d9d783a9e978a4362e7b357d2307a` (`feat(people): reveal older timeline events`) was pushed to `origin/main`. After push/fetch, local `HEAD`, `origin/main`, and remote `ls-remote` all matched the same hash. The only remaining untracked file is the pre-existing owner-owned `docs/adr/ADR-012-keystore-wrapping-key-rotation.md`; it was not staged or modified. ACT-0196 final verification and limitations are in the current diary checkpoint.
