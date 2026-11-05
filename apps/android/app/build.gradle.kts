@@ -19,8 +19,8 @@ android {
         applicationId = "ai.memora.app"
         minSdk = 26
         targetSdk = 36
-        versionCode = 79
-        versionName = "1.1.57-accessible-navigation"
+        versionCode = 81
+        versionName = "1.1.59-firebase-audio-transcription"
         testInstrumentationRunner = "ai.memora.app.GeminiSyntheticProbe"
     }
     buildFeatures { compose = true }

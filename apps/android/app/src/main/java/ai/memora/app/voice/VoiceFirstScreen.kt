@@ -82,6 +82,7 @@ fun VoiceFirstScreen(gatewayOverride: AudioNoteGateway? = null, recorderOverride
         release = released
         job = scope.launch(start = CoroutineStart.LAZY) {
             var wav: ByteArray? = null
+            var stage = "audio"
             try {
                 wav = recorder.record()
                 if (!released.isCompleted && visible) state = "release"
@@ -89,19 +90,21 @@ fun VoiceFirstScreen(gatewayOverride: AudioNoteGateway? = null, recorderOverride
                 ensureActive()
                 if (!visible) return@launch
                 state = "processing"
+                stage = "stt"
                 val spoken = withTimeout(30_000) { gateway.transcribe(wav) }
                 wav.fill(0); wav = null
                 ensureActive()
-                if (spoken.isBlank()) { state = "error"; return@launch }
+                if (spoken.isBlank()) { failureCode = "stt_empty_transcript"; state = "error"; return@launch }
                 transcript = spoken
                 // AgentRuntime allows 60 seconds for multi-round tool calling; leave a small
                 // margin so the screen does not cancel the turn before the runtime reports its result.
+                stage = "assistant"
                 val result = withTimeout(65_000) { processor.handle(spoken) }
                 ensureActive()
                 val spokenAnswer = when (result) {
                     is VoiceFirstResult.Ready -> result.spoken
                     is VoiceFirstResult.Failed -> { failureCode = result.code; state = "error"; return@launch }
-                    VoiceFirstResult.Unavailable -> { state = "error"; return@launch }
+                    VoiceFirstResult.Unavailable -> { failureCode = "assistant_unavailable"; state = "error"; return@launch }
                 }
                 answer = spokenAnswer
                 state = "speaking"
@@ -109,9 +112,13 @@ fun VoiceFirstScreen(gatewayOverride: AudioNoteGateway? = null, recorderOverride
                 catch (_: TimeoutCancellationException) { state = "sound_error" }
                 catch (cancelled: CancellationException) { throw cancelled }
                 catch (_: Exception) { state = "sound_error" }
-            } catch (_: TimeoutCancellationException) { if (visible) { failureCode = "request_timeout"; state = "error" } }
+            } catch (error: TimeoutCancellationException) {
+                if (visible) { failureCode = "${stage}_timeout"; state = "error" }
+            }
             catch (cancelled: CancellationException) { throw cancelled }
-            catch (_: Exception) { if (visible) state = "error" }
+            catch (error: Exception) {
+                if (visible) { failureCode = VoiceFailureDiagnostics.code(stage, error); state = "error" }
+            }
             finally { recorder.stop(); wav?.fill(0); release = null; job = null }
         }
         job?.start()
