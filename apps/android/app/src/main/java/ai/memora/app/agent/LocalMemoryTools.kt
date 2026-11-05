@@ -66,8 +66,10 @@ internal class LocalMemoryTools(private val repository: ProtectedDomainRepositor
         override suspend fun read(call: AgentModelToolCall, turn: AgentTurnRequest): ToolCommitResult {
             val query = call.arguments["query"] as? String ?: return rejected()
             if (query.isBlank() || query.length > 200) return rejected()
-            val terms = memorySearchTerms(query)
-            if (terms.isEmpty()) return ToolCommitResult(ToolObservationStatus.APPLIED, "evidence_found", mapOf(
+            val temporal = MemoryTemporalQuery.parse(query, LocalDate.now(searchClock.withZone(userTimeZone)))
+            val terms = memorySearchTerms(temporal.lexicalQuery)
+            val relativeDates = resolveRelativeSearchDates(query)
+            if (terms.isEmpty() && temporal.dates.isEmpty() && relativeDates.isEmpty()) return ToolCommitResult(ToolObservationStatus.APPLIED, "evidence_found", mapOf(
                 "count" to 0, "match_mode" to "ranked_lexical", "evidence" to emptyList<Any>(), "episodes" to emptyList<Any>(),
                 "conversation_turns" to emptyList<Any>(),
                 "profile_facts" to emptyList<Any>(), "person_aliases" to emptyList<Any>(), "activity" to emptyList<Any>(), "activity_truncated" to false,
@@ -85,7 +87,7 @@ internal class LocalMemoryTools(private val repository: ProtectedDomainRepositor
             val matchedPersonIds = (hits.filter { it.kind == DomainKind.PERSON &&
                 PersonAliasRepository.queryContainsExactPhrase(query, it.title) }.map { it.objectId } +
                 aliasHits.mapNotNull { it["person_id"] as? String }).distinct()
-            val activity = searchRelatedActivity(turn.scopeId, terms, query, matchedPersonIds)
+            val activity = searchRelatedActivity(turn.scopeId, terms, query, matchedPersonIds, temporal.dates)
             return ToolCommitResult(ToolObservationStatus.APPLIED, "evidence_found", mapOf(
                 "count" to (hits.size + episodes.size + conversationTurns.size + profileFacts.size + aliasHits.size + activity.items.size),
                 "match_mode" to "ranked_lexical",
@@ -492,24 +494,25 @@ internal class LocalMemoryTools(private val repository: ProtectedDomainRepositor
      * Exact finance totals and full case timelines remain the responsibility of their specialist tools.
      */
     private suspend fun searchRelatedActivity(scope: String, terms: List<String>, query: String,
-        matchedPersonIds: List<String> = emptyList()): UnifiedActivitySearch {
+        matchedPersonIds: List<String> = emptyList(), temporalDates: Set<LocalDate> = emptySet()): UnifiedActivitySearch {
         val hits = mutableListOf<RankedActivity>()
         val relativeDates = resolveRelativeSearchDates(query)
-        val foldedTerms = (terms + relativeDates.flatMap(::memorySearchTerms)).map(::normalizeMemorySearchText).distinct()
         val explicitDates = ISO_LOCAL_DATE.findAll(query).mapNotNull { match ->
-            runCatching { LocalDate.parse(match.value) }.getOrNull()?.toString()
-        }.toSet() + relativeDates
-
-        val phraseTerms = memorySearchTerms((listOf(query) + relativeDates).joinToString(" "))
+            runCatching { LocalDate.parse(match.value) }.getOrNull()
+        }.toSet() + relativeDates.mapNotNull { runCatching { LocalDate.parse(it) }.getOrNull() } + temporalDates
+        val dateStrings = explicitDates.map(LocalDate::toString)
+        val foldedTerms = (terms + dateStrings.flatMap(::memorySearchTerms)).map(::normalizeMemorySearchText).distinct()
+        val explicitDateStrings = dateStrings.toSet()
+        val phraseTerms = terms
         val phrase = phraseTerms.joinToString(" ")
 
         fun score(fields: List<String>, title: String? = null): Int {
-            if (explicitDates.isNotEmpty() && fields.none { field -> field in explicitDates }) return 0
+            if (explicitDateStrings.isNotEmpty() && fields.none { field -> field in explicitDateStrings }) return 0
             val fieldTerms = fields.map(::memorySearchTerms)
             val tokens = fieldTerms.flatten().toSet()
             val matchedTerms = foldedTerms.filter { term -> tokens.any { token -> memorySearchTokenMatches(term, token) } }
             val matched = matchedTerms.size
-            if (matched == 0) return 0
+            if (matched == 0) return if (terms.isEmpty() && explicitDates.isNotEmpty()) 100 else 0
             val titleTokens = title?.let(::memorySearchTerms).orEmpty()
             val titleMatches = matchedTerms.count { term -> titleTokens.any { memorySearchTokenMatches(term, it) } }
             val exactPhrase = phraseTerms.size > 1 && fieldTerms.any { it.windowed(phraseTerms.size)
@@ -614,7 +617,8 @@ internal class LocalMemoryTools(private val repository: ProtectedDomainRepositor
                 .mapNotNull { it.sourceExcerpt }
                 .toList()
             val explicitlyLinkedPersonIds = personLinkedCaseIds[record.caseId].orEmpty().toList()
-            val relevance = maxOf(score(listOfNotNull(record.title, record.summary, record.nextAction) +
+            val relevance = maxOf(score(listOfNotNull(record.title, record.summary, record.nextAction,
+                localDate(record.updatedAt)) +
                 snapshot.participants.map { it.title } + caseSourceExcerpts, record.title),
                 if (explicitlyLinkedPersonIds.isNotEmpty()) 150 else 0)
             if (relevance > 0) hits += RankedActivity(relevance, record.updatedAt, "case", record.caseId,
@@ -701,6 +705,7 @@ internal class LocalMemoryTools(private val repository: ProtectedDomainRepositor
         val MEMORY_SEARCH_MARKS = Regex("\\p{M}+")
         val MEMORY_SEARCH_STOP_WORDS = setOf("what", "whats", "find", "show", "about", "with", "the", "for", "and", "from",
             "what", "is", "was", "are", "to", "of", "in", "on", "me", "my", "who", "when", "where", "why", "how",
+            "did", "happen", "happened", "occurred", "было", "произошло", "случилось", "oldu", "bas", "verdi",
             "ne", "nə", "haqqinda", "haqqında", "haqda", "mene", "mənə", "menim", "mənim", "ve", "və", "bu", "bir",
             "что", "как", "мне", "мой", "моя", "мое", "об", "про", "для", "и", "по", "у", "к", "в", "на", "с", "из", "от", "за", "ли")
         const val MAX_UNIFIED_ACTIVITY_HITS = 12

@@ -388,6 +388,93 @@ class AgentFakeProviderUnifiedMemoryTest {
         }
     }
 
+    @Test fun weekdayAndWeekRangeQueriesResolveInProfileTimezoneAcrossLanguages() = runBlocking {
+        val nextWeek = MemoryTemporalQuery.parse("next week", java.time.LocalDate.parse("2026-11-03"))
+        assertEquals((9L..15L).map { java.time.LocalDate.of(2026, 11, it.toInt()) }.toSet(), nextWeek.dates)
+        assertEquals("", nextWeek.lexicalQuery)
+        assertTrue("Unqualified weekday is ambiguous and must not become a date",
+            MemoryTemporalQuery.parse("Friday", java.time.LocalDate.parse("2026-11-03")).dates.isEmpty())
+        val db = databaseRule.database
+        val scope = "00000000-0000-4000-8000-000000000197"
+        val foreignScope = "00000000-0000-4000-8000-000000000198"
+        val domain = ProtectedDomainRepository(db)
+        domain.recordFinanceEvent(scope, "Synthetic customer", "receipt", 1_250, "AZN", "Synthetic Friday receipt",
+            null, "synthetic-week-person", "synthetic-last-week-receipt", "synthetic-last-week-receipt-command",
+            "2026-10-30T12:00:00Z", "2026-10-30T12:00:00Z")
+        domain.recordFinanceEvent(scope, "Synthetic customer", "receipt", 2_500, "AZN", "Synthetic Monday receipt",
+            null, "synthetic-week-person", "synthetic-this-week-receipt", "synthetic-this-week-receipt-command",
+            "2026-11-02T12:00:00Z", "2026-11-02T12:00:00Z")
+        domain.recordFinanceEvent(foreignScope, "Synthetic foreign", "receipt", 9_900, "AZN", "Synthetic foreign receipt",
+            null, "synthetic-foreign-week-person", "synthetic-foreign-week-receipt", "synthetic-foreign-week-command",
+            "2026-10-30T12:00:00Z", "2026-10-30T12:00:00Z")
+        domain.createCalendarEvent(CalendarInput("synthetic-last-week-calendar", scope, "Synthetic service appointment",
+            "2026-10-30T15:00", null, "Asia/Baku", "minute"))
+        domain.createCalendarEvent(CalendarInput("synthetic-this-week-calendar", scope, "Synthetic service appointment",
+            "2026-11-02T15:00", null, "Asia/Baku", "minute"))
+        db.protectedStoreDao().putTaskEvents(listOf(
+            TaskEventRow(taskId = "synthetic-last-week-task", scopeId = scope, actorId = "synthetic-owner",
+                commandId = "synthetic-last-week-task-created", type = "created", previousVersion = null,
+                title = "Synthetic service follow-up", completed = null, dueLocal = null, dueZone = null,
+                remind = null, personLabel = null, projectLabel = null),
+            TaskEventRow(taskId = "synthetic-last-week-task", scopeId = scope, actorId = "synthetic-owner",
+                commandId = "synthetic-last-week-task-due", type = "details", previousVersion = 1,
+                title = null, completed = null, dueLocal = "2026-10-30T09:00", dueZone = "Asia/Baku",
+                remind = false, personLabel = null, projectLabel = null),
+            TaskEventRow(taskId = "synthetic-this-week-task", scopeId = scope, actorId = "synthetic-owner",
+                commandId = "synthetic-this-week-task-created", type = "created", previousVersion = null,
+                title = "Synthetic service follow-up", completed = null, dueLocal = null, dueZone = null,
+                remind = null, personLabel = null, projectLabel = null),
+            TaskEventRow(taskId = "synthetic-this-week-task", scopeId = scope, actorId = "synthetic-owner",
+                commandId = "synthetic-this-week-task-due", type = "details", previousVersion = 1,
+                title = null, completed = null, dueLocal = "2026-11-02T09:00", dueZone = "Asia/Baku",
+                remind = false, personLabel = null, projectLabel = null),
+        ))
+        val handler = LocalMemoryTools(domain, ProtectedMemoryRepository(db), financeEnabled = true,
+            userTimeZoneId = "Asia/Baku",
+            searchClock = Clock.fixed(Instant.parse("2026-11-03T10:30:00Z"), ZoneOffset.UTC))
+            .handlers().single { it.descriptor.name == "search_memory" }
+        val turn = AgentTurnRequest("synthetic-week-search-turn", scope, "synthetic-week-search-session",
+            null, "az-AZ", "Synthetic temporal search")
+
+        suspend fun keys(query: String): Set<String> {
+            val result = handler.read(AgentModelToolCall("synthetic-week-${query.hashCode()}", "search_memory", 1,
+                mapOf("query" to query)), turn)
+            assertEquals(ToolObservationStatus.APPLIED, result.status)
+            return (result.modelData["activity"] as List<*>).mapNotNull { it as? Map<*, *> }
+                .map { "${it["kind"]}:${it["source_id"]}" }.toSet()
+        }
+
+        val lastWeek = setOf("money_event:synthetic-last-week-receipt", "calendar_event:synthetic-last-week-calendar",
+            "task:synthetic-last-week-task")
+        val thisWeek = setOf("money_event:synthetic-this-week-receipt", "calendar_event:synthetic-this-week-calendar",
+            "task:synthetic-this-week-task")
+        listOf("last week", "keçən həftə", "на прошлой неделе").forEach { query ->
+            val hits = keys(query)
+            assertTrue("$query should retrieve last ISO week: $hits", hits.containsAll(lastWeek))
+            assertFalse("$query must exclude current week: $hits", hits.any { it in thisWeek })
+            assertFalse("$query must remain scope-bound: $hits", "money_event:synthetic-foreign-week-receipt" in hits)
+        }
+        listOf("this week", "bu həftə", "на этой неделе").forEach { query ->
+            val hits = keys(query)
+            assertTrue("$query should retrieve the current ISO week: $hits", hits.containsAll(thisWeek))
+            assertFalse("$query must exclude last week: $hits", hits.any { it in lastWeek })
+        }
+        val lastFriday = keys("last Friday")
+        assertTrue("explicit previous weekday should resolve to 2026-10-30: $lastFriday",
+            "money_event:synthetic-last-week-receipt" in lastFriday &&
+                "calendar_event:synthetic-last-week-calendar" in lastFriday && "task:synthetic-last-week-task" in lastFriday)
+        assertFalse("previous weekday must not include Monday", lastFriday.any { it in thisWeek })
+        val naturalLastFriday = keys("What happened last Friday?")
+        assertTrue("A natural question wrapper must not block the date filter: $naturalLastFriday",
+            "money_event:synthetic-last-week-receipt" in naturalLastFriday)
+        val lastFridayAz = keys("keçən cümə")
+        assertTrue("Azerbaijani previous weekday must resolve through the same local date: $lastFridayAz",
+            "calendar_event:synthetic-last-week-calendar" in lastFridayAz)
+        val lastFridayRu = keys("в прошлую пятницу")
+        assertTrue("Russian previous weekday must resolve through the same local date: $lastFridayRu",
+            "calendar_event:synthetic-last-week-calendar" in lastFridayRu)
+    }
+
     @Test fun typedTableReferencesRequireActiveSameScopeObjectsOfExpectedKind() = runBlocking {
         val db = databaseRule.database
         val domain = ProtectedDomainRepository(db)

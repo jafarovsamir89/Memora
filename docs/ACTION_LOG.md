@@ -1565,3 +1565,10 @@ The first comprehensive Gradle pass found a regression: local DAO scan offset sh
 ### ACT-0205 — 2026-11-04 — Git handoff for ACT-0204
 
 Verified remote handoff: implementation/docs commit `c7a09e9e10910babefbe057dbb00df83870f221c` (`feat(cases): paginate browsing and search`) is on `origin/main`; local HEAD, tracking ref and `git ls-remote origin refs/heads/main` match. The only untracked path remains owner-owned ADR-012, untouched and excluded. ACT-0204 validation and device/acceptance limits are recorded in the preceding entry. The owner's workflow preference to batch related implementation/docs before a comprehensive build/test pass remains in force.
+
+
+### ACT-0206 — 2026-11-04 — ISO-week and weekday retrieval
+
+Implemented deterministic date resolution before local lexical activity search. ISO week ranges are Monday–Sunday; AZ/RU/EN phrase variants and explicitly qualified weekday phrases are supported. Previous/next weekdays are strict; current-week phrases resolve within the local ISO week. Bare weekday is not guessed. Date filters apply to same-scope dated finance/task/calendar rows after profile-timezone conversion; no model/network/write/schema changes. Added `MemoryTemporalQuery`, end-to-end synthetic coverage and ADR-032/S70; synchronized TODO, plan, product spec, README, validation matrix, AGENTS and diary.
+
+Initial comprehensive runs exposed a date fixture formatting issue, incorrect positional task-fixture fields and Russian `й` normalization mismatch. The fixture now uses `LocalDate.of` and named arguments; parser normalizes phrase dictionary entries identically to queries. Targeted end-to-end regression passed. Final full Gradle passed: 63 suites / 334 tests, 0 failures/errors/skips; debug and AndroidTest APK builds, AndroidTest Kotlin compile; lint 0 errors / 73 warnings / 3 hints. APK v76 / `1.1.54-memory-week-search`, SHA-256 `b7f28653670e1608416b1e46243047e57f8cd6154a9317bc149491438da24416`; `aapt` confirms package/version; `git diff --check` passed. ADB empty; no device/TalkBack/owner acceptance/performance measurement. No migration. Commit/push handoff follows. Owner-owned ADR-012 untouched and excluded.
