@@ -1095,3 +1095,7 @@ Implementation and documentation commit `3eaad875f25e1ae35b33feda7bd4dd3dc588adb
 ### ACT-0197 — 2026-11-04 — Git handoff for ACT-0196
 
 Implementation and documentation commit `bc65af6b867d9d783a9e978a4362e7b357d2307a` (`feat(people): reveal older timeline events`) was pushed to `origin/main`. After push/fetch, local `HEAD`, `origin/main`, and remote `ls-remote` all matched the same hash. The only remaining untracked file is the pre-existing owner-owned `docs/adr/ADR-012-keystore-wrapping-key-rotation.md`; it was not staged or modified. ACT-0196 final verification and limitations are in the current diary checkpoint.
+
+### ACT-0199 — 2026-11-04 — Git handoff for ACT-0198
+
+Implementation and documentation commit `53570e42357ffe4ab39f3438759335840d0bacf4` (`feat(people): suggest tasks by exact person label`) was pushed to `origin/main`. After push/fetch, local HEAD, `origin/main`, and `git ls-remote origin refs/heads/main` matched `53570e42357ffe4ab39f3438759335840d0bacf4`. Only the pre-existing owner-owned untracked `docs/adr/ADR-012-keystore-wrapping-key-rotation.md` remains; it was untouched and excluded. ACT-0198 validation evidence is in the current diary checkpoint.
