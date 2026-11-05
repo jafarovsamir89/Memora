@@ -1501,4 +1501,4 @@ Synthetic Compose regression verifies source-only search, status switching, no-m
 
 ### ACT-0193 — 2026-11-04 — Git handoff for ACT-0192
 
-Pending implementation/docs commit and remote verification.
+Implementation/docs commit `8b3210b9447b641e52c7de5b2c5bfb36d7ce9e00` (`feat(cases): add local search and status filters`) was pushed to `origin/main`. After push/fetch, local HEAD, `origin/main`, and `git ls-remote origin refs/heads/main` all matched. Owner-owned untracked ADR-012 remains untouched and excluded. ACT-0192 test/build evidence and remaining M20-05 device/visual acceptance limits are recorded above.
