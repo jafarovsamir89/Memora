@@ -30,7 +30,13 @@ internal data class DomainHit(val objectId: String, val kind: DomainKind, val ti
     val evidenceEndUtf16: Int, val evidenceText: String)
 internal data class DeletePreview(val objectId: String, val expectedVersion: Long, val linkedIds: List<String>)
 internal data class LinkedDomainObject(val link: DomainLinkRow, val objectRecord: DomainObjectRow)
-internal data class ImportPreview(val tableId: String, val schemaVersion: Long, val rows: List<Pair<String, Map<String, Any?>>>)
+internal data class ImportPreview(
+    val tableId: String,
+    val schemaVersion: Long,
+    val rows: List<Pair<String, Map<String, Any?>>>,
+    val mode: String = "editable",
+    val viewSpecJson: String? = null,
+)
 internal data class TableSnapshot(val table: UserTableRow, val columns: List<TableColumnRow>, val rows: List<TableDataRow>,
     val linkedTotalCount: Int = 0)
 internal data class LinkedViewSpec(val sourceKind: DomainKind)
@@ -83,6 +89,16 @@ private fun decodeLinkedViewSpec(encoded: String): LinkedViewSpec {
         .getOrElse { error("linked_view_spec_invalid") }
     require(kind in LINKABLE_DOMAIN_KINDS) { "linked_view_kind_not_supported" }
     return LinkedViewSpec(kind)
+}
+
+private fun canonicalJson(value: Any?): String = when (value) {
+    is JSONObject -> value.keys().asSequence().sorted().joinToString(prefix = "{", postfix = "}") { key ->
+        "${JSONObject.quote(key)}:${canonicalJson(value.get(key))}"
+    }
+    is JSONArray -> (0 until value.length()).joinToString(prefix = "[", postfix = "]") { index -> canonicalJson(value.get(index)) }
+    null, JSONObject.NULL -> "null"
+    is String -> JSONObject.quote(value)
+    else -> value.toString()
 }
 internal data class CalendarInput(val eventId: String, val scopeId: String, val title: String, val startLocal: String, val endLocal: String?, val zoneId: String, val precision: String)
 internal data class FinanceHistory(val person: PersonRow, val events: List<MoneyEventRow>, val remainingDebtMinorByEvent: Map<String, Long>,
@@ -572,6 +588,11 @@ internal class ProtectedDomainRepository(private val db: AgentDatabase) {
     }
 
     suspend fun addRows(scope: String, tableId: String, expectedSchemaVersion: Long, rowValues: List<Pair<String, Map<String, Any?>>>) = db.withTransaction {
+        addRowsInTransaction(scope, tableId, expectedSchemaVersion, rowValues)
+    }
+
+    private suspend fun addRowsInTransaction(scope: String, tableId: String, expectedSchemaVersion: Long,
+        rowValues: List<Pair<String, Map<String, Any?>>>): List<TableDataRow> {
         require(rowValues.size in 1..100)
         val table = dao.userTable(scope, tableId) ?: error("not_found")
         check(table.deletedAt == null && table.schemaVersion == expectedSchemaVersion) { "schema_conflict" }
@@ -590,7 +611,7 @@ internal class ProtectedDomainRepository(private val db: AgentDatabase) {
         missing.forEach { dao.insertTableRows(listOf(it)) }
         val readback = dao.rows(tableId, scope).associateBy { it.rowId }
         check(prepared.all { readback[it.rowId] == it }) { "table_rows_add_readback_mismatch" }
-        prepared.map { readback.getValue(it.rowId) }
+        return prepared.map { readback.getValue(it.rowId) }
     }
 
     suspend fun updateRow(scope: String, tableId: String, rowId: String, expectedVersion: Long,
@@ -677,24 +698,54 @@ internal class ProtectedDomainRepository(private val db: AgentDatabase) {
     suspend fun exportTable(scope: String, tableId: String): String {
         val table = dao.userTable(scope, tableId) ?: error("not_found")
         check(table.deletedAt == null)
-        check(table.mode == "editable") { "linked_view_export_not_supported" }
         val columns = dao.columns(tableId)
-        val rows = dao.rows(tableId, scope)
-        return JSONObject().put("format", "memora-table-v1").put("scope", scope).put("tableId", tableId)
-            .put("schemaVersion", table.schemaVersion).put("columns", JSONArray(columns.map { JSONObject()
-                .put("id", it.columnId).put("name", it.name).put("type", it.valueType).put("required", it.required).put("config", JSONObject(it.configJson)) }))
-            .put("rows", JSONArray(rows.map { JSONObject().put("id", it.rowId).put("version", it.version).put("values", JSONObject(it.valuesJson)) })).toString()
+        val rows = if (table.mode == "editable") dao.rows(tableId, scope) else emptyList()
+        require(rows.size <= 1000) { "table_export_limit" }
+        val root = JSONObject().put("format", "memora-table-v2").put("scope", scope).put("tableId", tableId)
+            .put("mode", table.mode).put("schemaVersion", table.schemaVersion)
+            .put("viewSpec", table.viewSpecJson?.let(::JSONObject) ?: JSONObject.NULL)
+            .put("columns", JSONArray(columns.sortedBy { it.position }.map { JSONObject()
+                .put("id", it.columnId).put("position", it.position).put("name", it.name).put("type", it.valueType)
+                .put("required", it.required).put("config", JSONObject(it.configJson)) }))
+            .put("rows", JSONArray(rows.map { JSONObject().put("id", it.rowId).put("version", it.version).put("values", JSONObject(it.valuesJson)) }))
+        val json = root.toString()
+        require(json.toByteArray(Charsets.UTF_8).size <= 1_000_000) { "table_export_limit" }
+        return json
     }
 
     suspend fun previewImport(scope: String, tableId: String, json: String): ImportPreview {
-        require(json.length <= 1_000_000)
-        val root = JSONObject(json); require(root.getString("format") == "memora-table-v1")
+        require(json.toByteArray(Charsets.UTF_8).size <= 1_000_000)
+        val root = JSONObject(json)
+        val format = root.getString("format")
+        require(format == "memora-table-v1" || format == "memora-table-v2") { "unsupported_table_format" }
+        val version2 = format == "memora-table-v2"
         require(root.getString("scope") == scope && root.getString("tableId") == tableId) { "scope_mismatch" }
         val table = dao.userTable(scope, tableId) ?: error("not_found")
-        check(table.mode == "editable") { "linked_view_import_not_supported" }
+        check(table.deletedAt == null) { "table_not_active" }
         check(root.getLong("schemaVersion") == table.schemaVersion) { "schema_conflict" }
-        val columns = dao.columns(tableId).map { it.columnId to ColumnSpec(it.columnId, it.name, ColumnType.valueOf(it.valueType), it.required, JSONObject(it.configJson)) }.toMap()
+        val mode = if (version2) root.getString("mode") else "editable"
+        require(mode == table.mode && mode in setOf("editable", "linked_view")) { "table_mode_conflict" }
+        val storedColumns = dao.columns(tableId).sortedBy { it.position }
+        val columns = storedColumns.map { it.columnId to ColumnSpec(it.columnId, it.name, ColumnType.valueOf(it.valueType), it.required, JSONObject(it.configJson)) }.toMap()
+        if (version2) {
+            val incomingColumns = root.getJSONArray("columns")
+            require(incomingColumns.length() == storedColumns.size) { "schema_conflict" }
+            storedColumns.forEachIndexed { index, current ->
+                val incoming = incomingColumns.getJSONObject(index)
+                require(incoming.getString("id") == current.columnId && incoming.getInt("position") == current.position &&
+                    incoming.getString("name") == current.name && incoming.getString("type") == current.valueType &&
+                    incoming.getBoolean("required") == current.required &&
+                    canonicalJson(incoming.getJSONObject("config")) == canonicalJson(JSONObject(current.configJson))) { "schema_conflict" }
+            }
+            if (mode == "linked_view") {
+                val encodedSpec = root.getJSONObject("viewSpec").toString()
+                require(table.viewSpecJson != null && decodeLinkedViewSpec(encodedSpec) == decodeLinkedViewSpec(table.viewSpecJson)) {
+                    "linked_view_spec_conflict"
+                }
+            } else require(!root.has("viewSpec") || root.isNull("viewSpec")) { "linked_view_spec_conflict" }
+        } else check(mode == "editable") { "linked_view_import_requires_v2" }
         val rawRows = root.getJSONArray("rows"); require(rawRows.length() <= 1000)
+        if (mode == "linked_view") require(rawRows.length() == 0) { "linked_view_rows_forbidden" }
         val ids = hashSetOf<String>()
         val parsed = (0 until rawRows.length()).map { index ->
             val row = rawRows.getJSONObject(index); require(ids.add(row.getString("id")))
@@ -702,11 +753,19 @@ internal class ProtectedDomainRepository(private val db: AgentDatabase) {
             validateRow(scope, columns, values)
             deterministicImportId(tableId, row.getString("id")) to values
         }
-        return ImportPreview(tableId, table.schemaVersion, parsed)
+        return ImportPreview(tableId, table.schemaVersion, parsed, mode, table.viewSpecJson)
     }
 
-    suspend fun importRows(scope: String, preview: ImportPreview): List<TableDataRow> =
-        addRows(scope, preview.tableId, preview.schemaVersion, preview.rows)
+    suspend fun importRows(scope: String, preview: ImportPreview): List<TableDataRow> = db.withTransaction {
+        val table = dao.userTable(scope, preview.tableId) ?: error("not_found")
+        check(table.deletedAt == null && table.schemaVersion == preview.schemaVersion && table.mode == preview.mode) { "schema_conflict" }
+        if (preview.mode == "linked_view") {
+            check(preview.rows.isEmpty() && preview.viewSpecJson != null && table.viewSpecJson != null &&
+                decodeLinkedViewSpec(preview.viewSpecJson) == decodeLinkedViewSpec(table.viewSpecJson)) { "linked_view_spec_conflict" }
+            return@withTransaction emptyList()
+        }
+        preview.rows.chunked(100).flatMap { addRowsInTransaction(scope, preview.tableId, preview.schemaVersion, it) }
+    }
 
     suspend fun search(scope: String, query: String, kinds: Set<DomainKind> = DomainKind.entries.toSet(), limit: Int = 20): List<DomainHit> {
         require(limit in 1..100 && query.length <= 500)

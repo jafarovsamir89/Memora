@@ -206,6 +206,16 @@
     <string name="table_no_rows">Bu görünüşdə sətir yoxdur.</string>
     <string name="table_save">Yadda saxla</string>
     <string name="table_action_failed">Əməliyyat alınmadı. Dəyişiklik saxlanmayıb.</string>
+    <string name="table_export_json">Cədvəli ixrac et</string>
+    <string name="table_import_json">Cədvəli əlavə et</string>
+    <string name="table_import_preview_title">Cədvəli yoxla</string>
+    <string name="table_import_rows_preview">Bu eyni cədvələ %1$d aktiv sətir əlavə olunacaq. Mövcud sətirlər və silinmiş sətir tarixçəsi dəyişməyəcək.</string>
+    <string name="table_import_linked_view_preview">Bu fayl eyni read-only linked view tərifidir. Mənbə qeydləri kopyalanmayacaq və dəyişdirilməyəcək.</string>
+    <string name="table_import_confirm">Əlavə et</string>
+    <string name="table_transfer_success">Cədvəl məlumatı yoxlanıldı.</string>
+    <string name="table_aggregate">Dəqiq cəmi hesabla</string>
+    <string name="table_aggregate_no_values">Bu sütunda məbləğ yoxdur.</string>
+    <string name="table_aggregate_total">Cəm: %1$s %2$s</string>
     <string name="table_summary">%1$d sətir · %2$d sütun</string>
     <string name="ai_speak">Cavabı səsləndir</string>
     <string name="ai_stop_speech">Dayandır</string>

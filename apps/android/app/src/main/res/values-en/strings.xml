@@ -206,6 +206,16 @@
     <string name="table_no_rows">There are no rows in this view.</string>
     <string name="table_save">Save</string>
     <string name="table_action_failed">The action failed. No change was saved.</string>
+    <string name="table_export_json">Export table</string>
+    <string name="table_import_json">Add from file</string>
+    <string name="table_import_preview_title">Review table import</string>
+    <string name="table_import_rows_preview">%1$d active rows will be merged into this same table. Existing rows and deleted-row history will not change.</string>
+    <string name="table_import_linked_view_preview">This file contains the same read-only linked-view definition. Source records will not be copied or changed.</string>
+    <string name="table_import_confirm">Add rows</string>
+    <string name="table_transfer_success">Table transfer completed.</string>
+    <string name="table_aggregate">Calculate exact total</string>
+    <string name="table_aggregate_no_values">This column has no amounts.</string>
+    <string name="table_aggregate_total">Total: %1$s %2$s</string>
     <string name="table_summary">%1$d rows · %2$d columns</string>
     <string name="ai_speak">Speak answer</string>
     <string name="ai_stop_speech">Stop</string>

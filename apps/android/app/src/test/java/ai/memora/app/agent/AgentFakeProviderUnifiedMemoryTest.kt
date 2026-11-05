@@ -313,9 +313,14 @@ class AgentFakeProviderUnifiedMemoryTest {
         assertTrue(runCatching {
             domain.addRows(scope, "synthetic-person-view", 1, listOf("synthetic-forbidden-row" to mapOf("source" to "copy")))
         }.isFailure)
-        assertTrue("linked views must not be exported as empty editable tables", runCatching {
-            domain.exportTable(scope, "synthetic-person-view")
-        }.isFailure)
+        val viewExport = org.json.JSONObject(domain.exportTable(scope, "synthetic-person-view"))
+        assertEquals("memora-table-v2", viewExport.getString("format"))
+        assertEquals("linked_view", viewExport.getString("mode"))
+        assertEquals(0, viewExport.getJSONArray("rows").length())
+        assertEquals("PERSON", viewExport.getJSONObject("viewSpec").getString("sourceKind"))
+        val preview = domain.previewImport(scope, "synthetic-person-view", viewExport.toString())
+        assertTrue(domain.importRows(scope, preview).isEmpty())
+        assertTrue(databaseRule.database.protectedStoreDao().rows("synthetic-person-view", scope).isEmpty())
         assertTrue("linked view schemas must remain source-spec controlled", runCatching {
             domain.changeTableSchema(scope, "synthetic-person-view", 1,
                 listOf(ColumnSpec("source", "Source", ColumnType.TEXT), ColumnSpec("extra", "Extra", ColumnType.TEXT)),

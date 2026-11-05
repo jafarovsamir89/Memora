@@ -19,8 +19,8 @@ android {
         applicationId = "ai.memora.app"
         minSdk = 26
         targetSdk = 36
-        versionCode = 62
-        versionName = "1.1.40-memory-archive-robustness"
+        versionCode = 63
+        versionName = "1.1.41-table-transfer-aggregates"
         testInstrumentationRunner = "ai.memora.app.GeminiSyntheticProbe"
     }
     buildFeatures { compose = true }

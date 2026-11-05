@@ -1,6 +1,10 @@
 package ai.memora.app
 
+import android.provider.DocumentsContract
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -12,6 +16,8 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.OutlinedButton
@@ -43,6 +49,9 @@ import ai.memora.app.data.protectedstore.ProtectedDomainRepository
 import ai.memora.app.data.protectedstore.TableDataRow
 import ai.memora.app.data.protectedstore.TableColumnRow
 import ai.memora.app.data.protectedstore.TableSnapshot
+import ai.memora.app.data.protectedstore.ImportPreview
+import ai.memora.app.data.protectedstore.TableTransferRead
+import ai.memora.app.data.protectedstore.TableTransferReader
 import ai.memora.app.ui.EmptyState
 import ai.memora.app.ui.MemoraCard
 import ai.memora.app.ui.LocalStrings
@@ -52,7 +61,9 @@ import ai.memora.app.ui.colors
 import ai.memora.app.ui.s
 import ai.memora.app.voice.AgentVoiceTurnProcessor
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import org.json.JSONObject
 import java.util.UUID
 import java.math.BigDecimal
@@ -95,12 +106,71 @@ fun TablesScreen() {
     var linkedPageResult by remember { mutableStateOf<LinkedViewPage?>(null) }
     var linkedPageLoading by remember { mutableStateOf(false) }
     var error by remember { mutableStateOf(false) }
+    var transferBusy by remember { mutableStateOf(false) }
+    var transferSuccess by remember { mutableStateOf(false) }
+    var transferTableId by remember { mutableStateOf<String?>(null) }
+    var pendingTableImport by remember { mutableStateOf<ImportPreview?>(null) }
+    var aggregateColumnId by remember { mutableStateOf<String?>(null) }
+    var aggregateTotals by remember { mutableStateOf<Map<String, Long>?>(null) }
+    var aggregateLoading by remember { mutableStateOf(false) }
+    var aggregateMenuExpanded by remember { mutableStateOf(false) }
     val selected = tables.firstOrNull { it.table.tableId == selectedTableId }
+
+    val exportLauncher = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("application/json")) { uri ->
+        val tableId = transferTableId
+        if (uri != null && tableId != null) coroutineScope.launch {
+            transferBusy = true
+            error = false
+            transferSuccess = false
+            val success = withContext(Dispatchers.IO) {
+                try {
+                    val json = repository.exportTable(scopeId, tableId)
+                    val output = context.contentResolver.openOutputStream(uri) ?: run {
+                        runCatching { DocumentsContract.deleteDocument(context.contentResolver, uri) }
+                        return@withContext false
+                    }
+                    output.use { it.write(json.toByteArray(Charsets.UTF_8)); it.flush() }
+                    true
+                } catch (_: Exception) {
+                    runCatching { DocumentsContract.deleteDocument(context.contentResolver, uri) }
+                    false
+                }
+            }
+            transferBusy = false
+            error = !success
+            transferSuccess = success
+        }
+    }
+
+    val importLauncher = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
+        val tableId = transferTableId
+        if (uri != null && tableId != null) coroutineScope.launch {
+            transferBusy = true
+            error = false
+            transferSuccess = false
+            val read = withContext(Dispatchers.IO) {
+                try {
+                    val input = context.contentResolver.openInputStream(uri) ?: return@withContext TableTransferRead.Unavailable
+                    input.use { TableTransferReader.read(it) }
+                } catch (_: Exception) { TableTransferRead.Unavailable }
+            }
+            try {
+                val json = (read as? TableTransferRead.Ready)?.json ?: throw IllegalArgumentException("table_import_file_invalid")
+                pendingTableImport = repository.previewImport(scopeId, tableId, json)
+            } catch (_: Exception) {
+                error = true
+            } finally {
+                transferBusy = false
+            }
+        }
+    }
 
     LaunchedEffect(selectedTableId) {
         linkedQuery = ""
         linkedPage = 0
         linkedSortAscending = true
+        aggregateTotals = null
+        aggregateColumnId = selected?.columns?.firstOrNull { it.valueType == ColumnType.MONEY.name }?.columnId
     }
 
     LaunchedEffect(scopeId, selectedTableId, showDeleted) {
@@ -207,6 +277,36 @@ fun TablesScreen() {
         referenceColumn = null
         referenceQuery = ""
         rowDialog = true
+    }
+
+    pendingTableImport?.let { preview ->
+        val importingView = preview.mode == "linked_view"
+        AlertDialog(
+            onDismissRequest = { if (!transferBusy) pendingTableImport = null },
+            title = { Text(s(R.string.table_import_preview_title)) },
+            text = { Text(if (importingView)
+                s(R.string.table_import_linked_view_preview)
+            else LocalStrings.current.getString(R.string.table_import_rows_preview, preview.rows.size)) },
+            confirmButton = { TextButton(
+                enabled = !transferBusy,
+                onClick = {
+                    transferBusy = true
+                    coroutineScope.launch {
+                        try {
+                            repository.importRows(scopeId, preview)
+                            tables = repository.tables(scopeId)
+                            deletedRows = repository.deletedRows(scopeId, preview.tableId)
+                            pendingTableImport = null
+                            error = false
+                            transferSuccess = true
+                        } catch (_: Exception) { error = true }
+                        finally { transferBusy = false }
+                    }
+                }, modifier = Modifier.testTag("table_import_confirm"),
+            ) { Text(s(R.string.table_import_confirm)) } },
+            dismissButton = { TextButton(onClick = { pendingTableImport = null }, enabled = !transferBusy,
+                modifier = Modifier.testTag("table_import_cancel")) { Text(s(R.string.task_cancel)) } },
+        )
     }
 
     if (createTableDialog) AlertDialog(
@@ -393,6 +493,24 @@ fun TablesScreen() {
                 Text(selected.table.title, style = androidx.compose.material3.MaterialTheme.typography.titleLarge, color = colors.ink)
                 if (selected.table.mode == "editable") TextButton(onClick = { beginRowEdit(null) }, modifier = Modifier.testTag("table_add_row")) { Text(s(R.string.table_add_row)) }
             }
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                OutlinedButton(onClick = {
+                    transferTableId = selected.table.tableId
+                    val fileName = selected.table.title.trim().replace(Regex("[^\\p{L}\\p{N}._-]"), "_").take(64).ifBlank { "memora_table" } + ".json"
+                    exportLauncher.launch(fileName)
+                }, enabled = !transferBusy, modifier = Modifier.weight(1f).testTag("table_export")) {
+                    Text(s(R.string.table_export_json))
+                }
+                OutlinedButton(onClick = {
+                    transferTableId = selected.table.tableId
+                    importLauncher.launch(arrayOf("application/json", "text/json", "text/plain"))
+                }, enabled = !transferBusy, modifier = Modifier.weight(1f).testTag("table_import")) {
+                    Text(s(R.string.table_import_json))
+                }
+            }
+            if (transferSuccess) Text(s(R.string.table_transfer_success), color = colors.accent,
+                modifier = Modifier.testTag("table_transfer_success"))
+            if (transferBusy) Text(s(R.string.today_loading), color = colors.muted)
             if (selected.table.mode == "linked_view") {
                 OutlinedTextField(value = linkedQuery, onValueChange = { linkedQuery = it; linkedPage = 0 },
                     modifier = Modifier.fillMaxWidth().testTag("linked_view_filter"),
@@ -430,6 +548,47 @@ fun TablesScreen() {
                     }
                 }
             } else {
+            val moneyColumns = selected.columns.filter { it.valueType == ColumnType.MONEY.name }
+            if (moneyColumns.isNotEmpty()) {
+                if (aggregateColumnId !in moneyColumns.map { it.columnId }) aggregateColumnId = moneyColumns.first().columnId
+                val aggregateColumn = moneyColumns.first { it.columnId == aggregateColumnId }
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Box {
+                        TextButton(onClick = { aggregateMenuExpanded = true }, modifier = Modifier.testTag("table_aggregate_column")) {
+                            Text(aggregateColumn.name)
+                        }
+                        DropdownMenu(expanded = aggregateMenuExpanded, onDismissRequest = { aggregateMenuExpanded = false }) {
+                            moneyColumns.forEach { column -> DropdownMenuItem(
+                                text = { Text(column.name) }, onClick = {
+                                    aggregateColumnId = column.columnId
+                                    aggregateTotals = null
+                                    aggregateMenuExpanded = false
+                                }, modifier = Modifier.testTag("table_aggregate_column_${column.columnId}"),
+                            ) }
+                        }
+                    }
+                    OutlinedButton(onClick = {
+                        aggregateLoading = true
+                        aggregateTotals = null
+                        coroutineScope.launch {
+                            try { aggregateTotals = repository.aggregateMoney(scopeId, selected.table.tableId, aggregateColumn.columnId) }
+                            catch (_: Exception) { error = true }
+                            finally { aggregateLoading = false }
+                        }
+                    }, enabled = !aggregateLoading, modifier = Modifier.testTag("table_aggregate_run")) {
+                        Text(s(R.string.table_aggregate))
+                    }
+                }
+                if (aggregateLoading) Text(s(R.string.today_loading), color = colors.muted)
+                aggregateTotals?.let { totals ->
+                    if (totals.isEmpty()) Text(s(R.string.table_aggregate_no_values), color = colors.muted)
+                    totals.forEach { (currency, minorUnits) ->
+                        val amount = BigDecimal.valueOf(minorUnits, 2).toPlainString()
+                        Text(LocalStrings.current.getString(R.string.table_aggregate_total, amount, currency),
+                            color = colors.accent, modifier = Modifier.testTag("table_aggregate_$currency"))
+                    }
+                }
+            }
             OutlinedButton(onClick = { showDeleted = !showDeleted }, modifier = Modifier.fillMaxWidth().testTag("table_show_deleted")) {
                 Text(s(if (showDeleted) R.string.table_show_active else R.string.table_show_deleted))
             }

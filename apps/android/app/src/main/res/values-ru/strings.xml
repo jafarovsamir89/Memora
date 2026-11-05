@@ -206,6 +206,16 @@
     <string name="table_no_rows">В этом списке строк нет.</string>
     <string name="table_save">Сохранить</string>
     <string name="table_action_failed">Не удалось выполнить действие. Изменение не сохранено.</string>
+    <string name="table_export_json">Экспортировать таблицу</string>
+    <string name="table_import_json">Добавить из файла</string>
+    <string name="table_import_preview_title">Проверьте импорт</string>
+    <string name="table_import_rows_preview">В эту же таблицу будут добавлены активные строки: %1$d. Существующие строки и история удалённых строк не изменятся.</string>
+    <string name="table_import_linked_view_preview">Файл содержит такое же read-only представление. Записи-источники не будут скопированы или изменены.</string>
+    <string name="table_import_confirm">Добавить строки</string>
+    <string name="table_transfer_success">Данные таблицы обработаны.</string>
+    <string name="table_aggregate">Посчитать точную сумму</string>
+    <string name="table_aggregate_no_values">В этом столбце нет сумм.</string>
+    <string name="table_aggregate_total">Итого: %1$s %2$s</string>
     <string name="table_summary">%1$d строк · %2$d столбцов</string>
     <string name="ai_speak">Озвучить ответ</string>
     <string name="ai_stop_speech">Остановить</string>

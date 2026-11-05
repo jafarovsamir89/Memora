@@ -1,5 +1,9 @@
 # M20-08 Native validation matrix
 
+## ACT-0180 — Table JSON transfer and exact money aggregates
+
+Implemented a user-facing Android SAF JSON transfer for existing tables, v2 typed schema/mode/scope/table binding, editable v1 compatibility, explicit import preview, strict bounded UTF-8 reads, atomic idempotent row merge in one transaction with 100-row insert batches, and linked-view definition-only transfer. Soft-deleted row history is excluded; complete portable backup remains separate. Exact money totals stay partitioned by currency. Full Gradle passed: 63 suites / 318 tests, 0 failures/errors/skips; debug/AndroidTest APKs and Kotlin compile passed; lint 0/74/3. APK v63 / `1.1.41-table-transfer-aggregates`, SHA-256 `15ac1d3492684ba841d9fe71590f3e69f8034434828931b2c19952dbb76e0ddd`. ADB device list was empty; SAF provider, TalkBack and owner acceptance remain separate gates.
+
 ## ACT-0170 — Typed custom-table references
 
 Synthetic repository coverage creates a valid same-scope person/project reference and rejects wrong-kind, missing, cross-scope and soft-deleted targets. Final full host run: 60 suites / 305 tests, 0 failures/errors/skips; debug and AndroidTest APK builds, AndroidTest Kotlin compile and lint passed (0 errors / 63 warnings / 3 hints). APK SHA-256 `c2520ebe1693d19510df2a7e34553d76408c7058cef290dd273da691bdfa7081`. This validates repository behavior only; it does not close P4 UI acceptance. A focused Robolectric Compose interaction attempt timed out with `AppNotIdleException` at TextField entry. Physical-device selection/reading, TalkBack, layout, save-failure recovery, genuine linked views and owner review remain open.
