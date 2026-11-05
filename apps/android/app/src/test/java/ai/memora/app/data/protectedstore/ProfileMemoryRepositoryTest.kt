@@ -42,11 +42,15 @@ class ProfileMemoryRepositoryTest {
         val scope = "synthetic-profile-scope"
         val otherScope = "synthetic-other-profile-scope"
         val source1 = "synthetic-profile-turn-1"
+        val sourceText = "🙂 Synthetic: Please keep your answers concise and in Azerbaijani."
+        val quote = "keep your answers concise and in Azerbaijani"
         val first = repo.saveUserStated(scope, "preference", "I prefer concise Azerbaijani answers",
-            source1, "Synthetic: Please keep your answers concise and in Azerbaijani.", nowMillis = 1_000)
+            source1, sourceText, nowMillis = 1_000, sourceQuote = quote)
         assertEquals(1L, first.revision)
         assertEquals(listOf(source1), first.sourceTurnIds)
         assertEquals("user_stated", first.revisions.single().provenance)
+        assertEquals(sourceText.indexOf(quote), first.sourceEvidence.single().sourceStartUtf16)
+        assertEquals(sourceText.indexOf(quote) + quote.length, first.sourceEvidence.single().sourceEndUtf16)
 
         val source2 = "synthetic-profile-turn-2"
         val duplicate = repo.saveUserStated(scope, "preference", "I prefer concise Azerbaijani answers.",
@@ -54,17 +58,21 @@ class ProfileMemoryRepositoryTest {
         assertEquals(first.factId, duplicate.factId)
         assertEquals(1L, duplicate.revision)
         assertEquals(listOf(source1, source2), duplicate.sourceTurnIds)
+        assertNull(duplicate.sourceEvidence.last().sourceStartUtf16)
         assertTrue(repo.list(scope, "Azerbaijani concise").any { it.factId == first.factId })
         assertTrue(repo.list(otherScope, "Azerbaijani").isEmpty())
 
         val correctedSource = "synthetic-profile-turn-correction"
         val corrected = repo.correctFromUser(scope, first.factId, 1, "preference", "I prefer detailed answers",
-            correctedSource, "Synthetic correction: detailed answers suit me better.", nowMillis = 3_000)
+            correctedSource, "Synthetic correction: detailed answers suit me better.", nowMillis = 3_000,
+            sourceQuote = "detailed answers suit me better")
         assertEquals(2L, corrected.revision)
         assertEquals(listOf(1L, 2L), corrected.revisions.map { it.revision })
         assertEquals("I prefer concise Azerbaijani answers", corrected.revisions.first().fact)
         assertEquals("user_corrected", corrected.revisions.last().provenance)
         assertEquals(correctedSource, corrected.revisions.last().sourceTurnId)
+        assertEquals("detailed answers suit me better".length,
+            corrected.sourceEvidence.last().sourceEndUtf16!! - corrected.sourceEvidence.last().sourceStartUtf16!!)
         assertEquals(listOf(source1, source2, correctedSource), corrected.sourceTurnIds)
 
         val manuallyEdited = repo.editManually(scope, first.factId, 2, "preference", "Detailed replies only when useful", nowMillis = 4_000)
@@ -76,6 +84,15 @@ class ProfileMemoryRepositoryTest {
         assertTrue(repo.delete(scope, first.factId, 3))
         assertNull(repo.get(scope, first.factId))
         assertTrue(repo.list(scope).isEmpty())
+    }
+
+    @Test fun invalidOrMissingQuoteNeverCreatesInventedSourceOffsets() = runBlocking {
+        val repo = ProtectedProfileMemoryRepository(databaseRule.database)
+        val source = "Synthetic: I prefer calm reminders."
+        val fact = repo.saveUserStated("synthetic-quote-validation", "preference", "Prefers calm reminders",
+            "synthetic-quote-validation-turn", source, nowMillis = 10, sourceQuote = "I prefer daily reminders")
+        assertNull(fact.sourceEvidence.single().sourceStartUtf16)
+        assertNull(fact.sourceEvidence.single().sourceEndUtf16)
     }
 
     @Test fun exactSourceTurnDeletionAndRetentionRemoveDerivedProfileFacts() = runBlocking {

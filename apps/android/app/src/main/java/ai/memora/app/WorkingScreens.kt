@@ -44,6 +44,8 @@ import java.util.Locale
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
+private data class ProfileFactSourceDisplay(val message: String, val exactQuote: String?)
+
 @Composable
 fun WorkingHomeScreen(language: String, state: CaptureSessionState, navigate: (String) -> Unit,
     capture: (Boolean) -> Unit, detail: (String) -> Unit, taskStore: EncryptedTaskStore? = null,
@@ -200,7 +202,7 @@ internal fun WorkingMemoryScreen(state: CaptureSessionState, detail: (String) ->
     var pendingDeleteEpisode by remember { mutableStateOf<ConversationEpisodeEvidence?>(null) }
     var selectedFact by remember { mutableStateOf<MemoryDomainFact?>(null) }
     var selectedProfileFact by remember { mutableStateOf<ProfileFactEvidence?>(null) }
-    var profileFactSources by remember { mutableStateOf<List<String>>(emptyList()) }
+    var profileFactSources by remember { mutableStateOf<List<ProfileFactSourceDisplay>>(emptyList()) }
     var profileFactSourcesLoading by remember { mutableStateOf(false) }
     var editingProfileFact by remember { mutableStateOf<ProfileFactEvidence?>(null) }
     var creatingProfileFact by remember { mutableStateOf(false) }
@@ -297,8 +299,15 @@ internal fun WorkingMemoryScreen(state: CaptureSessionState, detail: (String) ->
         coroutineScope.launch {
             try {
                 val conversations = conversationRepository ?: return@launch
-                profileFactSources = fact.sourceTurnIds.mapNotNull { turnId ->
-                    conversations.turn(scopeId, turnId).firstOrNull { it.role == "user" }?.message
+                profileFactSources = fact.sourceEvidence.mapNotNull { source ->
+                    val message = conversations.turn(scopeId, source.turnId).firstOrNull { it.role == "user" }?.message
+                        ?: return@mapNotNull null
+                    val start = source.sourceStartUtf16
+                    val end = source.sourceEndUtf16
+                    val quote = if (start != null && end != null && start >= 0 && end > start && end <= message.length) {
+                        message.substring(start, end)
+                    } else null
+                    ProfileFactSourceDisplay(message, quote)
                 }
             } catch (_: Exception) { archiveError = true }
             finally { profileFactSourcesLoading = false }
@@ -466,8 +475,14 @@ internal fun WorkingMemoryScreen(state: CaptureSessionState, detail: (String) ->
                     if (!profileFactSourcesLoading && profileFactSources.isEmpty())
                         Text(s(R.string.profile_memory_source_unavailable), color = colors.muted)
                     profileFactSources.forEach { source ->
-                        Text(source, color = colors.muted, style = MaterialTheme.typography.bodySmall,
-                            modifier = Modifier.testTag("profile_fact_conversation_source"))
+                        Column(verticalArrangement = Arrangement.spacedBy(4.dp), modifier = Modifier.testTag("profile_fact_conversation_source")) {
+                            Text(source.message, color = colors.muted, style = MaterialTheme.typography.bodySmall)
+                            source.exactQuote?.let { quote ->
+                                Text(LocalStrings.current.getString(R.string.profile_memory_exact_excerpt, quote),
+                                    color = colors.accent, style = MaterialTheme.typography.bodySmall,
+                                    modifier = Modifier.testTag("profile_fact_exact_excerpt"))
+                            }
+                        }
                     }
                 }
                 val older = fact.revisions.dropLast(1).takeLast(5).asReversed()

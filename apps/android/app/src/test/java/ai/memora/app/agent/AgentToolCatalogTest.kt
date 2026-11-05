@@ -37,10 +37,12 @@ class AgentToolCatalogTest {
         }
         val saveProfileFact = requireNotNull(AgentToolCatalog.find("save_profile_fact", 1))
         assertEquals(setOf("category", "fact"), saveProfileFact.parameters.filterNot { it.optional }.map { it.name }.toSet())
+        assertEquals(setOf("source_quote"), saveProfileFact.optionalParameters.toSet())
         assertEquals(listOf("preference", "goal", "context", "other"),
             saveProfileFact.parameters.single { it.name == "category" }.enumValues)
         val editProfileFact = requireNotNull(AgentToolCatalog.find("edit_profile_fact", 1))
         assertEquals(setOf("fact_id", "expected_revision", "fact"), editProfileFact.parameters.filterNot { it.optional }.map { it.name }.toSet())
+        assertTrue(editProfileFact.optionalParameters.contains("source_quote"))
         assertEquals(AgentToolValueType.INTEGER, editProfileFact.parameters.single { it.name == "expected_revision" }.type)
     }
 

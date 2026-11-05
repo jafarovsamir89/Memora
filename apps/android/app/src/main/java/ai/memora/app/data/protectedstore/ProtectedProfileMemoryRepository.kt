@@ -24,8 +24,15 @@ internal data class ProfileFactEvidence(
     val createdAtMillis: Long,
     val updatedAtMillis: Long,
     val sourceTurnIds: List<String>,
+    val sourceEvidence: List<ProfileFactSourceEvidence>,
     val revisions: List<ProfileFactRevisionEvidence>,
     val score: Int = 0,
+)
+
+internal data class ProfileFactSourceEvidence(
+    val turnId: String,
+    val sourceStartUtf16: Int?,
+    val sourceEndUtf16: Int?,
 )
 
 /** Owner-scoped, explicit personal memory. Model-inferred facts are intentionally unsupported. */
@@ -89,14 +96,17 @@ internal class ProtectedProfileMemoryRepository(private val db: AgentDatabase) {
         sourceTurnId: String,
         sourceText: String,
         nowMillis: Long = System.currentTimeMillis(),
+        sourceQuote: String? = null,
     ): ProfileFactEvidence = db.withTransaction {
         validate(scopeId, category, fact, nowMillis)
         ensureCurrentUserSource(scopeId, sourceTurnId, sourceText, nowMillis)
+        val sourceRange = sourceRange(sourceText, sourceQuote)
         val normalizedFact = normalizeFact(fact)
         val digest = digest(scopeId, category, normalizedFact)
         val existing = dao.profileFactByDigest(scopeId, digest)
         if (existing != null) {
-            dao.insertProfileFactSource(ProfileFactSourceRow(scopeId, existing.factId, sourceTurnId, "user_stated"))
+            dao.insertProfileFactSource(ProfileFactSourceRow(scopeId, existing.factId, sourceTurnId, "user_stated",
+                sourceRange?.first, sourceRange?.second))
             return@withTransaction requireReadback(scopeId, existing.factId)
         }
         check(dao.profileFactCount(scopeId) < MAX_PROFILE_FACTS) { "profile_fact_limit_reached" }
@@ -104,7 +114,8 @@ internal class ProtectedProfileMemoryRepository(private val db: AgentDatabase) {
         val normalized = fact.trim()
         val row = ProfileFactRow(id, scopeId, category, normalized, digest, 1, nowMillis, nowMillis)
         dao.insertProfileFact(row)
-        dao.insertProfileFactSource(ProfileFactSourceRow(scopeId, id, sourceTurnId, "user_stated"))
+        dao.insertProfileFactSource(ProfileFactSourceRow(scopeId, id, sourceTurnId, "user_stated",
+            sourceRange?.first, sourceRange?.second))
         dao.insertProfileFactRevision(ProfileFactRevisionRow(scopeId, id, 1, category, normalized,
             "user_stated", sourceTurnId, nowMillis))
         requireReadback(scopeId, id).also { saved ->
@@ -123,8 +134,9 @@ internal class ProtectedProfileMemoryRepository(private val db: AgentDatabase) {
         sourceTurnId: String,
         sourceText: String,
         nowMillis: Long = System.currentTimeMillis(),
+        sourceQuote: String? = null,
     ): ProfileFactEvidence = update(scopeId, factId, expectedRevision, category, fact,
-        "user_corrected", sourceTurnId, sourceText, nowMillis)
+        "user_corrected", sourceTurnId, sourceText, sourceQuote, nowMillis)
 
     /** UI edits are explicit owner actions and keep a revision even without a conversation source. */
     suspend fun editManually(
@@ -135,7 +147,7 @@ internal class ProtectedProfileMemoryRepository(private val db: AgentDatabase) {
         fact: String,
         nowMillis: Long = System.currentTimeMillis(),
     ): ProfileFactEvidence = update(scopeId, factId, expectedRevision, category, fact,
-        "user_edited", null, null, nowMillis)
+        "user_edited", null, null, null, nowMillis)
 
     suspend fun delete(scopeId: String, factId: String, expectedRevision: Long): Boolean = db.withTransaction {
         require(scopeId.isNotBlank() && factId.isNotBlank() && expectedRevision > 0)
@@ -151,11 +163,13 @@ internal class ProtectedProfileMemoryRepository(private val db: AgentDatabase) {
         provenance: String,
         sourceTurnId: String?,
         sourceText: String?,
+        sourceQuote: String?,
         nowMillis: Long,
     ): ProfileFactEvidence = db.withTransaction {
         validate(scopeId, category, fact, nowMillis)
         require(factId.isNotBlank() && expectedRevision > 0)
         if (sourceTurnId != null) ensureCurrentUserSource(scopeId, sourceTurnId, requireNotNull(sourceText), nowMillis)
+        val sourceRange = if (sourceTurnId != null) sourceRange(requireNotNull(sourceText), sourceQuote) else null
         val current = dao.profileFact(scopeId, factId) ?: error("profile_fact_not_found")
         check(current.revision == expectedRevision) { "profile_fact_revision_conflict" }
         val normalized = fact.trim()
@@ -163,7 +177,8 @@ internal class ProtectedProfileMemoryRepository(private val db: AgentDatabase) {
         val duplicate = dao.profileFactByDigest(scopeId, digest)
         check(duplicate == null || duplicate.factId == factId) { "profile_fact_duplicate" }
         if (current.category == category && current.fact == normalized) {
-            if (sourceTurnId != null) dao.insertProfileFactSource(ProfileFactSourceRow(scopeId, factId, sourceTurnId, provenance))
+            if (sourceTurnId != null) dao.insertProfileFactSource(ProfileFactSourceRow(scopeId, factId, sourceTurnId, provenance,
+                sourceRange?.first, sourceRange?.second))
             return@withTransaction requireReadback(scopeId, factId)
         }
         // Any episode built from the superseded statement can now contradict the owner's correction.
@@ -174,7 +189,8 @@ internal class ProtectedProfileMemoryRepository(private val db: AgentDatabase) {
         val updatedAt = maxOf(nowMillis, current.updatedAtMillis)
         check(dao.updateProfileFact(scopeId, factId, expectedRevision, category, normalized, digest,
             nextRevision, updatedAt) == 1) { "profile_fact_revision_conflict" }
-        if (sourceTurnId != null) dao.insertProfileFactSource(ProfileFactSourceRow(scopeId, factId, sourceTurnId, provenance))
+        if (sourceTurnId != null) dao.insertProfileFactSource(ProfileFactSourceRow(scopeId, factId, sourceTurnId, provenance,
+            sourceRange?.first, sourceRange?.second))
         dao.insertProfileFactRevision(ProfileFactRevisionRow(scopeId, factId, nextRevision, category,
             normalized, provenance, sourceTurnId, updatedAt))
         supersededSourceTurnIds.forEach { sourceTurnId ->
@@ -214,7 +230,16 @@ internal class ProtectedProfileMemoryRepository(private val db: AgentDatabase) {
         check(revisions.lastOrNull()?.revision == row.revision && revisions.lastOrNull()?.fact == row.fact &&
             sources.all { it.scopeId == scopeId && it.factId == factId }) { "profile_fact_integrity_error" }
         return ProfileFactEvidence(row.factId, row.scopeId, row.category, row.fact, row.revision,
-            row.createdAtMillis, row.updatedAtMillis, sources.map { it.turnId }, revisions)
+            row.createdAtMillis, row.updatedAtMillis, sources.map { it.turnId },
+            sources.map { ProfileFactSourceEvidence(it.turnId, it.sourceStartUtf16, it.sourceEndUtf16) }, revisions)
+    }
+
+    private fun sourceRange(sourceText: String, sourceQuote: String?): Pair<Int, Int>? {
+        if (sourceQuote == null) return null
+        if (sourceQuote.isBlank() || sourceQuote.length > 2_000) return null
+        val start = sourceText.indexOf(sourceQuote)
+        if (start < 0) return null
+        return start to (start + sourceQuote.length)
     }
 
     private fun validate(scopeId: String, category: String, fact: String, nowMillis: Long) {

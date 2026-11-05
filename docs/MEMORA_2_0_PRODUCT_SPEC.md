@@ -101,7 +101,7 @@ Memora не всезнающая и не всегда точнее челове�
 Добавить поверх, не переписывая канонические источники:
 1. Conversation archive — прозрачная политика хранения, поисковый доступ, не искусственно считать последние 240 сообщений всей памятью.
 2. Episodic memory — summaries с доказательствами: о чём говорили, что решили, что осталось незавершённым; привязка к исходным turn IDs и ревизиям, изменение/отзыв/удаление.
-3. Personal profile memory — как обращаться, язык, стиль, устойчивые предпочтения, цели, привычные контексты; явное vs предполагаемое, редактируемое, без тайного чувствительного профилирования.
+3. Personal profile memory — как обращаться, язык, стиль, устойчивые предпочтения, цели, привычные контексты; явное vs предполагаемое, редактируемое, без тайного чувствительного профилирования. Когда факт выведен из текущей реплики, UI должен по возможности показывать проверяемый точный источник; span цитаты сверяется приложением с оригиналом, а отсутствие span не должно маскироваться как точная цитата.
 4. Canonical facts/actions — деньги, события, задачи, календарь, лица, проекты, подтверждения и версии. LLM не считается источником истины.
 5. Hybrid retrieval — keyword+semantic when implemented, entities, time, relationships, provenance, context budget, relevance, no-answer when absent.
    - Current partial slice: `search_memory` recognizes literal ISO calendar dates and the bounded relative-day words documented in ACT-0169, matching finance/task/calendar activity using the profile timezone. Weekday expressions, general natural-date parsing and date ranges are not implemented.

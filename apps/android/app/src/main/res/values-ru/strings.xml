@@ -485,6 +485,7 @@
     <string name="profile_memory_category_other">Другое</string>
     <string name="profile_memory_revision">Версия %1$d · источники доступны для проверки</string>
     <string name="profile_memory_sources">Ваши исходные сообщения</string>
+    <string name="profile_memory_exact_excerpt">Точная цитата: «%1$s»</string>
     <string name="profile_memory_sources_count">Источники: %1$d</string>
     <string name="profile_memory_manual_source">Этот факт добавлен или изменён вручную в памяти; у него нет источника из разговора.</string>
     <string name="profile_memory_source_unavailable">Исходный разговор больше недоступен.</string>

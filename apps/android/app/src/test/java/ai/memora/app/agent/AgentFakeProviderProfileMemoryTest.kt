@@ -43,6 +43,9 @@ class AgentFakeProviderProfileMemoryTest {
         assertEquals("I prefer brief answers in Azerbaijani", stored.fact)
         assertEquals(listOf(sourceTurn), stored.sourceTurnIds)
         assertEquals("user_stated", stored.revisions.single().provenance)
+        assertEquals("I prefer brief answers in Azerbaijani.",
+            conversations.sourceUserTurn(scope, sourceTurn)?.message?.substring(
+                stored.sourceEvidence.single().sourceStartUtf16!!, stored.sourceEvidence.single().sourceEndUtf16!!))
         assertEquals("Synthetic statement: I prefer brief answers in Azerbaijani.",
             conversations.sourceUserTurn(scope, sourceTurn)?.message)
 
@@ -59,7 +62,8 @@ class AgentFakeProviderProfileMemoryTest {
             "az-AZ", "Synthetic correction: detailed answers are better for me.")
         val prepared = editHandler.prepare(AgentModelToolCall("profile-edit", "edit_profile_fact", 1,
             mapOf("fact_id" to stored.factId, "expected_revision" to stored.revision,
-                "fact" to "I prefer detailed answers")), correctionTurn, "00000000-0000-4000-8000-000000000806")
+                "fact" to "I prefer detailed answers", "source_quote" to "detailed answers are better for me.")),
+            correctionTurn, "00000000-0000-4000-8000-000000000806")
         assertTrue(prepared is ToolPreparation.Prepared)
         val edited = editHandler.commit((prepared as ToolPreparation.Prepared).command)
         assertEquals(ToolObservationStatus.APPLIED, edited.status)
@@ -67,6 +71,8 @@ class AgentFakeProviderProfileMemoryTest {
         assertEquals(2L, updated.revision)
         assertEquals("I prefer detailed answers", updated.fact)
         assertEquals(correctionTurn.turnId, updated.revisions.last().sourceTurnId)
+        assertEquals("detailed answers are better for me.", correctionTurn.text.substring(
+            updated.sourceEvidence.last().sourceStartUtf16!!, updated.sourceEvidence.last().sourceEndUtf16!!))
 
         val stale = editHandler.prepare(AgentModelToolCall("profile-stale-edit", "edit_profile_fact", 1,
             mapOf("fact_id" to stored.factId, "expected_revision" to 1L, "fact" to "Stale value")),
@@ -138,7 +144,8 @@ class AgentFakeProviderProfileMemoryTest {
             request.tools.forEach(AgentToolCatalog::require)
             return when (rounds++) {
                 0 -> AgentModelReply.Calls(listOf(AgentModelToolCall("profile-save", "save_profile_fact", 1,
-                    mapOf("category" to "preference", "fact" to "I prefer brief answers in Azerbaijani"))))
+                    mapOf("category" to "preference", "fact" to "I prefer brief answers in Azerbaijani",
+                        "source_quote" to "I prefer brief answers in Azerbaijani."))))
                 else -> AgentModelReply.Answer("Synthetic preference saved with its source.")
             }
         }

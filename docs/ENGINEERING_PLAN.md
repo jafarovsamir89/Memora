@@ -70,6 +70,8 @@
 
 **ACT-0174 (2026-11-04):** P4 linked views now page and search across the full active source set: DAO reads 200-row chunks inside one Room transaction, filtering in Kotlin preserves AZ/RU/EN case-insensitivity, and a bounded priority queue retains only the requested locale-sorted window. UI pages 25 records; agent accepts exact offset/limit. Full Gradle 60 suites / 308 tests, lint 0/72/3; APK v60 hash is in TODO and validation matrix. Offset cap 100,000 is explicit. P3/P4 remain partial; no owner/device acceptance.
 
+**ACT-0186 (2026-11-04):** P3 profile-memory source evidence now supports optional locally verified exact excerpt offsets (Room 19→20, nullable UTF-16 ranges); the quote itself is not duplicated. Missing/false quotes remain source-linked without claiming exactness. Full Gradle passed 63 suites / 325 tests, lint 0/73/3; APK v66 SHA-256 `b918987cbf98b6389360f5c825db2936a6fe8bb234e1481dab842103df0682c5`. Next: apply broader source/provenance semantics to canonical entities/cases and continue memory-diary UX/recovery proof. Owner device/TalkBack and migration probe remain open; this is not P3 closure.
+
 ## 1. Основание и принятые решения
 
 Полное видение из [README](../README.md), [VISION](VISION.md) и [FULL_PRODUCT_SPEC](FULL_PRODUCT_SPEC.md) сохраняется: независимый AI-секретарь, управляемая пользователем долгосрочная память, голос/текст/документы, люди и проекты, деньги и обязательства, задачи и календарь, поиск, проактивность, интеграции, совместные пространства, Android/iOS/веб, RU/AZ/EN.

@@ -172,6 +172,12 @@ internal val AGENT_DB_18_TO_19 = androidx.room.migration.Migration(18, 19) { db 
     db.execSQL("ALTER TABLE user_table ADD COLUMN viewSpecJson TEXT")
 }
 
+/** Add nullable, source-verified UTF-16 ranges for profile-fact evidence. */
+internal val AGENT_DB_19_TO_20 = androidx.room.migration.Migration(19, 20) { db ->
+    db.execSQL("ALTER TABLE profile_fact_source ADD COLUMN sourceStartUtf16 INTEGER")
+    db.execSQL("ALTER TABLE profile_fact_source ADD COLUMN sourceEndUtf16 INTEGER")
+}
+
 /** Minimal command journal. Only identifiers, digest, status and recovery versions are retained. */
 @Entity(tableName = "agent_command_journal")
 internal data class AgentCommandJournalRow(
@@ -320,6 +326,8 @@ internal data class ProfileFactSourceRow(
     val factId: String,
     val turnId: String,
     val provenance: String,
+    val sourceStartUtf16: Int? = null,
+    val sourceEndUtf16: Int? = null,
 )
 
 @Entity(tableName = "profile_fact_revision", primaryKeys = ["factId", "revision"], indices = [
@@ -953,7 +961,7 @@ internal interface ProtectedStoreDao {
     CaseParticipantRow::class, CaseEvidenceRow::class, PersonAliasRow::class, PersonAliasRevisionRow::class,
     TaskPersonLinkRow::class, TaskPersonLinkRevisionRow::class,
     CalendarPersonLinkRow::class, CalendarPersonLinkRevisionRow::class],
-    version = 19, exportSchema = true)
+    version = 20, exportSchema = true)
 internal abstract class AgentDatabase : RoomDatabase() {
     abstract fun protectedStoreDao(): ProtectedStoreDao
     companion object {
@@ -1105,7 +1113,8 @@ internal abstract class AgentDatabase : RoomDatabase() {
                     .addMigrations(AGENT_DB_1_TO_2, AGENT_DB_2_TO_3, AGENT_DB_3_TO_4, AGENT_DB_4_TO_5,
                         AGENT_DB_5_TO_6, AGENT_DB_6_TO_7, AGENT_DB_7_TO_8, AGENT_DB_8_TO_9, AGENT_DB_9_TO_10,
                         AGENT_DB_10_TO_11, AGENT_DB_11_TO_12, AGENT_DB_12_TO_13, AGENT_DB_13_TO_14, AGENT_DB_14_TO_15,
-                        AGENT_DB_15_TO_16, AGENT_DB_16_TO_17, AGENT_DB_17_TO_18, AGENT_DB_18_TO_19)
+                        AGENT_DB_15_TO_16, AGENT_DB_16_TO_17, AGENT_DB_17_TO_18, AGENT_DB_18_TO_19,
+                        AGENT_DB_19_TO_20)
                     .setJournalMode(RoomDatabase.JournalMode.TRUNCATE)
                     // WAL remains disabled until P1 WAL/SHM privacy and recovery gates pass.
                     .openHelperFactory(SupportOpenHelperFactory(databaseKey, null, false))

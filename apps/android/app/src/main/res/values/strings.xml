@@ -485,6 +485,7 @@
     <string name="profile_memory_category_other">Digər</string>
     <string name="profile_memory_revision">Versiya %1$d · mənbələri yoxlanıla bilər</string>
     <string name="profile_memory_sources">Sizin dediyiniz mənbələr</string>
+    <string name="profile_memory_exact_excerpt">Dəqiq sitat: “%1$s”</string>
     <string name="profile_memory_sources_count">Mənbə: %1$d</string>
     <string name="profile_memory_manual_source">Bu fakt yaddaşda əl ilə əlavə və ya redaktə edilib; söhbət mənbəyi yoxdur.</string>
     <string name="profile_memory_source_unavailable">İlkin söhbət mənbəyi artıq əlçatan deyil.</string>

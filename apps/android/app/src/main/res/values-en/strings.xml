@@ -485,6 +485,7 @@
     <string name="profile_memory_category_other">Other</string>
     <string name="profile_memory_revision">Revision %1$d · sources can be checked</string>
     <string name="profile_memory_sources">Your source messages</string>
+    <string name="profile_memory_exact_excerpt">Exact excerpt: “%1$s”</string>
     <string name="profile_memory_sources_count">Sources: %1$d</string>
     <string name="profile_memory_manual_source">This fact was entered or edited manually in Memory; it has no conversation source.</string>
     <string name="profile_memory_source_unavailable">The original conversation source is no longer available.</string>

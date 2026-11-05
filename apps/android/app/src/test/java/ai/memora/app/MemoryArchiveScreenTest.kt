@@ -95,7 +95,8 @@ class MemoryArchiveScreenTest {
         val scopeId = AgentVoiceTurnProcessor(context).conversationScopeId()
         val repository = ProtectedProfileMemoryRepository(databaseRule.database)
         repository.saveUserStated(scopeId, "preference", "Synthetic likes concise summaries",
-            "synthetic-profile-source-turn", "Synthetic: I like concise summaries.")
+            "synthetic-profile-source-turn", "Synthetic: I like concise summaries.",
+            sourceQuote = "I like concise summaries.")
 
         compose.setContent {
             CompositionLocalProvider(LocalAgentDatabaseOverride provides databaseRule.database) {
@@ -112,6 +113,7 @@ class MemoryArchiveScreenTest {
             compose.onAllNodesWithTag("profile_fact_conversation_source").fetchSemanticsNodes().isNotEmpty()
         }
         compose.onNodeWithTag("profile_fact_conversation_source").assertIsDisplayed()
+        compose.onNodeWithTag("profile_fact_exact_excerpt").assertIsDisplayed()
         assertTrue(compose.onAllNodesWithTag("profile_fact_manual_source").fetchSemanticsNodes().isEmpty())
     }
 

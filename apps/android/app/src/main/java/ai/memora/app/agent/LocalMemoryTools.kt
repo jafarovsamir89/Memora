@@ -120,20 +120,21 @@ internal class LocalMemoryTools(private val repository: ProtectedDomainRepositor
         override suspend fun prepare(call: AgentModelToolCall, turn: AgentTurnRequest, commandId: String): ToolPreparation {
             val category = call.arguments["category"] as? String ?: return ToolPreparation.Rejected("invalid_profile_category")
             val fact = call.arguments["fact"] as? String ?: return ToolPreparation.Rejected("invalid_profile_fact")
+            val sourceQuote = call.arguments["source_quote"] as? String
             if (category !in ProtectedProfileMemoryRepository.CATEGORIES || fact.isBlank() || fact.trim().length > 600)
                 return ToolPreparation.Rejected("invalid_profile_fact")
             if (turn.text.isBlank() || turn.text.length > 20_000) return ToolPreparation.Rejected("profile_source_unavailable")
             if (profileMemory == null) return ToolPreparation.Rejected("profile_memory_unavailable")
             val digest = sha256("profile_fact_save\u0000${turn.scopeId}\u0000${turn.turnId}\u0000$category\u0000$fact")
             return ToolPreparation.Prepared(PreparedAgentCommand(commandId, digest, emptyMap(), false,
-                SaveProfileFactPayload(turn.scopeId, category, fact.trim(), turn.turnId, turn.text)))
+                SaveProfileFactPayload(turn.scopeId, category, fact.trim(), turn.turnId, turn.text, sourceQuote)))
         }
 
         override suspend fun commit(command: PreparedAgentCommand): ToolCommitResult {
             val payload = command.opaquePayload as? SaveProfileFactPayload ?: return rejected()
             return try {
                 val saved = profileMemory?.saveUserStated(payload.scope, payload.category, payload.fact,
-                    payload.sourceTurnId, payload.sourceText) ?: return ToolCommitResult(ToolObservationStatus.FAILED, "profile_memory_unavailable")
+                    payload.sourceTurnId, payload.sourceText, sourceQuote = payload.sourceQuote) ?: return ToolCommitResult(ToolObservationStatus.FAILED, "profile_memory_unavailable")
                 ToolCommitResult(ToolObservationStatus.APPLIED, "profile_fact_saved", mapOf("fact_id" to saved.factId,
                     "category" to saved.category, "fact" to saved.fact, "revision" to saved.revision,
                     "source_turn_ids" to saved.sourceTurnIds))
@@ -155,6 +156,7 @@ internal class LocalMemoryTools(private val repository: ProtectedDomainRepositor
             val id = call.arguments["fact_id"] as? String ?: return ToolPreparation.Rejected("invalid_profile_fact_id")
             val expected = exactPositiveLong(call.arguments["expected_revision"]) ?: return ToolPreparation.Rejected("invalid_profile_revision")
             val fact = call.arguments["fact"] as? String ?: return ToolPreparation.Rejected("invalid_profile_fact")
+            val sourceQuote = call.arguments["source_quote"] as? String
             val store = profileMemory ?: return ToolPreparation.Rejected("profile_memory_unavailable")
             val current = store.get(turn.scopeId, id) ?: return ToolPreparation.Conflict("profile_fact_not_found")
             if (current.revision != expected) return ToolPreparation.Conflict("profile_fact_revision_conflict")
@@ -163,14 +165,14 @@ internal class LocalMemoryTools(private val repository: ProtectedDomainRepositor
                 return ToolPreparation.Rejected("invalid_profile_fact")
             val digest = sha256("profile_fact_edit\u0000${turn.scopeId}\u0000$id\u0000$expected\u0000$category\u0000$fact")
             return ToolPreparation.Prepared(PreparedAgentCommand(commandId, digest, mapOf(id to expected), false,
-                EditProfileFactPayload(turn.scopeId, id, expected, category, fact.trim(), turn.turnId, turn.text)))
+                EditProfileFactPayload(turn.scopeId, id, expected, category, fact.trim(), turn.turnId, turn.text, sourceQuote)))
         }
 
         override suspend fun commit(command: PreparedAgentCommand): ToolCommitResult {
             val payload = command.opaquePayload as? EditProfileFactPayload ?: return rejected()
             return try {
                 val saved = profileMemory?.correctFromUser(payload.scope, payload.id, payload.expectedRevision,
-                    payload.category, payload.fact, payload.sourceTurnId, payload.sourceText)
+                    payload.category, payload.fact, payload.sourceTurnId, payload.sourceText, sourceQuote = payload.sourceQuote)
                     ?: return ToolCommitResult(ToolObservationStatus.FAILED, "profile_memory_unavailable")
                 ToolCommitResult(ToolObservationStatus.APPLIED, "profile_fact_updated", mapOf("fact_id" to saved.factId,
                     "category" to saved.category, "fact" to saved.fact, "revision" to saved.revision,
@@ -1669,9 +1671,9 @@ internal class LocalMemoryTools(private val repository: ProtectedDomainRepositor
     private data class SavePayload(val scope: String, val objectId: String,
         val kind: DomainKind, val title: String, val body: String)
     private data class SaveProfileFactPayload(val scope: String, val category: String, val fact: String,
-        val sourceTurnId: String, val sourceText: String)
+        val sourceTurnId: String, val sourceText: String, val sourceQuote: String?)
     private data class EditProfileFactPayload(val scope: String, val id: String, val expectedRevision: Long,
-        val category: String, val fact: String, val sourceTurnId: String, val sourceText: String)
+        val category: String, val fact: String, val sourceTurnId: String, val sourceText: String, val sourceQuote: String?)
     private data class DeleteProfileFactPayload(val scope: String, val id: String, val expectedRevision: Long)
     private data class SaveEpisodePayload(val scope: String, val title: String, val summary: String, val sources: List<String>)
     private data class DeleteEpisodePayload(val scope: String, val episodeId: String)
