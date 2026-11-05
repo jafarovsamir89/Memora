@@ -15,8 +15,10 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import ai.memora.app.ui.*
@@ -224,7 +226,17 @@ fun MemoraApp(initialRoute: String = "home", initialTheme: String = "system", ca
                                 onClick = { route = destination; parent = "home" },
                                 modifier = Modifier.testTag("nav_$destination"),
                                 icon = { Icon(icons[index], null, Modifier.size(22.dp)) },
-                                label = { Text(s(labels[index]), fontSize = 11.sp, fontWeight = FontWeight.Medium, maxLines = 1) },
+                                label = {
+                                    Text(
+                                        s(labels[index]),
+                                        modifier = Modifier.testTag("nav_label_$destination"),
+                                        fontSize = if (LocalDensity.current.fontScale > 1.15f) 9.5.sp else 11.sp,
+                                        fontWeight = FontWeight.Medium,
+                                        textAlign = TextAlign.Center,
+                                        maxLines = 2,
+                                        softWrap = true,
+                                    )
+                                },
                                 colors = NavigationBarItemDefaults.colors(
                                     selectedIconColor = colors.accent, selectedTextColor = colors.accent,
                                     unselectedIconColor = colors.muted, unselectedTextColor = colors.muted,

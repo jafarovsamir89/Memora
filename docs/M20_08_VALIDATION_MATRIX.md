@@ -338,3 +338,11 @@ Optional `source_quote` arguments are locally checked against the current USER m
 - Empty first-run plus Today, Secretary, Tasks, Memory and Reports rendered. No personal data, mic, notification, cloud AI, or reminder was used. No fatal crash was observed in the sampled logcat.
 - Landscape report content showed partial clipping near the bottom navigation. At 1.25× system font, bottom navigation labels crowded. Original rotation/font values were restored. TalkBack, keyboard, owner review, reminder delivery, live AZ/RU voice and populated Room migration remain untested.
 - Screenshots: `docs/device-acceptance/ACT-0212/`. This advances physical evidence for MEM-03.12, M20-02 and M20-05/M20-08 but closes none of them; M20-02’s all-store restore and populated-upgrade gaps remain, and MEM-14.09 remains open.
+
+## ACT-0214 — 2026-11-05 responsive-navigation / device addendum
+
+- Navigation label centering, two-line allowance and high-font adaptation (9.5sp base when fontScale >1.15, still system-scaled) are covered by a narrow-phone Azerbaijani Compose screenshot/assertion. At 1.25×, all five labels fit on one line on the Redmi.
+- Reports landscape was rechecked. The report source and lower sections remain reachable through the existing vertical scroll; an 800×360dp phone-landscape Compose regression covers this. No separate landscape layout change was required.
+- Full Gradle: 63 suites / 338 tests, 0 failures/errors/skips; debug and AndroidTest APKs, AndroidTest Kotlin compile; lint 0 errors / 73 warnings / 3 hints. APK v79 `1.1.57-accessible-navigation`, SHA-256 `c0e6cb19777b8ca0783b61257abb9194066234757ac30c5639720984175077b2`.
+- Installed v79 over v78 on Redmi 2201117SG / Android 13 using `adb install -r`; version and original firstInstallTime confirmed. No populated data existed, so this is not populated-data retention evidence. Mic/notification permissions stayed denied. Screenshots: `docs/device-acceptance/ACT-0214/`.
+- This closes the observed large-font label crowding and confirms tested Reports scroll reachability only. TalkBack, keyboard, owner acceptance, reminder, live AZ/RU voice, populated DB migration/restart, native full acceptance and release readiness remain open.

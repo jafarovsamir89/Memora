@@ -537,12 +537,20 @@ class UiShellTest {
 
     @Test @Config(qualifiers = "w360dp-h800dp-xhdpi")
     fun smallPhoneWithLargeText() {
+        val context = ApplicationProvider.getApplicationContext<Context>()
+        appearanceStore = AtomicAppearanceStore(
+            File(context.cacheDir, "ui-large-font-settings-${UUID.randomUUID()}"), AppearanceSettings("az", "light"),
+        )
         compose.setContent {
             val density = LocalDensity.current.density
-            CompositionLocalProvider(LocalDensity provides Density(density, fontScale = 1.4f)) {
+            CompositionLocalProvider(LocalDensity provides Density(density, fontScale = 1.25f)) {
                 TestMemoraApp(initialTheme = "light", capturePersistenceOverride = captureStore, appearanceStoreOverride = appearanceStore)
             }
         }
+        listOf("home", "chat", "cases", "memory", "more").forEach { destination ->
+            compose.onNodeWithTag("nav_$destination").assertIsDisplayed()
+        }
+        screenshot("12-bottom-navigation-large-font")
         compose.onNodeWithTag("nav_memory").performClick()
         compose.onNodeWithTag("capture_text").assertExists().performScrollTo().performClick()
         compose.onNodeWithTag("capture_input").assertExists()
@@ -555,5 +563,23 @@ class UiShellTest {
         compose.onNodeWithTag("nav_memory").assertIsDisplayed().performClick()
         compose.onNodeWithTag("memory_search").assertIsDisplayed()
         screenshot("11-tablet-landscape")
+    }
+
+    @Test @Config(qualifiers = "w800dp-h360dp-land-xhdpi")
+    fun financeReportsRemainScrollableOnLandscapePhone() {
+        val context = ApplicationProvider.getApplicationContext<Context>()
+        appearanceStore = AtomicAppearanceStore(
+            File(context.cacheDir, "ui-landscape-report-settings-${UUID.randomUUID()}"), AppearanceSettings("az", "light"),
+        )
+        compose.setContent {
+            CompositionLocalProvider(LocalAgentDatabaseOverride provides agentDatabase.database) {
+                TestMemoraApp(initialTheme = "light", initialLanguage = "az",
+                    capturePersistenceOverride = captureStore, appearanceStoreOverride = appearanceStore)
+            }
+        }
+        compose.onNodeWithTag("nav_more").assertIsDisplayed().performClick()
+        compose.onNodeWithTag("finance_report_source").performScrollTo().assertIsDisplayed()
+        compose.onNodeWithTag("more_tasks").performScrollTo().assertIsDisplayed()
+        screenshot("18-finance-reports-landscape-scroll")
     }
 }
