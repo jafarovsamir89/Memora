@@ -1423,3 +1423,7 @@ ACT-0176 was committed as `cea4906aec0cd5778c33979423f9bdee51c2f824` (`feat(memo
 Follow-up package for ACT-0176: one SQL DAO call now batch-loads messages for all user turns on the current page, replacing per-turn N+1 reads. Query change clears old rows/cursor immediately; request generation plus query/refresh checks discard any stale page completion. S56 records both behaviors.
 
 Verification on final v62 source: full Gradle passed, 60 suites / 310 tests, 0 failures/errors/skips; debug and AndroidTest APKs assembled, AndroidTest Kotlin compilation passed, lint 0 errors / 72 warnings / 3 hints. Synthetic test still finds all 165 archive hits over multiple pages once, in newest-first order, and excludes another scope; Compose regression opens page two. APK `ai.memora.app` versionCode 62 / `1.1.40-memory-archive-robustness`, SHA-256 `3533b9ddbe6f5cd7f9bfa7b45cdd51d63cd9fbf0f30638c95c57030727579903`. `aapt dump badging` confirmed package/version. ADB has no device; owner field acceptance not claimed. P3/P4 remain open. Commit/push to be verified separately.
+
+### ACT-0179 — 2026-11-04 — Git handoff ACT-0178
+
+ACT-0178 implementation was committed as `811273c989386dc1d8ad2ac82b3cab413752ed7a` (`fix(memory): guard archive page refresh`) and pushed to `origin/main`. `git fetch` verified local HEAD, origin/main, and `git ls-remote` match. Only owner-owned ADR-012 remains untracked and was left untouched. Current worktree has no implementation changes pending; P3/P4 remain open.
