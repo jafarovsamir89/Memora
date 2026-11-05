@@ -282,6 +282,11 @@ class CasesAndPersonCardTest {
             "synthetic-linked-task-create", "Synthetic follow-up task"))
         assertEquals(listOf("synthetic-linked-task"), ai.memora.app.data.protectedstore.ProtectedMemoryRepository(databaseRule.database)
             .tasks().tasks.map { it.id })
+        repository.appendTaskEvent(TaskEvent.Updated("synthetic-linked-task", scope, "synthetic-test-owner",
+            "synthetic-linked-task-person-label", 1, "Synthetic follow-up task", null, null, false,
+            "synthetic planner", null))
+        repository.appendTaskEvent(TaskEvent.Created("synthetic-unmatched-task", scope, "synthetic-test-owner",
+            "synthetic-unmatched-task-create", "Synthetic unrelated task"))
         repository.recordFinanceEvent(scope, "Synthetic Planner", "receipt", 5_000, "AZN", "Synthetic advance", null,
             "synthetic-planner-finance", "synthetic-planner-receipt", "synthetic-planner-receipt-command",
             "2026-11-03T10:01:00Z", "2026-11-03T10:01:00Z")
@@ -357,6 +362,12 @@ class CasesAndPersonCardTest {
                 .fetchSemanticsNodes().isNotEmpty()
         }
         compose.onNodeWithTag("person_task_link_open").performScrollTo().performClick()
+        compose.onNodeWithTag("person_task_label_matches_heading").assertExists()
+        compose.onNodeWithTag("person_task_label_matches_help").assertExists()
+        compose.onNodeWithTag("person_task_other_available").assertExists()
+        assertEquals(null, runBlocking {
+            databaseRule.database.protectedStoreDao().taskPersonLink(scope, "synthetic-linked-task", "synthetic-source-person")
+        })
         compose.waitUntil(10_000) { compose.onAllNodesWithTag("person_task_candidate_synthetic-linked-task").fetchSemanticsNodes().isNotEmpty() }
         compose.onNodeWithTag("person_task_candidate_synthetic-linked-task").performClick()
         compose.onNodeWithTag("person_task_link_confirm").performClick()

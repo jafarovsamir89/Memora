@@ -401,7 +401,10 @@
     <string name="person_aliases">Other names</string>
     <string name="person_aliases_help">Only exact names you add are used. Similar names never merge people.</string>
     <string name="person_tasks">Tasks</string>
-    <string name="person_tasks_help">Choose a task and explicitly link it to this person. Similar names never create a link.</string>
+    <string name="person_tasks_help">Tasks with an exact saved person name or confirmed alias are suggested first. A link is created only after you confirm it.</string>
+    <string name="person_task_label_matches_heading">Tasks matching this person name</string>
+    <string name="person_task_label_matches_help">This is only a suggestion; confirm before linking.</string>
+    <string name="person_task_other_available">Other tasks</string>
     <string name="person_task_link_add">Link a task</string>
     <string name="person_task_link_remove">Remove link</string>
     <string name="person_task_link_empty">There are no tasks available to link.</string>

@@ -401,7 +401,10 @@
     <string name="person_aliases">Başqa adlar</string>
     <string name="person_aliases_help">Yalnız sizin əlavə etdiyiniz dəqiq ad uyğunluğu istifadə olunur. Şəxslər ad oxşarlığına görə birləşdirilmir.</string>
     <string name="person_tasks">Tapşırıqlar</string>
-    <string name="person_tasks_help">Tapşırığı ID ilə seçib bu şəxsə açıq şəkildə bağlayın. Ad oxşarlığı əlaqə yaratmır.</string>
+    <string name="person_tasks_help">Tapşırıqda saxlanmış şəxsin dəqiq adı və ya təsdiqlənmiş aliası uyğun gələrsə, o yuxarıda təklif olunur. Əlaqə yalnız sizin təsdiqinizdən sonra yaradılır.</string>
+    <string name="person_task_label_matches_heading">Şəxs adı ilə uyğun tapşırıqlar</string>
+    <string name="person_task_label_matches_help">Uyğunluq yalnız namizəddir; əlaqəni təsdiqləməlisiniz.</string>
+    <string name="person_task_other_available">Digər tapşırıqlar</string>
     <string name="person_task_link_add">Tapşırıq bağla</string>
     <string name="person_task_link_remove">Əlaqəni ləğv et</string>
     <string name="person_task_link_empty">Bağlamaq üçün tapşırıq yoxdur.</string>

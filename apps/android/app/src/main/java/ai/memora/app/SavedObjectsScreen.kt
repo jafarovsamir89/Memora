@@ -419,13 +419,38 @@ private fun PersonCardSections(
     }
     if (taskPickerVisible) {
         val availableTasks = tasks.filter { it.id !in linkedTaskIds }
+        val exactPersonLabels = buildSet {
+            add(PersonAliasRepository.normalizeAlias(person.title))
+            aliases.filter { it.deletedAtMillis == null }.forEach { add(PersonAliasRepository.normalizeAlias(it.aliasText)) }
+        }
+        val labelMatchedTasks = availableTasks.filter { task ->
+            task.personLabel?.let { PersonAliasRepository.normalizeAlias(it) in exactPersonLabels } == true
+        }
+        val matchedTaskIds = labelMatchedTasks.mapTo(mutableSetOf()) { it.id }
+        val otherAvailableTasks = availableTasks.filterNot { it.id in matchedTaskIds }
         androidx.compose.material3.AlertDialog(
             onDismissRequest = { taskPickerVisible = false },
             title = { Text(s(ai.memora.app.R.string.person_task_link_add)) },
             text = {
                 Column(Modifier.heightIn(max = 360.dp).verticalScroll(remember { ScrollState(0) })) {
                     if (availableTasks.isEmpty()) Text(s(ai.memora.app.R.string.person_task_link_empty), color = colors.muted)
-                    availableTasks.forEach { task ->
+                    if (labelMatchedTasks.isNotEmpty()) {
+                        Text(s(ai.memora.app.R.string.person_task_label_matches_heading), modifier = Modifier.testTag("person_task_label_matches_heading"),
+                            color = colors.ink, style = androidx.compose.material3.MaterialTheme.typography.titleSmall)
+                        Text(s(ai.memora.app.R.string.person_task_label_matches_help), modifier = Modifier.testTag("person_task_label_matches_help"), color = colors.muted,
+                            style = androidx.compose.material3.MaterialTheme.typography.bodySmall)
+                    }
+                    labelMatchedTasks.forEach { task ->
+                        TextButton(modifier = Modifier.fillMaxWidth().testTag("person_task_candidate_${task.id}"),
+                            onClick = { taskPickerVisible = false; pendingTask = task }) {
+                            Text(task.title, color = colors.ink)
+                        }
+                    }
+                    if (otherAvailableTasks.isNotEmpty()) {
+                        Text(s(ai.memora.app.R.string.person_task_other_available), modifier = Modifier.testTag("person_task_other_available"),
+                            color = colors.ink, style = androidx.compose.material3.MaterialTheme.typography.titleSmall)
+                    }
+                    otherAvailableTasks.forEach { task ->
                         TextButton(modifier = Modifier.fillMaxWidth().testTag("person_task_candidate_${task.id}"),
                             onClick = { taskPickerVisible = false; pendingTask = task }) {
                             Text(task.title, color = colors.ink)

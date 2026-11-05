@@ -401,7 +401,10 @@
     <string name="person_aliases">Другие имена</string>
     <string name="person_aliases_help">Используются только точные имена, добавленные вами. Похожие имена не объединяют людей.</string>
     <string name="person_tasks">Задачи</string>
-    <string name="person_tasks_help">Выберите задачу по её записи и явно свяжите с человеком. Совпадение имён не создаёт связь.</string>
+    <string name="person_tasks_help">Задачи с точным сохранённым именем человека или подтверждённым псевдонимом предлагаются выше. Связь появится только после вашего подтверждения.</string>
+    <string name="person_task_label_matches_heading">Задачи с совпадающим именем</string>
+    <string name="person_task_label_matches_help">Это только подсказка; связь нужно подтвердить.</string>
+    <string name="person_task_other_available">Другие задачи</string>
     <string name="person_task_link_add">Связать задачу</string>
     <string name="person_task_link_remove">Убрать связь</string>
     <string name="person_task_link_empty">Нет задач для связи.</string>
