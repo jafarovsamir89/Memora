@@ -19,8 +19,8 @@ android {
         applicationId = "ai.memora.app"
         minSdk = 26
         targetSdk = 36
-        versionCode = 70
-        versionName = "1.1.48-person-case-story"
+        versionCode = 71
+        versionName = "1.1.49-person-history-pages"
         testInstrumentationRunner = "ai.memora.app.GeminiSyntheticProbe"
     }
     buildFeatures { compose = true }

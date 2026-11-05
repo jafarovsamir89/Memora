@@ -257,6 +257,7 @@ private fun PersonCardSections(
     var historyByPersonId by remember(person.objectId) { mutableStateOf<Map<String, ai.memora.app.data.protectedstore.FinanceHistory>>(emptyMap()) }
     var relatedCases by remember(person.objectId) { mutableStateOf<List<CaseSnapshot>>(emptyList()) }
     var showAllRelatedCases by remember(person.objectId) { mutableStateOf(false) }
+    var visiblePersonStoryCount by remember(person.objectId) { mutableIntStateOf(40) }
     var relatedObjects by remember(person.objectId) { mutableStateOf<List<LinkedDomainObject>>(emptyList()) }
     var aliases by remember(person.objectId) { mutableStateOf<List<PersonAliasRow>>(emptyList()) }
     var newAlias by remember(person.objectId) { mutableStateOf("") }
@@ -653,7 +654,7 @@ private fun PersonCardSections(
                     add(PersonStoryEntry(storyId, event.at, personTimelineOrder(event.at), label, event.detail, source))
                 }
         }
-    }.distinctBy { it.id }.sortedWith(compareByDescending<PersonStoryEntry> { it.sortOrder }.thenBy { it.id }).take(40)
+    }.distinctBy { it.id }.sortedWith(compareByDescending<PersonStoryEntry> { it.sortOrder }.thenBy { it.id })
 
     if (relatedObjects.isNotEmpty()) {
         Text(s(ai.memora.app.R.string.person_related_records), modifier = Modifier.padding(top = 18.dp),
@@ -676,7 +677,7 @@ private fun PersonCardSections(
     if (personStory.isNotEmpty()) {
         Text(s(ai.memora.app.R.string.person_timeline), modifier = Modifier.padding(top = 18.dp),
             style = androidx.compose.material3.MaterialTheme.typography.titleSmall, color = colors.ink)
-        personStory.forEach { entry ->
+        personStory.take(visiblePersonStoryCount).forEach { entry ->
             MemoraCard(modifier = Modifier.padding(top = 8.dp).testTag("person_story_${entry.id}"),
                 onClick = entry.source?.let { { onOpenCaseSource(it) } } ?: entry.task?.let { { onOpenTask(it) } }) {
                 Text(entry.title, color = colors.ink, style = androidx.compose.material3.MaterialTheme.typography.titleSmall)
@@ -684,6 +685,19 @@ private fun PersonCardSections(
                 Text(entry.at, color = colors.muted, style = androidx.compose.material3.MaterialTheme.typography.labelSmall)
                 if (entry.source != null || entry.task != null) Text(s(ai.memora.app.R.string.case_source_open_details), color = colors.accent,
                     style = androidx.compose.material3.MaterialTheme.typography.labelMedium)
+            }
+        }
+        if (personStory.size > 40) {
+            TextButton(
+                modifier = Modifier.testTag("person_story_older_toggle"),
+                onClick = {
+                    visiblePersonStoryCount = if (visiblePersonStoryCount < personStory.size) {
+                        (visiblePersonStoryCount + 40).coerceAtMost(personStory.size)
+                    } else 40
+                },
+            ) {
+                Text(s(if (visiblePersonStoryCount < personStory.size) ai.memora.app.R.string.person_story_show_older
+                    else ai.memora.app.R.string.person_story_collapse_older))
             }
         }
     }

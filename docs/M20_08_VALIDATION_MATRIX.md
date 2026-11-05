@@ -1,3 +1,9 @@
+## ACT-0196 — Verified: expandable person timeline
+
+**Current implementation package ACT-0196 (2026-11-04):** Person timeline no longer silently truncates after 40 entries. It shows the 40 newest and a localized action reveals older events in batches of 40 until the complete loaded set is visible; collapsing returns to the newest 40. Synthetic Compose test creates 50 linked cases and verifies an older revision becomes visible after expansion. Full Gradle: 63 suites / 329 tests, 0 failures/errors/skips; debug/AndroidTest APK builds and AndroidTest Kotlin compile passed; lint 0/73/3. APK v71 / `1.1.49-person-history-pages`, SHA-256 `6c04e21787f7978dbe7e63d8fbaa68bd5c32dd57288972334b0bb671b78269d0`. No schema change; ADB empty, so physical-device/TalkBack/owner acceptance remain open. See ADR-027/S65; M20-05 remains partial.
+
+Synthetic Compose coverage creates 50 same-person cases, checks that an older revision is outside the initial 40, then reveals it with the older-events action. No schema migration or device acceptance.
+
 # M20-08 Native validation matrix
 
 ## ACT-0192 — Verified: Cases list search and status filters

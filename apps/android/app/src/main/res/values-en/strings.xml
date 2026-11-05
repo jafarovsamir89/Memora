@@ -439,6 +439,8 @@
     <string name="person_timeline">Person timeline</string>
     <string name="person_cases_show_all">Show all linked cases</string>
     <string name="person_cases_show_fewer">Show fewer</string>
+    <string name="person_story_show_older">Show older events</string>
+    <string name="person_story_collapse_older">Collapse older events</string>
     <string name="person_related_records">Linked records</string>
     <string name="person_related_kind_person">Person</string>
     <string name="person_related_kind_project">Project</string>
