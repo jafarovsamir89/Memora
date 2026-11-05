@@ -1180,3 +1180,7 @@ Synthetic интеграция проверяет обе границы и вн�
 ### ACT-0211 · 2026-11-04 · Git-передача ACT-0210
 
 ACT-0210 code and synchronized documentation committed as `d22b36a06e986ecdb4228dc4440d3a248350ac63` (`feat(memory): support bounded date ranges`) and pushed to `origin/main`. Before this diary handoff, `git fetch origin main`, local HEAD, `origin/main`, and `git ls-remote origin refs/heads/main` all matched that SHA; tracked worktree clean. Owner-owned untracked `docs/adr/ADR-012-keystore-wrapping-key-rotation.md` was left untouched and excluded. Next on another PC: fetch/pull `main`, inspect ACT-0210 evidence and continue the open Memora 2.0 M20-04 judged cross-domain retrieval plus M20-01 Gemini/agent acceptance. M20-03/04/05 and native acceptance remain partial; do not infer release readiness.
+
+### ACT-0215 · 2026-11-05 · Git-передача ACT-0214
+
+ACT-0214 зафиксирован коммитом `c358a86ff87bc4d88a12bcd3fe66c619127c7c81` (`fix(android): adapt nav labels for large text`) и отправлен в `origin/main`. После проверки local HEAD, fetched `origin/main` и `git ls-remote origin refs/heads/main` совпали. Независимый untracked `docs/adr/ADR-012-keystore-wrapping-key-rotation.md` оставлен без изменений и не включён. Для этого документационного handoff Gradle повторно не запускался; полная проверка и устройство ACT-0214 описаны выше. Продолжать незакрытые native/accessibility acceptance и M20 gates; новая проверка данных на телефоне должна выполняться только с синтетическими записями и явным согласием внутри приложения.
