@@ -308,6 +308,14 @@
     <string name="table_source_notes">Заметки</string>
     <string name="table_linked_view_summary">Связанное представление · записей: %1$d</string>
     <string name="table_linked_view_empty">Нет подходящих активных записей.</string>
+    <string name="table_linked_view_filter">Фильтр видимых записей</string>
+    <string name="table_linked_view_sort_ascending">По имени: А–Я</string>
+    <string name="table_linked_view_sort_descending">По имени: Я–А</string>
+    <string name="table_linked_view_count">Показано %1$d из %2$d активных записей</string>
+    <string name="table_linked_view_limit">Поиск и страницы охватывают первые 500 активных записей.</string>
+    <string name="table_linked_view_previous">Назад</string>
+    <string name="table_linked_view_next">Далее</string>
+    <string name="table_linked_view_page">Страница %1$d из %2$d</string>
     <string name="table_linked_source_version">Сохранённая запись · версия %1$d</string>
     <string name="table_field_source_id">ID источника</string>
     <string name="table_field_title">Название</string>

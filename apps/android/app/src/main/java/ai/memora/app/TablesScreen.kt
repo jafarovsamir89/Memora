@@ -15,13 +15,14 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.OutlinedButton
-import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
@@ -35,6 +36,7 @@ import ai.memora.app.data.protectedstore.ColumnType
 import ai.memora.app.data.protectedstore.DomainKind
 import ai.memora.app.data.protectedstore.DomainObjectRow
 import ai.memora.app.data.protectedstore.LinkedViewSpec
+import ai.memora.app.data.protectedstore.linkedViewPage
 import ai.memora.app.data.protectedstore.ProtectedDomainRepository
 import ai.memora.app.data.protectedstore.TableDataRow
 import ai.memora.app.data.protectedstore.TableColumnRow
@@ -83,8 +85,17 @@ fun TablesScreen() {
     var newTableColumns by remember { mutableStateOf("") }
     var linkedViewMode by remember { mutableStateOf(false) }
     var linkedSourceKind by remember { mutableStateOf(DomainKind.PERSON) }
+    var linkedQuery by remember { mutableStateOf("") }
+    var linkedPage by remember { mutableIntStateOf(0) }
+    var linkedSortAscending by remember { mutableStateOf(true) }
     var error by remember { mutableStateOf(false) }
     val selected = tables.firstOrNull { it.table.tableId == selectedTableId }
+
+    LaunchedEffect(selectedTableId) {
+        linkedQuery = ""
+        linkedPage = 0
+        linkedSortAscending = true
+    }
 
     LaunchedEffect(scopeId, selectedTableId, showDeleted) {
         try {
@@ -354,13 +365,36 @@ fun TablesScreen() {
                 if (selected.table.mode == "editable") TextButton(onClick = { beginRowEdit(null) }, modifier = Modifier.testTag("table_add_row")) { Text(s(R.string.table_add_row)) }
             }
             if (selected.table.mode == "linked_view") {
-                if (selected.linkedRows.isEmpty()) Text(s(R.string.table_linked_view_empty), color = colors.muted)
-                selected.linkedRows.forEach { source ->
+                OutlinedTextField(value = linkedQuery, onValueChange = { linkedQuery = it; linkedPage = 0 },
+                    modifier = Modifier.fillMaxWidth().testTag("linked_view_filter"),
+                    label = { Text(s(R.string.table_linked_view_filter)) }, singleLine = true)
+                TextButton(onClick = { linkedSortAscending = !linkedSortAscending; linkedPage = 0 },
+                    modifier = Modifier.testTag("linked_view_sort")) {
+                    Text(s(if (linkedSortAscending) R.string.table_linked_view_sort_ascending else R.string.table_linked_view_sort_descending))
+                }
+                val pageSize = 25
+                val viewPage = linkedViewPage(selected.linkedRows, linkedQuery, linkedSortAscending, linkedPage, pageSize)
+                Text(LocalStrings.current.getString(R.string.table_linked_view_count, viewPage.matchingCount, selected.linkedTotalCount),
+                    color = colors.muted)
+                if (selected.linkedTotalCount > selected.linkedRows.size) {
+                    Text(s(R.string.table_linked_view_limit), color = colors.muted)
+                }
+                if (viewPage.rows.isEmpty()) Text(s(R.string.table_linked_view_empty), color = colors.muted)
+                viewPage.rows.forEach { source ->
                     MemoraCard(modifier = Modifier.testTag("linked_view_source_${source.objectId}")) {
                         Text(source.title, style = androidx.compose.material3.MaterialTheme.typography.titleMedium, color = colors.ink)
                         source.body?.takeIf(String::isNotBlank)?.let { Text(it, color = colors.muted) }
                         Text(LocalStrings.current.getString(R.string.table_linked_source_version, source.version),
                             style = androidx.compose.material3.MaterialTheme.typography.labelSmall, color = colors.accent)
+                    }
+                }
+                if (viewPage.pageCount > 1) {
+                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                        TextButton(onClick = { linkedPage = (viewPage.pageIndex - 1).coerceAtLeast(0) }, enabled = viewPage.pageIndex > 0,
+                            modifier = Modifier.testTag("linked_view_previous")) { Text(s(R.string.table_linked_view_previous)) }
+                        Text(LocalStrings.current.getString(R.string.table_linked_view_page, viewPage.pageIndex + 1, viewPage.pageCount), color = colors.muted)
+                        TextButton(onClick = { linkedPage = (viewPage.pageIndex + 1).coerceAtMost(viewPage.pageCount - 1) }, enabled = viewPage.pageIndex + 1 < viewPage.pageCount,
+                            modifier = Modifier.testTag("linked_view_next")) { Text(s(R.string.table_linked_view_next)) }
                     }
                 }
             } else {

@@ -31,6 +31,13 @@ import java.util.UUID
 import org.json.JSONObject
 import org.json.JSONArray
 
+private fun Any?.asBoundedInteger(default: Int, minimum: Int, maximum: Int): Int? {
+    if (this == null) return default
+    val value = runCatching { BigDecimal(toString()).intValueExact() }.getOrNull() ?: return null
+    if (value < minimum || value > maximum) return null
+    return value.toInt()
+}
+
 /** First production tool slice: bounded evidence search and explicit local memory writes. */
 internal class LocalMemoryTools(private val repository: ProtectedDomainRepository, private val memory: ProtectedMemoryRepository,
     private val financeEnabled: Boolean = true, private val onTaskChanged: (Task) -> String = { "not_scheduled" },
@@ -380,7 +387,9 @@ internal class LocalMemoryTools(private val repository: ProtectedDomainRepositor
                 "table_count" to tables.size, "truncated" to (tables.size > selected.size),
                 "tables" to selected.map { item -> mapOf("id" to item.table.tableId, "title" to item.table.title.take(120),
                     "schema_version" to item.table.schemaVersion,
-                    "row_count" to if (item.table.mode == "linked_view") item.linkedRows.size else item.rows.size,
+                    "row_count" to if (item.table.mode == "linked_view") item.linkedTotalCount else item.rows.size,
+                    "loaded_row_count" to if (item.table.mode == "linked_view") item.linkedRows.size else item.rows.size,
+                    "rows_truncated" to (item.table.mode == "linked_view" && item.linkedTotalCount > item.linkedRows.size),
                     "mode" to item.table.mode,
                     "schema_truncated" to (item.columns.size > 8),
                     "columns" to item.columns.take(8).map { mapOf("id" to it.columnId, "name" to it.name.take(80), "type" to it.valueType) }) }
@@ -396,24 +405,34 @@ internal class LocalMemoryTools(private val repository: ProtectedDomainRepositor
         override suspend fun read(call: AgentModelToolCall, turn: AgentTurnRequest): ToolCommitResult {
             val tableId = call.arguments["table_id"] as? String ?: return rejected()
             val query = call.arguments["query"] as? String ?: ""
+            val offset = call.arguments["offset"].asBoundedInteger(default = 0, minimum = 0, maximum = 100_000)
+                ?: return ToolCommitResult(ToolObservationStatus.REJECTED, "invalid_offset")
+            val limit = call.arguments["limit"].asBoundedInteger(default = 10, minimum = 1, maximum = 50)
+                ?: return ToolCommitResult(ToolObservationStatus.REJECTED, "invalid_limit")
             if (tableId.isBlank() || query.length > 200) return rejected()
             val table = repository.tables(turn.scopeId).firstOrNull { it.table.tableId == tableId }
                 ?: return ToolCommitResult(ToolObservationStatus.REJECTED, "table_not_found")
             val linkedView = table.table.mode == "linked_view"
             val rows: List<Map<String, Any?>>
             val matchingCount: Int
+            val sourceCount: Int
+            val sourceSetTruncated: Boolean
             if (linkedView) {
                 val matching = table.linkedRows.filter { source -> query.isBlank() ||
                     listOf(source.objectId, source.title, source.body.orEmpty(), source.status).any { it.contains(query, ignoreCase = true) } }
                 matchingCount = matching.size
-                rows = matching.take(10).map { source -> mapOf("id" to source.objectId,
+                sourceCount = table.linkedTotalCount
+                sourceSetTruncated = table.linkedTotalCount > table.linkedRows.size
+                rows = matching.drop(offset).take(limit).map { source -> mapOf("id" to source.objectId,
                     "version" to source.version, "source_kind" to source.kind,
                     "values" to mapOf("source_id" to source.objectId, "title" to source.title, "body" to source.body,
                         "status" to source.status, "version" to source.version), "source_id" to source.objectId) }
             } else {
                 val matching = table.rows.filter { query.isBlank() || it.valuesJson.contains(query, ignoreCase = true) }
                 matchingCount = matching.size
-                rows = matching.take(10).map { row -> mapOf("id" to row.rowId, "version" to row.version,
+                sourceCount = table.rows.size
+                sourceSetTruncated = false
+                rows = matching.drop(offset).take(limit).map { row -> mapOf("id" to row.rowId, "version" to row.version,
                     "values" to row.valuesJson.take(700), "values_truncated" to (row.valuesJson.length > 700)) }
             }
             return ToolCommitResult(ToolObservationStatus.APPLIED, "table_rows_loaded", mapOf(
@@ -421,7 +440,10 @@ internal class LocalMemoryTools(private val repository: ProtectedDomainRepositor
                 "mode" to table.table.mode,
                 "columns" to table.columns.take(12).map { mapOf("id" to it.columnId, "name" to it.name.take(80), "type" to it.valueType) },
                 "rows" to rows, "returned" to rows.size, "matching_row_count" to matchingCount,
-                "truncated" to (matchingCount > rows.size),
+                "source_row_count" to sourceCount, "source_set_truncated" to sourceSetTruncated,
+                "offset" to offset, "limit" to limit,
+                "next_offset" to if (offset + rows.size < matchingCount) offset + rows.size else null,
+                "truncated" to (offset + rows.size < matchingCount || sourceSetTruncated),
             ))
         }
         override suspend fun prepare(call: AgentModelToolCall, turn: AgentTurnRequest, commandId: String) = ToolPreparation.Rejected("read_only_tool")

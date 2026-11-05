@@ -6,6 +6,8 @@ import ai.memora.app.data.protectedstore.ColumnSpec
 import ai.memora.app.data.protectedstore.ColumnType
 import ai.memora.app.data.protectedstore.DomainKind
 import ai.memora.app.data.protectedstore.LinkedViewSpec
+import ai.memora.app.data.protectedstore.DomainObjectRow
+import ai.memora.app.data.protectedstore.linkedViewPage
 import ai.memora.app.data.protectedstore.ProtectedConversationRepository
 import ai.memora.app.data.protectedstore.ProtectedDomainRepository
 import ai.memora.app.data.protectedstore.ProtectedMemoryRepository
@@ -307,6 +309,7 @@ class AgentFakeProviderUnifiedMemoryTest {
         val first = domain.tables(scope).single()
         assertEquals("PERSON", first.table.viewSpecJson?.let { org.json.JSONObject(it).getString("sourceKind") })
         assertEquals(listOf("synthetic-view-person"), first.linkedRows.map { it.objectId })
+        assertEquals(1, first.linkedTotalCount)
         assertTrue(first.rows.isEmpty())
         assertTrue(runCatching {
             domain.addRows(scope, "synthetic-person-view", 1, listOf("synthetic-forbidden-row" to mapOf("source" to "copy")))
@@ -324,6 +327,55 @@ class AgentFakeProviderUnifiedMemoryTest {
         domain.updateObject(scope, original.objectId, original.version, "Renamed source", original.body, original.status,
             "synthetic-linked-view-update", "2026-11-04T11:00:00Z")
         assertEquals("Renamed source", domain.tables(scope).single().linkedRows.single().title)
+    }
+
+    @Test fun linkedViewFilteringSortingAndPagingAreStableAndBounded() {
+        val sources = (0 until 61).map { index ->
+            DomainObjectRow("view-%03d".format(index), "synthetic-view-scope", "PERSON", "Person %03d".format(index),
+                if (index % 2 == 0) "Target group" else "Other group", "active", 1, null)
+        }
+        val secondPage = linkedViewPage(sources, "", ascending = true, requestedPage = 1, pageSize = 25)
+        assertEquals(61, secondPage.matchingCount)
+        assertEquals(3, secondPage.pageCount)
+        assertEquals(1, secondPage.pageIndex)
+        assertEquals(25, secondPage.rows.size)
+        assertEquals("view-025", secondPage.rows.first().objectId)
+
+        val filtered = linkedViewPage(sources, "target", ascending = false, requestedPage = 9, pageSize = 25)
+        assertEquals(31, filtered.matchingCount)
+        assertEquals(2, filtered.pageCount)
+        assertEquals(1, filtered.pageIndex)
+        assertEquals(listOf("view-010", "view-008", "view-006", "view-004", "view-002", "view-000"),
+            filtered.rows.map { it.objectId })
+    }
+
+    @Test fun agentCanReadLinkedViewPagesAndReportsWhetherSourcesAreTruncated() = runBlocking {
+        val domain = ProtectedDomainRepository(databaseRule.database)
+        val scope = "synthetic-agent-linked-page-scope"
+        repeat(30) { index ->
+            val id = "synthetic-agent-view-%03d".format(index)
+            domain.createObject(scope, id, DomainKind.PERSON, "Person %03d".format(index), "Group A", null,
+                "2026-11-04T10:00:00Z")
+        }
+        domain.createTable(scope, "synthetic-agent-linked-page", "Synthetic people", "linked_view",
+            listOf(ColumnSpec("source", "Source", ColumnType.TEXT)), viewSpec = LinkedViewSpec(DomainKind.PERSON))
+        val tools = LocalMemoryTools(domain, ProtectedMemoryRepository(databaseRule.database)).handlers()
+        val handler = tools.single { it.descriptor.name == "read_table_rows" }
+        val turn = AgentTurnRequest("synthetic-linked-page-turn", scope, "synthetic-owner", null, "az-AZ", "read people")
+        val first = handler.read(AgentModelToolCall("page-1", "read_table_rows", 1,
+            mapOf("table_id" to "synthetic-agent-linked-page", "offset" to 0, "limit" to 5)), turn)
+        assertEquals(ToolObservationStatus.APPLIED, first.status)
+        assertEquals(5, first.modelData["returned"])
+        assertEquals(5, first.modelData["next_offset"])
+        assertEquals(false, first.modelData["source_set_truncated"])
+        assertEquals(true, first.modelData["truncated"])
+        val last = handler.read(AgentModelToolCall("page-2", "read_table_rows", 1,
+            mapOf("table_id" to "synthetic-agent-linked-page", "query" to "person 02", "offset" to 5, "limit" to 10)), turn)
+        assertEquals(5, last.modelData["returned"])
+        assertEquals(null, last.modelData["next_offset"])
+        val invalid = handler.read(AgentModelToolCall("page-invalid", "read_table_rows", 1,
+            mapOf("table_id" to "synthetic-agent-linked-page", "limit" to 51)), turn)
+        assertEquals(ToolObservationStatus.REJECTED, invalid.status)
     }
 
     @Test fun localMemoryRetrievalFindsExactAzerbaijaniRussianAndMixedButDoesNotClaimParaphraseRecall() = runBlocking {

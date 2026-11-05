@@ -308,6 +308,14 @@
     <string name="table_source_notes">Notes</string>
     <string name="table_linked_view_summary">Linked view · %1$d records</string>
     <string name="table_linked_view_empty">No active saved records match this view.</string>
+    <string name="table_linked_view_filter">Filter visible records</string>
+    <string name="table_linked_view_sort_ascending">Sort by name: A–Z</string>
+    <string name="table_linked_view_sort_descending">Sort by name: Z–A</string>
+    <string name="table_linked_view_count">Showing %1$d of %2$d active records</string>
+    <string name="table_linked_view_limit">Search and pages cover the first 500 active records.</string>
+    <string name="table_linked_view_previous">Previous</string>
+    <string name="table_linked_view_next">Next</string>
+    <string name="table_linked_view_page">Page %1$d of %2$d</string>
     <string name="table_linked_source_version">Saved record · version %1$d</string>
     <string name="table_field_source_id">Source ID</string>
     <string name="table_field_title">Title</string>

@@ -32,8 +32,26 @@ internal data class DeletePreview(val objectId: String, val expectedVersion: Lon
 internal data class LinkedDomainObject(val link: DomainLinkRow, val objectRecord: DomainObjectRow)
 internal data class ImportPreview(val tableId: String, val schemaVersion: Long, val rows: List<Pair<String, Map<String, Any?>>>)
 internal data class TableSnapshot(val table: UserTableRow, val columns: List<TableColumnRow>, val rows: List<TableDataRow>,
-    val linkedRows: List<DomainObjectRow> = emptyList())
+    val linkedRows: List<DomainObjectRow> = emptyList(), val linkedTotalCount: Int = linkedRows.size)
 internal data class LinkedViewSpec(val sourceKind: DomainKind)
+internal data class LinkedViewPage(val rows: List<DomainObjectRow>, val matchingCount: Int, val pageIndex: Int, val pageCount: Int)
+
+internal fun linkedViewPage(sources: List<DomainObjectRow>, query: String, ascending: Boolean, requestedPage: Int,
+    pageSize: Int = 25): LinkedViewPage {
+    require(requestedPage >= 0 && pageSize in 1..100)
+    val needle = query.trim()
+    val collator = java.text.Collator.getInstance(java.util.Locale.getDefault())
+    val matching = sources.asSequence().filter { source -> needle.isBlank() ||
+        listOf(source.objectId, source.title, source.body.orEmpty(), source.status).any { it.contains(needle, ignoreCase = true) } }
+        .toList().sortedWith { a, b ->
+            val titleOrder = collator.compare(a.title, b.title).let { if (ascending) it else -it }
+            if (titleOrder != 0) titleOrder else a.objectId.compareTo(b.objectId)
+        }
+    val pageCount = (matching.size + pageSize - 1) / pageSize
+    val pageIndex = requestedPage.coerceIn(0, (pageCount - 1).coerceAtLeast(0))
+    return LinkedViewPage(matching.drop(pageIndex * pageSize).take(pageSize), matching.size, pageIndex, pageCount)
+}
+
 private val LINKABLE_DOMAIN_KINDS = setOf(DomainKind.PERSON, DomainKind.PROJECT, DomainKind.NOTE)
 
 private fun encodeLinkedViewSpec(spec: LinkedViewSpec): String = JSONObject()
@@ -351,9 +369,13 @@ internal class ProtectedDomainRepository(private val db: AgentDatabase) {
     suspend fun tables(scope: String): List<TableSnapshot> = dao.activeUserTables(scope).map { table ->
         val linkedRows = if (table.mode == "linked_view") {
             val spec = decodeLinkedViewSpec(table.viewSpecJson ?: error("linked_view_spec_missing"))
-            dao.activeDomainObjects(scope, spec.sourceKind.name, 500).filter { it.status == "active" }
+            dao.activeDomainObjects(scope, spec.sourceKind.name, 501).take(500)
         } else emptyList()
-        TableSnapshot(table, dao.columns(table.tableId), dao.rows(table.tableId, scope), linkedRows)
+        val linkedTotalCount = if (table.mode == "linked_view") {
+            val spec = decodeLinkedViewSpec(table.viewSpecJson ?: error("linked_view_spec_missing"))
+            dao.countActiveDomainObjects(scope, spec.sourceKind.name)
+        } else 0
+        TableSnapshot(table, dao.columns(table.tableId), dao.rows(table.tableId, scope), linkedRows, linkedTotalCount)
     }
 
     suspend fun deletedRows(scope: String, tableId: String): List<TableDataRow> = dao.deletedRows(tableId, scope)
