@@ -188,6 +188,7 @@ internal fun WorkingMemoryScreen(state: CaptureSessionState, detail: (String) ->
     var archiveLoading by remember { mutableStateOf(false) }
     var conversationPageLoading by remember { mutableStateOf(false) }
     var conversationNextCursor by remember { mutableStateOf<Long?>(null) }
+    var conversationQueryGeneration by remember { mutableIntStateOf(0) }
     var archiveError by remember { mutableStateOf(false) }
     var retentionDays by remember { mutableIntStateOf(0) }
     var refreshVersion by remember { mutableIntStateOf(0) }
@@ -218,14 +219,17 @@ internal fun WorkingMemoryScreen(state: CaptureSessionState, detail: (String) ->
     }
     LaunchedEffect(scopeId, query, refreshVersion, archiveReady) {
         if (!archiveReady) return@LaunchedEffect
-        delay(250)
+        conversationQueryGeneration++
+        val queryGeneration = conversationQueryGeneration
+        conversationTurns = emptyList()
+        conversationNextCursor = null
         archiveLoading = true
+        delay(250)
         try {
             val conversations = conversationRepository ?: error("protected_memory_unavailable")
             val domain = domainRepository ?: error("protected_memory_unavailable")
-            conversationTurns = emptyList()
-            conversationNextCursor = null
             val conversationPage = conversations.conversationTurnPage(scopeId, query.trim(), limit = 30)
+            if (queryGeneration != conversationQueryGeneration) return@LaunchedEffect
             conversationTurns = conversationPage.turns
             conversationNextCursor = conversationPage.nextBeforeSequence
             conversationEpisodes = conversations.searchEpisodes(scopeId, query.trim(), limit = 30)
@@ -246,15 +250,23 @@ internal fun WorkingMemoryScreen(state: CaptureSessionState, detail: (String) ->
     fun loadMoreConversationTurns() {
         val cursor = conversationNextCursor ?: return
         if (conversationPageLoading) return
+        val requestedQuery = query.trim()
+        val requestedRefresh = refreshVersion
+        val requestedGeneration = conversationQueryGeneration
         coroutineScope.launch {
             conversationPageLoading = true
             try {
                 val conversations = conversationRepository ?: error("protected_memory_unavailable")
-                val page = conversations.conversationTurnPage(scopeId, query.trim(), cursor, limit = 30)
+                val page = conversations.conversationTurnPage(scopeId, requestedQuery, cursor, limit = 30)
+                if (requestedGeneration != conversationQueryGeneration || requestedQuery != query.trim() || requestedRefresh != refreshVersion) {
+                    return@launch
+                }
                 conversationTurns = (conversationTurns + page.turns).distinctBy { it.turnId }
                 conversationNextCursor = page.nextBeforeSequence
             } catch (_: Exception) {
-                archiveError = true
+                if (requestedGeneration == conversationQueryGeneration && requestedQuery == query.trim() && requestedRefresh == refreshVersion) {
+                    archiveError = true
+                }
             } finally {
                 conversationPageLoading = false
             }

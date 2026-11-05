@@ -87,10 +87,14 @@ internal class ProtectedConversationRepository(private val db: AgentDatabase) {
             val page = dao.conversationPage(scopeId, cursor, PAGE_SIZE)
             if (page.isEmpty()) return ConversationTurnPage(matches.map { it.second }, null)
             cursor = page.last().sequence
-            for (message in page) {
-                if (message.role != "user") continue
-                val turnRows = dao.conversationMessagesForTurn(scopeId, message.turnId)
-                    .filter { it.scopeId == scopeId && it.turnId == message.turnId }
+            val userMessages = page.filter { it.role == "user" }
+            val rowsByTurn = if (userMessages.isEmpty()) emptyMap() else dao
+                .conversationMessagesForTurns(scopeId, userMessages.map { it.turnId }.distinct())
+                .filter { it.scopeId == scopeId }
+                .groupBy { it.turnId }
+            for (message in userMessages) {
+                val turnRows = rowsByTurn[message.turnId].orEmpty()
+                    .filter { it.turnId == message.turnId }
                 val turn = toTurnEvidence(turnRows) ?: continue
                 val evidenceText = listOf(turn.userMessage, turn.assistantMessage).joinToString("\n")
                 val snippet = if (terms.isEmpty()) null else {

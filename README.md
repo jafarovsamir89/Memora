@@ -16,7 +16,7 @@
 
 # Memora AI — Your Second Memory
 
-**Current implementation package ACT-0176 (2026-11-04):** the protected Memory screen loads exhaustive newest-first conversation pages of 30 turns, separate from bounded model-context search. Archive stays local. Full host suite: 60 suites / 310 tests; lint 0/72/3; debug and AndroidTest builds and Kotlin compile passed. APK v61 SHA-256 `b28373f68dd4140cdbed5c97261d56bf2cfa572c00e5c4c7ff3765cd430c5f7e`. No device attached; P3/P4 remain partial.
+**Current implementation package ACT-0178 (2026-11-04):** protected Memory archive pages now batch-load messages and discard stale results when search changes. Full host suite: 60 suites / 310 tests; lint 0/72/3; debug and AndroidTest builds and Kotlin compile passed. APK v62 SHA-256 `3533b9ddbe6f5cd7f9bfa7b45cdd51d63cd9fbf0f30638c95c57030727579903`. No device attached; P3/P4 remain partial.
 
 
 **ACT-0172 P4 checkpoint (2026-11-04; superseded by ACT-0173):** custom tables now have an initial read-only linked view over active saved people, projects, or notes. A typed source-kind spec is stored with an additive Room 18→19 migration; views read canonical records live, preserve source IDs, and reject row/schema writes. Full host suite 60/306 and lint 0/70/3 passed; APK v58 launched on the emulator after a data-preserving update. Export/import, preview/undo, aggregates, accessibility, device UI acceptance and complete P4 remain open.

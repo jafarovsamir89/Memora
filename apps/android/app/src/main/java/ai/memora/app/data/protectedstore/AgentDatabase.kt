@@ -752,6 +752,8 @@ internal interface ProtectedStoreDao {
     suspend fun conversationPage(scope: String, beforeSequence: Long?, limit: Int): List<AgentConversationMessageRow>
     @androidx.room.Query("SELECT * FROM agent_conversation_message WHERE scopeId=:scope AND turnId=:turn ORDER BY sequence")
     suspend fun conversationMessagesForTurn(scope: String, turn: String): List<AgentConversationMessageRow>
+    @androidx.room.Query("SELECT * FROM agent_conversation_message WHERE scopeId=:scope AND turnId IN (:turnIds) ORDER BY sequence")
+    suspend fun conversationMessagesForTurns(scope: String, turnIds: List<String>): List<AgentConversationMessageRow>
     @androidx.room.Insert(onConflict = androidx.room.OnConflictStrategy.REPLACE)
     suspend fun putActionResults(rows: List<AgentActionResultRow>)
     @androidx.room.Query("SELECT * FROM agent_action_result WHERE scopeId=:scope AND turnId=:turn ORDER BY createdAtMillis, resultId")

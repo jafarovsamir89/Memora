@@ -1417,3 +1417,9 @@ Synthetic proof: 165 matching turns paginated once each beyond the former 120-re
 ### ACT-0177 — 2026-11-04 — Git handoff ACT-0176
 
 ACT-0176 was committed as `cea4906aec0cd5778c33979423f9bdee51c2f824` (`feat(memory): paginate conversation archive`) and pushed to `origin/main`. A subsequent fetch confirmed local HEAD, origin/main, and `git ls-remote` all match. Owner-owned untracked ADR-012 remains untouched and unstaged. APK v61 and full verification evidence are recorded in ACT-0176 above. Worktree has no implementation changes pending.
+
+### ACT-0178 — 2026-11-04 — Batch and guard conversation archive pages
+
+Follow-up package for ACT-0176: one SQL DAO call now batch-loads messages for all user turns on the current page, replacing per-turn N+1 reads. Query change clears old rows/cursor immediately; request generation plus query/refresh checks discard any stale page completion. S56 records both behaviors.
+
+Verification on final v62 source: full Gradle passed, 60 suites / 310 tests, 0 failures/errors/skips; debug and AndroidTest APKs assembled, AndroidTest Kotlin compilation passed, lint 0 errors / 72 warnings / 3 hints. Synthetic test still finds all 165 archive hits over multiple pages once, in newest-first order, and excludes another scope; Compose regression opens page two. APK `ai.memora.app` versionCode 62 / `1.1.40-memory-archive-robustness`, SHA-256 `3533b9ddbe6f5cd7f9bfa7b45cdd51d63cd9fbf0f30638c95c57030727579903`. `aapt dump badging` confirmed package/version. ADB has no device; owner field acceptance not claimed. P3/P4 remain open. Commit/push to be verified separately.
