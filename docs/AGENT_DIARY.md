@@ -1083,3 +1083,7 @@ ACT-0178 was committed as `811273c989386dc1d8ad2ac82b3cab413752ed7a` (`fix(memor
 ### ACT-0187 — Git handoff for ACT-0186
 
 Implementation/docs commit `2c283e7a6c11b3a1229367c9106a04f14258ff3b` (`feat(memory): anchor profile facts to exact source spans`) was pushed to `origin/main`. `git fetch`, local HEAD, `origin/main`, and `git ls-remote origin refs/heads/main` agreed at this hash. Owner-owned untracked ADR-012 remains untouched and excluded. ACT-0186 verification and limitations remain as recorded above; P3/P4 and device acceptance remain open.
+
+### ACT-0195 — 2026-11-04 — Git handoff for ACT-0194
+
+Implementation and documentation commit `3eaad875f25e1ae35b33feda7bd4dd3dc588adbb` (`feat(people): show complete linked case history`) was pushed to `origin/main`. After push and fetch, local `HEAD`, `origin/main`, and `git ls-remote origin refs/heads/main` all matched `3eaad875f25e1ae35b33feda7bd4dd3dc588adbb`. Only the pre-existing owner-owned untracked `docs/adr/ADR-012-keystore-wrapping-key-rotation.md` remains outside the commit; it was untouched and unstaged. ACT-0194 verification evidence and device/owner limitations are recorded in the checkpoint above.
