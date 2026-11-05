@@ -18,6 +18,25 @@ import org.robolectric.annotation.Config
 class ProfileMemoryRepositoryTest {
     @get:Rule val databaseRule = UiAgentDatabaseRule()
 
+    @Test fun manuallyEnteredProfileFactHasExplicitProvenanceAndNoInventedSource() = runBlocking {
+        val repo = ProtectedProfileMemoryRepository(databaseRule.database)
+        val scope = "synthetic-manual-profile-scope"
+        val fact = repo.createManually(scope, "identity", "Owner prefers Azerbaijani", nowMillis = 1234)
+
+        assertEquals("identity", fact.category)
+        assertEquals("Owner prefers Azerbaijani", fact.fact)
+        assertEquals(1L, fact.revision)
+        assertTrue(fact.sourceTurnIds.isEmpty())
+        assertEquals("user_entered", fact.revisions.single().provenance)
+        assertNull(fact.revisions.single().sourceTurnId)
+        assertEquals(fact.factId, repo.get(scope, fact.factId)?.factId)
+        assertTrue(repo.list("synthetic-unrelated-manual-profile-scope").isEmpty())
+        assertTrue(runCatching {
+            repo.createManually(scope, "identity", "Owner prefers Azerbaijani", nowMillis = 2345)
+        }.exceptionOrNull()?.message?.contains("profile_fact_duplicate") == true)
+        assertEquals(1, repo.list(scope).size)
+    }
+
     @Test fun explicitFactsAreScopedDeduplicatedVersionedAndUserEditable() = runBlocking {
         val repo = ProtectedProfileMemoryRepository(databaseRule.database)
         val scope = "synthetic-profile-scope"

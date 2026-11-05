@@ -14,10 +14,12 @@ import androidx.compose.ui.test.performTextInput
 import androidx.test.core.app.ApplicationProvider
 import ai.memora.app.data.CaptureSessionState
 import ai.memora.app.data.protectedstore.ProtectedConversationRepository
+import ai.memora.app.data.protectedstore.ProtectedProfileMemoryRepository
 import ai.memora.app.ui.LocalStrings
 import ai.memora.app.ui.MemoraTheme
 import ai.memora.app.voice.AgentVoiceTurnProcessor
 import kotlinx.coroutines.runBlocking
+import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
@@ -57,6 +59,60 @@ class MemoryArchiveScreenTest {
 
         compose.waitUntil(10_000) { runBlocking { repository.turn(scopeId, "synthetic-memory-turn").isEmpty() } }
         assertTrue(repository.turn(scopeId, "synthetic-memory-turn").isEmpty())
+    }
+
+    @Test fun ownerCanAddProfileFactManuallyAndSeeThatItHasNoConversationSource() = runBlocking<Unit> {
+        val context = ApplicationProvider.getApplicationContext<Context>()
+        val scopeId = AgentVoiceTurnProcessor(context).conversationScopeId()
+        val repository = ProtectedProfileMemoryRepository(databaseRule.database)
+
+        compose.setContent {
+            CompositionLocalProvider(LocalAgentDatabaseOverride provides databaseRule.database) {
+                CompositionLocalProvider(LocalStrings provides context.resources) {
+                    MemoraTheme("light") {
+                        WorkingMemoryScreen(CaptureSessionState(ready = true, loading = false), {}, {}, {})
+                    }
+                }
+            }
+        }
+        compose.waitUntil(10_000) { compose.onAllNodesWithTag("profile_fact_add").fetchSemanticsNodes().isNotEmpty() }
+        compose.onNodeWithTag("profile_fact_add").performScrollTo().performClick()
+        compose.onNodeWithTag("profile_fact_editor").performTextInput("Synthetic owner preference for Azerbaijani")
+        compose.onNodeWithTag("profile_fact_category_identity").performClick()
+        compose.onNodeWithTag("profile_fact_editor_save").performClick()
+
+        compose.waitUntil(10_000) { runBlocking { repository.list(scopeId).isNotEmpty() } }
+        val saved = repository.list(scopeId).single()
+        assertTrue(saved.sourceTurnIds.isEmpty())
+        assertEquals("user_entered", saved.revisions.single().provenance)
+        compose.waitUntil(10_000) { compose.onAllNodesWithTag("profile_fact_0").fetchSemanticsNodes().isNotEmpty() }
+        compose.onNodeWithTag("profile_fact_0").performScrollTo().performClick()
+        compose.onNodeWithTag("profile_fact_manual_source").assertIsDisplayed()
+    }
+
+    @Test fun conversationBackedProfileFactShowsItsSourceInsteadOfManualProvenance() = runBlocking<Unit> {
+        val context = ApplicationProvider.getApplicationContext<Context>()
+        val scopeId = AgentVoiceTurnProcessor(context).conversationScopeId()
+        val repository = ProtectedProfileMemoryRepository(databaseRule.database)
+        repository.saveUserStated(scopeId, "preference", "Synthetic likes concise summaries",
+            "synthetic-profile-source-turn", "Synthetic: I like concise summaries.")
+
+        compose.setContent {
+            CompositionLocalProvider(LocalAgentDatabaseOverride provides databaseRule.database) {
+                CompositionLocalProvider(LocalStrings provides context.resources) {
+                    MemoraTheme("light") {
+                        WorkingMemoryScreen(CaptureSessionState(ready = true, loading = false), {}, {}, {})
+                    }
+                }
+            }
+        }
+        compose.waitUntil(10_000) { compose.onAllNodesWithTag("profile_fact_0").fetchSemanticsNodes().isNotEmpty() }
+        compose.onNodeWithTag("profile_fact_0").performScrollTo().performClick()
+        compose.waitUntil(10_000) {
+            compose.onAllNodesWithTag("profile_fact_conversation_source").fetchSemanticsNodes().isNotEmpty()
+        }
+        compose.onNodeWithTag("profile_fact_conversation_source").assertIsDisplayed()
+        assertTrue(compose.onAllNodesWithTag("profile_fact_manual_source").fetchSemanticsNodes().isEmpty())
     }
 
     @Test fun olderConversationPageCanBeOpenedFromMemoryScreen() = runBlocking<Unit> {

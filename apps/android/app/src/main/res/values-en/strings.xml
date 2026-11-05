@@ -460,8 +460,10 @@
     <string name="memory_unified_hint">Search notes, saved facts and conversation history locally on this device.</string>
     <string name="profile_preferences_title">Profile preferences</string>
     <string name="profile_memory_title">About me</string>
-    <string name="profile_memory_hint">The secretary saves only non-sensitive details you explicitly state. Review sources and revisions, edit any fact, or remove it.</string>
+    <string name="profile_memory_hint">Manage facts you explicitly choose to keep. Review sources and revisions, add a fact yourself, edit it, or remove it.</string>
     <string name="profile_memory_empty">No saved profile facts yet.</string>
+    <string name="profile_memory_add">Add a fact</string>
+    <string name="profile_memory_save_error">Could not save this fact. Check for a duplicate or try again.</string>
     <string name="profile_memory_category_identity">About me</string>
     <string name="profile_memory_category_preference">Preferences</string>
     <string name="profile_memory_category_goal">Goals</string>
@@ -470,7 +472,8 @@
     <string name="profile_memory_revision">Revision %1$d · sources can be checked</string>
     <string name="profile_memory_sources">Your source messages</string>
     <string name="profile_memory_sources_count">Sources: %1$d</string>
-    <string name="profile_memory_manual_source">This fact was edited manually in Memory.</string>
+    <string name="profile_memory_manual_source">This fact was entered or edited manually in Memory; it has no conversation source.</string>
+    <string name="profile_memory_source_unavailable">The original conversation source is no longer available.</string>
     <string name="profile_memory_previous_versions">Previous versions</string>
     <string name="profile_memory_edit">Edit fact</string>
     <string name="profile_memory_save">Save</string>

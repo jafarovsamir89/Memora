@@ -460,8 +460,10 @@
     <string name="memory_unified_hint">Yalnız cihazda qeydlər, saxlanmış faktlar və söhbət tarixçəsi üzrə axtarış edin.</string>
     <string name="profile_preferences_title">Profil parametrləri</string>
     <string name="profile_memory_title">Mənim haqqımda</string>
-    <string name="profile_memory_hint">Katib yalnız açıq dediyiniz, həssas olmayan məlumatları saxlayır. Mənbələri, əvvəlki versiyaları görə və istənilən faktı dəyişə bilərsiniz.</string>
+    <string name="profile_memory_hint">Yalnız saxlamağı seçdiyiniz faktları idarə edin. Mənbə və versiyalara baxın, faktı özünüz əlavə edin, dəyişin və ya silin.</string>
     <string name="profile_memory_empty">Saxlanmış profil məlumatı yoxdur.</string>
+    <string name="profile_memory_add">Fakt əlavə et</string>
+    <string name="profile_memory_save_error">Faktı saxlamaq olmadı. Dublikatı yoxlayın və yenidən cəhd edin.</string>
     <string name="profile_memory_category_identity">Özüm haqqında</string>
     <string name="profile_memory_category_preference">Tercihlər</string>
     <string name="profile_memory_category_goal">Məqsədlər</string>
@@ -470,7 +472,8 @@
     <string name="profile_memory_revision">Versiya %1$d · mənbələri yoxlanıla bilər</string>
     <string name="profile_memory_sources">Sizin dediyiniz mənbələr</string>
     <string name="profile_memory_sources_count">Mənbə: %1$d</string>
-    <string name="profile_memory_manual_source">Bu fakt yaddaş bölməsində əl ilə redaktə edilib.</string>
+    <string name="profile_memory_manual_source">Bu fakt yaddaşda əl ilə əlavə və ya redaktə edilib; söhbət mənbəyi yoxdur.</string>
+    <string name="profile_memory_source_unavailable">İlkin söhbət mənbəyi artıq əlçatan deyil.</string>
     <string name="profile_memory_previous_versions">Əvvəlki versiyalar</string>
     <string name="profile_memory_edit">Faktı redaktə et</string>
     <string name="profile_memory_save">Yadda saxla</string>

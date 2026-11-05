@@ -1,5 +1,9 @@
 # M20-08 Native validation matrix
 
+## ACT-0182 — Owner-authored profile memory
+
+The local Memory screen can create profile facts directly, choose identity/preference/goal/context/other, retain explicit `user_entered` provenance with no fabricated source turn, reject duplicate same-category facts, and show version/source state for subsequent edits. No Room migration. Full Gradle passed: 63 suites / 321 tests, 0 failures/errors/skips; debug/AndroidTest builds and Kotlin compile passed; lint 0/73/3. APK v64 / `1.1.42-manual-profile-memory`, SHA-256 `b3c817d02e65211b34866d9e1563ab34a504156d6522e4bc966ef4d1784b8526`. Host synthetic evidence only; owner-device/TalkBack acceptance remains separate.
+
 ## ACT-0180 — Table JSON transfer and exact money aggregates
 
 Implemented a user-facing Android SAF JSON transfer for existing tables, v2 typed schema/mode/scope/table binding, editable v1 compatibility, explicit import preview, strict bounded UTF-8 reads, atomic idempotent row merge in one transaction with 100-row insert batches, and linked-view definition-only transfer. Soft-deleted row history is excluded; complete portable backup remains separate. Exact money totals stay partitioned by currency. Full Gradle passed: 63 suites / 318 tests, 0 failures/errors/skips; debug/AndroidTest APKs and Kotlin compile passed; lint 0/74/3. APK v63 / `1.1.41-table-transfer-aggregates`, SHA-256 `15ac1d3492684ba841d9fe71590f3e69f8034434828931b2c19952dbb76e0ddd`. ADB device list was empty; SAF provider, TalkBack and owner acceptance remain separate gates.

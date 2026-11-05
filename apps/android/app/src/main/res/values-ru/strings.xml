@@ -460,8 +460,10 @@
     <string name="memory_unified_hint">Поиск по заметкам, сохранённым фактам и истории разговоров только на устройстве.</string>
     <string name="profile_preferences_title">Настройки профиля</string>
     <string name="profile_memory_title">Обо мне</string>
-    <string name="profile_memory_hint">Секретарь сохраняет только явно сказанные вами сведения, не относящиеся к чувствительным данным. Можно просмотреть источники и версии, изменить или удалить любой факт.</string>
+    <string name="profile_memory_hint">Управляйте сведениями, которые сами решили сохранить. Можно посмотреть источники и версии, добавить факт вручную, изменить или удалить его.</string>
     <string name="profile_memory_empty">Сохранённых сведений о профиле пока нет.</string>
+    <string name="profile_memory_add">Добавить факт</string>
+    <string name="profile_memory_save_error">Не удалось сохранить факт. Проверьте, нет ли дубля, или попробуйте ещё раз.</string>
     <string name="profile_memory_category_identity">Обо мне</string>
     <string name="profile_memory_category_preference">Предпочтения</string>
     <string name="profile_memory_category_goal">Цели</string>
@@ -470,7 +472,8 @@
     <string name="profile_memory_revision">Версия %1$d · источники доступны для проверки</string>
     <string name="profile_memory_sources">Ваши исходные сообщения</string>
     <string name="profile_memory_sources_count">Источники: %1$d</string>
-    <string name="profile_memory_manual_source">Этот факт отредактирован вручную в разделе памяти.</string>
+    <string name="profile_memory_manual_source">Этот факт добавлен или изменён вручную в памяти; у него нет источника из разговора.</string>
+    <string name="profile_memory_source_unavailable">Исходный разговор больше недоступен.</string>
     <string name="profile_memory_previous_versions">Предыдущие версии</string>
     <string name="profile_memory_edit">Изменить факт</string>
     <string name="profile_memory_save">Сохранить</string>

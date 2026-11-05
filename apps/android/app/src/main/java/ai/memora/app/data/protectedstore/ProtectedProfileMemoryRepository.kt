@@ -56,6 +56,31 @@ internal class ProtectedProfileMemoryRepository(private val db: AgentDatabase) {
         return loadEvidence(scopeId, factId)
     }
 
+    /** Saves an owner-authored profile fact without inventing a conversation source. */
+    suspend fun createManually(
+        scopeId: String,
+        category: String,
+        fact: String,
+        nowMillis: Long = System.currentTimeMillis(),
+    ): ProfileFactEvidence = db.withTransaction {
+        validate(scopeId, category, fact, nowMillis)
+        val normalized = fact.trim()
+        val digest = digest(scopeId, category, normalizeFact(normalized))
+        check(dao.profileFactByDigest(scopeId, digest) == null) { "profile_fact_duplicate" }
+        check(dao.profileFactCount(scopeId) < MAX_PROFILE_FACTS) { "profile_fact_limit_reached" }
+        val id = UUID.randomUUID().toString()
+        val row = ProfileFactRow(id, scopeId, category, normalized, digest, 1, nowMillis, nowMillis)
+        dao.insertProfileFact(row)
+        dao.insertProfileFactRevision(ProfileFactRevisionRow(scopeId, id, 1, category, normalized,
+            "user_entered", null, nowMillis))
+        requireReadback(scopeId, id).also { saved ->
+            check(saved.fact == normalized && saved.sourceTurnIds.isEmpty() &&
+                saved.revisions.singleOrNull()?.let { it.provenance == "user_entered" && it.sourceTurnId == null } == true) {
+                "profile_fact_readback_mismatch"
+            }
+        }
+    }
+
     /** Saves only a fact explicitly present in the current user message; source text is not model-authored. */
     suspend fun saveUserStated(
         scopeId: String,
@@ -221,7 +246,7 @@ internal class ProtectedProfileMemoryRepository(private val db: AgentDatabase) {
         "ne", "haqqinda", "haqda", "mene", "menim", "ve", "bu", "bir", "що", "как", "мне", "об", "про", "для", "и", "по", "у", "к", "в", "на", "с", "из", "от", "за")
 
     companion object {
-        val CATEGORIES = setOf("preference", "goal", "context", "other")
+        val CATEGORIES = setOf("identity", "preference", "goal", "context", "other")
         const val MAX_PROFILE_FACTS = 200
         private val WHITESPACE = Regex("\\s+")
     }

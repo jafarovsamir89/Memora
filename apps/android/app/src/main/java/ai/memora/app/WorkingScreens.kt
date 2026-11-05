@@ -201,7 +201,11 @@ internal fun WorkingMemoryScreen(state: CaptureSessionState, detail: (String) ->
     var selectedFact by remember { mutableStateOf<MemoryDomainFact?>(null) }
     var selectedProfileFact by remember { mutableStateOf<ProfileFactEvidence?>(null) }
     var profileFactSources by remember { mutableStateOf<List<String>>(emptyList()) }
+    var profileFactSourcesLoading by remember { mutableStateOf(false) }
     var editingProfileFact by remember { mutableStateOf<ProfileFactEvidence?>(null) }
+    var creatingProfileFact by remember { mutableStateOf(false) }
+    var profileFactSaving by remember { mutableStateOf(false) }
+    var profileFactSaveError by remember { mutableStateOf(false) }
     var pendingDeleteProfileFact by remember { mutableStateOf<ProfileFactEvidence?>(null) }
     var showLocalProfileEditor by remember { mutableStateOf(false) }
     var localProfileSaveError by remember { mutableStateOf(false) }
@@ -288,6 +292,8 @@ internal fun WorkingMemoryScreen(state: CaptureSessionState, detail: (String) ->
     fun openProfileFact(fact: ProfileFactEvidence) {
         selectedProfileFact = fact
         profileFactSources = emptyList()
+        profileFactSourcesLoading = fact.sourceTurnIds.isNotEmpty()
+        if (fact.sourceTurnIds.isEmpty()) return
         coroutineScope.launch {
             try {
                 val conversations = conversationRepository ?: return@launch
@@ -295,6 +301,7 @@ internal fun WorkingMemoryScreen(state: CaptureSessionState, detail: (String) ->
                     conversations.turn(scopeId, turnId).firstOrNull { it.role == "user" }?.message
                 }
             } catch (_: Exception) { archiveError = true }
+            finally { profileFactSourcesLoading = false }
         }
     }
 
@@ -450,11 +457,19 @@ internal fun WorkingMemoryScreen(state: CaptureSessionState, detail: (String) ->
                 Text(s(profileFactCategoryLabel(fact.category)), style = MaterialTheme.typography.labelMedium, color = colors.accent)
                 Text(LocalStrings.current.getString(R.string.profile_memory_revision, fact.revision),
                     style = MaterialTheme.typography.bodySmall, color = colors.muted)
-                if (fact.revisions.lastOrNull()?.provenance == "user_edited")
-                    Text(s(R.string.profile_memory_manual_source), color = colors.muted, style = MaterialTheme.typography.bodySmall)
-                Text(s(R.string.profile_memory_sources), style = MaterialTheme.typography.labelLarge, color = colors.accent)
-                if (profileFactSources.isEmpty()) Text(s(R.string.profile_memory_manual_source), color = colors.muted)
-                profileFactSources.forEach { source -> Text(source, color = colors.muted, style = MaterialTheme.typography.bodySmall) }
+                if (fact.sourceTurnIds.isEmpty()) {
+                    Text(s(R.string.profile_memory_manual_source), color = colors.muted, style = MaterialTheme.typography.bodySmall,
+                        modifier = Modifier.testTag("profile_fact_manual_source"))
+                } else {
+                    Text(s(R.string.profile_memory_sources), style = MaterialTheme.typography.labelLarge, color = colors.accent)
+                    if (profileFactSourcesLoading) Text(s(R.string.capture_loading), color = colors.muted)
+                    if (!profileFactSourcesLoading && profileFactSources.isEmpty())
+                        Text(s(R.string.profile_memory_source_unavailable), color = colors.muted)
+                    profileFactSources.forEach { source ->
+                        Text(source, color = colors.muted, style = MaterialTheme.typography.bodySmall,
+                            modifier = Modifier.testTag("profile_fact_conversation_source"))
+                    }
+                }
                 val older = fact.revisions.dropLast(1).takeLast(5).asReversed()
                 if (older.isNotEmpty()) {
                     Text(s(R.string.profile_memory_previous_versions), style = MaterialTheme.typography.labelLarge, color = colors.accent)
@@ -470,21 +485,37 @@ internal fun WorkingMemoryScreen(state: CaptureSessionState, detail: (String) ->
         dismissButton = { TextButton(onClick = { pendingDeleteProfileFact = fact; selectedProfileFact = null },
             modifier = Modifier.testTag("profile_fact_delete")) { Text(s(R.string.profile_memory_forget)) } },
     ) }
-    editingProfileFact?.let { fact -> ProfileFactEditorDialog(
-        fact = fact,
-        onDismiss = { editingProfileFact = null },
+    if (creatingProfileFact || editingProfileFact != null) ProfileFactEditorDialog(
+        fact = editingProfileFact,
+        saving = profileFactSaving,
+        saveError = profileFactSaveError,
+        onDismiss = {
+            if (!profileFactSaving) {
+                creatingProfileFact = false
+                editingProfileFact = null
+                profileFactSaveError = false
+            }
+        },
         onSave = { category, value ->
-            editingProfileFact = null
+            profileFactSaveError = false
+            profileFactSaving = true
             coroutineScope.launch {
                 try {
                     val repository = profileMemoryRepository ?: error("protected_profile_memory_unavailable")
-                    repository.editManually(scopeId, fact.factId, fact.revision, category, value)
+                    val fact = editingProfileFact
+                    if (fact == null) repository.createManually(scopeId, category, value)
+                    else repository.editManually(scopeId, fact.factId, fact.revision, category, value)
                     refreshVersion++
                     archiveError = false
-                } catch (_: Exception) { archiveError = true }
+                    creatingProfileFact = false
+                    editingProfileFact = null
+                } catch (_: Exception) {
+                    archiveError = true
+                    profileFactSaveError = true
+                } finally { profileFactSaving = false }
             }
         },
-    ) }
+    )
     pendingDeleteProfileFact?.let { fact -> AlertDialog(
         onDismissRequest = { pendingDeleteProfileFact = null },
         title = { Text(s(R.string.profile_memory_forget)) },
@@ -518,6 +549,11 @@ internal fun WorkingMemoryScreen(state: CaptureSessionState, detail: (String) ->
             label = { Text(s(R.string.inbox_archived)) }, modifier = Modifier.testTag("memory_include_archived"))
         SectionHeading(s(R.string.profile_memory_title))
         Text(s(R.string.profile_memory_hint), style = MaterialTheme.typography.bodySmall, color = colors.muted)
+        OutlinedButton(onClick = {
+            creatingProfileFact = true
+            editingProfileFact = null
+            profileFactSaveError = false
+        }, modifier = Modifier.fillMaxWidth().testTag("profile_fact_add")) { Text(s(R.string.profile_memory_add)) }
         if (archiveReady && !archiveLoading && !archiveError && profileFacts.isEmpty())
             Text(s(R.string.profile_memory_empty), color = colors.muted)
         profileFacts.forEachIndexed { index, fact ->
@@ -648,30 +684,38 @@ private fun LocalProfileEditorDialog(
 
 @Composable
 private fun ProfileFactEditorDialog(
-    fact: ProfileFactEvidence,
+    fact: ProfileFactEvidence?,
+    saving: Boolean,
+    saveError: Boolean,
     onDismiss: () -> Unit,
     onSave: (category: String, fact: String) -> Unit,
 ) {
-    var category by remember(fact.factId, fact.revision) { mutableStateOf(fact.category) }
-    var value by remember(fact.factId, fact.revision) { mutableStateOf(fact.fact) }
+    var category by remember(fact?.factId, fact?.revision) { mutableStateOf(fact?.category ?: "other") }
+    var value by remember(fact?.factId, fact?.revision) { mutableStateOf(fact?.fact.orEmpty()) }
     AlertDialog(
-        onDismissRequest = onDismiss,
-        title = { Text(s(R.string.profile_memory_edit)) },
+        onDismissRequest = { if (!saving) onDismiss() },
+        title = { Text(s(if (fact == null) R.string.profile_memory_add else R.string.profile_memory_edit)) },
         text = {
             Column(Modifier.heightIn(max = 430.dp).verticalScroll(rememberScrollState()),
                 verticalArrangement = Arrangement.spacedBy(10.dp)) {
                 OutlinedTextField(value, { value = it.take(600) }, label = { Text(s(R.string.profile_memory_fact)) },
-                    enabled = true, modifier = Modifier.fillMaxWidth().testTag("profile_fact_editor"))
+                    enabled = !saving, modifier = Modifier.fillMaxWidth().testTag("profile_fact_editor"))
                 Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                    listOf("preference", "goal", "context", "other").forEach { item ->
-                        FilterChip(category == item, { category = item }, label = { Text(s(profileFactCategoryLabel(item))) })
+                    listOf("identity", "preference", "goal", "context", "other").forEach { item ->
+                        FilterChip(category == item, { category = item }, enabled = !saving,
+                            label = { Text(s(profileFactCategoryLabel(item))) },
+                            modifier = Modifier.testTag("profile_fact_category_$item"))
                     }
                 }
+                if (saveError) Text(s(R.string.profile_memory_save_error), color = MaterialTheme.colorScheme.error,
+                    modifier = Modifier.testTag("profile_fact_save_error"))
             }
         },
         confirmButton = { TextButton(onClick = { onSave(category, value.trim()) },
-            enabled = value.isNotBlank(), modifier = Modifier.testTag("profile_fact_editor_save")) { Text(s(R.string.profile_memory_save)) } },
-        dismissButton = { TextButton(onClick = onDismiss) { Text(s(R.string.task_cancel)) } },
+            enabled = !saving && value.isNotBlank(), modifier = Modifier.testTag("profile_fact_editor_save")) {
+            Text(s(if (saving) R.string.onboarding_saving else R.string.profile_memory_save))
+        } },
+        dismissButton = { TextButton(onClick = onDismiss, enabled = !saving) { Text(s(R.string.task_cancel)) } },
     )
 }
 
@@ -688,6 +732,7 @@ private fun domainKindResource(kind: String): Int = when (kind) {
 }
 
 private fun profileFactCategoryLabel(category: String): Int = when (category) {
+    "identity" -> R.string.profile_memory_category_identity
     "preference" -> R.string.profile_memory_category_preference
     "goal" -> R.string.profile_memory_category_goal
     "context" -> R.string.profile_memory_category_context

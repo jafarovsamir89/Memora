@@ -16,7 +16,9 @@
 
 # Memora AI — Your Second Memory
 
-**Current implementation package ACT-0180 (2026-11-04):** P4 adds user-facing typed table SAF JSON export/import with legacy v1 compatibility, exact v2 schema/view binding, explicit preview, atomic idempotent batches, definition-only linked-view transfer and exact per-currency aggregates. Full Gradle passed: 63 suites / 318 tests, 0 failures/errors/skips; lint 0/74/3; debug/AndroidTest builds and AndroidTest Kotlin compile passed. APK v63 SHA-256 `15ac1d3492684ba841d9fe71590f3e69f8034434828931b2c19952dbb76e0ddd`. No device attached; P3/P4 remain partial.
+**Current implementation package ACT-0182 (2026-11-04):** owner-authored profile facts can now be created directly in Memory with truthful `user_entered` provenance, explicit identity category, revisioned edit/delete and duplicate rejection. Full Gradle passed: 63 suites / 321 tests, 0 failures/errors/skips; lint 0/73/3, debug/AndroidTest builds and Kotlin compile passed. APK v64 SHA-256 `b3c817d02e65211b34866d9e1563ab34a504156d6522e4bc966ef4d1784b8526`. P3 remains open; no owner device/TalkBack acceptance.
+
+**Previous implementation package ACT-0180 (2026-11-04):** P4 adds user-facing typed table SAF JSON export/import with legacy v1 compatibility, exact v2 schema/view binding, explicit preview, atomic idempotent batches, definition-only linked-view transfer and exact per-currency aggregates. Full Gradle passed: 63 suites / 318 tests, 0 failures/errors/skips; lint 0/74/3; debug/AndroidTest builds and AndroidTest Kotlin compile passed. APK v63 SHA-256 `15ac1d3492684ba841d9fe71590f3e69f8034434828931b2c19952dbb76e0ddd`. No device attached; P3/P4 remain partial.
 
 **Previous implementation package ACT-0178:** protected Memory archive pages now batch-load messages and discard stale results when search changes. Full host suite: 60 suites / 310 tests; lint 0/72/3; debug and AndroidTest builds and Kotlin compile passed. APK v62 SHA-256 `3533b9ddbe6f5cd7f9bfa7b45cdd51d63cd9fbf0f30638c95c57030727579903`. No device attached; P3/P4 remain partial.
 
