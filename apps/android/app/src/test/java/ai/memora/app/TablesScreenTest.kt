@@ -10,6 +10,7 @@ import androidx.compose.ui.test.onAllNodesWithTag
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollTo
+import androidx.compose.ui.test.performTextInput
 import androidx.test.core.app.ApplicationProvider
 import ai.memora.app.data.protectedstore.ColumnSpec
 import ai.memora.app.data.protectedstore.ColumnType
@@ -18,6 +19,7 @@ import ai.memora.app.ui.LocalStrings
 import ai.memora.app.ui.MemoraTheme
 import ai.memora.app.voice.AgentVoiceTurnProcessor
 import kotlinx.coroutines.runBlocking
+import org.junit.Assert.assertEquals
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -80,5 +82,36 @@ class TablesScreenTest {
         }
         compose.onNodeWithTag("table_aggregate_AZN").assertTextEquals("Total: 11.25 AZN")
         compose.onNodeWithTag("table_aggregate_USD").assertTextEquals("Total: 25.00 USD")
+    }
+
+    @Test fun ownerCanPreviewAddFieldAndInspectSchemaHistory() = runBlocking<Unit> {
+        val context = ApplicationProvider.getApplicationContext<Context>()
+        val scope = AgentVoiceTurnProcessor(context).conversationScopeId()
+        ProtectedDomainRepository(databaseRule.database).createTable(scope, "synthetic-schema-ui", "Synthetic schema", "editable",
+            listOf(ColumnSpec("name", "Name", ColumnType.TEXT)))
+        compose.setContent {
+            CompositionLocalProvider(LocalAgentDatabaseOverride provides databaseRule.database) {
+                CompositionLocalProvider(LocalStrings provides context.resources) {
+                    MemoraTheme("light") { TablesScreen() }
+                }
+            }
+        }
+        compose.waitUntil(10_000) {
+            compose.onAllNodesWithTag("table_synthetic-schema-ui").fetchSemanticsNodes().isNotEmpty()
+        }
+        compose.onNodeWithTag("table_synthetic-schema-ui").performScrollTo().performClick()
+        compose.onNodeWithTag("table_add_columns").performScrollTo().performClick()
+        compose.onNodeWithTag("table_add_columns_input").performTextInput("Due:DATE")
+        compose.onNodeWithTag("table_add_columns_preview").performClick()
+        compose.onNodeWithTag("table_schema_apply").assertIsDisplayed().performClick()
+        compose.waitUntil(10_000) { compose.onAllNodesWithTag("table_schema_saved").fetchSemanticsNodes().isNotEmpty() }
+        compose.onNodeWithTag("table_schema_history").performScrollTo().performClick()
+        compose.onNodeWithTag("table_schema_revision_1").assertIsDisplayed().performClick()
+        compose.onNodeWithTag("table_schema_restore_confirm").assertIsDisplayed()
+        compose.onNodeWithTag("table_schema_restore_field_name").assertIsDisplayed()
+
+        val snapshot = ProtectedDomainRepository(databaseRule.database).tables(scope).single()
+        assertEquals(2L, snapshot.table.schemaVersion)
+        assertEquals(listOf("Name", "Due"), snapshot.columns.map { it.name })
     }
 }

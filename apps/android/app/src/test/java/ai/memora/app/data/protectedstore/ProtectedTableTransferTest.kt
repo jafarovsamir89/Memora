@@ -94,4 +94,49 @@ class ProtectedTableTransferTest {
         val wrongSpec = JSONObject(exported).put("viewSpec", JSONObject().put("version", 1).put("sourceKind", "PROJECT"))
         assertTrue(runCatching { domain.previewImport(scope, "synthetic-linked-transfer", wrongSpec.toString()) }.isFailure)
     }
+
+    @Test fun schemaRestoreIsRevisionedAndKeepsRowValuesAvailableForRedo() = runBlocking {
+        val domain = ProtectedDomainRepository(databaseRule.database)
+        val scope = "synthetic-schema-undo-scope"
+        domain.createTable(scope, "synthetic-schema-undo", "Synthetic schema", "editable",
+            listOf(ColumnSpec("name", "Name", ColumnType.TEXT)), now = "2026-11-04T10:00:00Z")
+        domain.addRows(scope, "synthetic-schema-undo", 1, listOf("synthetic-schema-row" to mapOf("name" to "Sample")))
+        domain.changeTableSchema(scope, "synthetic-schema-undo", 1,
+            listOf(ColumnSpec("name", "Name", ColumnType.TEXT), ColumnSpec("site", "Site", ColumnType.TEXT)),
+            "2026-11-04T10:01:00Z")
+        domain.updateRow(scope, "synthetic-schema-undo", "synthetic-schema-row", 1, 2,
+            mapOf("name" to "Sample", "site" to "Baku"))
+
+        assertEquals(3L, domain.restoreTableSchema(scope, "synthetic-schema-undo", 2, 1, "2026-11-04T10:02:00Z"))
+        var snapshot = domain.tables(scope).single()
+        assertEquals(listOf("name"), snapshot.columns.map { it.columnId })
+        assertEquals("Baku", JSONObject(snapshot.rows.single().valuesJson).getString("site"))
+        domain.updateRow(scope, "synthetic-schema-undo", "synthetic-schema-row", 2, 3,
+            mapOf("name" to "Updated while field is hidden"))
+        snapshot = domain.tables(scope).single()
+        assertEquals("Baku", JSONObject(snapshot.rows.single().valuesJson).getString("site"))
+
+        assertEquals(4L, domain.restoreTableSchema(scope, "synthetic-schema-undo", 3, 2, "2026-11-04T10:03:00Z"))
+        snapshot = domain.tables(scope).single()
+        assertEquals(listOf("name", "site"), snapshot.columns.map { it.columnId })
+        assertEquals("Baku", JSONObject(snapshot.rows.single().valuesJson).getString("site"))
+        assertEquals(listOf(1L, 2L, 3L, 4L), domain.tableSchemaHistory(scope, "synthetic-schema-undo").map { it.version })
+    }
+
+    @Test fun schemaRestoreRejectsStaleVersionForeignScopeAndLinkedViews() = runBlocking {
+        val domain = ProtectedDomainRepository(databaseRule.database)
+        val scope = "synthetic-schema-guards-scope"
+        domain.createTable(scope, "synthetic-schema-guards", "Synthetic editable", "editable",
+            listOf(ColumnSpec("name", "Name", ColumnType.TEXT)))
+        domain.changeTableSchema(scope, "synthetic-schema-guards", 1,
+            listOf(ColumnSpec("name", "Name", ColumnType.TEXT), ColumnSpec("site", "Site", ColumnType.TEXT)),
+            "2026-11-04T10:00:00Z")
+        assertTrue(runCatching { domain.restoreTableSchema(scope, "synthetic-schema-guards", 1, 1, "2026-11-04T10:01:00Z") }.isFailure)
+        assertTrue(runCatching { domain.restoreTableSchema("foreign-scope", "synthetic-schema-guards", 2, 1, "2026-11-04T10:01:00Z") }.isFailure)
+        assertTrue(runCatching { domain.tableSchemaHistory("foreign-scope", "synthetic-schema-guards") }.isFailure)
+
+        domain.createTable(scope, "synthetic-schema-view", "Synthetic view", "linked_view",
+            listOf(ColumnSpec("source_id", "Source", ColumnType.TEXT)), viewSpec = LinkedViewSpec(DomainKind.PERSON))
+        assertTrue(runCatching { domain.restoreTableSchema(scope, "synthetic-schema-view", 1, 1, "2026-11-04T10:01:00Z") }.isFailure)
+    }
 }

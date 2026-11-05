@@ -910,6 +910,7 @@ internal interface ProtectedStoreDao {
     @androidx.room.Query("SELECT * FROM user_table WHERE scopeId=:scope AND deletedAt IS NULL ORDER BY title, tableId") suspend fun activeUserTables(scope: String): List<UserTableRow>
     @androidx.room.Insert(onConflict = androidx.room.OnConflictStrategy.ABORT) suspend fun insertUserTable(row: UserTableRow)
     @androidx.room.Query("SELECT * FROM table_column WHERE tableId=:id ORDER BY position") suspend fun columns(id: String): List<TableColumnRow>
+    @androidx.room.Query("DELETE FROM table_column WHERE tableId=:id") suspend fun deleteColumns(id: String)
     @androidx.room.Insert(onConflict = androidx.room.OnConflictStrategy.ABORT) suspend fun insertColumns(rows: List<TableColumnRow>)
     @androidx.room.Insert(onConflict = androidx.room.OnConflictStrategy.ABORT) suspend fun insertSchemaRevision(row: TableSchemaRevisionRow)
     @androidx.room.Query("SELECT * FROM table_schema_revision WHERE tableId=:id ORDER BY version") suspend fun schemaRevisions(id: String): List<TableSchemaRevisionRow>

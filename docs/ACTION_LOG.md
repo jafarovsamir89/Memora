@@ -1445,3 +1445,10 @@ The next P3/MEM-12.13 slice adds direct profile-fact creation in the local Memor
 ### ACT-0183 — 2026-11-04 — Git handoff for ACT-0182
 
 ACT-0182 implementation/docs commit `5076b855aacffe47459e393d9674a4b71cffabad` (`feat(memory): add owner-authored profile facts`) was pushed to `origin/main`. `git fetch`, local `HEAD`, `origin/main`, and `git ls-remote origin refs/heads/main` match. Owner-owned untracked ADR-012 remains excluded and untouched. P3/P4 remain open; no device acceptance is implied.
+
+
+### ACT-0184 — 2026-11-04 — Table schema preview/history/restore
+
+Added owner-facing optional-column additions with exact preview, revision history, and confirmed restore of an earlier schema as a new version. Restores are scope- and version-checked and refuse linked views. Row JSON is not rewritten; updates retain keys outside the active schema so a hidden optional-field value can return on redo. Added AZ/RU/EN UI strings, repository and Compose synthetic regressions, ADR-021 and S59; synchronized README, product/engineering/domain specs, validation matrix, AGENTS and TODO.
+
+Full command `JAVA_TOOL_OPTIONS='-XX:TieredStopAtLevel=1' ./gradlew :app:testDebugUnitTest :app:assembleDebug :app:assembleDebugAndroidTest :app:compileDebugAndroidTestKotlin :app:lintDebug --no-daemon --console=plain --max-workers=1` passed: 63 suites / 324 tests, 0 failures/errors/skips; debug and AndroidTest APK builds and AndroidTest Kotlin compilation passed; lint 0 errors / 73 warnings / 3 hints. APK `ai.memora.app`, versionCode 65 / `1.1.43-table-schema-history`, SHA-256 `c63e99cda02c55f9c416de85a15b95284260a0c9001589c0b0391728f0da71b8`. `git diff --check` passed after final docs update. An initial full run exposed only a test expectation mismatch (display label vs stable ID); corrected, and the full run was repeated. Device list was empty; no physical-device, TalkBack, owner acceptance or DB migration evidence is claimed. P3/P4 remain open. Owner-owned ADR-012 was excluded. Commit/push will be recorded only after verification.

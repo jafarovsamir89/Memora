@@ -18,6 +18,8 @@
 
 **ACT-0157 update:** active SQLCipher restore cutover and pre-Room startup recovery now exist behind an internal confirmation-gated API. Synthetic Android 14 passed a successful replacement, candidate-validation rollback, and injected restart recovery at three journal phases plus interrupted rollback cleanup; full suite 60/301, lint 0/60/3. The API is not connected to SAF/UI. Injected callback interruption does not prove force-stop or hard power-loss durability. M20-02 remains partial pending user workflow, device/owner acceptance and broader fault matrix.
 
+**ACT-0184 implementation checkpoint (2026-11-04):** P4 editable tables now support owner-reviewed additive optional-column changes, schema revision history, and confirmed restore/redo as a new append-only revision. Restored schemas replace only the active column projection; row JSON values stay intact and hidden values are preserved when a row is edited. Linked views remain read-only. Full Gradle passed: 63 suites / 324 tests, 0 failures/errors/skips; debug and AndroidTest APK builds, AndroidTest Kotlin compilation passed; lint 0 errors / 73 warnings / 3 hints. APK v65 / `1.1.43-table-schema-history`, SHA-256 `c63e99cda02c55f9c416de85a15b95284260a0c9001589c0b0391728f0da71b8`. Synthetic host tests only; no device attached. P4/P3 remain open.
+
 # MEMORA 2.0 — полное продуктовое видение и техническое задание
 
 **Решение владельца:** 2026-11-03  

@@ -39,6 +39,7 @@ internal data class ImportPreview(
 )
 internal data class TableSnapshot(val table: UserTableRow, val columns: List<TableColumnRow>, val rows: List<TableDataRow>,
     val linkedTotalCount: Int = 0)
+internal data class TableSchemaRevisionSnapshot(val version: Long, val changedAt: String, val columns: List<TableColumnRow>)
 internal data class LinkedViewSpec(val sourceKind: DomainKind)
 internal data class LinkedViewPage(val rows: List<DomainObjectRow>, val matchingCount: Int, val totalCount: Int,
     val offset: Int, val limit: Int, val nextOffset: Int?, val continuationLimitReached: Boolean)
@@ -563,6 +564,35 @@ internal class ProtectedDomainRepository(private val db: AgentDatabase) {
         expectedSchemaVersion + 1
     }
 
+    suspend fun tableSchemaHistory(scope: String, tableId: String): List<TableSchemaRevisionSnapshot> {
+        val table = dao.userTable(scope, tableId)?.takeIf { it.deletedAt == null } ?: error("not_found")
+        check(table.mode == "editable") { "linked_view_read_only" }
+        return dao.schemaRevisions(tableId).map { revision ->
+            TableSchemaRevisionSnapshot(revision.version, revision.changedAt, decodeSchemaRevision(revision.columnsJson, tableId))
+        }
+    }
+
+    /** Restores a prior schema as a new revision. Row JSON is untouched, so hidden optional-column values can reappear on redo. */
+    suspend fun restoreTableSchema(scope: String, tableId: String, expectedSchemaVersion: Long,
+        targetRevisionVersion: Long, now: String): Long = db.withTransaction {
+        val table = dao.userTable(scope, tableId) ?: error("not_found")
+        check(table.deletedAt == null && table.schemaVersion == expectedSchemaVersion) { "schema_conflict" }
+        check(table.mode == "editable") { "linked_view_read_only" }
+        check(expectedSchemaVersion < Long.MAX_VALUE)
+        require(targetRevisionVersion in 1 until expectedSchemaVersion) { "schema_revision_not_restorable" }
+        val target = dao.schemaRevisions(tableId).firstOrNull { it.version == targetRevisionVersion }
+            ?: error("schema_revision_not_found")
+        val restoredColumns = decodeSchemaRevision(target.columnsJson, tableId)
+        check(dao.updateTableSchemaVersion(scope, tableId, expectedSchemaVersion, expectedSchemaVersion + 1) == 1) { "schema_conflict" }
+        dao.deleteColumns(tableId)
+        dao.insertColumns(restoredColumns)
+        val revision = TableSchemaRevisionRow(tableId, expectedSchemaVersion + 1, columnsJson(restoredColumns), now)
+        dao.insertSchemaRevision(revision)
+        check(dao.columns(tableId) == restoredColumns && dao.schemaRevisions(tableId).lastOrNull() == revision &&
+            dao.userTable(scope, tableId)?.schemaVersion == expectedSchemaVersion + 1) { "table_schema_restore_readback_mismatch" }
+        expectedSchemaVersion + 1
+    }
+
     suspend fun renameTable(scope: String, tableId: String, expectedVersion: Long, title: String): UserTableRow = db.withTransaction {
         requireTitle(title)
         val current = dao.userTable(scope, tableId) ?: error("not_found")
@@ -623,7 +653,10 @@ internal class ProtectedDomainRepository(private val db: AgentDatabase) {
         check(existing.version == expectedVersion && expectedVersion < Long.MAX_VALUE) { "version_conflict" }
         val columns = dao.columns(tableId).map { it.columnId to ColumnSpec(it.columnId, it.name, ColumnType.valueOf(it.valueType), it.required, JSONObject(it.configJson)) }.toMap()
         validateRow(scope, columns, values)
-        val encoded = encodeValues(values)
+        val originalValues = JSONObject(existing.valuesJson)
+        val hiddenValues = originalValues.keys().asSequence().filter { it !in columns }
+            .associateWith { key -> jsonValue(originalValues.get(key)) }
+        val encoded = encodeValues(hiddenValues + values)
         check(dao.updateTableRow(rowId, tableId, scope, expectedVersion, expectedVersion + 1, encoded) == 1)
         val expected = existing.copy(version = expectedVersion + 1, valuesJson = encoded)
         check(dao.rowById(rowId) == expected) { "table_row_update_readback_mismatch" }
@@ -1048,6 +1081,22 @@ internal class ProtectedDomainRepository(private val db: AgentDatabase) {
     private fun columnsJson(columns: List<TableColumnRow>) = JSONArray(columns.sortedBy { it.position }.map { JSONObject()
         .put("id", it.columnId).put("position", it.position).put("name", it.name).put("type", it.valueType)
         .put("required", it.required).put("config", JSONObject(it.configJson)) }).toString()
+
+    private fun decodeSchemaRevision(json: String, tableId: String): List<TableColumnRow> {
+        val array = JSONArray(json)
+        require(array.length() in 1..50) { "schema_revision_invalid" }
+        return (0 until array.length()).map { index ->
+            val column = array.getJSONObject(index)
+            val config = column.optJSONObject("config") ?: JSONObject()
+            val row = TableColumnRow(tableId, column.getString("id"), column.optInt("position", index),
+                column.getString("name"), column.getString("type"), column.optBoolean("required"), config.toString())
+            require(row.columnId.matches(Regex("[A-Za-z0-9_-]{1,64}")) &&
+                runCatching { ColumnType.valueOf(row.valueType) }.isSuccess && row.position == index && row.name.isNotBlank()) {
+                "schema_revision_invalid"
+            }
+            row
+        }.also { rows -> require(rows.map { it.columnId }.distinct().size == rows.size) { "schema_revision_invalid" } }
+    }
 
     /** Stable target-table scoped IDs make an identical import retry idempotent. */
     private fun deterministicImportId(tableId: String, sourceRowId: String): String {

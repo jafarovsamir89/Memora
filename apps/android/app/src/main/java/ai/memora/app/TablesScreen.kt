@@ -49,6 +49,7 @@ import ai.memora.app.data.protectedstore.ProtectedDomainRepository
 import ai.memora.app.data.protectedstore.TableDataRow
 import ai.memora.app.data.protectedstore.TableColumnRow
 import ai.memora.app.data.protectedstore.TableSnapshot
+import ai.memora.app.data.protectedstore.TableSchemaRevisionSnapshot
 import ai.memora.app.data.protectedstore.ImportPreview
 import ai.memora.app.data.protectedstore.TableTransferRead
 import ai.memora.app.data.protectedstore.TableTransferReader
@@ -108,12 +109,19 @@ fun TablesScreen() {
     var error by remember { mutableStateOf(false) }
     var transferBusy by remember { mutableStateOf(false) }
     var transferSuccess by remember { mutableStateOf(false) }
+    var schemaSuccess by remember { mutableStateOf(false) }
     var transferTableId by remember { mutableStateOf<String?>(null) }
     var pendingTableImport by remember { mutableStateOf<ImportPreview?>(null) }
     var aggregateColumnId by remember { mutableStateOf<String?>(null) }
     var aggregateTotals by remember { mutableStateOf<Map<String, Long>?>(null) }
     var aggregateLoading by remember { mutableStateOf(false) }
     var aggregateMenuExpanded by remember { mutableStateOf(false) }
+    var addColumnsDialog by remember { mutableStateOf(false) }
+    var addColumnsInput by remember { mutableStateOf("") }
+    var pendingSchemaChange by remember { mutableStateOf<List<ColumnSpec>?>(null) }
+    var schemaHistory by remember { mutableStateOf<List<TableSchemaRevisionSnapshot>>(emptyList()) }
+    var showSchemaHistory by remember { mutableStateOf(false) }
+    var pendingSchemaRestore by remember { mutableStateOf<TableSchemaRevisionSnapshot?>(null) }
     val selected = tables.firstOrNull { it.table.tableId == selectedTableId }
 
     val exportLauncher = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("application/json")) { uri ->
@@ -170,6 +178,8 @@ fun TablesScreen() {
         linkedPage = 0
         linkedSortAscending = true
         aggregateTotals = null
+        schemaSuccess = false
+        schemaHistory = emptyList()
         aggregateColumnId = selected?.columns?.firstOrNull { it.valueType == ColumnType.MONEY.name }?.columnId
     }
 
@@ -306,6 +316,109 @@ fun TablesScreen() {
             ) { Text(s(R.string.table_import_confirm)) } },
             dismissButton = { TextButton(onClick = { pendingTableImport = null }, enabled = !transferBusy,
                 modifier = Modifier.testTag("table_import_cancel")) { Text(s(R.string.task_cancel)) } },
+        )
+    }
+
+    if (addColumnsDialog && selected != null) AlertDialog(
+        onDismissRequest = { addColumnsDialog = false },
+        title = { Text(s(R.string.table_add_columns_title)) },
+        text = { Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            OutlinedTextField(addColumnsInput, { addColumnsInput = it.take(1200) },
+                Modifier.fillMaxWidth().testTag("table_add_columns_input"), label = { Text(s(R.string.table_columns)) }, minLines = 2)
+            Text(s(R.string.table_add_columns_help), style = androidx.compose.material3.MaterialTheme.typography.bodySmall)
+            if (error) Text(s(R.string.table_action_failed), color = androidx.compose.material3.MaterialTheme.colorScheme.error)
+        } },
+        confirmButton = { TextButton(onClick = {
+            val additions = parseTableColumnDeclarations(addColumnsInput)
+            val existingNames = selected.columns.map { it.name.trim().lowercase() }.toSet()
+            if (additions == null || additions.isEmpty() || additions.size + selected.columns.size > 50 ||
+                additions.any { it.first.lowercase() in existingNames } ||
+                (existingNames + additions.map { it.first.lowercase() }).size != existingNames.size + additions.size) {
+                error = true
+                return@TextButton
+            }
+            pendingSchemaChange = selected.columns.map { ColumnSpec(it.columnId, it.name,
+                ColumnType.valueOf(it.valueType), it.required, JSONObject(it.configJson)) } + additions.map { (name, type) ->
+                ColumnSpec(UUID.randomUUID().toString(), name, type)
+            }
+            error = false
+            addColumnsDialog = false
+        }, modifier = Modifier.testTag("table_add_columns_preview")) { Text(s(R.string.table_schema_preview)) } },
+        dismissButton = { TextButton(onClick = { addColumnsDialog = false; addColumnsInput = "" }) { Text(s(R.string.task_cancel)) } },
+    )
+
+    pendingSchemaChange?.let { proposed ->
+        val current = selected
+        val additions = current?.let { proposed.drop(it.columns.size) }.orEmpty()
+        AlertDialog(
+            onDismissRequest = { pendingSchemaChange = null },
+            title = { Text(s(R.string.table_schema_preview)) },
+            text = { Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                Text(s(R.string.table_schema_add_preview_explainer))
+                additions.forEach { Text("+ ${it.name} (${it.type.name})", color = colors.accent) }
+            } },
+            confirmButton = { TextButton(enabled = current != null, modifier = Modifier.testTag("table_schema_apply"), onClick = {
+                val table = current ?: return@TextButton
+                val schema = proposed
+                pendingSchemaChange = null
+                coroutineScope.launch {
+                    try {
+                        repository.changeTableSchema(scopeId, table.table.tableId, table.table.schemaVersion, schema,
+                            java.time.Instant.now().toString())
+                        tables = repository.tables(scopeId)
+                        addColumnsInput = ""
+                        error = false
+                        schemaSuccess = true
+                    } catch (_: Exception) { error = true }
+                }
+            }) { Text(s(R.string.table_schema_apply)) } },
+            dismissButton = { TextButton(onClick = { pendingSchemaChange = null }) { Text(s(R.string.task_cancel)) } },
+        )
+    }
+
+    if (showSchemaHistory && selected != null) AlertDialog(
+        onDismissRequest = { showSchemaHistory = false },
+        title = { Text(s(R.string.table_schema_history_title)) },
+        text = { Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+            if (schemaHistory.isEmpty()) Text(s(R.string.table_schema_history_empty))
+            schemaHistory.asReversed().forEach { revision ->
+                val isCurrent = revision.version == selected.table.schemaVersion
+                TextButton(enabled = !isCurrent, modifier = Modifier.fillMaxWidth().testTag("table_schema_revision_${revision.version}"),
+                    onClick = { pendingSchemaRestore = revision; showSchemaHistory = false }) {
+                    Text(LocalStrings.current.getString(if (isCurrent) R.string.table_schema_revision_current else R.string.table_schema_revision_restore,
+                        revision.version))
+                }
+            }
+        } },
+        confirmButton = { TextButton(onClick = { showSchemaHistory = false }) { Text(s(R.string.task_cancel)) } },
+    )
+
+    pendingSchemaRestore?.let { revision ->
+        val current = selected
+        AlertDialog(
+            onDismissRequest = { pendingSchemaRestore = null },
+            title = { Text(s(R.string.table_schema_restore_title)) },
+            text = { Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                Text(s(R.string.table_schema_restore_explainer))
+                Text(s(R.string.table_schema_restore_fields), color = colors.muted)
+                revision.columns.forEach { column ->
+                    Text("${column.name} (${column.valueType})", modifier = Modifier.testTag("table_schema_restore_field_${column.columnId}"))
+                }
+            } },
+            confirmButton = { TextButton(enabled = current != null, modifier = Modifier.testTag("table_schema_restore_confirm"), onClick = {
+                val table = current ?: return@TextButton
+                pendingSchemaRestore = null
+                coroutineScope.launch {
+                    try {
+                        repository.restoreTableSchema(scopeId, table.table.tableId, table.table.schemaVersion,
+                            revision.version, java.time.Instant.now().toString())
+                        tables = repository.tables(scopeId)
+                        error = false
+                        schemaSuccess = true
+                    } catch (_: Exception) { error = true }
+                }
+            }) { Text(s(R.string.table_schema_restore_confirm)) } },
+            dismissButton = { TextButton(onClick = { pendingSchemaRestore = null }) { Text(s(R.string.task_cancel)) } },
         )
     }
 
@@ -508,8 +621,25 @@ fun TablesScreen() {
                     Text(s(R.string.table_import_json))
                 }
             }
+            if (selected.table.mode == "editable") {
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    OutlinedButton(onClick = { addColumnsInput = ""; error = false; addColumnsDialog = true },
+                        modifier = Modifier.weight(1f).testTag("table_add_columns")) { Text(s(R.string.table_add_columns_title)) }
+                    OutlinedButton(onClick = {
+                        coroutineScope.launch {
+                            try {
+                                schemaHistory = repository.tableSchemaHistory(scopeId, selected.table.tableId)
+                                showSchemaHistory = true
+                                error = false
+                            } catch (_: Exception) { error = true }
+                        }
+                    }, modifier = Modifier.weight(1f).testTag("table_schema_history")) { Text(s(R.string.table_schema_history_title)) }
+                }
+            }
             if (transferSuccess) Text(s(R.string.table_transfer_success), color = colors.accent,
                 modifier = Modifier.testTag("table_transfer_success"))
+            if (schemaSuccess) Text(s(R.string.table_schema_saved), color = colors.accent,
+                modifier = Modifier.testTag("table_schema_saved"))
             if (transferBusy) Text(s(R.string.today_loading), color = colors.muted)
             if (selected.table.mode == "linked_view") {
                 OutlinedTextField(value = linkedQuery, onValueChange = { linkedQuery = it; linkedPage = 0 },
@@ -653,4 +783,21 @@ private fun parseTableInput(type: String, raw: String): Pair<Boolean, Any?> {
         }
         null -> false to null
     }
+}
+
+private fun parseTableColumnDeclarations(input: String): List<Pair<String, ColumnType>>? {
+    val tokens = input.split(',').map(String::trim)
+    if (tokens.isEmpty() || tokens.any(String::isBlank)) return null
+    val result = tokens.map { token ->
+        val pieces = token.split(':', limit = 2)
+        val name = pieces[0].trim()
+        val type = if (pieces.size == 1) ColumnType.TEXT else
+            runCatching { ColumnType.valueOf(pieces[1].trim().uppercase()) }.getOrNull()
+        if (name.isBlank() || name.length > 100 || type !in setOf(ColumnType.TEXT, ColumnType.INTEGER, ColumnType.DECIMAL,
+                ColumnType.BOOLEAN, ColumnType.DATE, ColumnType.DATETIME, ColumnType.MONEY,
+                ColumnType.PERSON_REF, ColumnType.PROJECT_REF)) return null
+        name to requireNotNull(type)
+    }
+    if (result.map { it.first.lowercase() }.distinct().size != result.size) return null
+    return result
 }

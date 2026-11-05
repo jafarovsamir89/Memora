@@ -1,5 +1,7 @@
 # Domain Model and Data Semantics
 
+**P4 schema-history slice ACT-0184:** schema restore appends a new version and replaces only the active column projection. Row JSON values remain intact; values for columns outside the restored schema are retained through edits and can reappear when that schema is restored. Linked views are read-only. Synthetic tests passed; see ADR-021/S59.
+
 **P3 profile-memory slice ACT-0182:** the owner can create a fact directly from the local Memory screen. Repository stores it with `user_entered` provenance, a nullable `sourceTurnId` left null and a revision record; it does not fabricate a conversation message. Owner edits continue as `user_edited` revisions. Exact normalized duplicates within the same scope/category fail closed instead of silently merging. `identity` is now a supported owner-selected profile-fact category. No schema migration or automatic sensitive-trait inference was added. See ADR-020 and S58.
 
 **Проектное дополнение ACT-0039:** целевые AgentTurn/Command/CommandResult/Confirmation, таблицы UserTable/Column/Row/Cell, единый доступ к источникам и миграция отдельных хранилищ определены в [руководстве агента](AI_AGENT_IMPLEMENTATION.md), разделы 4–6 и 10. Это требования будущих схем; существующие схемы APK не изменены. Linked view не создаёт вторую финансовую истину, суммы и evidence остаются каноническими. Детали закрепляются в P0 до production-кода.

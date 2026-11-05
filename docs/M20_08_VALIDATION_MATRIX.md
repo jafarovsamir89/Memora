@@ -1,5 +1,9 @@
 # M20-08 Native validation matrix
 
+## ACT-0184 — Table schema preview and restore
+
+Additive-field preview, schema revision history, confirmed restore as a new revision and hidden row JSON preservation through edits are implemented. Full Gradle passed: 63 suites / 324 tests, 0 failures/errors/skips; debug/AndroidTest builds and AndroidTest Kotlin compilation passed; lint 0/73/3. APK v65 SHA-256 `c63e99cda02c55f9c416de85a15b95284260a0c9001589c0b0391728f0da71b8`. Synthetic host coverage proves add/undo/redo, hidden row value retention, stale-version/scope/linked-view rejection and Compose preview/history. Device/TalkBack/owner acceptance remains separate.
+
 ## ACT-0182 — Owner-authored profile memory
 
 The local Memory screen can create profile facts directly, choose identity/preference/goal/context/other, retain explicit `user_entered` provenance with no fabricated source turn, reject duplicate same-category facts, and show version/source state for subsequent edits. No Room migration. Full Gradle passed: 63 suites / 321 tests, 0 failures/errors/skips; debug/AndroidTest builds and Kotlin compile passed; lint 0/73/3. APK v64 / `1.1.42-manual-profile-memory`, SHA-256 `b3c817d02e65211b34866d9e1563ab34a504156d6522e4bc966ef4d1784b8526`. Host synthetic evidence only; owner-device/TalkBack acceptance remains separate.
