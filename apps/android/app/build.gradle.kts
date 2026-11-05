@@ -19,8 +19,8 @@ android {
         applicationId = "ai.memora.app"
         minSdk = 26
         targetSdk = 36
-        versionCode = 76
-        versionName = "1.1.54-memory-week-search"
+        versionCode = 77
+        versionName = "1.1.55-project-case-search"
         testInstrumentationRunner = "ai.memora.app.GeminiSyntheticProbe"
     }
     buildFeatures { compose = true }

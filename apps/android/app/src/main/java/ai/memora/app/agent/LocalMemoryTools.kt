@@ -87,12 +87,20 @@ internal class LocalMemoryTools(private val repository: ProtectedDomainRepositor
             val matchedPersonIds = (hits.filter { it.kind == DomainKind.PERSON &&
                 PersonAliasRepository.queryContainsExactPhrase(query, it.title) }.map { it.objectId } +
                 aliasHits.mapNotNull { it["person_id"] as? String }).distinct()
-            val activity = searchRelatedActivity(turn.scopeId, terms, query, matchedPersonIds, temporal.dates)
+            val projectCandidates = repository.search(turn.scopeId, query, kinds = setOf(DomainKind.PROJECT),
+                limit = MAX_EXACT_PROJECT_CANDIDATES)
+            val exactProjectCandidates = projectCandidates.filter { hit ->
+                PersonAliasRepository.queryContainsExactPhrase(query, hit.title)
+            }
+            val projectResolutionTruncated = projectCandidates.size == MAX_EXACT_PROJECT_CANDIDATES
+            val matchedProjectIds = exactProjectCandidates.singleOrNull()
+                ?.takeUnless { projectResolutionTruncated }?.let { listOf(it.objectId) }.orEmpty()
+            val activity = searchRelatedActivity(turn.scopeId, terms, query, matchedPersonIds, temporal.dates, matchedProjectIds)
             return ToolCommitResult(ToolObservationStatus.APPLIED, "evidence_found", mapOf(
                 "count" to (hits.size + episodes.size + conversationTurns.size + profileFacts.size + aliasHits.size + activity.items.size),
                 "match_mode" to "ranked_lexical",
                 "truncated" to (hits.size == 8 || episodes.size == 5 || conversationTurns.size == 5 ||
-                    profileFacts.size == 8 || activity.truncated),
+                    profileFacts.size == 8 || projectResolutionTruncated || activity.truncated),
                 "evidence" to hits.map { hit -> mapOf("id" to hit.objectId, "kind" to hit.kind.name.lowercase(),
                     "title" to hit.title, "text" to hit.evidenceText.take(500),
                     "text_truncated" to (hit.evidenceText.length > 500), "revision" to hit.evidenceRevisionId) },
@@ -494,7 +502,8 @@ internal class LocalMemoryTools(private val repository: ProtectedDomainRepositor
      * Exact finance totals and full case timelines remain the responsibility of their specialist tools.
      */
     private suspend fun searchRelatedActivity(scope: String, terms: List<String>, query: String,
-        matchedPersonIds: List<String> = emptyList(), temporalDates: Set<LocalDate> = emptySet()): UnifiedActivitySearch {
+        matchedPersonIds: List<String> = emptyList(), temporalDates: Set<LocalDate> = emptySet(),
+        matchedProjectIds: List<String> = emptyList()): UnifiedActivitySearch {
         val hits = mutableListOf<RankedActivity>()
         val relativeDates = resolveRelativeSearchDates(query)
         val explicitDates = ISO_LOCAL_DATE.findAll(query).mapNotNull { match ->
@@ -592,22 +601,33 @@ internal class LocalMemoryTools(private val repository: ProtectedDomainRepositor
         }
 
         val caseCandidates = cases.searchCases(scope, query, limit = 20)
-        val personLinkedCaseRecords = linkedMapOf<String, ai.memora.app.data.protectedstore.CaseRecordRow>()
+        val explicitlyLinkedCaseRecords = linkedMapOf<String, ai.memora.app.data.protectedstore.CaseRecordRow>()
         val personLinkedCaseIds = linkedMapOf<String, MutableSet<String>>()
+        val projectLinkedCaseIds = linkedMapOf<String, MutableSet<String>>()
         val boundedPersonIds = matchedPersonIds.distinct().take(MAX_PERSON_CASE_LOOKUPS)
-        var linkedCaseSearchTruncated = matchedPersonIds.distinct().size > MAX_PERSON_CASE_LOOKUPS
+        val boundedProjectIds = matchedProjectIds.distinct().take(MAX_PERSON_CASE_LOOKUPS)
+        var linkedCaseSearchTruncated = matchedPersonIds.distinct().size > MAX_PERSON_CASE_LOOKUPS ||
+            matchedProjectIds.distinct().size > MAX_PERSON_CASE_LOOKUPS
         boundedPersonIds.forEach { personId ->
             val personCases = cases.casesForPerson(scope, personId, limit = 100)
             if (personCases.size == 100) linkedCaseSearchTruncated = true
             personCases.forEach { record ->
-                personLinkedCaseRecords[record.caseId] = record
+                explicitlyLinkedCaseRecords[record.caseId] = record
                 personLinkedCaseIds.getOrPut(record.caseId) { linkedSetOf() }.add(personId)
             }
         }
-        val boundedLinkedCaseRecords = personLinkedCaseRecords.values
+        boundedProjectIds.forEach { projectId ->
+            val projectCases = cases.casesForProject(scope, projectId, limit = 100)
+            if (projectCases.size == 100) linkedCaseSearchTruncated = true
+            projectCases.forEach { record ->
+                explicitlyLinkedCaseRecords[record.caseId] = record
+                projectLinkedCaseIds.getOrPut(record.caseId) { linkedSetOf() }.add(projectId)
+            }
+        }
+        val boundedLinkedCaseRecords = explicitlyLinkedCaseRecords.values
             .sortedWith(compareByDescending<ai.memora.app.data.protectedstore.CaseRecordRow> { it.updatedAt }.thenBy { it.caseId })
             .take(MAX_PERSON_CASE_CANDIDATES)
-        if (personLinkedCaseRecords.size > MAX_PERSON_CASE_CANDIDATES) linkedCaseSearchTruncated = true
+        if (explicitlyLinkedCaseRecords.size > MAX_PERSON_CASE_CANDIDATES) linkedCaseSearchTruncated = true
         val casesToRead = (caseCandidates + boundedLinkedCaseRecords).distinctBy { it.caseId }
         casesToRead.forEach caseLoop@{ record ->
             val snapshot = cases.caseSnapshot(scope, record.caseId) ?: return@caseLoop
@@ -617,16 +637,23 @@ internal class LocalMemoryTools(private val repository: ProtectedDomainRepositor
                 .mapNotNull { it.sourceExcerpt }
                 .toList()
             val explicitlyLinkedPersonIds = personLinkedCaseIds[record.caseId].orEmpty().toList()
+            val explicitlyLinkedProjectIds = projectLinkedCaseIds[record.caseId].orEmpty().toList()
             val relevance = maxOf(score(listOfNotNull(record.title, record.summary, record.nextAction,
                 localDate(record.updatedAt)) +
                 snapshot.participants.map { it.title } + caseSourceExcerpts, record.title),
-                if (explicitlyLinkedPersonIds.isNotEmpty()) 150 else 0)
+                if (explicitlyLinkedPersonIds.isNotEmpty() || explicitlyLinkedProjectIds.isNotEmpty()) 150 else 0)
             if (relevance > 0) hits += RankedActivity(relevance, record.updatedAt, "case", record.caseId,
                 mapOf("kind" to "case", "source_id" to record.caseId, "source_revision_id" to "${record.caseId}:${record.version}",
                     "case_id" to record.caseId, "version" to record.version, "title" to record.title,
                     "summary" to record.summary?.take(240), "status" to record.status,
-                    "retrieval_reason" to if (explicitlyLinkedPersonIds.isNotEmpty()) "explicit_person_case_link" else "ranked_lexical",
+                    "retrieval_reason" to when {
+                        explicitlyLinkedPersonIds.isNotEmpty() && explicitlyLinkedProjectIds.isNotEmpty() -> "explicit_person_and_project_case_link"
+                        explicitlyLinkedPersonIds.isNotEmpty() -> "explicit_person_case_link"
+                        explicitlyLinkedProjectIds.isNotEmpty() -> "explicit_project_case_link"
+                        else -> "ranked_lexical"
+                    },
                     "matched_person_ids" to explicitlyLinkedPersonIds,
+                    "matched_project_ids" to explicitlyLinkedProjectIds,
                     "next_action" to record.nextAction?.take(180), "participants" to participants.take(8),
                     "source_quotes" to snapshot.timeline.asReversed().asSequence()
                         .filter { it.sourceKind == "case_revision" && it.sourceExcerpt != null }
@@ -694,6 +721,7 @@ internal class LocalMemoryTools(private val repository: ProtectedDomainRepositor
         else localDate(value, sourceZoneId)
 
     private companion object {
+        const val MAX_EXACT_PROJECT_CANDIDATES = 100
         const val MAX_PERSON_CASE_LOOKUPS = 3
         const val MAX_PERSON_CASE_CANDIDATES = 20
         val ISO_LOCAL_DATE = Regex("(?<!\\d)\\d{4}-\\d{2}-\\d{2}(?!\\d)")

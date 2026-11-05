@@ -112,6 +112,75 @@ class AgentFakeProviderUnifiedMemoryTest {
         assertEquals(1, cases.casesForPerson(scope, "synthetic-linked-person").size)
     }
 
+    @Test fun searchMemoryFollowsExactProjectToOnlyExplicitlyLinkedCases() = runBlocking {
+        val db = databaseRule.database
+        val scope = "00000000-0000-4000-8000-000000000199"
+        val foreignScope = "00000000-0000-4000-8000-000000000200"
+        val domain = ProtectedDomainRepository(db)
+        val cases = ProtectedCaseRepository(db)
+        domain.createObject(scope, "synthetic-project-atlas", DomainKind.PROJECT, "Atlas Initiative",
+            "Fictional project context", null, "2026-11-04T09:00:00Z")
+        domain.createObject(scope, "synthetic-project-unrelated", DomainKind.PROJECT, "Harbor Plan",
+            null, null, "2026-11-04T09:00:00Z")
+        domain.createObject(foreignScope, "synthetic-project-foreign", DomainKind.PROJECT, "Atlas Initiative",
+            "Foreign scope", null, "2026-11-04T09:00:00Z")
+        cases.createCase(scope, "synthetic-project-linked-case", "Turbine handover", "Unrelated case wording",
+            sourceTurnId = "synthetic-project-case-source", now = "2026-11-04T09:10:00Z")
+        cases.addEvidence(scope, "synthetic-project-linked-case", "domain_object", "synthetic-project-atlas",
+            relation = "project_context", now = "2026-11-04T09:11:00Z")
+        cases.createCase(scope, "synthetic-project-unlinked-case", "Workshop repair", "No matching context",
+            sourceTurnId = "synthetic-unlinked-project-case-source", now = "2026-11-04T09:12:00Z")
+        cases.createCase(foreignScope, "synthetic-project-foreign-case", "Atlas contract review", "Foreign case",
+            sourceTurnId = "synthetic-foreign-project-case-source", now = "2026-11-04T09:13:00Z")
+        cases.addEvidence(foreignScope, "synthetic-project-foreign-case", "domain_object", "synthetic-project-foreign",
+            relation = "project_context", now = "2026-11-04T09:14:00Z")
+
+        val handler = LocalMemoryTools(domain, ProtectedMemoryRepository(db)).handlers()
+            .single { it.descriptor.name == "search_memory" }
+        val result = handler.read(AgentModelToolCall("synthetic-project-linked-query", "search_memory", 1,
+            mapOf("query" to "What happened with Atlas Initiative?")), AgentTurnRequest(
+            "synthetic-project-linked-turn", scope, "synthetic-project-linked-session", null, "en-US", "Synthetic query"))
+        val activity = result.modelData["activity"] as List<*>
+        val caseHits = activity.mapNotNull { it as? Map<*, *> }.filter { it["kind"] == "case" }
+        assertEquals(listOf("synthetic-project-linked-case"), caseHits.mapNotNull { it["case_id"] as? String })
+        assertEquals("explicit_project_case_link", caseHits.single()["retrieval_reason"])
+        assertEquals(listOf("synthetic-project-atlas"), caseHits.single()["matched_project_ids"])
+        assertTrue((caseHits.single()["sources"] as List<*>).any { source ->
+            val row = source as? Map<*, *>
+            row?.get("source_kind") == "domain_object" && row["source_id"] == "synthetic-project-atlas"
+        })
+        assertEquals(listOf("synthetic-project-linked-case"),
+            cases.casesForProject(scope, "synthetic-project-atlas").map { it.caseId })
+        assertTrue(cases.casesForProject(scope, "synthetic-project-unrelated").isEmpty())
+    }
+
+    @Test fun exactDuplicateProjectTitlesDoNotCrossLinkCasesDuringMemorySearch() = runBlocking {
+        val db = databaseRule.database
+        val scope = "00000000-0000-4000-8000-000000000201"
+        val domain = ProtectedDomainRepository(db)
+        val cases = ProtectedCaseRepository(db)
+        domain.createObject(scope, "synthetic-duplicate-project-a", DomainKind.PROJECT, "Atlas Initiative",
+            null, null, "2026-11-04T09:00:00Z")
+        domain.createObject(scope, "synthetic-duplicate-project-b", DomainKind.PROJECT, "Atlas Initiative",
+            null, null, "2026-11-04T09:01:00Z")
+        cases.createCase(scope, "synthetic-duplicate-project-case-a", "Turbine handover", "No lexical project reference",
+            sourceTurnId = "synthetic-duplicate-project-source-a", now = "2026-11-04T09:10:00Z")
+        cases.createCase(scope, "synthetic-duplicate-project-case-b", "Workshop repair", "No lexical project reference",
+            sourceTurnId = "synthetic-duplicate-project-source-b", now = "2026-11-04T09:11:00Z")
+        cases.addEvidence(scope, "synthetic-duplicate-project-case-a", "domain_object", "synthetic-duplicate-project-a",
+            relation = "project_context", now = "2026-11-04T09:12:00Z")
+        cases.addEvidence(scope, "synthetic-duplicate-project-case-b", "domain_object", "synthetic-duplicate-project-b",
+            relation = "project_context", now = "2026-11-04T09:13:00Z")
+        val handler = LocalMemoryTools(domain, ProtectedMemoryRepository(db)).handlers()
+            .single { it.descriptor.name == "search_memory" }
+        val result = handler.read(AgentModelToolCall("synthetic-duplicate-project-query", "search_memory", 1,
+            mapOf("query" to "Atlas Initiative")), AgentTurnRequest(
+            "synthetic-duplicate-project-turn", scope, "synthetic-duplicate-project-session", null, "en-US", "Synthetic query"))
+        val activity = result.modelData["activity"] as List<*>
+        val caseIds = activity.mapNotNull { (it as? Map<*, *>)?.takeIf { row -> row["kind"] == "case" }?.get("case_id") }
+        assertTrue("duplicate exact project titles must not select either case: $caseIds", caseIds.isEmpty())
+    }
+
     @Test fun caseSearchPagesBeyondTheNewestHundredRecords() = runBlocking {
         val scope = "00000000-0000-4000-8000-000000000190"
         val dao = databaseRule.database.protectedStoreDao()

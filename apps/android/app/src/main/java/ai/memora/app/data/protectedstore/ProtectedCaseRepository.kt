@@ -338,6 +338,14 @@ internal class ProtectedCaseRepository(private val db: AgentDatabase) {
         return dao.activeCasesForPerson(scope, personId, limit)
     }
 
+    /** Returns only cases with an active explicit PROJECT evidence link in the same scope. */
+    suspend fun casesForProject(scope: String, projectId: String, limit: Int = 100): List<CaseRecordRow> {
+        require(scope.isNotBlank() && projectId.isNotBlank() && limit in 1..100)
+        val project = dao.domainObject(scope, projectId)
+        if (project?.kind != DomainKind.PROJECT.name || project.deletedAt != null) return emptyList()
+        return dao.activeCasesForProject(scope, projectId, limit)
+    }
+
     suspend fun openCaseCount(scope: String): Int {
         require(scope.isNotBlank())
         return dao.openCaseCount(scope)
