@@ -1,0 +1,3 @@
+# Copy this file to gemini-test.properties and paste a Google AI Studio key.
+# Never commit the real gemini-test.properties file or share the resulting APK publicly.
+gemini.apiKey=

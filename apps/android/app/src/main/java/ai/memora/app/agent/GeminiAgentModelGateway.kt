@@ -2,6 +2,9 @@
 
 package ai.memora.app.agent
 
+import ai.memora.app.ai.DirectGeminiApi
+import ai.memora.app.ai.GeminiAgentModel
+import ai.memora.app.ai.optGeminiObject
 import com.google.firebase.Firebase
 import com.google.firebase.ai.ai
 import com.google.firebase.ai.type.FunctionDeclaration
@@ -19,6 +22,8 @@ import kotlinx.serialization.json.JsonNull
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.booleanOrNull
+import org.json.JSONArray
+import org.json.JSONObject
 
 /** Converts Firebase's structured JSON values without silently discarding a malformed argument map. */
 internal object GeminiToolArgumentNormalizer {
@@ -71,6 +76,31 @@ internal fun requireGeminiFinalAnswer(text: String?): AgentModelReply.Answer {
     if (answer.isEmpty()) throw AgentGatewayFailure("model_empty_response")
     return AgentModelReply.Answer(answer)
 }
+
+internal data class DirectGeminiAgentContent(
+    val modelContent: JSONObject,
+    val functionCalls: List<JSONObject>,
+    val answer: String,
+)
+
+/** Parses the REST candidate while preserving the full model turn, including Gemini thought signatures. */
+internal fun parseDirectGeminiAgentContent(response: JSONObject): DirectGeminiAgentContent {
+    val modelContent = response.optJSONArray("candidates")?.optJSONObject(0)?.optJSONObject("content")
+        ?: throw AgentGatewayFailure("model_empty_response")
+    val parts = modelContent.optJSONArray("parts") ?: JSONArray()
+    val calls = (0 until parts.length()).mapNotNull { index ->
+        parts.optJSONObject(index)?.optGeminiObject("functionCall", "function_call")
+    }
+    val answer = (0 until parts.length()).mapNotNull { parts.optJSONObject(it)?.optString("text") }
+        .filter(String::isNotBlank).joinToString("\n")
+    return DirectGeminiAgentContent(modelContent, calls, answer)
+}
+
+/** Generation parameters compatible with the selected Gemini model. */
+internal fun geminiRestGenerationConfig(model: GeminiAgentModel): JSONObject =
+    JSONObject().put("max_output_tokens", 768).apply {
+        if (model != GeminiAgentModel.FLASH_36) put("temperature", 0.1)
+    }
 
 internal fun agentResponsePreferenceInstruction(preferences: AgentResponsePreferences?): String {
     preferences ?: return ""
@@ -125,10 +155,18 @@ internal fun classifyGeminiFailure(status: Int?, causeNames: Set<String>, provid
 }
 
 /** One Gemini chat per active app turn. It only exposes declarations supplied by the local registry. */
-class GeminiAgentModelGateway : AgentModelGateway {
+class GeminiAgentModelGateway(
+    private val selectedModel: GeminiAgentModel = GeminiAgentModel.DEFAULT,
+) : AgentModelGateway {
     private data class Session(val chat: com.google.firebase.ai.Chat, var userMessageSent: Boolean = false, var resultCursor: Int = 0,
         val functionNames: MutableMap<String, String> = mutableMapOf())
     private val sessions = mutableMapOf<String, Session>()
+    private data class DirectSession(
+        val contents: JSONArray = JSONArray(),
+        var resultCursor: Int = 0,
+        val functionNames: MutableMap<String, String> = mutableMapOf(),
+    )
+    private val directSessions = mutableMapOf<String, DirectSession>()
 
     override suspend fun complete(request: AgentModelRequest): AgentModelReply {
         val phase = if (sessions[request.turnId]?.userMessageSent == true) "tool_followup" else "initial"
@@ -145,12 +183,17 @@ class GeminiAgentModelGateway : AgentModelGateway {
 
     private suspend fun completeInternal(request: AgentModelRequest): AgentModelReply {
         require(request.turnId.matches(UUID_PATTERN) && request.userText.isNotBlank() && request.userText.length <= 20_000)
+        if (DirectGeminiApi.isConfigured) return completeDirectInternal(request)
         val session = sessions[request.turnId]
         require(request.tools.map { it.name }.distinct().size == request.tools.size) { "duplicate_tool_declaration" }
         val declarations = request.tools.map(::declaration)
         val model = Firebase.ai(backend = GenerativeBackend.googleAI()).generativeModel(
-            "gemini-3.5-flash-lite",
-            generationConfig = generationConfig { temperature = 0.1f; maxOutputTokens = 768 },
+            selectedModel.modelId,
+            // Gemini 3.6 needs its documented default sampling configuration.
+            generationConfig = generationConfig {
+                if (selectedModel != GeminiAgentModel.FLASH_36) temperature = 0.1f
+                maxOutputTokens = 768
+            },
             tools = declarations.takeIf { it.isNotEmpty() }?.let { listOf(Tool.functionDeclarations(it)) }.orEmpty(),
             systemInstruction = content { text(SYSTEM_INSTRUCTION + agentResponsePreferenceInstruction(request.responsePreferences)) },
         )
@@ -215,6 +258,117 @@ class GeminiAgentModelGateway : AgentModelGateway {
         }
         sessions.remove(request.turnId)
         return requireGeminiFinalAnswer(response.text)
+    }
+
+    /** Debug APK only: same local registry, policy and runtime, using the owner's local AI Studio key. */
+    private suspend fun completeDirectInternal(request: AgentModelRequest): AgentModelReply {
+        require(request.tools.map { it.name }.distinct().size == request.tools.size) { "duplicate_tool_declaration" }
+        val active = directSessions.getOrPut(request.turnId) { DirectSession() }
+        if (active.contents.length() == 0) {
+            active.contents.put(JSONObject().put("role", "user").put("parts", JSONArray()
+                .put(JSONObject().put("text", initialUserMessage(request)))))
+        } else {
+            val pending = request.previousToolResults.drop(active.resultCursor)
+            active.resultCursor = request.previousToolResults.size
+            if (pending.isEmpty()) {
+                active.contents.put(JSONObject().put("role", "user").put("parts", JSONArray()
+                    .put(JSONObject().put("text", request.userText))))
+            } else {
+                val parts = JSONArray()
+                pending.forEach { result ->
+                    val functionName = active.functionNames[result.callId] ?: result.name
+                    val providerResult = result.toProviderNeutralResult()
+                    parts.put(JSONObject().put("function_response", JSONObject()
+                        .put("name", functionName)
+                        .put("response", JSONObject()
+                            .put("status", providerResult.status.name.lowercase())
+                            .put("code", providerResult.code)
+                            .put("result", toOrgJson(providerResult.data)))))
+                }
+                active.contents.put(JSONObject().put("role", "user").put("parts", parts))
+            }
+        }
+
+        val body = JSONObject()
+            .put("system_instruction", JSONObject().put("parts", JSONArray().put(JSONObject().put("text",
+                SYSTEM_INSTRUCTION + agentResponsePreferenceInstruction(request.responsePreferences)))))
+            .put("contents", active.contents)
+            .put("generation_config", geminiRestGenerationConfig(selectedModel))
+        if (request.tools.isNotEmpty()) {
+            val declarations = JSONArray()
+            request.tools.forEach { descriptor -> declarations.put(directDeclaration(descriptor)) }
+            body.put("tools", JSONArray().put(JSONObject().put("function_declarations", declarations)))
+        }
+
+        val response = DirectGeminiApi.generate(selectedModel.modelId, body)
+        val parsed = parseDirectGeminiAgentContent(response)
+        active.contents.put(parsed.modelContent)
+        val calls = parsed.functionCalls
+        if (calls.isNotEmpty()) {
+            val byName = request.tools.associateBy { it.name }
+            if (calls.any { it.optString("name") !in byName }) {
+                directSessions.remove(request.turnId)
+                throw AgentGatewayFailure("unknown_model_tool")
+            }
+            val converted = calls.map { call ->
+                val name = call.optString("name")
+                val descriptor = requireNotNull(byName[name])
+                val arguments = call.optJSONObject("args")?.let(::orgJsonToMap).orEmpty()
+                val normalized = try { GeminiToolArgumentNormalizer.normalize(arguments) }
+                catch (error: Exception) { throw AgentGatewayFailure("invalid_function_arguments", error) }
+                val id = java.util.UUID.randomUUID().toString()
+                active.functionNames[id] = name
+                AgentModelToolCall(id, name, descriptor.version, normalized)
+            }
+            active.resultCursor = request.previousToolResults.size
+            return AgentModelReply.Calls(converted)
+        }
+        directSessions.remove(request.turnId)
+        return requireGeminiFinalAnswer(parsed.answer)
+    }
+
+    private fun directDeclaration(tool: AgentToolDescriptor): JSONObject {
+        val contract = AgentToolCatalog.require(tool)
+        val properties = JSONObject()
+        val required = JSONArray()
+        contract.parameters.forEach { parameter ->
+            val schema = JSONObject().put("type", when (parameter.type) {
+                AgentToolValueType.STRING, AgentToolValueType.ENUM -> "STRING"
+                AgentToolValueType.INTEGER -> "INTEGER"
+                AgentToolValueType.BOOLEAN -> "BOOLEAN"
+                AgentToolValueType.STRING_ARRAY -> "ARRAY"
+            })
+            if (parameter.type == AgentToolValueType.ENUM) {
+                schema.put("enum", JSONArray(parameter.enumValues))
+            } else if (parameter.type == AgentToolValueType.STRING_ARRAY) {
+                schema.put("items", JSONObject().put("type", "STRING"))
+            }
+            properties.put(parameter.name, schema)
+            if (!parameter.optional) required.put(parameter.name)
+        }
+        val parameters = JSONObject().put("type", "OBJECT").put("properties", properties)
+        if (required.length() > 0) parameters.put("required", required)
+        return JSONObject().put("name", contract.name).put("description", contract.description).put("parameters", parameters)
+    }
+
+    private fun orgJsonToMap(value: JSONObject): Map<String, Any?> = value.keys().asSequence()
+        .associateWith { key -> orgJsonToValue(value.opt(key)) }
+
+    private fun orgJsonToValue(value: Any?): Any? = when (value) {
+        null, JSONObject.NULL -> null
+        is JSONObject -> orgJsonToMap(value)
+        is JSONArray -> (0 until value.length()).map { orgJsonToValue(value.opt(it)) }
+        else -> value
+    }
+
+    private fun toOrgJson(value: Any?): Any? = when (value) {
+        null -> JSONObject.NULL
+        is String, is Number, is Boolean -> value
+        is Map<*, *> -> JSONObject().apply {
+            value.forEach { (key, nested) -> if (key is String) put(key, toOrgJson(nested)) }
+        }
+        is Iterable<*> -> JSONArray().apply { value.take(50).forEach { put(toOrgJson(it)) } }
+        else -> value.toString().take(1000)
     }
 
     private fun declaration(tool: AgentToolDescriptor): FunctionDeclaration {

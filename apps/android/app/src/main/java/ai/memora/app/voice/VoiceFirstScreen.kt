@@ -40,7 +40,8 @@ import kotlinx.coroutines.*
 /** One hold-to-talk control. No microphone or cloud request begins before consent and permission. */
 @Composable
 fun VoiceFirstScreen(gatewayOverride: AudioNoteGateway? = null, recorderOverride: AudioNoteRecorder? = null,
-    processorOverride: VoiceTurnProcessor? = null, speechOverride: SpeechOutput? = null) {
+    processorOverride: VoiceTurnProcessor? = null, speechOverride: SpeechOutput? = null,
+    onOpenSettings: (() -> Unit)? = null) {
     val context = LocalContext.current
     val lifecycle = (context as? LifecycleOwner)?.lifecycle
     val settings = remember(context) { context.getSharedPreferences("voice-first-consent", 0) }
@@ -91,7 +92,7 @@ fun VoiceFirstScreen(gatewayOverride: AudioNoteGateway? = null, recorderOverride
                 if (!visible) return@launch
                 state = "processing"
                 stage = "stt"
-                val spoken = withTimeout(30_000) { gateway.transcribe(wav) }
+                val spoken = withTimeout(VoiceLanguagePolicy.AUDIO_TRANSCRIPTION_TIMEOUT_MS) { gateway.transcribe(wav) }
                 wav.fill(0); wav = null
                 ensureActive()
                 if (spoken.isBlank()) { failureCode = "stt_empty_transcript"; state = "error"; return@launch }
@@ -176,6 +177,13 @@ fun VoiceFirstScreen(gatewayOverride: AudioNoteGateway? = null, recorderOverride
         })
         Text(statusText, textAlign = TextAlign.Center, style = MaterialTheme.typography.bodyLarge,
             modifier = Modifier.testTag("voice_first_status"))
+        if (state == "error" && failureCode == "model_rate_limited" && onOpenSettings != null) {
+            Text(s(R.string.ai_model_quota_reached), color = colors.muted,
+                style = MaterialTheme.typography.bodySmall, textAlign = TextAlign.Center)
+            TextButton(onClick = onOpenSettings, modifier = Modifier.testTag("voice_open_ai_model_settings")) {
+                Text(s(R.string.ai_model_change))
+            }
+        }
         Spacer(Modifier.height(16.dp))
         Box(Modifier.size(176.dp).background(colors.accent.copy(alpha = if (state == "recording") .19f else .08f), CircleShape)
             .border(1.dp, colors.accent.copy(alpha = .18f), CircleShape), contentAlignment = Alignment.Center) {

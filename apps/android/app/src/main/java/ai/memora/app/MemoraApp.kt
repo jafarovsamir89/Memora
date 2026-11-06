@@ -253,7 +253,7 @@ fun MemoraApp(initialRoute: String = "home", initialTheme: String = "system", ca
                       screens.SaveableStateProvider(route) {
                         when (route) {
                             "home" -> WorkingHomeScreen(language, captureState, navigate, openCapture, { detailId = it }, taskStore) {
-                                VoiceFirstScreen()
+                                VoiceFirstScreen(onOpenSettings = { navigate("settings") })
                             }
                             "memory" -> WorkingMemoryScreen(captureState, { detailId = it }, { openCapture(false) }, { navigate("inbox") },
                                 localProfile = profile.profile, updateLocalProfile = { input, done ->

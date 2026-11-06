@@ -7,7 +7,8 @@ object VoiceLanguagePolicy {
     const val PRIMARY = "az"
     const val LIVE_MODEL = "gemini-3.1-flash-live-preview"
     const val TEXT_MODEL = "gemini-3.1-flash-lite"
-    const val AUDIO_TRANSCRIPTION_MODEL = "gemini-3.8-flash"
+    const val AUDIO_TRANSCRIPTION_MODEL = "gemini-3.6-flash"
+    const val AUDIO_TRANSCRIPTION_TIMEOUT_MS = 90_000L
     const val PREFIX_MS = 50
     const val SILENCE_MS = 800
 

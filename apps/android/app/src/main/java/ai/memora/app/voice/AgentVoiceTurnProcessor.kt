@@ -6,6 +6,7 @@ import ai.memora.app.agent.*
 import ai.memora.app.data.ProtectedLocalProfileStore
 import ai.memora.app.data.VoiceMoneyKey
 import ai.memora.app.data.VoiceMoneyStore
+import ai.memora.app.data.GeminiAgentModelSelectionStore
 import ai.memora.app.data.protectedstore.AgentDatabase
 import ai.memora.app.data.protectedstore.AgentActionResultRow
 import ai.memora.app.data.protectedstore.ProtectedConversationRepository
@@ -75,7 +76,8 @@ internal class AgentVoiceTurnProcessor(context: Context, private val databaseOve
                     conversations = conversations, profileMemory = ProtectedProfileMemoryRepository(database),
                     personAliases = ai.memora.app.data.protectedstore.PersonAliasRepository(database),
                     userTimeZoneId = profile?.timeZoneId).handlers() else emptyList()
-            val orchestrator = AgentOrchestrator(GeminiAgentModelGateway(), DefaultAgentToolRegistry(handlers), policy,
+            val selectedModel = GeminiAgentModelSelectionStore(appContext).selectedModel()
+            val orchestrator = AgentOrchestrator(GeminiAgentModelGateway(selectedModel), DefaultAgentToolRegistry(handlers), policy,
                 RoomAgentRunJournal(database))
             val turnId = UUID.randomUUID().toString()
             val result = orchestrator.run(AgentTurnRequest(turnId, scopeId, actorId, null,

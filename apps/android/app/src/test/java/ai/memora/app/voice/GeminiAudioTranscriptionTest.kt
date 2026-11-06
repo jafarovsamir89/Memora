@@ -9,8 +9,8 @@ import org.robolectric.annotation.Config
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [33])
 class TranscribeProtocolTest {
-    @Test fun audioUsesFirebaseSupportedMultimodalModelAndAzFirstVerbatimPrompt() {
-        assertEquals("gemini-3.8-flash", VoiceLanguagePolicy.AUDIO_TRANSCRIPTION_MODEL)
+    @Test fun audioUsesSelectedGeminiMultimodalModelAndAzFirstVerbatimPrompt() {
+        assertEquals("gemini-3.6-flash", VoiceLanguagePolicy.AUDIO_TRANSCRIPTION_MODEL)
         val instruction = VoiceLanguagePolicy.transcriptionInstruction()
         assertTrue(instruction.contains("verbatim"))
         assertTrue(instruction.contains("Azerbaijani az-AZ"))

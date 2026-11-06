@@ -1,3 +1,5 @@
+import java.util.Properties
+
 plugins {
     id("com.android.application")
     id("org.jetbrains.kotlin.android")
@@ -6,6 +8,15 @@ plugins {
     id("androidx.room")
     id("com.google.android.gms.oss-licenses-plugin")
 }
+
+// Owner-controlled, local-only credential for the explicitly requested Gemini test APK.
+// This key is embedded in debug APK bytes, so this file must remain ignored and uncommitted.
+val geminiTestProperties = Properties().apply {
+    val config = rootProject.file("gemini-test.properties")
+    if (config.exists()) config.inputStream().use { load(it) }
+}
+val geminiDebugApiKey = geminiTestProperties.getProperty("gemini.apiKey", "").trim()
+fun String.asBuildConfigString(): String = "\"" + replace("\\", "\\\\").replace("\"", "\\\"") + "\""
 
 // A local Firebase configuration is optional; the application remains usable without it.
 if (file("google-services.json").exists()) {
@@ -19,11 +30,19 @@ android {
         applicationId = "ai.memora.app"
         minSdk = 26
         targetSdk = 36
-        versionCode = 81
-        versionName = "1.1.59-firebase-audio-transcription"
+        versionCode = 88
+        versionName = "1.1.66-gemini-model-selection"
         testInstrumentationRunner = "ai.memora.app.GeminiSyntheticProbe"
     }
-    buildFeatures { compose = true }
+    buildFeatures { compose = true; buildConfig = true }
+    buildTypes {
+        getByName("debug") {
+            buildConfigField("String", "GEMINI_API_KEY", geminiDebugApiKey.asBuildConfigString())
+        }
+        getByName("release") {
+            buildConfigField("String", "GEMINI_API_KEY", "\"\"")
+        }
+    }
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17

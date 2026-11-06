@@ -199,7 +199,7 @@ fun AgentChatScreen(language: String = "az", showVoiceControl: Boolean = false, 
                 color = colors.ink)
             Text(s(ai.memora.app.R.string.secretary_voice_hint), style = androidx.compose.material3.MaterialTheme.typography.bodySmall,
                 color = colors.muted)
-            VoiceFirstScreen()
+            VoiceFirstScreen(onOpenSettings = { onOpenArea("settings") })
         }
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
             TextButton(onClick = {
@@ -242,6 +242,13 @@ fun AgentChatScreen(language: String = "az", showVoiceControl: Boolean = false, 
             val message = failureCode?.let { LocalStrings.current.getString(ai.memora.app.R.string.ai_failed_code, it) }
                 ?: s(ai.memora.app.R.string.ai_failed)
             Text(message, color = colors.muted)
+            if (failureCode == "model_rate_limited") {
+                Text(s(ai.memora.app.R.string.ai_model_quota_reached), color = colors.muted,
+                    style = androidx.compose.material3.MaterialTheme.typography.bodySmall)
+                TextButton(onClick = { onOpenArea("settings") }, modifier = Modifier.testTag("agent_open_ai_model_settings")) {
+                    Text(s(ai.memora.app.R.string.ai_model_change))
+                }
+            }
             if (draftRestoredAfterFailure) Text(s(ai.memora.app.R.string.agent_failed_draft_kept),
                 color = colors.muted, style = androidx.compose.material3.MaterialTheme.typography.bodySmall,
                 modifier = Modifier.testTag("agent_failed_draft_note"))

@@ -1,5 +1,6 @@
 package ai.memora.app.voice
 
+import ai.memora.app.ai.DirectGeminiApiException
 import java.net.ConnectException
 import java.net.UnknownHostException
 import java.net.NoRouteToHostException
@@ -10,6 +11,17 @@ import java.util.concurrent.TimeoutException
 internal object VoiceFailureDiagnostics {
     fun code(stage: String, error: Throwable): String {
         val causes = generateSequence(error) { it.cause }.take(8).toList()
+        causes.filterIsInstance<DirectGeminiApiException>().firstOrNull()?.let { failure ->
+            return when (failure.httpStatus) {
+                400 -> "${stage}_gemini_request_rejected"
+                401 -> "${stage}_gemini_key_invalid"
+                403 -> "${stage}_gemini_access_denied"
+                404 -> "${stage}_gemini_model_unavailable"
+                429 -> "${stage}_gemini_quota_or_rate_limit"
+                in 500..599 -> "${stage}_gemini_service_error_${failure.httpStatus}"
+                else -> "${stage}_gemini_http_${failure.httpStatus}"
+            }
+        }
         val sdkCode = causes.firstNotNullOfOrNull { cause ->
             when (cause.javaClass.simpleName) {
                 "APINotConfiguredException" -> "firebase_ai_not_configured"

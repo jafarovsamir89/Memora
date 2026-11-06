@@ -2,6 +2,9 @@
 
 package ai.memora.app.voice
 
+import ai.memora.app.ai.DirectGeminiApi
+import ai.memora.app.ai.optGeminiObject
+import ai.memora.app.ai.optGeminiString
 import android.media.AudioAttributes
 import android.media.AudioFormat
 import android.media.AudioTrack
@@ -13,6 +16,9 @@ import com.google.firebase.ai.type.ResponseModality
 import com.google.firebase.ai.type.SpeechConfig
 import com.google.firebase.ai.type.Voice
 import com.google.firebase.ai.type.generationConfig
+import android.util.Base64
+import org.json.JSONArray
+import org.json.JSONObject
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.delay
@@ -37,10 +43,36 @@ internal object GeminiAudioFormat {
     }
 }
 
+/** Decodes Gemini REST inline audio while bounding the total PCM held in memory. */
+internal fun decodeDirectGeminiTtsAudio(response: JSONObject): ByteArray {
+    val parts = response.optJSONArray("candidates")?.optJSONObject(0)?.optJSONObject("content")
+        ?.optJSONArray("parts") ?: error("gemini_tts_empty_response")
+    val chunks = ArrayList<ByteArray>()
+    var totalBytes = 0
+    for (i in 0 until parts.length()) {
+        val inline = parts.optJSONObject(i)?.optGeminiObject("inlineData", "inline_data") ?: continue
+        val mime = inline.optGeminiString("mimeType", "mime_type")
+        require(GeminiAudioFormat.accepts(mime))
+        val chunk = Base64.decode(inline.optString("data"), Base64.DEFAULT)
+        totalBytes += chunk.size
+        require(totalBytes in 2..1_500_000 && totalBytes % 2 == 0)
+        chunks += chunk
+    }
+    require(chunks.isNotEmpty()) { "gemini_tts_empty_audio" }
+    val pcm = ByteArray(totalBytes)
+    var position = 0
+    chunks.forEach { chunk -> chunk.copyInto(pcm, position); position += chunk.size; chunk.fill(0) }
+    return pcm
+}
+
 /** Only the short answer is sent to Google for speech; the archive remains local. */
 class GeminiSpeechOutput : SpeechOutput {
     override suspend fun speak(text: String) = withTimeout(30_000) {
         require(text.isNotBlank() && text.length <= 1000)
+        if (DirectGeminiApi.isConfigured) {
+            speakDirect(text)
+            return@withTimeout
+        }
         val model = Firebase.ai(backend = GenerativeBackend.googleAI()).generativeModel(
             modelName = "gemini-3.1-flash-tts-preview",
             generationConfig = generationConfig {
@@ -56,6 +88,19 @@ class GeminiSpeechOutput : SpeechOutput {
         var position = 0
         parts.forEach { part -> part.inlineData.copyInto(audio, position); position += part.inlineData.size }
         try { playPcm(audio) } finally { audio.fill(0) }
+    }
+
+    private suspend fun speakDirect(text: String) {
+        val body = JSONObject()
+            .put("contents", JSONArray().put(JSONObject().put("role", "user").put("parts", JSONArray().put(
+                JSONObject().put("text", "Read the following text exactly in its original language, without adding or translating words: $text")))))
+            .put("generation_config", JSONObject()
+                .put("response_modalities", JSONArray().put("AUDIO"))
+                .put("speech_config", JSONObject().put("voice_config", JSONObject()
+                    .put("prebuilt_voice_config", JSONObject().put("voice_name", "Kore")))))
+        val response = DirectGeminiApi.generate("gemini-3.1-flash-tts-preview", body)
+        val pcm = decodeDirectGeminiTtsAudio(response)
+        try { playPcm(pcm) } finally { pcm.fill(0) }
     }
 
     private suspend fun playPcm(audio: ByteArray) = withContext(Dispatchers.IO) {

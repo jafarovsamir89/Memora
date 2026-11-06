@@ -7,6 +7,10 @@ import org.junit.Assert.*
 import org.junit.Test
 
 class VoiceLanguagePolicyTest {
+    @Test fun audioTranscriptionDeadlineAllowsConfiguredGeminiRequestBudget() {
+        assertEquals(90_000L, VoiceLanguagePolicy.AUDIO_TRANSCRIPTION_TIMEOUT_MS)
+    }
+
     @Test fun azerbaijaniNeverFallsBackToTurkish() {
         assertEquals("az-AZ", VoiceLanguagePolicy.locale("az").toLanguageTag())
         assertFalse(VoiceLanguagePolicy.acceptsVoice("az", Locale.forLanguageTag("tr-TR")))

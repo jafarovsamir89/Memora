@@ -21,7 +21,7 @@ interface AudioNoteGateway {
 
 /** Dedicated verbatim STT; existing consent/review remains mandatory before local storage. */
 class FirebaseAudioNoteGateway(private val context: Context) : AudioNoteGateway {
-    override suspend fun transcribe(wav: ByteArray): String = FirebaseTranscribeTransport(context).transcribe(wav)
+    override suspend fun transcribe(wav: ByteArray): String = GeminiTranscribeTransport(context).transcribe(wav)
     override suspend fun suggestWriting(raw: String): String = TranscriptOrthography().suggest(raw)
 }
 

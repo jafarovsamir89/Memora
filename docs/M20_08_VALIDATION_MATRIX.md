@@ -346,3 +346,20 @@ Optional `source_quote` arguments are locally checked against the current USER m
 - Full Gradle: 63 suites / 338 tests, 0 failures/errors/skips; debug and AndroidTest APKs, AndroidTest Kotlin compile; lint 0 errors / 73 warnings / 3 hints. APK v79 `1.1.57-accessible-navigation`, SHA-256 `c0e6cb19777b8ca0783b61257abb9194066234757ac30c5639720984175077b2`.
 - Installed v79 over v78 on Redmi 2201117SG / Android 13 using `adb install -r`; version and original firstInstallTime confirmed. No populated data existed, so this is not populated-data retention evidence. Mic/notification permissions stayed denied. Screenshots: `docs/device-acceptance/ACT-0214/`.
 - This closes the observed large-font label crowding and confirms tested Reports scroll reachability only. TalkBack, keyboard, owner acceptance, reminder, live AZ/RU voice, populated DB migration/restart, native full acceptance and release readiness remain open.
+
+
+## ACT-0227 — owner-reported voice smoke result
+
+Owner reports that the installed v86 voice flow understands speech and responds after the ACT-0226 camelCase REST parser fix. Record as one positive physical smoke test. The report did not include a verbatim utterance/transcript, repetitions, latency, separately observed text/audio outcomes, or a domain action; do not infer those results. The broader AZ/RU/EN and mixed-language set, TalkBack/keyboard, reminders, populated database upgrade/restart, daily use and MEM-14.09 remain open.
+
+
+## ACT-0228 — 1,000 synthetic text-only voice scripts
+
+Corpus v1 has 250 rows per AZ/RU/EN/mixed class, 10 intent/safety categories, balanced 800/200 development/reserved split and deterministic generation (SHA-256 `9dec464ea8d29a9a1d6cdcbdacd9a04a55563b9111bcbec3078acd72331b52bf`). Python generator check and 3 host contract tests over all 1,000 rows passed. Full Gradle: 68 suites / 350 tests, no failures/errors/skips; lint 0/73/3; debug/AndroidTest builds and AndroidTest Kotlin compilation passed. This is script/schema/app locale/transcript-buffer validation only. No WAV/microphone/Google call was used; it does not measure model transcription, intent, TTS, latency or device reliability. Reserved rows are not speaker-separated. MEM-02.02 remains partial; MEM-02.03/05/06, MEM-13.09 and MEM-14.09 remain open.
+### ACT-0230 — Local Gemini agent model selection and stopped live campaign
+
+Settings shows an accessible, localized radio picker for `gemini-3.5-flash-lite` (default), `gemini-3.1-flash-lite`, and `gemini-3.6-flash`. Selection persists in app-private SharedPreferences and is read when a new agent turn starts; the existing AgentModelGateway carries it through tool rounds. A quota failure links to Settings. STT/TTS routes do not change, and there is no silent model fallback. Gemini 3.6 uses the documented default sampling configuration. The initial 3.8 option was replaced after the prior synthetic project API probe returned two HTTP 503 responses for 3.8 and HTTP 200 for 3.6; this is not a quality or field-availability guarantee. Host tests cover the allowlist, default/invalid values, persistence, selected-state UI and model-specific REST generation parameters.
+
+Full Gradle passed after final model choice: 71 JVM suites / 357 tests, 0 failures/errors, 1 opt-in live test skipped; debug and AndroidTest APKs, AndroidTest Kotlin compile passed; lint 0 errors / 75 warnings / 3 hints. APK v88 / `1.1.66-gemini-model-selection`, SHA-256 `52aae5fd5bbb9f705fd97f82c0b6220ab300a52d947abc267b143a1dd346ea45`. Physical install did not run because ADB sees no device; no install, launch or device-data mutation is claimed.
+
+Owner stopped the separate live Gemini campaign. Its final report has 44 Azerbaijani synthetic text turns: 41 passed, 3 failed (`AZ-LIVE-001-06`, `AZ-LIVE-003-06`, `AZ-LIVE-004-06`) because saved episode summaries omitted one required amount despite successful save/search tools. Story totals S-001 9/10, S-002 10/10, S-003 9/10, S-004 9/10 and S-005 4/10. This does not complete the intended 1,000 turns, audio validation, MEM-13.09, native acceptance or release readiness.

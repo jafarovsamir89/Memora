@@ -1,20 +1,22 @@
 package ai.memora.app.voice
 
 import android.content.Context
+import ai.memora.app.ai.DirectGeminiApi
 import com.google.firebase.Firebase
 import com.google.firebase.FirebaseApp
 import com.google.firebase.ai.ai
 import com.google.firebase.ai.type.GenerativeBackend
 import com.google.firebase.ai.type.content
 import com.google.firebase.ai.type.generationConfig
+import org.json.JSONArray
+import org.json.JSONObject
+import android.util.Base64
 
-/**
- * Transcribes a bounded in-memory WAV with a Firebase AI Logic-supported audio model.
- * Firebase AI Logic SDK supplies App Check; no custom WebSocket/proxy protocol is used.
- */
-internal class FirebaseTranscribeTransport(private val context: Context) {
+/** Transcribes a bounded in-memory WAV via direct Gemini API in keyed debug builds. */
+internal class GeminiTranscribeTransport(private val context: Context) {
     suspend fun transcribe(wav: ByteArray): String {
         validateTranscriptionWav(wav)
+        if (DirectGeminiApi.isConfigured) return transcribeDirect(wav)
         check(FirebaseApp.getApps(context).isNotEmpty()) { "Firebase is not configured" }
         val model = Firebase.ai(backend = GenerativeBackend.googleAI()).generativeModel(
             modelName = VoiceLanguagePolicy.AUDIO_TRANSCRIPTION_MODEL,
@@ -26,6 +28,23 @@ internal class FirebaseTranscribeTransport(private val context: Context) {
             text("Transcribe only the speech in this audio using the system instruction.")
         }
         return model.generateContent(prompt).text?.trim()?.take(20_000).orEmpty()
+    }
+
+    private suspend fun transcribeDirect(wav: ByteArray): String {
+        val body = JSONObject()
+            .put("system_instruction", JSONObject().put("parts", JSONArray()
+                .put(JSONObject().put("text", VoiceLanguagePolicy.transcriptionInstruction()))))
+            .put("contents", JSONArray().put(JSONObject().put("role", "user").put("parts", JSONArray()
+                .put(JSONObject().put("inline_data", JSONObject()
+                    .put("mime_type", "audio/wav")
+                    .put("data", Base64.encodeToString(wav, Base64.NO_WRAP))))
+                .put(JSONObject().put("text", "Transcribe only the speech in this audio using the system instruction.")))))
+            .put("generation_config", JSONObject().put("temperature", 0).put("max_output_tokens", 512))
+        val response = DirectGeminiApi.generate(VoiceLanguagePolicy.AUDIO_TRANSCRIPTION_MODEL, body)
+        return response.optJSONArray("candidates")?.optJSONObject(0)
+            ?.optJSONObject("content")?.optJSONArray("parts")?.let { parts ->
+                buildString { for (i in 0 until parts.length()) append(parts.optJSONObject(i)?.optString("text").orEmpty()) }
+            }?.trim()?.take(20_000).orEmpty()
     }
 }
 
