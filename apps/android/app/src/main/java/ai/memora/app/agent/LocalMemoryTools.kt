@@ -46,7 +46,8 @@ internal class LocalMemoryTools(private val repository: ProtectedDomainRepositor
     private val profileMemory: ProtectedProfileMemoryRepository? = null,
     private val personAliases: PersonAliasRepository? = null,
     private val userTimeZoneId: String? = null,
-    private val searchClock: Clock = Clock.systemUTC()) {
+    private val searchClock: Clock = Clock.systemUTC(),
+    private val authoritativeLocalDate: LocalDate? = null) {
     private val userTimeZone: ZoneId by lazy {
         runCatching { userTimeZoneId?.let(ZoneId::of) ?: ZoneId.of("UTC") }.getOrDefault(ZoneId.of("UTC"))
     }
@@ -1129,7 +1130,7 @@ internal class LocalMemoryTools(private val repository: ProtectedDomainRepositor
     }
 
     private inner class CreateTask : AgentToolHandler {
-        override val descriptor = AgentToolDescriptor("create_task", 2, ToolAccess.PERSISTED_MEMORY,
+        override val descriptor = AgentToolDescriptor("create_task", 3, ToolAccess.PERSISTED_MEMORY,
             ToolEffect.WRITE, runtimeEnabled = true)
         override suspend fun prepare(call: AgentModelToolCall, turn: AgentTurnRequest, commandId: String): ToolPreparation {
             val title = call.arguments["title"] as? String ?: return ToolPreparation.Rejected("invalid_title")
@@ -1144,10 +1145,23 @@ internal class LocalMemoryTools(private val repository: ProtectedDomainRepositor
             }
             val absoluteDueLocal = (call.arguments["due_local"] as? String)?.trim()?.takeIf { it.isNotEmpty() }
             if (reminderMinutes != null && absoluteDueLocal != null) return ToolPreparation.Rejected("conflicting_reminder_time")
-            val dueLocal = reminderMinutes?.let {
-                ai.memora.app.domain.TaskReminderTime.resolveRelative(it, dueZone, java.time.Instant.now())
+            val modelDueLocal = reminderMinutes?.let {
+                ai.memora.app.domain.TaskReminderTime.resolveRelative(it, dueZone, searchClock.instant())
                     ?: return ToolPreparation.Rejected("invalid_reminder_interval")
             } ?: absoluteDueLocal
+            val today = currentLocalDate()
+            val dueDateIntent = if (reminderMinutes == null) TaskDateIntent.resolveSingleDate(turn.text, today) else null
+            val dueLocal = if (dueDateIntent != null && modelDueLocal != null) {
+                val modelDue = runCatching { LocalDateTime.parse(modelDueLocal) }.getOrNull()
+                    ?: return ToolPreparation.Rejected("invalid_due_local")
+                modelDue.with(dueDateIntent).toString()
+            } else modelDueLocal
+            if (dueLocal != null && dueDateIntent == null && !TaskDateIntent.hasExplicitYear(turn.text) &&
+                !TaskDateIntent.explicitlyRefersToPastYear(turn.text)) {
+                val proposedDate = runCatching { LocalDateTime.parse(dueLocal).toLocalDate() }.getOrNull()
+                    ?: return ToolPreparation.Rejected("invalid_due_local")
+                if (proposedDate.isBefore(today)) return ToolPreparation.Rejected("ambiguous_task_year")
+            }
             val remind = reminderMinutes != null || (call.arguments["remind"] as? Boolean ?: false)
             val person = (call.arguments["person_label"] as? String)?.trim()?.takeIf { it.isNotEmpty() }
             val project = (call.arguments["project_label"] as? String)?.trim()?.takeIf { it.isNotEmpty() }
@@ -1181,6 +1195,8 @@ internal class LocalMemoryTools(private val repository: ProtectedDomainRepositor
         }
     }
 
+    private fun currentLocalDate(): LocalDate = authoritativeLocalDate ?: LocalDate.now(searchClock.withZone(userTimeZone))
+
     private inner class SetTaskCompletion : AgentToolHandler {
         override val descriptor = AgentToolDescriptor("set_task_completion", 1, ToolAccess.PERSISTED_MEMORY,
             ToolEffect.WRITE, runtimeEnabled = true)
@@ -1208,14 +1224,27 @@ internal class LocalMemoryTools(private val repository: ProtectedDomainRepositor
     }
 
     private inner class EditTask : AgentToolHandler {
-        override val descriptor = AgentToolDescriptor("edit_task", 1, ToolAccess.PERSISTED_MEMORY,
+        override val descriptor = AgentToolDescriptor("edit_task", 2, ToolAccess.PERSISTED_MEMORY,
             ToolEffect.WRITE, runtimeEnabled = true)
         override suspend fun prepare(call: AgentModelToolCall, turn: AgentTurnRequest, commandId: String): ToolPreparation {
             val id = call.arguments["task_id"] as? String ?: return ToolPreparation.Rejected("invalid_task_id")
             val task = memory.tasks().tasks.firstOrNull { it.id == id && it.scopeId == turn.scopeId }
                 ?: return ToolPreparation.Rejected("task_not_found")
             val clearDue = call.arguments["clear_due"] as? Boolean ?: false
-            val due = if (clearDue) null else (call.arguments["due_local"] as? String)?.trim()?.takeIf { it.isNotEmpty() } ?: task.dueLocal
+            val requestedDue = if (clearDue) null else (call.arguments["due_local"] as? String)?.trim()?.takeIf { it.isNotEmpty() }
+            val today = currentLocalDate()
+            val dueDateIntent = requestedDue?.let { TaskDateIntent.resolveSingleDate(turn.text, today) }
+            val due = if (requestedDue != null && dueDateIntent != null) {
+                val modelDue = runCatching { LocalDateTime.parse(requestedDue) }.getOrNull()
+                    ?: return ToolPreparation.Rejected("invalid_due_local")
+                modelDue.with(dueDateIntent).toString()
+            } else requestedDue ?: task.dueLocal
+            if (requestedDue != null && dueDateIntent == null && !TaskDateIntent.hasExplicitYear(turn.text) &&
+                !TaskDateIntent.explicitlyRefersToPastYear(turn.text)) {
+                val proposedDate = runCatching { due?.let { LocalDateTime.parse(it).toLocalDate() } }.getOrNull()
+                    ?: return ToolPreparation.Rejected("invalid_due_local")
+                if (proposedDate.isBefore(today)) return ToolPreparation.Rejected("ambiguous_task_year")
+            }
             val zone = if (due == null) null else (call.arguments["zone_id"] as? String)?.trim()?.takeIf { it.isNotEmpty() }
                 ?: task.dueZone ?: "Asia/Baku"
             val remind = if (due == null) false else call.arguments["remind"] as? Boolean ?: task.remind

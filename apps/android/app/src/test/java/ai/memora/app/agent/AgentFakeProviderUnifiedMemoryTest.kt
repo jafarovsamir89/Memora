@@ -19,6 +19,7 @@ import ai.memora.app.data.protectedstore.TaskEventRow
 import kotlinx.coroutines.runBlocking
 import java.time.Clock
 import java.time.Instant
+import java.time.LocalDate
 import java.time.ZoneOffset
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -35,6 +36,131 @@ import org.robolectric.annotation.Config
 @Config(sdk = [33])
 class AgentFakeProviderUnifiedMemoryTest {
     @get:Rule val databaseRule = UiAgentDatabaseRule()
+
+    @Test fun taskCreatedForTomorrowCannotPersistGeminisStalePreviousYear() = runBlocking {
+        val db = databaseRule.database
+        val scope = "00000000-0000-4000-8000-000000000193"
+        val clock = Clock.fixed(Instant.parse("2026-11-10T08:00:00Z"), ZoneOffset.UTC)
+        val tools = LocalMemoryTools(ProtectedDomainRepository(db), ProtectedMemoryRepository(db),
+            userTimeZoneId = "Asia/Baku", searchClock = clock,
+            authoritativeLocalDate = LocalDate.parse("2026-11-10")).handlers().filter { it.descriptor.name == "create_task" }
+        val provider = object : AgentModelGateway {
+            var turnCount = 0
+            override suspend fun complete(request: AgentModelRequest): AgentModelReply {
+                request.tools.forEach(AgentToolCatalog::require)
+                if (turnCount++ == 0) {
+                    assertEquals("2026-11-10", request.authoritativeLocalDate)
+                    return AgentModelReply.Calls(listOf(AgentModelToolCall("synthetic-create-task", "create_task", 3,
+                        mapOf("title" to "Synthetic reminder", "due_local" to "2025-11-11T09:00", "remind" to false))))
+                }
+                val result = request.previousToolResults.single { it.name == "create_task" }
+                assertEquals("2026-11-11T09:00", result.modelData["due_local"])
+                return AgentModelReply.Answer("Synthetic task saved for the corrected date.")
+            }
+        }
+
+        val result = AgentOrchestrator(provider, DefaultAgentToolRegistry(tools), AllowPolicy(), MemoryJournal()).run(
+            AgentTurnRequest("00000000-0000-4000-8000-000000000194", scope,
+                "00000000-0000-4000-8000-000000000195", null, "az-AZ",
+                "Sabah saat 09:00-da sintetik yoxlama tapşırığını yarat",
+                authoritativeLocalDate = "2026-11-10"),
+        )
+
+        assertEquals(AgentRunResultStatus.COMPLETED, result.status)
+        val taskId = result.toolResults.single().modelData["id"] as String
+        val dueRows = db.protectedStoreDao().taskEvents().filter { it.taskId == taskId && it.dueLocal != null }
+        assertEquals(listOf("2026-11-11T09:00"), dueRows.map { it.dueLocal })
+    }
+
+    @Test fun taskMovedToTomorrowCannotPersistGeminisStalePreviousYear() = runBlocking {
+        val db = databaseRule.database
+        val scope = "00000000-0000-4000-8000-000000000193"
+        val clock = Clock.fixed(Instant.parse("2026-11-10T08:00:00Z"), ZoneOffset.UTC)
+        val tools = LocalMemoryTools(ProtectedDomainRepository(db), ProtectedMemoryRepository(db),
+            userTimeZoneId = "Asia/Baku", searchClock = clock,
+            authoritativeLocalDate = LocalDate.parse("2026-11-10")).handlers()
+            .filter { it.descriptor.name in setOf("create_task", "edit_task") }
+        val provider = object : AgentModelGateway {
+            var turnCount = 0
+            var taskId = ""
+            override suspend fun complete(request: AgentModelRequest): AgentModelReply {
+                request.tools.forEach(AgentToolCatalog::require)
+                return when (turnCount++) {
+                    0 -> AgentModelReply.Calls(listOf(AgentModelToolCall("synthetic-create-task", "create_task", 3,
+                        mapOf("title" to "Synthetic rescheduled task", "remind" to false))))
+                    1 -> {
+                        taskId = request.previousToolResults.single { it.name == "create_task" }.modelData["id"] as String
+                        AgentModelReply.Calls(listOf(AgentModelToolCall("synthetic-edit-task", "edit_task", 2,
+                            mapOf("task_id" to taskId, "due_local" to "2025-11-11T09:00"))))
+                    }
+                    else -> {
+                        assertEquals("2026-11-11T09:00", request.previousToolResults.single { it.name == "edit_task" }
+                            .modelData["due_local"])
+                        AgentModelReply.Answer("Synthetic task moved to the corrected date.")
+                    }
+                }
+            }
+        }
+
+        val result = AgentOrchestrator(provider, DefaultAgentToolRegistry(tools), AllowPolicy(), MemoryJournal()).run(
+            AgentTurnRequest("00000000-0000-4000-8000-000000000200", scope,
+                "00000000-0000-4000-8000-000000000201", null, "az-AZ",
+                "Sabah sintetik tapşırığın vaxtını dəyiş",
+                authoritativeLocalDate = "2026-11-10"),
+        )
+
+        assertEquals(AgentRunResultStatus.COMPLETED, result.status)
+        val dueRows = db.protectedStoreDao().taskEvents().filter { it.taskId == provider.taskId && it.dueLocal != null }
+        assertEquals(listOf("2026-11-11T09:00"), dueRows.map { it.dueLocal })
+    }
+
+    @Test fun yearlessPastYearReturnedByModelIsRejectedInsteadOfWritten() = runBlocking {
+        val db = databaseRule.database
+        val scope = "00000000-0000-4000-8000-000000000193"
+        val clock = Clock.fixed(Instant.parse("2026-11-10T08:00:00Z"), ZoneOffset.UTC)
+        val tools = LocalMemoryTools(ProtectedDomainRepository(db), ProtectedMemoryRepository(db),
+            userTimeZoneId = "Asia/Baku", searchClock = clock,
+            authoritativeLocalDate = LocalDate.parse("2026-11-10")).handlers().filter { it.descriptor.name == "create_task" }
+        val provider = object : AgentModelGateway {
+            var turnCount = 0
+            override suspend fun complete(request: AgentModelRequest): AgentModelReply = if (turnCount++ == 0) {
+                AgentModelReply.Calls(listOf(AgentModelToolCall("synthetic-create-old-task", "create_task", 3,
+                    mapOf("title" to "Synthetic April task", "due_local" to "2025-04-15T09:00", "remind" to false))))
+            } else AgentModelReply.Answer("I need the year confirmed.")
+        }
+
+        val result = AgentOrchestrator(provider, DefaultAgentToolRegistry(tools), AllowPolicy(), MemoryJournal()).run(
+            AgentTurnRequest("00000000-0000-4000-8000-000000000196", scope,
+                "00000000-0000-4000-8000-000000000197", null, "az-AZ", "Create a task for 15 April"),
+        )
+
+        assertTrue(result.toolResults.any { it.code == "ambiguous_task_year" })
+        assertTrue(db.protectedStoreDao().taskEvents().isEmpty())
+    }
+
+    @Test fun yearlessDateEarlierThisYearReturnedByModelIsRejectedInsteadOfWritten() = runBlocking {
+        val db = databaseRule.database
+        val scope = "00000000-0000-4000-8000-000000000193"
+        val clock = Clock.fixed(Instant.parse("2026-11-10T08:00:00Z"), ZoneOffset.UTC)
+        val tools = LocalMemoryTools(ProtectedDomainRepository(db), ProtectedMemoryRepository(db),
+            userTimeZoneId = "Asia/Baku", searchClock = clock,
+            authoritativeLocalDate = LocalDate.parse("2026-11-10")).handlers().filter { it.descriptor.name == "create_task" }
+        val provider = object : AgentModelGateway {
+            var turnCount = 0
+            override suspend fun complete(request: AgentModelRequest): AgentModelReply = if (turnCount++ == 0) {
+                AgentModelReply.Calls(listOf(AgentModelToolCall("synthetic-create-old-task", "create_task", 3,
+                    mapOf("title" to "Synthetic April task", "due_local" to "2026-04-15T09:00", "remind" to false))))
+            } else AgentModelReply.Answer("I need the year confirmed.")
+        }
+
+        val result = AgentOrchestrator(provider, DefaultAgentToolRegistry(tools), AllowPolicy(), MemoryJournal()).run(
+            AgentTurnRequest("00000000-0000-4000-8000-000000000198", scope,
+                "00000000-0000-4000-8000-000000000199", null, "az-AZ", "Create a task for 15 April"),
+        )
+
+        assertTrue(result.toolResults.any { it.code == "ambiguous_task_year" })
+        assertTrue(db.protectedStoreDao().taskEvents().isEmpty())
+    }
 
     @Test fun searchMemoryFindsOnlyActiveSameScopeAliasPhrasesInsideNaturalQueries() = runBlocking {
         val db = databaseRule.database

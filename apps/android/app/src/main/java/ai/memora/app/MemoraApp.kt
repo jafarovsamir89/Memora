@@ -106,7 +106,7 @@ fun MemoraApp(initialRoute: String = "home", initialTheme: String = "system", ca
             }
             is LocalProfileState.Ready -> {
             var route by rememberSaveable { mutableStateOf(initialRoute) }
-            var parent by rememberSaveable { mutableStateOf("home") }
+            var backStack by rememberSaveable { mutableStateOf(emptyList<String>()) }
             var capture by rememberSaveable { mutableStateOf(false) }
             var voice by rememberSaveable { mutableStateOf(false) }
             var pendingCommand by rememberSaveable { mutableStateOf<String?>(null) }
@@ -162,9 +162,19 @@ fun MemoraApp(initialRoute: String = "home", initialTheme: String = "system", ca
                     }
                 }
             }
-            val navigate: (String) -> Unit = { destination -> parent = route; route = destination }
+            val navigate: (String) -> Unit = { destination ->
+                if (destination != route) {
+                    backStack = backStack + route
+                    route = destination
+                }
+            }
             val topRoutes = setOf("home", "chat", "cases", "memory", "more")
-            val goBack: () -> Unit = { route = if (route in topRoutes) "home" else parent.takeIf { it != route } ?: "home"; parent = "home" }
+            val goBack: () -> Unit = {
+                if (backStack.isNotEmpty()) {
+                    route = backStack.last()
+                    backStack = backStack.dropLast(1)
+                } else route = "home"
+            }
             val added = s(R.string.draft_added)
             LaunchedEffect(captureState.captures, pendingCommand) {
                 val command = pendingCommand
@@ -172,17 +182,23 @@ fun MemoraApp(initialRoute: String = "home", initialTheme: String = "system", ca
                     pendingCommand = null
                     if (capture) {
                         capture = false
-                        if (route != "inbox") { parent = route; route = "inbox" }
+                        if (route != "inbox") navigate("inbox")
                         scope.launch { snackbar.showSnackbar(added) }
                     }
                 }
             }
-            BackHandler(enabled = route != "home" && !capture && detailId == null && !about, onBack = goBack)
+            BackHandler(enabled = (route != "home" || backStack.isNotEmpty()) && !capture && detailId == null && !about, onBack = goBack)
 
             val openCapture: (Boolean) -> Unit = { showVoice ->
                 voice = showVoice; capture = true
             }
             val routes = listOf("home", "chat", "cases", "memory", "more")
+            val moreRoutes = setOf("inbox", "notes", "finance", "calendar", "people", "projects", "tasks",
+                "tables", "portable_backup", "settings", "voice_memory", "licenses")
+            val selectedTopRoute = route.takeIf { it in topRoutes }
+                ?: "more".takeIf { route in moreRoutes }
+                ?: backStack.lastOrNull { it in topRoutes }
+                ?: "home"
             val labels = listOf(R.string.nav_home, R.string.nav_secretary, R.string.cases, R.string.nav_memory, R.string.nav_more)
             val icons = listOf(Glyph.Home, Glyph.Chat, Glyph.Folder, Glyph.Memory, Glyph.Grid)
             val titleId = when (route) {
@@ -203,7 +219,7 @@ fun MemoraApp(initialRoute: String = "home", initialTheme: String = "system", ca
                         Modifier.fillMaxWidth().statusBarsPadding().padding(horizontal = 20.dp, vertical = 10.dp),
                         horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = Alignment.CenterVertically,
                     ) {
-                        if (route !in topRoutes) {
+                        if (route !in topRoutes || backStack.isNotEmpty()) {
                             IconButton(goBack, Modifier.testTag("back")) { Icon(Glyph.Back, s(R.string.back), tint = colors.ink) }
                         } else BrandMark()
                         Column(Modifier.weight(1f)) {
@@ -222,8 +238,8 @@ fun MemoraApp(initialRoute: String = "home", initialTheme: String = "system", ca
                     NavigationBar(containerColor = colors.card, tonalElevation = 0.dp) {
                         routes.forEachIndexed { index, destination ->
                             NavigationBarItem(
-                                selected = route == destination || (destination == "more" && route !in topRoutes),
-                                onClick = { route = destination; parent = "home" },
+                                selected = selectedTopRoute == destination,
+                                onClick = { route = destination; backStack = emptyList() },
                                 modifier = Modifier.testTag("nav_$destination"),
                                 icon = { Icon(icons[index], null, Modifier.size(22.dp)) },
                                 label = {

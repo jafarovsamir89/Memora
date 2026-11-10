@@ -25,6 +25,13 @@ class AgentRuntimeTest {
         assertEquals(0, model.lastRequest!!.tools.size)
     }
 
+    @Test fun authoritativeLocalDateIsPassedToTheModel() = runBlocking {
+        val model = QueueModel(AgentModelReply.Answer("Done"))
+        val result = runtime(model, DefaultAgentToolRegistry()).run(turn.copy(authoritativeLocalDate = "2026-11-10"))
+        assertEquals(AgentRunResultStatus.COMPLETED, result.status)
+        assertEquals("2026-11-10", model.lastRequest?.authoritativeLocalDate)
+    }
+
     @Test fun toolThenAnswerRechecksMemoryConsentOnEveryModelSend() = runBlocking {
         val memoryTool = FakeTool(access = ToolAccess.PERSISTED_MEMORY, effect = ToolEffect.READ)
         val registry = DefaultAgentToolRegistry(listOf(memoryTool))

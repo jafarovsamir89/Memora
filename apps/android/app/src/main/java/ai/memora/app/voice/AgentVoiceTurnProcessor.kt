@@ -16,6 +16,7 @@ import ai.memora.app.data.protectedstore.ProtectedProfileMemoryRepository
 import ai.memora.app.data.protectedstore.RoomAgentRunJournal
 import ai.memora.app.reminders.TaskReminders
 import java.io.File
+import java.time.LocalDate
 import java.time.Instant
 import java.util.UUID
 import kotlinx.coroutines.CancellationException
@@ -67,6 +68,7 @@ internal class AgentVoiceTurnProcessor(context: Context, private val databaseOve
             else emptyList()
             val repo = domainRepository
             val profile = ProtectedLocalProfileStore(database).read()
+            val authoritativeLocalDate = AgentDateContext.currentLocalDate(profile?.timeZoneId)
             val responsePreferences = profile?.takeIf { it.onboardingCompleted }?.let {
                 AgentResponsePreferences(it.language, it.toneStyle, it.responseStyle)
             }
@@ -75,7 +77,8 @@ internal class AgentVoiceTurnProcessor(context: Context, private val databaseOve
                     onTaskChanged = { task -> TaskReminders.schedule(appContext, task).code() },
                     conversations = conversations, profileMemory = ProtectedProfileMemoryRepository(database),
                     personAliases = ai.memora.app.data.protectedstore.PersonAliasRepository(database),
-                    userTimeZoneId = profile?.timeZoneId).handlers() else emptyList()
+                    userTimeZoneId = profile?.timeZoneId,
+                    authoritativeLocalDate = runCatching { LocalDate.parse(authoritativeLocalDate) }.getOrNull()).handlers() else emptyList()
             val selectedModel = GeminiAgentModelSelectionStore(appContext).selectedModel()
             val orchestrator = AgentOrchestrator(GeminiAgentModelGateway(selectedModel), DefaultAgentToolRegistry(handlers), policy,
                 RoomAgentRunJournal(database))
@@ -83,7 +86,7 @@ internal class AgentVoiceTurnProcessor(context: Context, private val databaseOve
             val result = orchestrator.run(AgentTurnRequest(turnId, scopeId, actorId, null,
                 locale = responsePreferences?.language?.let(::languageTag) ?: "az-AZ",
                 text = message, channel = channel, conversationHistory = history,
-                responsePreferences = responsePreferences))
+                responsePreferences = responsePreferences, authoritativeLocalDate = authoritativeLocalDate))
             val completedAt = Instant.now().toEpochMilli()
             val actionResults = AgentActionResultMapper.map(scopeId, turnId, result.toolResults, completedAt)
             if (result.status == AgentRunResultStatus.FAILED || result.status == AgentRunResultStatus.RECOVERY_REQUIRED) {

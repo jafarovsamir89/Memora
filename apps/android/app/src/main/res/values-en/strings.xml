@@ -5,7 +5,7 @@
     <string name="nav_memory">Memory</string>
     <string name="nav_capture">Capture</string>
     <string name="nav_tasks">Tasks</string>
-    <string name="nav_more">Reports</string>
+    <string name="nav_more">More</string>
     <string name="tagline">Your second memory</string>
     <string name="close">Close</string>
     <string name="back">Back</string>

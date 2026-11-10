@@ -30,6 +30,7 @@ import java.math.BigDecimal
 import java.text.NumberFormat
 import java.time.Instant
 import java.time.YearMonth
+import java.time.format.DateTimeFormatter
 import java.time.ZoneId
 import java.util.Locale
 
@@ -135,6 +136,9 @@ internal fun FinanceReportsSection(language: String) {
     val month = remember(selectedMonthText) {
         FinanceAnalytics.requestedMonth(selectedMonthText) ?: YearMonth.now(FinanceAnalytics.bakuZone)
     }
+    val monthLabel = remember(month, language) {
+        month.format(DateTimeFormatter.ofPattern("LLLL yyyy", Locale.forLanguageTag(language)))
+    }
     val resources = ai.memora.app.ui.LocalStrings.current
 
     LaunchedEffect(scopeId, selectedMonthText, retryToken) {
@@ -165,7 +169,7 @@ internal fun FinanceReportsSection(language: String) {
                         contentDescription = resources.getString(ai.memora.app.R.string.report_previous_month)
                     },
                 ) { androidx.compose.material3.Text("‹", fontSize = 26.sp) }
-                androidx.compose.material3.Text(month.toString(), style = androidx.compose.material3.MaterialTheme.typography.titleMedium,
+                androidx.compose.material3.Text(monthLabel, style = androidx.compose.material3.MaterialTheme.typography.titleMedium,
                     fontWeight = FontWeight.SemiBold, modifier = Modifier.testTag("finance_report_month"))
                 val currentMonth = YearMonth.now(FinanceAnalytics.bakuZone)
                 androidx.compose.material3.TextButton(

@@ -4,8 +4,8 @@
     <string name="nav_home">Bu gün</string>
     <string name="nav_memory">Yaddaş</string>
     <string name="nav_capture">Qeyd</string>
-    <string name="nav_tasks">İşlər</string>
-    <string name="nav_more">Hesabatlar</string>
+    <string name="nav_tasks">Tapşırıqlar</string>
+    <string name="nav_more">Daha çox</string>
     <string name="tagline">İkinci yaddaşınız</string>
     <string name="close">Bağla</string>
     <string name="back">Geri</string>

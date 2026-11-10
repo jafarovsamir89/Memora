@@ -247,16 +247,16 @@ fun SettingsScreen(theme: String, changeTheme: (String) -> Unit, language: Strin
     val voiceConsent = remember(context) { context.getSharedPreferences("voice-first-consent", 0) }
     var granted by remember { mutableStateOf(voiceConsent.all.values.any { it == true }) }
     ScreenColumn {
-        ScreenHeading(s(R.string.settings), s(R.string.settings_subtitle))
+        Text(s(R.string.settings_subtitle), color = colors.muted, style = MaterialTheme.typography.bodyMedium)
         if (error) {
             Text(s(R.string.settings_storage_error), color = MaterialTheme.colorScheme.error, modifier = Modifier.testTag("settings_storage_error"))
             OutlinedButton(onClick = retry, modifier = Modifier.testTag("settings_retry")) { Text(s(R.string.settings_retry)) }
         }
+        GeminiAgentModelSettings()
         SectionHeading(s(R.string.appearance))
         Filters(listOf("system" to s(R.string.theme_system), "light" to s(R.string.theme_light), "dark" to s(R.string.theme_dark)), theme, changeTheme, enabled = ready)
         SectionHeading(s(R.string.language))
         Filters(listOf("ru" to "Русский", "az" to "Azərbaycan", "en" to "English"), language, changeLanguage, enabled = ready)
-        GeminiAgentModelSettings()
         AttentionSettingsControls()
         DevicePermissionSettings()
         AppCheckDebugSettings()

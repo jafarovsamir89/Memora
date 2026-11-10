@@ -4,8 +4,8 @@
     <string name="nav_home">Сегодня</string>
     <string name="nav_memory">Память</string>
     <string name="nav_capture">Запись</string>
-    <string name="nav_tasks">Дела</string>
-    <string name="nav_more">Отчёты</string>
+    <string name="nav_tasks">Задачи</string>
+    <string name="nav_more">Ещё</string>
     <string name="tagline">Ваша вторая память</string>
     <string name="close">Закрыть</string>
     <string name="back">Назад</string>

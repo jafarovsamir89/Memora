@@ -57,6 +57,8 @@ data class AgentTurnRequest(
     val channel: AgentInputChannel = AgentInputChannel.VOICE,
     val conversationHistory: List<AgentDialogueMessage> = emptyList(),
     val responsePreferences: AgentResponsePreferences? = null,
+    /** App-derived local date for resolving dates; only the ISO date is sent to the model. */
+    val authoritativeLocalDate: String? = null,
 )
 
 enum class AgentTurnStatus {
@@ -107,6 +109,7 @@ data class AgentModelRequest(
     val tools: List<AgentToolDescriptor>,
     val conversationHistory: List<AgentDialogueMessage> = emptyList(),
     val responsePreferences: AgentResponsePreferences? = null,
+    val authoritativeLocalDate: String? = null,
 )
 
 sealed interface AgentModelReply {
@@ -276,6 +279,7 @@ class AgentOrchestrator(
                         tools = registry.enabledTools(),
                         conversationHistory = turn.conversationHistory,
                         responsePreferences = turn.responsePreferences,
+                        authoritativeLocalDate = turn.authoritativeLocalDate,
                     )) }
                 } catch (error: AgentGatewayFailure) {
                     val fallback = finishAfterModelFailure(turn, observations, error.safeCode)
