@@ -1,5 +1,9 @@
 # Memora — дневник ведущего инженера
 
+## ACT-0238 — 2026-11-15 — Git handoff для Stage 1
+
+Stage 1 commit `e04cacdbe7d93d8cd36569f20dcf0f477dcc92fd` (`feat(ui): complete redesign v1 stage 1`) успешно отправлен в `origin/ui/redesign-v1`. После push выполнен fetch feature branch; local `HEAD`, `origin/ui/redesign-v1` и `git ls-remote` указывают на один SHA. Локальный указатель `main` остался `e627ab3dde4ae27ef866fad4c437ba59ebb94f5b`; remote `main` остался `ac621919aca09ece6e292eae708d55cc09de16d7`. История не переписывалась. В рабочем дереве остался только owner-owned untracked `docs/adr/ADR-012-keystore-wrapping-key-rotation.md`, не затронутый и не staged. API key properties, APK и raw live report не включались. Для документационной handoff-записи тесты не перезапускались; верификация ACT-0237 сохранена. Следующий шаг — ждать отдельного одобрения Stage 2.
+
 ## ACT-0237 — 2026-11-15 — UI/UX Redesign V1, Stage 1
 
 Владелец одобрил переход после завершённого аудита/P0 и утвердил вариант B. Работал только в `ui/redesign-v1`; Stage 2/3 не начинал. Сверял продуктовый курс, план, TODO и предыдущий ACT-0235/0236. Добавлены общие белые/фиолетовые/мятные design tokens, типографика, spacing/shapes, светлая/тёмная Material 3 палитра, контрастные тесты, переиспользуемые карточки/заголовки/иконки/пилюли/top bar/bottom navigation. Основные вкладки: Today, Secretary, Cases, Memory, More. Навигация вариант B: типизированные маршруты, сохранённая история и состояние каждого экрана, UUID-проверяемые точные object targets. Карточка результата открывает read-only детали целевой записи, ограниченные текущим conversation scope. More стал каталогом разделов из двух колонок и предшествует финансовому отчёту. Today/Secretary/Memory не переделаны целиком.

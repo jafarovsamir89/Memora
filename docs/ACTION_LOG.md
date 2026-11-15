@@ -1,3 +1,9 @@
+## ACT-0238 · 2026-11-15 · Git handoff для UI/UX Stage 1
+
+ACT-0237 implementation commit `e04cacdbe7d93d8cd36569f20dcf0f477dcc92fd` (`feat(ui): complete redesign v1 stage 1`) отправлен в `origin/ui/redesign-v1`. `git fetch` и `git ls-remote` подтвердили совпадение local `HEAD`, `origin/ui/redesign-v1` и remote `refs/heads/ui/redesign-v1`. Локальная ветка `main` осталась на `e627ab3dde4ae27ef866fad4c437ba59ebb94f5b`, remote `main` — `ac621919aca09ece6e292eae708d55cc09de16d7`; ни одна не менялась. История не переписывалась.
+
+Единственный untracked файл — owner-owned `docs/adr/ADR-012-keystore-wrapping-key-rotation.md`; он сохранён без чтения/изменения и не staged. Локальный Gemini API key, APK и raw live report не добавлены. Для этого docs-only handoff Gradle не запускался; проверки реализации см. ACT-0237. Ожидать отдельного одобрения перед Stage 2.
+
 ## ACT-0237 · 2026-11-15 · UI/UX Redesign V1 — Stage 1
 
 Реализована утверждённая постепенная модернизация навигации в отдельной ветке `ui/redesign-v1`: типизированные destinations, проверенные UUID action targets, reducer/back stack, сохранение экранного состояния, пять главных вкладок Today/Secretary/Cases/Memory/More. Action cards открывают read-only представление точной записи в текущем scope. Раздел More стал двухколоночным каталогом, расположенным перед finance report. Визуальная система унифицирована: белый/фиолетовый/мятный стиль, Material 3 light/dark schemes, токены, размеры/формы/типографика и повторно используемые Compose-компоненты. Today, Secretary и Memory не перепроектировались целиком. Схема БД, ledger, доменные правила, AI provider и разрешения не менялись.
