@@ -8,7 +8,7 @@
 
 На synthetic Android 14 emulator: свежая установка v91 показала onboarding; завершение onboarding привело в Today; после force-stop/relaunch снова показан Today. Для markerless v90 seeded synthetic profile/fact/case/person/finance/task, затем `adb install -r` обновил до v91 без изменения `firstInstallTime`; все пять категорий и профиль найдены, legacy profile не потерян. Отдельный тест запустил production notification reconciliation до MainActivity: Room DB создана, marker отсутствовал; MainActivity показал onboarding, marker остался `new`. Скриншоты и подробный отчёт: `docs/ui-ux-redesign-v1/p0-fix/REPORT.md`. Физический Redmi, Gemini, сеть, микрофон и личные записи не использовались.
 
-APK v91 `1.1.69-onboarding-marker-race`, SHA-256 `8dbe49ad9bb702220107f1fa563617c4a4bf6bae66ecb16b1e2ac7354cafda9e`. Отдельно описано смешанное содержимое `e627ab3` и путь будущего отделения UI hunks от date logic без переписывания истории. Результаты локальные; owner-owned ADR-012 не трогать. Следующая задача: остановиться; Stage 1 только после следующего явного разрешения владельца.
+APK v91 `1.1.69-onboarding-marker-race`, SHA-256 `8dbe49ad9bb702220107f1fa563617c4a4bf6bae66ecb16b1e2ac7354cafda9e`. Отдельно описано смешанное содержимое `e627ab3` и путь будущего отделения UI hunks от date logic без переписывания истории. Implementation/docs commit `a0bce80` отправлен в `origin/ui/redesign-v1`; `main` не менялась. Owner-owned ADR-012 оставлен без изменений и исключён. Следующая задача: остановиться; Stage 1 только после следующего явного разрешения владельца.
 
 ## ACT-0235 — 2026-11-15 — UI/UX redesign V1, Stage 0 audit
 

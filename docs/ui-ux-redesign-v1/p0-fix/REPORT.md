@@ -2,6 +2,7 @@
 
 **Task:** ACT-0236 · **Date:** 2026-11-15 · **Branch:** `ui/redesign-v1`
 **Status:** P0 fixed and verified on a synthetic Android 14 emulator. Stage 1 has not started.
+**Implementation commit:** `a0bce80` (`fix(android): preserve onboarding on fresh install`), pushed to `origin/ui/redesign-v1`.
 
 ## Finding and proof
 
