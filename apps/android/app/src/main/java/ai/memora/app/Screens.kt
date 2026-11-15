@@ -62,46 +62,55 @@ fun Filters(options: List<Pair<String, String>>, selected: String, onSelect: (St
 @Composable
 fun MoreScreen(navigate: (String) -> Unit, about: () -> Unit, captureVoice: (() -> Unit)? = null, language: String = "az") {
     ScreenColumn {
-        ScreenHeading(s(R.string.more_title), s(R.string.more_subtitle))
-        FinanceReportsSection(language)
+        Text(s(R.string.more_subtitle), color = colors.muted, style = MaterialTheme.typography.bodyMedium)
         SectionHeading(s(R.string.more_tools_title))
-        MemoraCard {
-            MenuRow(Glyph.Tasks, s(R.string.nav_tasks), s(R.string.working_tasks_hint),
-                onClick = { navigate("tasks") }, testTag = "more_tasks")
-            HorizontalDivider(color = colors.line)
-            if (captureVoice != null) {
-                MenuRow(Glyph.Mic, s(R.string.nav_capture), s(R.string.working_capture_hint),
-                    onClick = captureVoice, testTag = "more_voice_capture")
-                HorizontalDivider(color = colors.line)
-            }
-            MenuRow(Glyph.Mic, s(R.string.voice_memory_title), s(R.string.voice_memory_help),
-                onClick = { navigate("voice_memory") }, testTag = "more_voice_memory")
-            HorizontalDivider(color = colors.line)
-            MenuRow(Glyph.Inbox, s(R.string.inbox), s(R.string.inbox_hint)) { navigate("inbox") }
-            HorizontalDivider(color = colors.line)
-            MenuRow(Glyph.Note, s(R.string.notes_title), s(R.string.notes_hint)) { navigate("notes") }
-            HorizontalDivider(color = colors.line)
-            MenuRow(Glyph.Wallet, s(R.string.finance), s(R.string.finance_hint), 1) { navigate("finance") }
-            HorizontalDivider(color = colors.line)
-            MenuRow(Glyph.Calendar, s(R.string.calendar_title), s(R.string.calendar_hint)) { navigate("calendar") }
-            HorizontalDivider(color = colors.line)
-            MenuRow(Glyph.Person, s(R.string.people), s(R.string.people_hint), testTag = "more_people") { navigate("people") }
-            HorizontalDivider(color = colors.line)
-            MenuRow(Glyph.Folder, s(R.string.cases), s(R.string.cases_hint), 2) { navigate("cases") }
-            HorizontalDivider(color = colors.line)
-            MenuRow(Glyph.Folder, s(R.string.projects), s(R.string.projects_hint), 2) { navigate("projects") }
-            HorizontalDivider(color = colors.line)
-            MenuRow(Glyph.Grid, s(R.string.tables_title), s(R.string.tables_subtitle)) { navigate("tables") }
-            HorizontalDivider(color = colors.line)
-            MenuRow(Glyph.Shield, s(R.string.backup_title), s(R.string.backup_subtitle), onClick = { navigate("portable_backup") },
-                testTag = "more_portable_backup")
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+            MoreDestinationCard(Glyph.Tasks, s(R.string.nav_tasks), s(R.string.working_tasks_hint),
+                testTag = "more_tasks") { navigate("tasks") }
+            MoreDestinationCard(Glyph.Person, s(R.string.people), s(R.string.people_hint), tone = 1,
+                testTag = "more_people") { navigate("people") }
         }
-        MemoraCard { MenuRow(Glyph.Settings, s(R.string.settings), s(R.string.settings_hint)) { navigate("settings") } }
-        MemoraCard(tint = colors.softGreen, onClick = about) {
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+            MoreDestinationCard(Glyph.Folder, s(R.string.cases), s(R.string.cases_hint),
+                testTag = "more_cases") { navigate("cases") }
+            MoreDestinationCard(Glyph.Folder, s(R.string.projects), s(R.string.projects_hint), tone = 3,
+                testTag = "more_projects") { navigate("projects") }
+        }
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+            MoreDestinationCard(Glyph.Inbox, s(R.string.inbox), s(R.string.inbox_hint), tone = 1,
+                testTag = "more_inbox") { navigate("inbox") }
+            MoreDestinationCard(Glyph.Note, s(R.string.notes_title), s(R.string.notes_hint),
+                testTag = "more_notes") { navigate("notes") }
+        }
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+            MoreDestinationCard(Glyph.Calendar, s(R.string.calendar_title), s(R.string.calendar_hint), tone = 1,
+                testTag = "more_calendar") { navigate("calendar") }
+            MoreDestinationCard(Glyph.Wallet, s(R.string.finance), s(R.string.finance_hint), tone = 3,
+                testTag = "more_finance") { navigate("finance") }
+        }
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+            MoreDestinationCard(Glyph.Grid, s(R.string.tables_title), s(R.string.tables_subtitle),
+                testTag = "more_tables") { navigate("tables") }
+            MoreDestinationCard(Glyph.Shield, s(R.string.backup_title), s(R.string.backup_subtitle), tone = 1,
+                testTag = "more_portable_backup") { navigate("portable_backup") }
+        }
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+            MoreDestinationCard(Glyph.Mic, s(R.string.voice_memory_title), s(R.string.voice_memory_help),
+                testTag = "more_voice_memory") { navigate("voice_memory") }
+            MoreDestinationCard(Glyph.Settings, s(R.string.settings), s(R.string.settings_hint), tone = 3,
+                testTag = "more_settings") { navigate("settings") }
+        }
+        if (captureVoice != null) MemoraCard {
+            MenuRow(Glyph.Mic, s(R.string.nav_capture), s(R.string.working_capture_hint), tone = 1,
+                testTag = "more_voice_capture", onClick = captureVoice)
+        }
+        MemoraCard(tint = colors.softMint, onClick = about, modifier = Modifier.testTag("more_privacy")) {
             Icon(Glyph.Shield, null, tint = colors.green)
             Text(s(R.string.private_title), style = MaterialTheme.typography.titleMedium, color = colors.ink)
             Text(s(R.string.private_body), style = MaterialTheme.typography.bodyMedium, color = colors.muted)
         }
+        SectionHeading(s(R.string.finance_reports_title))
+        FinanceReportsSection(language)
     }
 }
 

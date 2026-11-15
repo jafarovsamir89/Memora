@@ -221,6 +221,48 @@ class UiShellTest {
         compose.onNodeWithTag("secretary_voice_card").assertIsDisplayed()
     }
 
+    @Test fun moreCatalogPrecedesReportsAndKeepsAllFivePrimaryTabs() {
+        compose.setContent {
+            CompositionLocalProvider(LocalAgentDatabaseOverride provides agentDatabase.database) {
+                TestMemoraApp(initialRoute = "more", initialTheme = "light", capturePersistenceOverride = captureStore,
+                    appearanceStoreOverride = appearanceStore)
+            }
+        }
+        listOf("home", "chat", "cases", "memory", "more").forEach { tab ->
+            compose.onNodeWithTag("nav_$tab").assertExists()
+        }
+        compose.onNodeWithTag("more_tasks").assertExists()
+        compose.onNodeWithTag("finance_reports_section").assertExists()
+        val semantics = compose.onRoot(useUnmergedTree = true).printToString()
+        val directoryIndex = semantics.indexOf("more_tasks")
+        val reportsIndex = semantics.indexOf("finance_reports_section")
+        Assert.assertTrue("More directory should appear before finance reports ($directoryIndex, $reportsIndex)",
+            directoryIndex >= 0 && reportsIndex > directoryIndex)
+        screenshot("18-more-directory-first")
+    }
+
+    @Test fun actionTargetOpensExactScopedObjectAndSelectsItsOwningTab() = kotlinx.coroutines.runBlocking {
+        val context = ApplicationProvider.getApplicationContext<Context>()
+        val database = agentDatabase.database
+        val scope = ai.memora.app.voice.AgentVoiceTurnProcessor(context, database).conversationScopeId()
+        val id = UUID.randomUUID().toString()
+        ProtectedCaseRepository(database).createCase(scope, id, "Synthetic exact target", "Stable target details",
+            nextAction = "Review exact target", sourceTurnId = UUID.randomUUID().toString())
+        val route = requireNotNull(AppTargetKind.fromAction("case", id)).encode()
+
+        compose.setContent {
+            CompositionLocalProvider(LocalAgentDatabaseOverride provides database) {
+                TestMemoraApp(initialRoute = route, initialTheme = "light", capturePersistenceOverride = captureStore,
+                    appearanceStoreOverride = appearanceStore)
+            }
+        }
+        compose.waitUntil(10_000) { compose.onAllNodesWithTag("action_target_$id").fetchSemanticsNodes().isNotEmpty() }
+        compose.onNodeWithTag("nav_cases").assertIsSelected()
+        compose.onNodeWithText("Synthetic exact target").assertExists()
+        compose.onNodeWithText("Stable target details").assertExists()
+        screenshot("19-exact-action-target")
+    }
+
     @Test fun reportsScreenReadsAndLabelsSyntheticLedgerWithoutClaimingProfit() = kotlinx.coroutines.runBlocking {
         val context = ApplicationProvider.getApplicationContext<Context>()
         appearanceStore = AtomicAppearanceStore(File(context.cacheDir, "ui-report-settings-${UUID.randomUUID()}"),
@@ -314,6 +356,11 @@ class UiShellTest {
         val scopeId = processor.conversationScopeId()
         val turnId = UUID.randomUUID().toString()
         val targetId = UUID.randomUUID().toString()
+        val instant = java.time.Instant.now().toString()
+        ai.memora.app.data.protectedstore.ProtectedDomainRepository(agentDatabase.database).recordFinanceEvent(
+            scopeId, "Synthetic Receipt Person", "receipt", 4_250, "AZN", "Synthetic action fixture",
+            "Synthetic receipt detail", UUID.randomUUID().toString(), targetId, UUID.randomUUID().toString(), instant, instant,
+        )
         ai.memora.app.data.protectedstore.ProtectedConversationRepository(agentDatabase.database).appendTurn(
             scopeId, turnId, "Synthetic request about a saved receipt", "Synthetic action confirmed.",
             1_800_000_000_000L,
@@ -356,7 +403,11 @@ class UiShellTest {
         compose.onNodeWithTag("action_correction_draft_note").assertExists()
         compose.onAllNodesWithTag("action_open_related").onFirst().performScrollTo().performClick()
         compose.onNodeWithTag("nav_more").assertIsSelected()
-        compose.onNodeWithTag("finance_screen").assertExists()
+        compose.waitUntil(10_000) {
+            compose.onAllNodesWithTag("action_target_$targetId").fetchSemanticsNodes().isNotEmpty()
+        }
+        compose.onNodeWithTag("action_target_$targetId").assertExists()
+        compose.onNodeWithText("Synthetic receipt detail").assertExists()
         Unit
     }
 

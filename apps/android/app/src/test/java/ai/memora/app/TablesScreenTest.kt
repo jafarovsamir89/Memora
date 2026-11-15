@@ -106,7 +106,10 @@ class TablesScreenTest {
         compose.onNodeWithTag("table_schema_apply").assertIsDisplayed().performClick()
         compose.waitUntil(10_000) { compose.onAllNodesWithTag("table_schema_saved").fetchSemanticsNodes().isNotEmpty() }
         compose.onNodeWithTag("table_schema_history").performScrollTo().performClick()
-        compose.onNodeWithTag("table_schema_revision_1").assertIsDisplayed().performClick()
+        compose.waitUntil(10_000) {
+            compose.onAllNodesWithTag("table_schema_revision_1").fetchSemanticsNodes().isNotEmpty()
+        }
+        compose.onNodeWithTag("table_schema_revision_1").performScrollTo().assertIsDisplayed().performClick()
         compose.onNodeWithTag("table_schema_restore_confirm").assertIsDisplayed()
         compose.onNodeWithTag("table_schema_restore_field_name").assertIsDisplayed()
 

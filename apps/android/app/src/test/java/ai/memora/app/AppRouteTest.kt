@@ -1,0 +1,65 @@
+package ai.memora.app
+
+import androidx.compose.runtime.saveable.SaverScope
+import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNull
+import org.junit.Test
+import java.util.UUID
+
+class AppRouteTest {
+    @Test fun actionTargetRouteRoundTripsExactStableIdAndTabAnchor() {
+        val id = "d6fd955d-3c06-4e3a-9f6a-2ab741c83d42"
+        val route = AppTargetKind.fromAction("case", id)
+
+        assertEquals(AppRoute(AppDestination.ACTION_TARGET, AppTargetKind.CASE, id), route)
+        assertEquals(AppDestination.CASES, route?.selectedPrimaryTab)
+        assertEquals(route, AppRoute.decode(requireNotNull(route).encode()))
+        assertEquals(route, AppRoute.fromLegacyRoute(requireNotNull(route).encode()))
+    }
+
+    @Test fun invalidOrUnknownActionTargetsNeverCreateGenericObjectRoutes() {
+        assertNull(AppTargetKind.fromAction("case", "not-an-id"))
+        assertNull(AppTargetKind.fromAction("unknown", UUID.randomUUID().toString()))
+        assertNull(AppTargetKind.fromAction("case", null))
+    }
+
+    @Test fun backRestoresExactPreviousRouteAndRetainsEachScreenStateKey() {
+        val first = AppRoute.screen(AppDestination.SECRETARY)
+        val caseId = "5e33a6d4-7f73-4e40-a926-8edfb0146325"
+        val target = requireNotNull(AppTargetKind.fromAction("case", caseId))
+        val state = AppNavigationState.start(first).navigate(AppRoute.screen(AppDestination.SETTINGS)).navigate(target)
+
+        assertEquals(target, state.current)
+        assertEquals(AppDestination.CASES, state.current.selectedPrimaryTab)
+        assertEquals(AppRoute.screen(AppDestination.SETTINGS), state.back().current)
+        assertEquals(AppRoute.screen(AppDestination.SECRETARY), state.back().back().current)
+        assertEquals(first, AppRoute.decode(first.stateKey))
+        assertEquals(target.stateKey, AppRoute.decode(target.stateKey)?.stateKey)
+    }
+
+    @Test fun selectingAnotherPrimaryTabClearsNestedHistory() {
+        val state = AppNavigationState.start(AppRoute.screen(AppDestination.MORE))
+            .navigate(AppRoute.screen(AppDestination.FINANCE))
+            .selectTab(AppDestination.MEMORY)
+
+        assertEquals(AppRoute.screen(AppDestination.MEMORY), state.current)
+        assertEquals(emptyList<AppRoute>(), state.backStack)
+    }
+
+    @Test fun navigationStateSaverRestoresCurrentRouteAndBackStack() {
+        val target = requireNotNull(AppTargetKind.fromAction(
+            "finance", "b911ad3b-491d-4ed0-8f9a-01b204e1b196",
+        ))
+        val original = AppNavigationState.start(AppRoute.screen(AppDestination.SECRETARY))
+            .navigate(AppRoute.screen(AppDestination.MORE))
+            .navigate(target)
+        val saverScope = object : SaverScope {
+            override fun canBeSaved(value: Any): Boolean = true
+        }
+        val saved = with(saverScope) {
+            with(AppNavigationState.Saver) { save(original) }
+        }
+
+        assertEquals(original, AppNavigationState.Saver.restore(requireNotNull(saved)))
+    }
+}

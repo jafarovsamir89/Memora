@@ -51,7 +51,8 @@ import kotlinx.coroutines.withTimeout
 
 /** Text chat and push-to-talk share the same agent, encrypted memory, and bounded dialogue context. */
 @Composable
-fun AgentChatScreen(language: String = "az", showVoiceControl: Boolean = false, onOpenArea: (String) -> Unit = {},
+internal fun AgentChatScreen(language: String = "az", showVoiceControl: Boolean = false, onOpenArea: (String) -> Unit = {},
+    onOpenTarget: (AppRoute) -> Unit = {},
     textTurnOverride: (suspend (String) -> VoiceFirstResult)? = null) {
     val context = LocalContext.current
     val settings = remember(context) { context.getSharedPreferences("voice-first-consent", 0) }
@@ -230,6 +231,7 @@ fun AgentChatScreen(language: String = "az", showVoiceControl: Boolean = false, 
                 ActionResultCard(
                     result = result,
                     onOpenArea = { route -> onOpenArea(route) },
+                    onOpenTarget = onOpenTarget,
                     onOpenSource = { sourceTurnId = message.turnId },
                 sourceMessage = messages.firstOrNull { it.turnId == message.turnId && it.role == "user" }?.message.orEmpty(),
                 onPrepareCorrection = { prompt -> input = prompt.take(20_000); correctionDraftPrepared = true },
@@ -277,6 +279,7 @@ fun AgentChatScreen(language: String = "az", showVoiceControl: Boolean = false, 
 
 @Composable
 private fun ActionResultCard(result: AgentActionResultRow, onOpenArea: (String) -> Unit,
+    onOpenTarget: (AppRoute) -> Unit,
     onOpenSource: () -> Unit, sourceMessage: String, onPrepareCorrection: (String) -> Unit,
     modifier: Modifier = Modifier) {
     val statusLabel = when (result.status) {
@@ -310,6 +313,7 @@ private fun ActionResultCard(result: AgentActionResultRow, onOpenArea: (String) 
     }
     val correctionTemplate = s(ai.memora.app.R.string.action_correction_draft_template)
     val targetId = result.targetId
+    val targetRoute = AppTargetKind.fromAction(result.targetKind, targetId)
     MemoraCard(tint = if (result.status == "APPLIED") colors.softAccent else colors.card,
         modifier = modifier.testTag("action_card_${result.status.lowercase()}")) {
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -332,7 +336,12 @@ private fun ActionResultCard(result: AgentActionResultRow, onOpenArea: (String) 
         }
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
             areaLabel?.let { label ->
-                OutlinedButton(onClick = { areaRoute?.let(onOpenArea) }, modifier = Modifier.testTag("action_open_related")) {
+                OutlinedButton(onClick = {
+                    when {
+                        targetRoute != null -> onOpenTarget(targetRoute)
+                        else -> areaRoute?.let(onOpenArea)
+                    }
+                }, modifier = Modifier.testTag("action_open_related")) {
                     Text("${s(ai.memora.app.R.string.action_open_related)} ${s(label)}")
                 }
             }

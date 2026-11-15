@@ -2,15 +2,17 @@ package ai.memora.app.ui
 
 import android.content.res.Resources
 import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.LocalIndication
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.*
+import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.layout.RowScope
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -21,11 +23,16 @@ import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.semantics.heading
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import ai.memora.app.R
+import ai.memora.app.AppDestination
 
 val LocalStrings = staticCompositionLocalOf<Resources> { error("Missing localized resources") }
 @Composable fun s(id: Int): String = LocalStrings.current.getString(id)
@@ -34,8 +41,9 @@ val LocalStrings = staticCompositionLocalOf<Resources> { error("Missing localize
 fun ScreenColumn(modifier: Modifier = Modifier, content: @Composable ColumnScope.() -> Unit) {
     Column(
         Modifier.fillMaxSize().verticalScroll(rememberScrollState())
-            .then(modifier).padding(horizontal = 24.dp).padding(top = 18.dp, bottom = 28.dp),
-        verticalArrangement = Arrangement.spacedBy(20.dp), content = content,
+            .then(modifier).padding(horizontal = MemoraSpacing.xl)
+            .padding(top = MemoraSpacing.screenTop, bottom = MemoraSpacing.screenBottom),
+        verticalArrangement = Arrangement.spacedBy(MemoraSpacing.lg), content = content,
     )
 }
 
@@ -76,34 +84,55 @@ fun MemoraCard(
     contentPadding: androidx.compose.ui.unit.Dp = 20.dp,
     content: @Composable ColumnScope.() -> Unit,
 ) {
+    val shape = MemoraShapes.card
+    val interactionSource = remember { MutableInteractionSource() }
     Surface(
-        modifier.fillMaxWidth().clip(RoundedCornerShape(24.dp))
-            .then(if (onClick != null) Modifier.clickable(onClick = onClick) else Modifier),
-        color = tint, shape = RoundedCornerShape(24.dp),
-    ) { Column(Modifier.padding(contentPadding), verticalArrangement = Arrangement.spacedBy(12.dp), content = content) }
+        modifier = modifier.fillMaxWidth().clip(shape).then(
+            if (onClick != null) Modifier.clickable(
+                interactionSource = interactionSource,
+                indication = LocalIndication.current,
+                role = Role.Button,
+                onClick = onClick,
+            ) else Modifier,
+        ),
+        color = tint,
+        shape = shape,
+        border = if (onClick != null) BorderStroke(1.dp, colors.line) else null,
+        tonalElevation = if (onClick != null) 1.dp else 0.dp,
+    ) {
+        Column(Modifier.padding(contentPadding), verticalArrangement = Arrangement.spacedBy(MemoraSpacing.sm), content = content)
+    }
 }
 
 @Composable
 fun IconBubble(icon: ImageVector, tone: Int = 0, size: Int = 44) {
-    val bg = when (tone) { 1 -> colors.softGreen; 2 -> colors.softAmber; else -> colors.softAccent }
-    val fg = when (tone) { 1 -> colors.green; 2 -> colors.amber; else -> colors.onSoftAccent }
-    Box(Modifier.size(size.dp).background(bg, RoundedCornerShape(15.dp)), contentAlignment = Alignment.Center) {
-        Icon(icon, null, Modifier.size(21.dp), tint = fg)
+    val (bg, fg) = when (tone) {
+        1 -> colors.softMint to colors.green
+        2 -> colors.softAmber to colors.amber
+        3 -> colors.softMint to colors.onSoftMint
+        else -> colors.softAccent to colors.onSoftAccent
+    }
+    Box(Modifier.size(size.dp).background(bg, MemoraShapes.control), contentAlignment = Alignment.Center) {
+        Icon(icon, null, Modifier.size(22.dp), tint = fg)
     }
 }
 
 @Composable
 fun Pill(label: String, tone: Int = 0) {
-    val bg = when (tone) { 1 -> colors.softGreen; 2 -> colors.softAmber; else -> colors.softAccent }
-    val fg = when (tone) { 1 -> colors.green; 2 -> colors.amber; else -> colors.onSoftAccent }
-    Text(label, Modifier.background(bg, RoundedCornerShape(8.dp)).padding(horizontal = 9.dp, vertical = 4.dp),
+    val (bg, fg) = when (tone) {
+        1 -> colors.softMint to colors.green
+        2 -> colors.softAmber to colors.amber
+        3 -> colors.softMint to colors.onSoftMint
+        else -> colors.softAccent to colors.onSoftAccent
+    }
+    Text(label, Modifier.background(bg, MemoraShapes.pill).padding(horizontal = 11.dp, vertical = 6.dp),
         color = fg, style = MaterialTheme.typography.labelSmall)
 }
 
 @Composable
 fun SectionHeading(title: String, action: (() -> Unit)? = null, badge: String? = null) {
     Row(Modifier.fillMaxWidth().heightIn(min = 44.dp), verticalAlignment = Alignment.CenterVertically) {
-        Text(title, style = MaterialTheme.typography.titleMedium, color = colors.ink,
+        Text(title, style = MaterialTheme.typography.titleMedium.copy(fontSize = 18.sp), color = colors.ink,
             modifier = Modifier.weight(1f).semantics { heading() })
         if (badge != null) Pill(badge)
         if (action != null) TextButton(onClick = action) {
@@ -115,16 +144,122 @@ fun SectionHeading(title: String, action: (() -> Unit)? = null, badge: String? =
 @Composable
 fun MenuRow(icon: ImageVector, title: String, subtitle: String, tone: Int = 0, testTag: String? = null, onClick: () -> Unit) {
     Row(
-        Modifier.fillMaxWidth().clip(RoundedCornerShape(18.dp)).clickable(onClick = onClick)
-            .padding(vertical = 12.dp, horizontal = 4.dp).then(if (testTag == null) Modifier else Modifier.testTag(testTag)),
-        horizontalArrangement = Arrangement.spacedBy(14.dp), verticalAlignment = Alignment.CenterVertically,
+        Modifier.fillMaxWidth().heightIn(min = 68.dp).clip(MemoraShapes.control)
+            .clickable(role = Role.Button, onClick = onClick)
+            .padding(vertical = MemoraSpacing.xs, horizontal = MemoraSpacing.xs)
+            .then(if (testTag == null) Modifier else Modifier.testTag(testTag)),
+        horizontalArrangement = Arrangement.spacedBy(MemoraSpacing.sm), verticalAlignment = Alignment.CenterVertically,
     ) {
-        IconBubble(icon, tone)
+        IconBubble(icon, tone, size = 48)
         Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
             Text(title, style = MaterialTheme.typography.titleMedium, color = colors.ink)
-            Text(subtitle, style = MaterialTheme.typography.bodySmall, color = colors.muted)
+            Text(subtitle, style = MaterialTheme.typography.bodySmall, color = colors.muted, maxLines = 2, overflow = TextOverflow.Ellipsis)
         }
         Icon(Glyph.Chevron, null, Modifier.size(17.dp), tint = colors.muted)
+    }
+}
+
+@Composable
+internal fun RowScope.MoreDestinationCard(
+    icon: ImageVector,
+    title: String,
+    subtitle: String,
+    tone: Int = 0,
+    testTag: String,
+    onClick: () -> Unit,
+) {
+    MemoraCard(
+        onClick = onClick,
+        contentPadding = MemoraSpacing.md,
+        modifier = Modifier.weight(1f).heightIn(min = 148.dp).testTag(testTag),
+    ) {
+        IconBubble(icon, tone, size = 48)
+        Text(title, style = MaterialTheme.typography.titleMedium, color = colors.ink, maxLines = 1, overflow = TextOverflow.Ellipsis)
+        Text(subtitle, style = MaterialTheme.typography.bodySmall, color = colors.muted, maxLines = 2, overflow = TextOverflow.Ellipsis)
+    }
+}
+
+@Composable
+fun MemoraTopBar(
+    title: String,
+    subtitle: String? = null,
+    isHome: Boolean = false,
+    showBack: Boolean = false,
+    showSettings: Boolean = false,
+    onBack: () -> Unit = {},
+    onAbout: () -> Unit = {},
+    onSettings: () -> Unit = {},
+) {
+    Row(
+        Modifier.fillMaxWidth().statusBarsPadding().padding(horizontal = MemoraSpacing.xl, vertical = MemoraSpacing.xs),
+        horizontalArrangement = Arrangement.spacedBy(MemoraSpacing.xs),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        when {
+            showBack -> IconButton(onClick = onBack, modifier = Modifier.size(48.dp).testTag("back")) {
+                Icon(Glyph.Back, s(R.string.back), tint = colors.ink)
+            }
+            isHome -> Box(Modifier.size(48.dp), contentAlignment = Alignment.CenterStart) { BrandMark(Modifier.size(36.dp)) }
+            else -> Spacer(Modifier.size(48.dp))
+        }
+        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(1.dp)) {
+            Text(
+                title,
+                style = if (isHome) MaterialTheme.typography.headlineMedium.copy(letterSpacing = (-1.2).sp)
+                    else MaterialTheme.typography.titleLarge,
+                color = colors.ink,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+            if (subtitle != null) Text(subtitle, style = MaterialTheme.typography.bodySmall, color = colors.muted,
+                maxLines = 1, overflow = TextOverflow.Ellipsis)
+        }
+        IconButton(onClick = onAbout, modifier = Modifier.size(48.dp).testTag("app_info")) {
+            Icon(Glyph.Shield, s(R.string.about), tint = colors.muted)
+        }
+        if (showSettings) IconButton(onClick = onSettings, modifier = Modifier.size(48.dp).testTag("open_settings")) {
+            Icon(Glyph.Settings, s(R.string.settings), tint = colors.muted)
+        }
+    }
+}
+
+@Composable
+internal fun MemoraBottomNavigation(selected: AppDestination, onSelect: (AppDestination) -> Unit) {
+    NavigationBar(
+        containerColor = colors.card,
+        contentColor = colors.ink,
+        tonalElevation = 0.dp,
+        windowInsets = NavigationBarDefaults.windowInsets,
+        modifier = Modifier.border(BorderStroke(1.dp, colors.line)),
+    ) {
+        val labels = listOf(R.string.nav_home, R.string.nav_secretary, R.string.cases, R.string.nav_memory, R.string.nav_more)
+        val icons = listOf(Glyph.Home, Glyph.Chat, Glyph.Folder, Glyph.Memory, Glyph.Grid)
+        AppDestination.PRIMARY_TABS.forEachIndexed { index, destination ->
+            NavigationBarItem(
+                selected = selected == destination,
+                onClick = { onSelect(destination) },
+                modifier = Modifier.testTag("nav_${destination.key}"),
+                icon = { Icon(icons[index], null, Modifier.size(22.dp)) },
+                label = {
+                    Text(
+                        s(labels[index]),
+                        modifier = Modifier.testTag("nav_label_${destination.key}"),
+                        fontSize = if (LocalDensity.current.fontScale > 1.15f) 9.5.sp else 11.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+                        maxLines = 2,
+                        softWrap = true,
+                    )
+                },
+                colors = NavigationBarItemDefaults.colors(
+                    selectedIconColor = colors.onSoftAccent,
+                    selectedTextColor = colors.accent,
+                    unselectedIconColor = colors.muted,
+                    unselectedTextColor = colors.muted,
+                    indicatorColor = colors.softAccent,
+                ),
+            )
+        }
     }
 }
 

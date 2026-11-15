@@ -4,9 +4,7 @@ import android.content.res.Configuration
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
-import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -15,10 +13,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalConfiguration
-import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.testTag
-import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import ai.memora.app.ui.*
@@ -105,8 +100,16 @@ fun MemoraApp(initialRoute: String = "home", initialTheme: String = "system", ca
                 } else LocalProfileErrorScreen(R.string.onboarding_load_error, profileModel::retry)
             }
             is LocalProfileState.Ready -> {
-            var route by rememberSaveable { mutableStateOf(initialRoute) }
-            var backStack by rememberSaveable { mutableStateOf(emptyList<String>()) }
+            var navigation by rememberSaveable(stateSaver = AppNavigationState.Saver) {
+                mutableStateOf(AppNavigationState.start(AppRoute.fromLegacyRoute(initialRoute)))
+            }
+            val route = navigation.current
+            val navigateRoute: (AppRoute) -> Unit = { destination ->
+                navigation = navigation.navigate(destination)
+            }
+            val navigate: (String) -> Unit = { destination ->
+                navigateRoute(AppRoute.fromLegacyRoute(destination))
+            }
             var capture by rememberSaveable { mutableStateOf(false) }
             var voice by rememberSaveable { mutableStateOf(false) }
             var pendingCommand by rememberSaveable { mutableStateOf<String?>(null) }
@@ -162,18 +165,8 @@ fun MemoraApp(initialRoute: String = "home", initialTheme: String = "system", ca
                     }
                 }
             }
-            val navigate: (String) -> Unit = { destination ->
-                if (destination != route) {
-                    backStack = backStack + route
-                    route = destination
-                }
-            }
-            val topRoutes = setOf("home", "chat", "cases", "memory", "more")
             val goBack: () -> Unit = {
-                if (backStack.isNotEmpty()) {
-                    route = backStack.last()
-                    backStack = backStack.dropLast(1)
-                } else route = "home"
+                navigation = navigation.back()
             }
             val added = s(R.string.draft_added)
             LaunchedEffect(captureState.captures, pendingCommand) {
@@ -182,110 +175,82 @@ fun MemoraApp(initialRoute: String = "home", initialTheme: String = "system", ca
                     pendingCommand = null
                     if (capture) {
                         capture = false
-                        if (route != "inbox") navigate("inbox")
+                        if (route.destination != AppDestination.INBOX) navigate("inbox")
                         scope.launch { snackbar.showSnackbar(added) }
                     }
                 }
             }
-            BackHandler(enabled = (route != "home" || backStack.isNotEmpty()) && !capture && detailId == null && !about, onBack = goBack)
+            BackHandler(enabled = (route.destination != AppDestination.TODAY || navigation.backStack.isNotEmpty()) &&
+                !capture && detailId == null && !about, onBack = goBack)
 
             val openCapture: (Boolean) -> Unit = { showVoice ->
                 voice = showVoice; capture = true
             }
-            val routes = listOf("home", "chat", "cases", "memory", "more")
-            val moreRoutes = setOf("inbox", "notes", "finance", "calendar", "people", "projects", "tasks",
-                "tables", "portable_backup", "settings", "voice_memory", "licenses")
-            val selectedTopRoute = route.takeIf { it in topRoutes }
-                ?: "more".takeIf { route in moreRoutes }
-                ?: backStack.lastOrNull { it in topRoutes }
-                ?: "home"
-            val labels = listOf(R.string.nav_home, R.string.nav_secretary, R.string.cases, R.string.nav_memory, R.string.nav_more)
-            val icons = listOf(Glyph.Home, Glyph.Chat, Glyph.Folder, Glyph.Memory, Glyph.Grid)
-            val titleId = when (route) {
-                "memory" -> R.string.nav_memory; "tasks" -> R.string.nav_tasks; "more" -> R.string.nav_more
-                "cases" -> R.string.cases
-                "inbox" -> R.string.inbox; "notes" -> R.string.notes_title; "finance" -> R.string.finance; "calendar" -> R.string.calendar_title; "people" -> R.string.people
-                "projects" -> R.string.projects; "settings" -> R.string.settings; "chat" -> R.string.nav_secretary
-                "voice_memory" -> R.string.voice_memory_title; "tables" -> R.string.tables_title
-                "portable_backup" -> R.string.backup_title
-                "licenses" -> R.string.open_source_licenses
-                else -> R.string.app_name
+            val titleId = when (route.destination) {
+                AppDestination.MEMORY -> R.string.nav_memory
+                AppDestination.TASKS -> R.string.nav_tasks
+                AppDestination.MORE -> R.string.nav_more
+                AppDestination.CASES -> R.string.cases
+                AppDestination.INBOX -> R.string.inbox
+                AppDestination.NOTES -> R.string.notes_title
+                AppDestination.FINANCE -> R.string.finance
+                AppDestination.CALENDAR -> R.string.calendar_title
+                AppDestination.PEOPLE -> R.string.people
+                AppDestination.PROJECTS -> R.string.projects
+                AppDestination.SETTINGS -> R.string.settings
+                AppDestination.SECRETARY -> R.string.nav_secretary
+                AppDestination.VOICE_MEMORY -> R.string.voice_memory_title
+                AppDestination.TABLES -> R.string.tables_title
+                AppDestination.PORTABLE_BACKUP -> R.string.backup_title
+                AppDestination.LICENSES -> R.string.open_source_licenses
+                AppDestination.ACTION_TARGET -> R.string.action_related_details
+                AppDestination.TODAY -> R.string.app_name
             }
 
             Scaffold(
                 containerColor = colors.background,
                 topBar = {
-                    Row(
-                        Modifier.fillMaxWidth().statusBarsPadding().padding(horizontal = 20.dp, vertical = 10.dp),
-                        horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = Alignment.CenterVertically,
-                    ) {
-                        if (route !in topRoutes || backStack.isNotEmpty()) {
-                            IconButton(goBack, Modifier.testTag("back")) { Icon(Glyph.Back, s(R.string.back), tint = colors.ink) }
-                        } else BrandMark()
-                        Column(Modifier.weight(1f)) {
-                            Text(if (route == "home") "memora" else s(titleId),
-                                style = if (route == "home") MaterialTheme.typography.headlineMedium.copy(letterSpacing = (-1.2).sp)
-                                else MaterialTheme.typography.titleLarge, color = colors.ink)
-                            if (route == "home") Text(s(R.string.tagline), style = MaterialTheme.typography.bodySmall, color = colors.muted)
-                        }
-                        IconButton(onClick = { about = true }, modifier = Modifier.testTag("app_info")) { Icon(Glyph.Shield, s(R.string.about)) }
-                        if (route == "home") IconButton({ navigate("settings") }, Modifier.testTag("open_settings")) {
-                            Icon(Glyph.Settings, s(R.string.settings), tint = colors.muted, modifier = Modifier.size(22.dp))
-                        }
-                    }
+                    MemoraTopBar(
+                        title = if (route.destination == AppDestination.TODAY) "memora" else s(titleId),
+                        subtitle = if (route.destination == AppDestination.TODAY) s(R.string.tagline) else null,
+                        isHome = route.destination == AppDestination.TODAY,
+                        showBack = !route.destination.isPrimaryTab || navigation.backStack.isNotEmpty(),
+                        showSettings = route.destination == AppDestination.TODAY,
+                        onBack = goBack,
+                        onAbout = { about = true },
+                        onSettings = { navigate("settings") },
+                    )
                 },
                 bottomBar = {
-                    NavigationBar(containerColor = colors.card, tonalElevation = 0.dp) {
-                        routes.forEachIndexed { index, destination ->
-                            NavigationBarItem(
-                                selected = selectedTopRoute == destination,
-                                onClick = { route = destination; backStack = emptyList() },
-                                modifier = Modifier.testTag("nav_$destination"),
-                                icon = { Icon(icons[index], null, Modifier.size(22.dp)) },
-                                label = {
-                                    Text(
-                                        s(labels[index]),
-                                        modifier = Modifier.testTag("nav_label_$destination"),
-                                        fontSize = if (LocalDensity.current.fontScale > 1.15f) 9.5.sp else 11.sp,
-                                        fontWeight = FontWeight.Medium,
-                                        textAlign = TextAlign.Center,
-                                        maxLines = 2,
-                                        softWrap = true,
-                                    )
-                                },
-                                colors = NavigationBarItemDefaults.colors(
-                                    selectedIconColor = colors.accent, selectedTextColor = colors.accent,
-                                    unselectedIconColor = colors.muted, unselectedTextColor = colors.muted,
-                                    indicatorColor = colors.softAccent,
-                                ),
-                            )
-                        }
-                    }
+                    MemoraBottomNavigation(
+                        selected = route.selectedPrimaryTab,
+                        onSelect = { navigation = navigation.selectTab(it) },
+                    )
                 },
                 snackbarHost = { SnackbarHost(snackbar) },
             ) { insets ->
                 Box(Modifier.fillMaxSize().padding(insets).consumeWindowInsets(insets), contentAlignment = Alignment.TopCenter) {
                     Box(Modifier.widthIn(max = 720.dp).fillMaxSize()) {
-                      screens.SaveableStateProvider(route) {
-                        when (route) {
-                            "home" -> WorkingHomeScreen(language, captureState, navigate, openCapture, { detailId = it }, taskStore) {
+                      screens.SaveableStateProvider(route.stateKey) {
+                        when (route.destination) {
+                            AppDestination.TODAY -> WorkingHomeScreen(language, captureState, navigate, openCapture, { detailId = it }, taskStore) {
                                 VoiceFirstScreen(onOpenSettings = { navigate("settings") })
                             }
-                            "memory" -> WorkingMemoryScreen(captureState, { detailId = it }, { openCapture(false) }, { navigate("inbox") },
+                            AppDestination.MEMORY -> WorkingMemoryScreen(captureState, { detailId = it }, { openCapture(false) }, { navigate("inbox") },
                                 localProfile = profile.profile, updateLocalProfile = { input, done ->
                                     profileModel.updateProfile(input) { saved ->
                                         if (saved) appearanceModel.change(language = input.language)
                                         done(saved)
                                     }
                                 })
-                            "tasks" -> ScreenColumn { ScreenHeading(s(R.string.tasks_title), s(R.string.working_tasks_hint)); TaskPrototype(taskStore) }
-                            "more" -> MoreScreen(navigate, { about = true }, { openCapture(true) }, language)
-                            "voice_memory" -> VoiceMemoryScreen()
-                            "notes" -> SavedObjectsScreen(DomainKind.NOTE)
-                            "tables" -> TablesScreen()
-                            "portable_backup" -> PortableBackupScreen()
-                            "licenses" -> OpenSourceLicensesScreen()
-                            "inbox" -> InboxScreen(captureState.captures, captureState.loading, captureState.error && !captureState.ready,
+                            AppDestination.TASKS -> ScreenColumn { ScreenHeading(s(R.string.tasks_title), s(R.string.working_tasks_hint)); TaskPrototype(taskStore) }
+                            AppDestination.MORE -> MoreScreen(navigate, { about = true }, { openCapture(true) }, language)
+                            AppDestination.VOICE_MEMORY -> VoiceMemoryScreen()
+                            AppDestination.NOTES -> SavedObjectsScreen(DomainKind.NOTE)
+                            AppDestination.TABLES -> TablesScreen()
+                            AppDestination.PORTABLE_BACKUP -> PortableBackupScreen()
+                            AppDestination.LICENSES -> OpenSourceLicensesScreen()
+                            AppDestination.INBOX -> InboxScreen(captureState.captures, captureState.loading, captureState.error && !captureState.ready,
                                 captureState.managementError || captureExportError,
                                 captureState.ready && (!captureState.error || captureState.limitReached) && !captureState.dirty && !captureState.saving &&
                                     !captureState.submitting && !captureState.retrySubmission && !captureState.managementBusy && !captureImportBusy,
@@ -296,17 +261,19 @@ fun MemoraApp(initialRoute: String = "home", initialTheme: String = "system", ca
                                 { entries, archived -> captureModel.session.archive(entries, archived) },
                                 captureState.managementBusy, { request -> captureModel.session.revise(request) },
                                 { entry -> captureModel.session.delete(entry.source.id, entry.source.revisions.last().id) })
-                            "finance" -> FinanceScreen()
-                            "calendar" -> CalendarScreen()
-                            "people" -> SavedObjectsScreen(DomainKind.PERSON)
-                            "cases" -> CasesScreen { navigate("chat") }
-                            "projects" -> SavedObjectsScreen(DomainKind.PROJECT)
-                            "settings" -> SettingsScreen(theme, { appearanceModel.change(theme = it) }, language, {
+                            AppDestination.FINANCE -> FinanceScreen()
+                            AppDestination.CALENDAR -> CalendarScreen()
+                            AppDestination.PEOPLE -> SavedObjectsScreen(DomainKind.PERSON)
+                            AppDestination.CASES -> CasesScreen { navigate("chat") }
+                            AppDestination.PROJECTS -> SavedObjectsScreen(DomainKind.PROJECT)
+                            AppDestination.SETTINGS -> SettingsScreen(theme, { appearanceModel.change(theme = it) }, language, {
                                 appearanceModel.change(language = it)
                                 (profileState as? LocalProfileState.Ready)?.profile?.let { profile -> profileModel.syncLanguage(it) }
                             }, appearance.ready && !appearance.busy, appearance.error, { appearanceModel.load() }, { about = true })
-                            "chat" -> AgentChatScreen(language, showVoiceControl = true, onOpenArea = navigate,
+                            AppDestination.SECRETARY -> AgentChatScreen(language, showVoiceControl = true, onOpenArea = navigate,
+                                onOpenTarget = navigateRoute,
                                 textTurnOverride = textTurnOverride)
+                            AppDestination.ACTION_TARGET -> ActionTargetDetailScreen(route)
                         }
                       }
                     }
