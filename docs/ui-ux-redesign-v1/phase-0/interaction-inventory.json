@@ -1,0 +1,243 @@
+{
+  "schema_version": "1.0",
+  "audit_id": "ACT-0235",
+  "project": "Memora 2.0 UI/UX redesign V1",
+  "stage": 0,
+  "branch": "ui/redesign-v1",
+  "source_commit": "e627ab3",
+  "profile": {
+    "type": "fresh synthetic emulator profile",
+    "android": "14 / API 34",
+    "resolution": "1080x2400",
+    "locale": "az-AZ",
+    "app_version": "1.1.68-date-anchor (versionCode 90)",
+    "personal_data": false,
+    "microphone_or_ai_request": false
+  },
+  "navigation": {
+    "top_level_routes": ["home", "chat", "cases", "memory", "more"],
+    "nested_routes": ["tasks", "notes", "finance", "calendar", "people", "projects", "tables", "portable_backup", "settings", "voice_memory", "licenses", "inbox"],
+    "implementation": "rememberSaveable String route + String backStack, SaveableStateHolder, bottom NavigationBar; detail screens and sheets are local UI state",
+    "known_limit": "Action-result open-related callbacks can route to a section without carrying the exact target object ID."
+  },
+  "field_contract": ["screen", "element", "action", "destination", "data_context", "back_behavior", "loading", "error", "empty", "permission_or_consent", "accessibility", "verification"],
+  "screens": [
+    {
+      "screen": "First-run profile setup",
+      "route": "profile gate before shell",
+      "purpose": "Collect local display name, language and response preferences before entering Today.",
+      "evidence": "LocalProfileOnboarding.kt; WorkingScreens.kt",
+      "controls": [
+        {"element":"Name field","action":"Enter or edit display name (bounded input)","destination":"No route change","data_context":"Local profile only","back_behavior":"Shell Back is not shown until profile resolves","loading":"Loading/error alternatives exist","error":"Save error shown and can be retried","empty":"Blank name accepted per model policy","permission_or_consent":"No AI or microphone permission","accessibility":"Text field label; needs TalkBack/device pass","verification":"Static review; fresh-emulator runtime exposed the P0 first-run skip."},
+        {"element":"Language chips AZ/RU/EN","action":"Choose UI language","destination":"No route change","data_context":"Local profile and appearance state","back_behavior":"No nested destination","loading":"Disabled during save","error":"Save error remains visible","empty":"One selected language","permission_or_consent":"None","accessibility":"FilterChip selected semantics","verification":"Static review; not exercised because fresh install bypassed onboarding."},
+        {"element":"Tone and response-style chips","action":"Set assistant tone and answer length","destination":"No route change","data_context":"Local profile preferences","back_behavior":"No nested destination","loading":"Disabled during save","error":"Save error remains visible","empty":"Defaults selected","permission_or_consent":"No cloud request","accessibility":"Selected semantics; labels need spoken review","verification":"Static review only."},
+        {"element":"Timezone choice","action":"Select profile timezone","destination":"No route change","data_context":"Local profile date behavior","back_behavior":"No nested destination","loading":"Disabled during save","error":"Save error remains visible","empty":"Default/fallback is offered","permission_or_consent":"None","accessibility":"Chip semantics","verification":"Static review only."},
+        {"element":"Start / retry","action":"Persist profile or retry profile load","destination":"Shell → Today on success","data_context":"Profile preferences","back_behavior":"No previous shell route","loading":"Loading state blocks duplicate action","error":"Retry screen or save failure shown","empty":"Onboarding is required for a genuinely new install","permission_or_consent":"None","accessibility":"Button semantics; runtime first-run issue is P0","verification":"Clean emulator opened Today instead; exact race root cause is not proven."}
+      ]
+    },
+    {
+      "screen":"App shell and bottom navigation","route":"home/chat/cases/memory/more + nested routes",
+      "purpose":"Global section navigation, title, Back and app information.",
+      "evidence":"MemoraApp.kt",
+      "controls":[
+        {"element":"Five bottom navigation items","action":"Switch to Today, Secretary, Cases, Memory or More and clear nested stack","destination":"One of five root routes","data_context":"Shared screen state is held by SaveableStateHolder; root tap starts fresh stack","back_behavior":"Android Back pops String backStack; root returns to home","loading":"Destination owns its loading state","error":"Destination owns its error state","empty":"Destination owns its empty state","permission_or_consent":"No global permission","accessibility":"Material NavigationBarItem labels/selected semantics; 2-line labels; TalkBack unverified","verification":"Shown in actual screenshots; nested Cases/Secretary and More/Settings Back manually checked."},
+        {"element":"Toolbar Back / Android system Back","action":"Pop prior route or return home","destination":"Previous route in saved String stack","data_context":"No route arguments today","back_behavior":"Top Back button and BackHandler use goBack; modal/detail state can intercept differently","loading":"No loading state","error":"No error state","empty":"No stack falls back to Today","permission_or_consent":"None","accessibility":"Toolbar icon has localized description; system Back standard behavior","verification":"Two nested paths manually checked; nested object dialog Back has separate issue."},
+        {"element":"App information / shield icon","action":"Open app information/licenses dialog or section","destination":"about dialog / licenses destination","data_context":"No personal data","back_behavior":"Dismiss dialog / route Back","loading":"None","error":"None","empty":"Static informational content","permission_or_consent":"None","accessibility":"IconButton localized description; dialog semantics need TalkBack pass","verification":"Source reviewed; screenshot/runtime behavior not individually checked."},
+        {"element":"Today toolbar Settings icon","action":"Open Settings","destination":"settings","data_context":"Appearance/profile preferences","back_behavior":"Returns to prior route","loading":"Settings state-owned","error":"Settings load error can retry","empty":"No data needed","permission_or_consent":"Settings can contain consent/permission controls","accessibility":"IconButton localized description","verification":"Settings reached via More in manual check; direct home shortcut source-reviewed."}
+      ]
+    },
+    {
+      "screen":"Today","route":"home",
+      "purpose":"Personal overview, voice assistant, capture shortcuts, attention and recent facts.",
+      "evidence":"WorkingScreens.kt; VoiceFirstScreen.kt; Sheets.kt",
+      "screenshot":"screenshots/01-today.png",
+      "controls":[
+        {"element":"Embedded cloud voice assistant / hold-to-talk","action":"Hold to record; release to transcribe, run assistant and speak answer","destination":"Stays on Today; rate-limit shortcut can open Settings","data_context":"Spoken audio sent only after voice cloud consent and Android microphone permission; assistant may use existing local sources by runtime policy","back_behavior":"Leaving screen/lifecycle stop cancels recording/job","loading":"Listening, release, processing, speaking states","error":"Stage-specific safe failure code; sound failure separate; rate limit offers Settings","empty":"Idle hint","permission_or_consent":"Voice consent dialog first; RECORD_AUDIO permission next; optional memory consent separate","accessibility":"Button role and content description; physical hold/release and TalkBack not verified","verification":"Rendered only; no mic, voice or cloud call."},
+        {"element":"Tell / capture button","action":"Open CaptureSheet in text mode","destination":"Modal capture sheet","data_context":"Local note/capture draft and save queue","back_behavior":"Dismiss only when not dirty/submitting; explicit close action","loading":"Load/save/submission state","error":"Draft kept with retry controls","empty":"Empty text-entry state","permission_or_consent":"Voice mode in sheet separately requires applicable consent/permission","accessibility":"Button; sheet field and close semantics need device pass","verification":"Route/source reviewed; not submitted."},
+        {"element":"Write / voice capture button","action":"Open CaptureSheet in voice mode","destination":"Modal capture sheet","data_context":"Local capture audio/transcript path; distinct from assistant conversation","back_behavior":"Sheet dismissal is guarded while dirty or saving","loading":"Capture/transcription/save statuses","error":"Retry path exists","empty":"Capture hint","permission_or_consent":"Capture consent/provider policy must be distinguished from assistant voice; not activated","accessibility":"Button; actual audio path not tested","verification":"Source review only."},
+        {"element":"Tasks/cases/calendar overview cards","action":"Open corresponding destination or details","destination":"tasks/cases/calendar or detail dialog","data_context":"Local protected sources; IDs for recent detail where available","back_behavior":"Route stack or detail dismiss","loading":"Overview reads local repositories","error":"Home shows status/error text; no consistent retry control","empty":"Clear-state message when no activity","permission_or_consent":"No cloud permission","accessibility":"Cards/buttons need focus order and spoken destination review","verification":"Empty Today screenshot; populated links not exercised."},
+        {"element":"Attention suggestions","action":"Open suggested local object/section","destination":"Configured section route","data_context":"Suggestion carries local task/case/event context","back_behavior":"Route Back to Today","loading":"Calculated from local stores","error":"No dedicated recovery UI identified","empty":"No suggestions state","permission_or_consent":"Notifications may be separately configured in Settings","accessibility":"Clickable suggestion semantics need audit","verification":"Static source review; empty profile only."},
+        {"element":"Recent memory cards","action":"Open source detail","destination":"Local source detail dialog","data_context":"Source ID","back_behavior":"Close detail to Today","loading":"Repository-backed state","error":"Unavailable state possible","empty":"No recent items","permission_or_consent":"Local only","accessibility":"Card semantics need TalkBack pass","verification":"No populated sources."}
+      ]
+    },
+    {
+      "screen":"Secretary text conversation","route":"chat",
+      "purpose":"Ask the AI secretary, review answers and navigate to tool results.",
+      "evidence":"AgentChatScreen.kt; MemoraApp.kt",
+      "screenshot":"screenshots/02-secretary.png",
+      "controls":[
+        {"element":"Message field and Send","action":"Submit text turn to agent","destination":"Stays in Secretary; results appended to conversation","data_context":"Text plus bounded local conversation context/tool results according to agent contract","back_behavior":"Route Back; text field draft saveable","loading":"Send disabled/working indicator while busy","error":"Failed text restored as editable draft; safe failure code shown","empty":"No messages state","permission_or_consent":"First send asks text cloud consent; dismissal drops pending consent draft; separate persistent-memory consent dialog","accessibility":"Labeled OutlinedTextField and button semantics; full keyboard/IME pass pending","verification":"Screen captured; no message submitted."},
+        {"element":"Text cloud-consent confirm/cancel","action":"Persist consent and continue pending message / decline and clear pending message","destination":"Same conversation","data_context":"Consent preference; pending text only for confirmation","back_behavior":"Dialog dismiss/cancel","loading":"None","error":"Preference commit failure shown as request error","empty":"None","permission_or_consent":"Explicit text consent; distinct from microphone","accessibility":"AlertDialog and button semantics","verification":"Source review only."},
+        {"element":"Memory consent toggle/dialog","action":"Allow or revoke persistent model memory","destination":"Same conversation","data_context":"Consent setting; no local archive exported by toggle","back_behavior":"Dialog dismiss","loading":"None","error":"Preference save failure sets error state","empty":"No memory context","permission_or_consent":"Explicit separate consent","accessibility":"Toggle/dialog semantics need TalkBack pass","verification":"Source review only."},
+        {"element":"Clear conversation control","action":"Confirm or cancel clearing conversation","destination":"Same conversation","data_context":"Conversation records in local protected store","back_behavior":"Dialog dismiss; confirm clears bounded history per implementation","loading":"Busy state while clearing/refreshing","error":"Failure message/state","empty":"Conversation becomes empty","permission_or_consent":"No Android permission","accessibility":"Destructive action requires clear labels","verification":"Source reviewed; not invoked."},
+        {"element":"Action result card / open related","action":"Open related section; correction action may prepare a draft","destination":"Generic section route today, not reliably exact object detail","data_context":"Result has target kind and ID, but ID often not passed into navigation","back_behavior":"Route Back to Secretary","loading":"Results refresh after successful turn","error":"Failed turn preserves draft; tool result errors rendered","empty":"No result card","permission_or_consent":"Text consent required for sending","accessibility":"Card/action semantics need exact spoken target","verification":"Static; no populated tool result."},
+        {"element":"Embedded voice assistant","action":"Use voice hold/release in the Secretary screen","destination":"Stays in Secretary","data_context":"Cloud voice + agent and optional local memory policy","back_behavior":"Lifecycle cancellation; route Back","loading":"Recording/processing/speaking","error":"Safe stage-specific code; settings route for quota","empty":"Idle state","permission_or_consent":"Separate voice cloud consent and microphone permission","accessibility":"Same VoiceFirstScreen contract","verification":"Rendered on screenshot; no audio sent."}
+      ]
+    },
+    {
+      "screen":"Cases","route":"cases",
+      "purpose":"Search, filter, inspect and page local cases; open Secretary to create/resolve.",
+      "evidence":"CasesScreen.kt",
+      "screenshot":"screenshots/03-cases.png",
+      "controls":[
+        {"element":"Search field","action":"Filter case title/details/participants","destination":"Same list","data_context":"Local same-scope case records; bounded query","back_behavior":"No nested route","loading":"Repository load/page state","error":"Load failure displayed without in-place retry","empty":"No cases or no matches message","permission_or_consent":"Local only","accessibility":"Labeled field; keyboard and clear-action semantics need pass","verification":"Empty list captured; no query entered."},
+        {"element":"Status filter chips (all/open/waiting/completed/cancelled)","action":"Filter cases by status","destination":"Same list","data_context":"Status enum only","back_behavior":"No route change","loading":"List reload/filter","error":"Same list error state","empty":"No matching cases","permission_or_consent":"None","accessibility":"FilterChip selected semantics; row horizontally scrolls with weak overflow cue","verification":"Visible empty screen; fifth chip may require swipe; populated filter not tested."},
+        {"element":"Clear filters","action":"Reset query/status","destination":"Same list","data_context":"Clears local UI filter state","back_behavior":"No route change","loading":"None","error":"No dedicated error","empty":"All cases empty","permission_or_consent":"None","accessibility":"Button label and state announcement need pass","verification":"Source reviewed."},
+        {"element":"Case card","action":"Open details/source timeline; change status (waiting/completed/reopen) where allowed","destination":"Case detail dialog and local repository","data_context":"Canonical case ID, evidence/source links, status event","back_behavior":"Dialog dismiss; nested source navigation has separate detail stack","loading":"Detail/read state","error":"Unavailable/load error state","empty":"No records","permission_or_consent":"No cloud permission","accessibility":"Card, status controls, and destructive/reopen semantics need pass","verification":"Empty screen only; no real synthetic case fixture populated."},
+        {"element":"Secretary empty-state CTA","action":"Open Secretary","destination":"chat","data_context":"No draft/object ID explicitly carried","back_behavior":"Current route stack returns to Cases (manually confirmed)","loading":"Secretary loads its own state","error":"Secretary error behavior","empty":"Only shown for empty results","permission_or_consent":"Secretary asks text/voice consent on use","accessibility":"Button semantics","verification":"Actual route manually followed; Android Back returned to Cases."},
+        {"element":"Newer / older pagination controls","action":"Load adjacent result page","destination":"Same list","data_context":"Stable page cursor/offset and query state","back_behavior":"No route change","loading":"Page load status","error":"Paging error rendering needs populated pass","empty":"Disabled at boundary","permission_or_consent":"None","accessibility":"Enabled state and page direction labels need pass","verification":"Source/automated baseline only; no records on emulator."}
+      ]
+    },
+    {
+      "screen":"Memory","route":"memory",
+      "purpose":"Search local retained sources, review profile facts and manage retention/archive.",
+      "evidence":"WorkingScreens.kt",
+      "screenshot":"screenshots/04-memory.png",
+      "controls":[
+        {"element":"Local search field","action":"Search saved memory/conversation sources","destination":"Same screen","data_context":"Local index and protected-store scope; query bounded","back_behavior":"No route change","loading":"Search/read loading","error":"Load error state","empty":"No sources or no match state","permission_or_consent":"Local read only; does not send query to Gemini","accessibility":"Labeled field; TalkBack and keyboard pending","verification":"Empty screen captured; no query/data."},
+        {"element":"Archived toggle/filter","action":"Include or exclude archived records","destination":"Same screen","data_context":"Local filter","back_behavior":"No route change","loading":"Results refresh","error":"Same read error","empty":"No matching records","permission_or_consent":"None","accessibility":"Selected chip semantics","verification":"Source reviewed."},
+        {"element":"Profile fact add/edit/delete controls","action":"Create/edit/remove owner-entered fact and revisions","destination":"Local editor/source dialog","data_context":"Protected profile fact with provenance/revision IDs","back_behavior":"Dialog Back/close returns Memory","loading":"Repository save/read","error":"Validation/save failure remains visible","empty":"Empty profile guidance","permission_or_consent":"Local protected DB only","accessibility":"Form and destructive confirmation require device pass","verification":"Source reviewed; not exercised on empty profile."},
+        {"element":"Retention chooser and confirmation","action":"Select retention period (forever/30/90/365) and confirm","destination":"Same screen","data_context":"Local retention setting and affected derived records","back_behavior":"Cancel dismisses confirmation","loading":"Save/cleanup state","error":"Save failure state","empty":"No sources to expire","permission_or_consent":"Explicit user confirmation for retention action","accessibility":"Dialog choices and consequences need spoken validation","verification":"Source reviewed; not changed."},
+        {"element":"Source, episode, turn and revision rows","action":"Open exact local source/evidence; paginate; delete with confirmation where offered","destination":"Detail dialog/revision history","data_context":"Source ID, revision ID, turn/episode evidence","back_behavior":"Close detail returns Memory; nested history back must be tested","loading":"Paged local reads","error":"Unavailable-source state","empty":"No history state","permission_or_consent":"Local only","accessibility":"Row summary and citation labels need pass","verification":"No populated records."},
+        {"element":"Manage inbox / capture","action":"Open Inbox or capture flow","destination":"inbox or capture sheet","data_context":"Local draft IDs","back_behavior":"Route/sheet Back","loading":"Repository state","error":"Retry exists in Inbox","empty":"Empty source state","permission_or_consent":"Capture voice rules apply","accessibility":"Button semantics","verification":"Source reviewed."}
+      ]
+    },
+    {
+      "screen":"More and section directory","route":"more",
+      "purpose":"Monthly finance overview plus links to feature sections and app settings.",
+      "evidence":"Screens.kt",
+      "screenshot":"screenshots/05-more.png",
+      "controls":[
+        {"element":"Previous/next month controls","action":"Change report month","destination":"Same screen","data_context":"Read-only local ledger aggregate and locale formatted month","back_behavior":"No route change","loading":"Report repository state","error":"Error card has no local retry control","empty":"No transactions summary","permission_or_consent":"Local only","accessibility":"Month controls need clear month announcement","verification":"First viewport captured; empty profile."},
+        {"element":"Section directory rows","action":"Open Tasks, capture, Voice Memory, Inbox, Notes, Finance, Calendar, People, Cases, Projects, Tables, Portable Backup, Settings, Privacy/About","destination":"Nested route or information dialog","data_context":"Local records/settings; Backup uses user-selected SAF document","back_behavior":"Nested routes should return to More; Settings Back manually verified","loading":"Each destination own state","error":"Destination-specific states","empty":"Destination-specific empty state","permission_or_consent":"Depends on destination","accessibility":"Rows need button semantics and directory discoverability; most are below initial viewport","verification":"More screenshot confirms low first-screen discoverability; scroll behavior source-reviewed."},
+        {"element":"Quick capture voice action","action":"Open voice CaptureSheet","destination":"CaptureSheet modal","data_context":"Local capture draft","back_behavior":"Guarded sheet dismiss","loading":"CaptureSessionState","error":"Retry/save states","empty":"Capture prompt","permission_or_consent":"Voice capture permission/consent as applicable","accessibility":"Button and sheet semantics need pass","verification":"Not activated."}
+      ]
+    },
+    {
+      "screen":"Tasks","route":"tasks",
+      "purpose":"Show protected assistant tasks and legacy prototype tasks.",
+      "evidence":"TaskPrototype.kt; MemoraApp.kt",
+      "controls":[
+        {"element":"Assistant task rows","action":"Review/toggle completion","destination":"Same screen or task detail route","data_context":"Protected task IDs/events","back_behavior":"Route Back","loading":"Protected task read","error":"Store error state","empty":"No assistant tasks","permission_or_consent":"Local only","accessibility":"Checkbox/button semantics need pass","verification":"No tasks in fresh profile."},
+        {"element":"Prototype task create/edit/title/reminder controls","action":"Create/edit prototype task, set reminder","destination":"Same screen","data_context":"Separate encrypted local task store, not protected assistant task source","back_behavior":"Route Back","loading":"Store operation","error":"Store failure/status","empty":"No prototype tasks","permission_or_consent":"Notification permission/scheduling applies to reminder","accessibility":"Mixed form controls need audit","verification":"Source labels flow as test-only; no personal task created."},
+        {"element":"Complete/delete/export/clear controls","action":"Change prototype tasks, export or clear local task store","destination":"Same screen or platform document picker","data_context":"Prototype store records","back_behavior":"Confirmation dialog or picker Back","loading":"Store/export state","error":"Operation error","empty":"No records after clear","permission_or_consent":"Delete/clear confirmation; notification settings as needed","accessibility":"Destructive action confirmation and picker labels need pass","verification":"Source only; not invoked."}
+      ]
+    },
+    {
+      "screen":"Finance and monthly report","route":"finance (ledger); report is embedded in more",
+      "purpose":"View local transactions, obligations/settlements and aggregates.",
+      "evidence":"FinanceScreen.kt; Screens.kt",
+      "controls":[
+        {"element":"Finance event and settlement rows","action":"Read transaction/settlement detail","destination":"Finance detail or source detail where available","data_context":"Canonical ledger event ID; money values are read-only in this UI","back_behavior":"Detail close returns to Finance","loading":"Local ledger query","error":"Finance error state, no in-place retry observed","empty":"No transactions message","permission_or_consent":"Local protected data only","accessibility":"Currency reading and row labels require TalkBack pass","verification":"No financial records were present or read."},
+        {"element":"Open Finance section link","action":"Open ledger list","destination":"finance","data_context":"No filter/context consistently forwarded from report","back_behavior":"Back returns More","loading":"Finance read state","error":"Finance error state","empty":"No events","permission_or_consent":"None","accessibility":"Link semantics","verification":"Static review."}
+      ]
+    },
+    {
+      "screen":"Calendar","route":"calendar",
+      "purpose":"Read local calendar events and refresh data.",
+      "evidence":"CalendarScreen.kt",
+      "controls":[
+        {"element":"Refresh","action":"Reload local event repository","destination":"Same screen","data_context":"Local calendar event rows","back_behavior":"No route change","loading":"Refreshing indicator","error":"Unavailable/error state with retry via refresh","empty":"No upcoming events","permission_or_consent":"No calendar provider permission identified; local agent calendar source","accessibility":"Button semantics and refresh result announcement need pass","verification":"Source reviewed; no events."},
+        {"element":"Calendar event row","action":"Open event detail/source","destination":"Detail dialog if offered","data_context":"Event ID and related links","back_behavior":"Close to Calendar","loading":"Read state","error":"Unavailable source state","empty":"No event rows","permission_or_consent":"Local only","accessibility":"Date/time reading needs pass","verification":"Empty profile only."}
+      ]
+    },
+    {
+      "screen":"Saved objects: Notes, People, Projects","route":"notes / people / projects",
+      "purpose":"Search and inspect local canonical objects, aliases and confirmed links.",
+      "evidence":"SavedObjectsScreen.kt",
+      "screenshots":["screenshots/07-people.png"],
+      "controls":[
+        {"element":"Search field","action":"Filter local object list","destination":"Same screen","data_context":"Same-scope object index; bounded search","back_behavior":"No route change","loading":"Repository state","error":"Error empty state without retry","empty":"No objects/no matches","permission_or_consent":"Local only","accessibility":"Labeled field","verification":"People empty screen captured; Notes/Projects reviewed in source."},
+        {"element":"Object row","action":"Open detail and related source/activities","destination":"Nested detail AlertDialog","data_context":"Canonical object ID and exact link IDs where present","back_behavior":"In-dialog Back pops detailStack, but Android Back can dismiss full dialog; selectedTask may remain stale on dismiss","loading":"Related data reads","error":"Source unavailable state","empty":"No object rows","permission_or_consent":"Local only","accessibility":"Nested dialog announcements/focus return unverified","verification":"Static review; populated data not tested."},
+        {"element":"Person alias add/retire/restore","action":"Manage owner-entered exact alias","destination":"Person detail/editor","data_context":"Person ID, alias ID/revision; explicit owner-created identity mapping","back_behavior":"Dialog close/back","loading":"Protected repository mutation","error":"Validation/save error","empty":"No aliases","permission_or_consent":"Explicit owner action; no automatic fuzzy merge","accessibility":"Text input and state buttons need pass","verification":"Source/host suite only."},
+        {"element":"Link/unlink task, person or calendar relationship","action":"Confirm a scoped canonical relationship and reverse it","destination":"Current object detail","data_context":"Canonical IDs and relationship history","back_behavior":"Dialog/detail Back","loading":"Repository mutation","error":"Conflict/validation error","empty":"No related objects","permission_or_consent":"Owner confirmation required","accessibility":"Confirmation must name both objects","verification":"Synthetic relationship tests in baseline; UI populated-link flow not run."}
+      ]
+    },
+    {
+      "screen":"Inbox / captures","route":"inbox",
+      "purpose":"Review, edit, archive, import/export and delete capture drafts/sources.",
+      "evidence":"Screens.kt; MemoraApp.kt",
+      "controls":[
+        {"element":"Search and select checkboxes","action":"Filter and select capture entries","destination":"Same list","data_context":"Local capture source IDs","back_behavior":"Route Back","loading":"Capture session load/management state","error":"Retry load control exists","empty":"No drafts","permission_or_consent":"Local only","accessibility":"Selection and result count need announcement","verification":"Source review only."},
+        {"element":"Archive/restore selected","action":"Change archive status","destination":"Same list","data_context":"Selected source IDs","back_behavior":"No route change","loading":"Management busy state","error":"Management error shown","empty":"Filter may leave no rows","permission_or_consent":"None","accessibility":"State/action labels need pass","verification":"Not activated."},
+        {"element":"Capture / edit / history / delete","action":"Open CaptureSheet, revise source, inspect revisions or delete with confirmation","destination":"Capture sheet or source dialog","data_context":"Capture ID, revision/source-turn IDs","back_behavior":"Dialog/sheet Back","loading":"Save/revise/delete state","error":"Retry/error status","empty":"No captures","permission_or_consent":"Delete confirmation","accessibility":"Form, history and destructive action semantics need pass","verification":"Source reviewed."},
+        {"element":"Export / import","action":"Export JSON via CreateDocument; import file via OpenDocument, preview, then confirm","destination":"Android SAF picker and import preview","data_context":"User-selected file; bounded validated import","back_behavior":"Picker Back cancels; preview cancel returns Inbox","loading":"busy/progress and parsing","error":"Invalid encoding/schema/limit/conflict/unavailable state","empty":"No entries to export/import","permission_or_consent":"Platform document URI permission","accessibility":"Native picker; preview needs clear replacement/merge semantics","verification":"No picker opened in this audit."}
+      ]
+    },
+    {
+      "screen":"Linked Tables","route":"tables",
+      "purpose":"Create and manage local custom/linked views, rows, schema and transfer.",
+      "evidence":"TablesScreen.kt",
+      "screenshot":"screenshots/08-tables.png",
+      "controls":[
+        {"element":"Create table / choose source and columns","action":"Create a table or linked view","destination":"Table editor","data_context":"Same-scope table schema, source kind and selected columns","back_behavior":"Editor Back/cancel","loading":"Repository load/save","error":"Validation shown in editor","empty":"No tables CTA","permission_or_consent":"Local only","accessibility":"Labels/column choices need TalkBack pass","verification":"Empty Tables screenshot captured."},
+        {"element":"Add/edit rows and reference picker","action":"Mutate row or select same-scope active person/project reference","destination":"Table view/editor","data_context":"Table/row/reference canonical IDs","back_behavior":"Picker/dialog Back returns editor","loading":"Repository reads/writes","error":"Stale/deleted/invalid reference shown unavailable","empty":"No rows state","permission_or_consent":"Owner action; no implicit cross-scope links","accessibility":"Grid/table navigation and focus order unverified","verification":"Static and baseline tests only; no rows."},
+        {"element":"Schema add/preview/apply/history/restore","action":"Review schema diff, apply change, inspect/restore version","destination":"Schema dialog/history","data_context":"Schema version and migration/undo history","back_behavior":"Cancel returns table","loading":"Preview/apply state","error":"Validation/conflict state","empty":"No previous schema versions","permission_or_consent":"Explicit confirmation for apply/restore","accessibility":"Diff must announce added/removed columns","verification":"No live schema mutation."},
+        {"element":"Filter/sort/pages/aggregate","action":"Change local view query and aggregation","destination":"Same table","data_context":"Bounded query, sort, cursor, aggregate fields","back_behavior":"No route change","loading":"Page query state","error":"Query error state","empty":"No matching rows","permission_or_consent":"Local only","accessibility":"Filter/sort and aggregate labels need pass","verification":"Source and tests only."},
+        {"element":"Import/export/delete/restore","action":"Preview and confirm transfer or deletion/restoration","destination":"SAF picker or dialog","data_context":"Table/schema/row IDs, validated file payload","back_behavior":"Picker/dialog cancel returns table","loading":"Busy state","error":"Invalid/conflict/limit errors","empty":"No rows to transfer","permission_or_consent":"SAF URI access and explicit destructive confirmation","accessibility":"Preview and undo semantics need pass","verification":"No provider or transfer exercised."}
+      ]
+    },
+    {
+      "screen":"Portable backup","route":"portable_backup",
+      "purpose":"Create or restore a protected portable archive through Android document provider.",
+      "evidence":"PortableBackupScreen.kt",
+      "controls":[
+        {"element":"Password and repeat fields","action":"Enter archive password and confirmation","destination":"Same screen","data_context":"Transient password fields; must not be logged or persisted","back_behavior":"Route Back","loading":"Disabled during archive operation","error":"Validation error on mismatch/weak input","empty":"Required before action","permission_or_consent":"No network; local encryption flow","accessibility":"Password labels/toggle semantics need pass","verification":"Source review only."},
+        {"element":"Export / import / preview / replace confirmation","action":"CreateDocument or OpenDocument, validate preview, confirm restore","destination":"Android SAF picker then screen/dialog","data_context":"Encrypted backup file and restore impact","back_behavior":"Picker cancel; cancel preview returns to backup","loading":"Progress state","error":"Invalid archive/password/storage error","empty":"No selected file","permission_or_consent":"Platform URI access and explicit replacement confirmation","accessibility":"Destructive replacement consequences must be announced","verification":"No backup operation performed."}
+      ]
+    },
+    {
+      "screen":"Settings","route":"settings",
+      "purpose":"Choose Gemini model, theme/language, attention preferences and permission/consent controls.",
+      "evidence":"Screens.kt; MemoraApp.kt",
+      "screenshot":"screenshots/06-settings.png",
+      "controls":[
+        {"element":"Gemini model radio choices","action":"Persist selected allowlisted model for future turns","destination":"Same screen","data_context":"Local preference; no automatic model fallback","back_behavior":"Back returns caller route","loading":"Preference screen state","error":"Invalid model falls back to curated default at read time","empty":"Configured default selected","permission_or_consent":"Does not send a request","accessibility":"RadioButton semantics; selected state must be spoken","verification":"Visible in screenshot; selection not changed."},
+        {"element":"Theme and language selectors","action":"Change app appearance and UI language","destination":"Same screen / updated app shell","data_context":"Local preference and profile language synchronization","back_behavior":"Back returns caller route","loading":"Disabled while appearance state busy","error":"Retry load control","empty":"Defaults available","permission_or_consent":"None","accessibility":"Selected options need spoken announcement","verification":"Screenshot shows settings; no preference changed."},
+        {"element":"Attention/reminder and quiet-hours controls","action":"Enable suggestions, configure notification time/quiet hours","destination":"Same screen or Android system settings","data_context":"Local reminder preferences","back_behavior":"Returns Settings","loading":"Save/request state","error":"Permission/schedule error states","empty":"Feature off by default if not configured","permission_or_consent":"Notification/exact-alarm Android permission/request path","accessibility":"Time values and switch state need pass","verification":"No permission requested."},
+        {"element":"Microphone, notification and exact-alarm settings shortcuts","action":"Open Android permission/settings screens","destination":"System Settings","data_context":"Platform permission state","back_behavior":"Android Back returns Settings","loading":"Refresh permission state on resume","error":"Unavailable state","empty":"Permission denied/not granted","permission_or_consent":"Explicit Android permission control","accessibility":"Need clear current permission state","verification":"Not activated."},
+        {"element":"Firebase App Check test access token","action":"Enter/save/verify test access token","destination":"Same screen; verification request","data_context":"Sensitive local test token; never include in diagnostics/commit","back_behavior":"No route change","loading":"Verification status","error":"Safe error code","empty":"No token configured","permission_or_consent":"Network access to configured Firebase test route","accessibility":"Sensitive field labeling needs review","verification":"Not used; no token touched."},
+        {"element":"Voice/memory consent revoke and Privacy/About","action":"Disable consent; open privacy details/licenses","destination":"Same screen or about/licenses route/dialog","data_context":"Consent preferences and static privacy copy","back_behavior":"Dialog/route Back","loading":"Preference state","error":"Commit failure state","empty":"No content if not configured","permission_or_consent":"Consent state change is explicit","accessibility":"Privacy copy and revoke action need TalkBack review","verification":"Screenshot shows static settings only."}
+      ]
+    },
+    {
+      "screen":"Voice Memory","route":"voice_memory",
+      "purpose":"Legacy voice-memory debt/receipt list and local management.",
+      "evidence":"VoiceMemoryScreen.kt",
+      "controls":[
+        {"element":"Voice memory rows","action":"Inspect saved financial/voice record","destination":"Local detail","data_context":"Local record ID; legacy UI store","back_behavior":"Detail close then route Back","loading":"Local read","error":"Unavailable/error state","empty":"Empty list","permission_or_consent":"Local only","accessibility":"Money/time reading needs validation","verification":"Source only; no records."},
+        {"element":"Export/delete","action":"Export or confirm deletion","destination":"SAF or confirmation dialog","data_context":"Selected legacy record IDs","back_behavior":"Cancel returns list","loading":"Operation status","error":"Export/delete failure state","empty":"No items","permission_or_consent":"Explicit delete confirmation","accessibility":"Destructive confirmation needs pass","verification":"Not activated."}
+      ]
+    },
+    {
+      "screen":"Open-source licenses","route":"licenses",
+      "purpose":"Read third-party notices.",
+      "evidence":"OpenSourceLicensesScreen.kt",
+      "controls":[
+        {"element":"License list and source links","action":"Scroll/read or open linked license page","destination":"Local document or external browser as configured","data_context":"Static third-party notices","back_behavior":"Route Back","loading":"Static screen","error":"External link may be unavailable","empty":"No runtime records","permission_or_consent":"External browser/network only when link opened","accessibility":"Headings and links need TalkBack pass","verification":"Not in screenshot set; source reviewed."}
+      ]
+    },
+    {
+      "screen":"Dialogs, sheets and detail overlays","route":"local overlay state on current route",
+      "purpose":"Capture, confirmations, object/source/task detail and import previews.",
+      "evidence":"MemoraApp.kt; Sheets.kt; SavedObjectsScreen.kt; AgentChatScreen.kt",
+      "controls":[
+        {"element":"Capture modal sheet","action":"Edit text/transcript, retry load/save, submit or close","destination":"Capture queue then Inbox when accepted","data_context":"Local CaptureSubmission IDs and draft","back_behavior":"Dirty or active submission blocks outside dismissal; explicit close path needs confirm/guard consistency","loading":"Load/save/submitting flags","error":"Retry and retained draft","empty":"Blank draft prompt","permission_or_consent":"Voice capture consent/permission when voice mode used","accessibility":"Modal focus and field semantics unverified." ,"verification":"Rendered path source-reviewed; not submitted."},
+        {"element":"Object/source/detail nested dialog","action":"Open related record/evidence, use in-dialog Back or close","destination":"Nested local detail stack","data_context":"IDs should stay exact and same-scope","back_behavior":"System Back can dismiss whole dialog rather than pop detail; task selection may remain stale","loading":"Repository detail state","error":"Unavailable-source state","empty":"No linked sources","permission_or_consent":"Local only","accessibility":"Focus restoration, nested title announcement and system Back need validation","verification":"Static; populated detail not opened."},
+        {"element":"Confirmation dialogs","action":"Confirm/cancel destructive, import, consent or relationship operation","destination":"Same route or platform picker","data_context":"Pending object IDs and operation payload","back_behavior":"Dismiss/cancel should not mutate","loading":"Usually no progress until confirm","error":"Operation-specific state after confirm","empty":"No data mutation on cancel","permission_or_consent":"Consent/destructive operations require explicit action","accessibility":"Dialog title/body/action order and consequences need pass","verification":"Not systematically exercised."}
+      ]
+    }
+  ],
+  "cross_cutting_findings": [
+    {"id":"UX-001","priority":"P0","summary":"Fresh install bypassed profile onboarding on clean emulator; likely initialization race, unproven exact root cause."},
+    {"id":"UX-002","priority":"P1","summary":"Cloud assistant voice and local capture voice are separate paths but labels/placement do not clearly distinguish intent."},
+    {"id":"UX-003","priority":"P1","summary":"More report pushes directory links below first viewport."},
+    {"id":"UX-004","priority":"P1","summary":"Action-result open-related callbacks do not consistently pass exact object IDs."},
+    {"id":"UX-005","priority":"P1","summary":"Tasks shows assistant tasks and a separate test/prototype store in one destination."},
+    {"id":"UX-006","priority":"P1","summary":"Line/surface contrast is below 3:1 for boundaries in both themes; manually computed from current theme colors."},
+    {"id":"UX-007","priority":"P2","summary":"System Back dismisses nested saved-object dialog instead of consistently popping internal detail; stale selectedTask is possible."},
+    {"id":"UX-008","priority":"P2","summary":"Several Cases/saved-object/Home/Finance error states lack in-place retry; Calendar and Inbox have retry/refresh."},
+    {"id":"UX-009","priority":"P2","summary":"Cases status filter horizontal overflow is not obvious."}
+  ],
+  "verification_limits": ["No physical Redmi acceptance", "No populated synthetic relationships or finance/task records on emulator", "No TalkBack or keyboard pass", "No large-font or dark-theme visual pass in this Stage 0", "No mic, speech, Gemini, network AI, or personal data", "AndroidTest APK compiled but instrumentation did not run", "No UI or runtime implementation changes made"]
+}

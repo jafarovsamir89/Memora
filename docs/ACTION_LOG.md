@@ -1,3 +1,7 @@
+## ACT-0235 · 2026-11-15 · UI/UX redesign V1 — Stage 0 audit
+
+На ветке `ui/redesign-v1` завершён аудит без изменений UI: отчёт, машинный inventory и 8 реальных снимков чистого Android 14/API 34 профиля находятся в `docs/ui-ux-redesign-v1/phase-0/`. Полный baseline успешен: 72 suites / 366 JVM tests (0 failures/errors, 1 opt-in live skip), debug и AndroidTest APK + Kotlin compile, lint 0/75/3. JSON parse и `git diff --check` прошли; instrumentation не запускалась. P0: новая установка пропустила onboarding (вероятная, но не доказанная гонка старта). Рекомендация навигации — инкрементально типизировать текущий стек. Личные данные, Gemini, микрофон и физический Redmi не использовались. Stage 1 ждёт явного одобрения.
+
 ## ACT-0225 — 2026-11-05 — Переключить STT на один проверенный Gemini model
 
 Владелец попросил протестировать приём/ответ и выбрать более стабильную/быструю модель без model fallback. Проведены прямые запросы через локальный debug key к Google Gemini Developer API, только с synthetic text и WAV тишины; ключ/значение и API bodies не журналировались.
