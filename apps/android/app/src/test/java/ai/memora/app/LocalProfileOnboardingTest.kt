@@ -9,6 +9,9 @@ import androidx.compose.ui.test.junit4.v2.createComposeRule
 import androidx.test.core.app.ApplicationProvider
 import ai.memora.app.data.AppearanceSettings
 import ai.memora.app.data.AtomicAppearanceStore
+import ai.memora.app.data.LocalProfileInput
+import ai.memora.app.data.LocalProfileState
+import ai.memora.app.data.LocalProfileViewModel
 import ai.memora.app.data.ProtectedLocalProfileStore
 import ai.memora.app.data.InstallDisposition
 import ai.memora.app.data.LocalInstallMarker
@@ -47,7 +50,7 @@ class LocalProfileOnboardingTest {
         compose.onNodeWithTag(tag).assertIsDisplayed()
     }
 
-    @Test fun installMarkerInspectsBeforeFreshDatabaseAndRecognizesExistingDatabase() {
+    @Test fun notificationDatabaseCreationBeforeProfileInspectionKeepsFreshInstallNew() {
         val context = ApplicationProvider.getApplicationContext<Context>()
         fun isolatedContext(root: File): Context = object : ContextWrapper(context) {
             override fun getFilesDir(): File = File(root, "files").apply { mkdirs() }
@@ -55,18 +58,77 @@ class LocalProfileOnboardingTest {
             override fun getApplicationInfo(): ApplicationInfo = ApplicationInfo(context.applicationInfo).apply { dataDir = root.path }
         }
 
-        val freshRoot = File(context.cacheDir, "profile-install-fresh-${UUID.randomUUID()}").apply { mkdirs() }
+        val freshRoot = File(context.cacheDir, "profile-install-notification-race-${UUID.randomUUID()}").apply { mkdirs() }
         val freshContext = isolatedContext(freshRoot)
+        // MainActivity starts notification reconciliation before Compose. schedule() opens Room
+        // before it checks notification permission, so this is the file-creation side effect that
+        // can win the race against LocalProfileViewModel's marker inspection.
+        assertTrue(freshContext.getDatabasePath(DatabaseKeyProvider.DATABASE_NAME).createNewFile())
         val freshMarker = LocalInstallMarker(freshContext, File(freshRoot, "marker"))
         assertEquals(InstallDisposition.NEW, freshMarker.inspect())
-        assertTrue(freshContext.getDatabasePath(DatabaseKeyProvider.DATABASE_NAME).createNewFile())
         assertEquals(InstallDisposition.NEW, freshMarker.inspect())
 
-        val existingRoot = File(context.cacheDir, "profile-install-existing-${UUID.randomUUID()}").apply { mkdirs() }
-        val existingContext = isolatedContext(existingRoot)
-        assertTrue(existingContext.getDatabasePath(DatabaseKeyProvider.DATABASE_NAME).createNewFile())
-        val existingMarker = LocalInstallMarker(existingContext, File(existingRoot, "marker"))
-        assertEquals(InstallDisposition.EXISTING, existingMarker.inspect())
+        val legacyRoot = File(context.cacheDir, "profile-install-legacy-${UUID.randomUUID()}").apply { mkdirs() }
+        val legacyContext = isolatedContext(legacyRoot)
+        assertTrue(File(legacyContext.filesDir, "tasks-prototype.bin").createNewFile())
+        val legacyMarker = LocalInstallMarker(legacyContext, File(legacyRoot, "marker"))
+        assertEquals(InstallDisposition.EXISTING, legacyMarker.inspect())
+    }
+
+    @Test fun freshInstallShowsOnboardingDespiteNotificationDatabaseAndStaysCompleteAfterRestart() {
+        val base = ApplicationProvider.getApplicationContext<Context>()
+        val root = File(base.cacheDir, "profile-onboarding-notification-${UUID.randomUUID()}").apply { mkdirs() }
+        val context = object : ContextWrapper(base) {
+            override fun getFilesDir(): File = File(root, "files").apply { mkdirs() }
+            override fun getDatabasePath(name: String): File = File(root, "databases/$name").also { it.parentFile?.mkdirs() }
+            override fun getApplicationInfo(): ApplicationInfo = ApplicationInfo(base.applicationInfo).apply { dataDir = root.path }
+        }
+        // Reproduce MainActivity's ordering: notification startup has already made Room's DB file.
+        assertTrue(context.getDatabasePath(DatabaseKeyProvider.DATABASE_NAME).createNewFile())
+        val marker = LocalInstallMarker(context, File(root, "marker"))
+        val store = InMemoryLocalProfileStore()
+        val firstLaunch = LocalProfileViewModel(context, store, "az", marker)
+
+        compose.waitUntil(10_000) { firstLaunch.state.value != LocalProfileState.Loading }
+        assertEquals(LocalProfileState.Onboarding, firstLaunch.state.value)
+        assertNull(runBlocking { store.read() })
+
+        firstLaunch.complete(LocalProfileInput("Synthetic Owner", "az", "friendly", "balanced", "Asia/Baku"))
+        compose.waitUntil(10_000) { firstLaunch.state.value is LocalProfileState.Ready }
+        val completed = (firstLaunch.state.value as LocalProfileState.Ready).profile
+        assertEquals("Synthetic Owner", completed.displayName)
+        assertTrue(completed.onboardingCompleted)
+        assertEquals(InstallDisposition.EXISTING, marker.inspect())
+
+        val nextLaunch = LocalProfileViewModel(context, store, "az", marker)
+        compose.waitUntil(10_000) { nextLaunch.state.value != LocalProfileState.Loading }
+        assertEquals(LocalProfileState.Ready(completed), nextLaunch.state.value)
+        assertEquals(1, store.completeCalls)
+    }
+
+    @Test fun markerlessExistingProfileIsPreservedWhenDatabaseFileIsNotAnInstallSignal() {
+        val base = ApplicationProvider.getApplicationContext<Context>()
+        val root = File(base.cacheDir, "profile-onboarding-legacy-${UUID.randomUUID()}").apply { mkdirs() }
+        val context = object : ContextWrapper(base) {
+            override fun getFilesDir(): File = File(root, "files").apply { mkdirs() }
+            override fun getDatabasePath(name: String): File = File(root, "databases/$name").also { it.parentFile?.mkdirs() }
+            override fun getApplicationInfo(): ApplicationInfo = ApplicationInfo(base.applicationInfo).apply { dataDir = root.path }
+        }
+        assertTrue(context.getDatabasePath(DatabaseKeyProvider.DATABASE_NAME).createNewFile())
+        val legacyProfile = ai.memora.app.data.protectedstore.LocalProfileRow(
+            "synthetic-existing-profile", "Synthetic Legacy", "ru", "direct", "concise", "Europe/Moscow",
+            1, true, null, 10L, 20L,
+        )
+        val store = InMemoryLocalProfileStore(legacyProfile)
+        val marker = LocalInstallMarker(context, File(root, "marker"))
+        assertEquals(InstallDisposition.NEW, marker.inspect()) // The DB filename alone is intentionally ambiguous.
+
+        val viewModel = LocalProfileViewModel(context, store, "az", marker)
+        compose.waitUntil(10_000) { viewModel.state.value != LocalProfileState.Loading }
+        assertEquals(LocalProfileState.Ready(legacyProfile), viewModel.state.value)
+        assertEquals(legacyProfile, runBlocking { store.read() })
+        assertEquals(0, store.completeCalls)
+        assertEquals(InstallDisposition.EXISTING, marker.inspect())
     }
 
     @Test fun encryptedLocalStateIsExcludedFromCloudBackupAndDeviceTransfer() {

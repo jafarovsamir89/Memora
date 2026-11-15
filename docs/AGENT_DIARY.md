@@ -1,5 +1,15 @@
 # Memora — дневник ведущего инженера
 
+## ACT-0236 — 2026-11-15 — P0: восстановить onboarding чистой установки
+
+На `ui/redesign-v1` доказана гипотеза ACT-0235: `MainActivity` запускал `AttentionNotifications.reconcileFromApp()` до Compose; фоновая сверка открывала Room/создавала `memora-agent.db`; `LocalInstallMarker.hasLegacyState()` принимал одно наличие файла БД за старую установку. Пустая БД без профиля из-за этого попадала в legacy fallback и автоматически получала завершённый профиль. Regression `notificationDatabaseCreationBeforeProfileInspectionKeepsFreshInstallNew` до исправления падал (`EXISTING` вместо `NEW`), после исправления проходит. Теперь файл БД не определяет lineage; после открытия БД существующий migrated profile остаётся главным сигналом, известные legacy sidecars сохранены. Схема, ledger и domain logic не менялись.
+
+Полная Gradle проверка: 72 suites / 368 tests, 0 failures/errors, 1 opt-in live test skipped; debug/AndroidTest сборки, AndroidTest Kotlin compile; lint 0/76/3. Позднее изменение только AndroidTest probe (проверка emulator gate и фаза notification preflight) отдельно прошло `assembleDebugAndroidTest` и `compileDebugAndroidTestKotlin`.
+
+На synthetic Android 14 emulator: свежая установка v91 показала onboarding; завершение onboarding привело в Today; после force-stop/relaunch снова показан Today. Для markerless v90 seeded synthetic profile/fact/case/person/finance/task, затем `adb install -r` обновил до v91 без изменения `firstInstallTime`; все пять категорий и профиль найдены, legacy profile не потерян. Отдельный тест запустил production notification reconciliation до MainActivity: Room DB создана, marker отсутствовал; MainActivity показал onboarding, marker остался `new`. Скриншоты и подробный отчёт: `docs/ui-ux-redesign-v1/p0-fix/REPORT.md`. Физический Redmi, Gemini, сеть, микрофон и личные записи не использовались.
+
+APK v91 `1.1.69-onboarding-marker-race`, SHA-256 `8dbe49ad9bb702220107f1fa563617c4a4bf6bae66ecb16b1e2ac7354cafda9e`. Отдельно описано смешанное содержимое `e627ab3` и путь будущего отделения UI hunks от date logic без переписывания истории. Результаты локальные; owner-owned ADR-012 не трогать. Следующая задача: остановиться; Stage 1 только после следующего явного разрешения владельца.
+
 ## ACT-0235 — 2026-11-15 — UI/UX redesign V1, Stage 0 audit
 
 Этап 0 выполнен на `ui/redesign-v1`: проверены продуктовый курс, маршруты, обработчики и состояния Compose; созданы машинный инвентарь `docs/ui-ux-redesign-v1/phase-0/interaction-inventory.json` и краткий отчёт `REPORT.md`.

@@ -8,7 +8,6 @@ import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
 import androidx.room.withTransaction
 import ai.memora.app.data.protectedstore.AgentDatabase
-import ai.memora.app.data.protectedstore.DatabaseKeyProvider
 import ai.memora.app.data.protectedstore.LocalProfileRow
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.CancellationException
@@ -136,7 +135,10 @@ internal class LocalInstallMarker(
     private fun hasLegacyState(): Boolean {
         val files = listOf("captures-prototype.bin", "tasks-prototype.bin", "voice-memory.bin", "appearance-settings-v1")
         if (files.any { File(context.filesDir, it).isFile }) return true
-        if (context.getDatabasePath(DatabaseKeyProvider.DATABASE_NAME).isFile) return true
+        // Do not use the database filename as install history. Startup notification reconciliation
+        // can open Room before Compose and create an empty current-schema database on a clean install.
+        // Existing databases are detected safely after open by their migrated local profile;
+        // known legacy sidecars above remain a fallback for older installs without one.
         return File(context.applicationInfo.dataDir, "shared_prefs/voice-first-consent.xml").isFile
     }
 
@@ -157,11 +159,12 @@ internal class LocalProfileViewModel(
     private val appContext: Context,
     private val storeOverride: LocalProfileStore?,
     private val initialLanguage: String,
+    installMarkerOverride: LocalInstallMarker? = null,
 ) : ViewModel() {
     private val mutable = MutableStateFlow<LocalProfileState>(LocalProfileState.Loading)
     val state = mutable.asStateFlow()
     private var store: LocalProfileStore? = null
-    private val installMarker = if (storeOverride == null) LocalInstallMarker(appContext) else null
+    private val installMarker = installMarkerOverride ?: if (storeOverride == null) LocalInstallMarker(appContext) else null
     private val storageDispatcher = if (storeOverride == null) Dispatchers.IO else Dispatchers.Unconfined
 
     init { load() }

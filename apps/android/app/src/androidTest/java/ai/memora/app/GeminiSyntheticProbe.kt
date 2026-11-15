@@ -63,6 +63,8 @@ class GeminiSyntheticProbe : Instrumentation() {
     private var processDeathPermitted = false
     private var speechOnly = false
     private var playbackOnly = false
+    private var allowSyntheticLocalInstallLineage = false
+    private var localInstallLineagePhase: String? = null
     private var onlyCase: String? = null
     override fun onCreate(arguments: Bundle?) {
         super.onCreate(arguments)
@@ -94,11 +96,28 @@ class GeminiSyntheticProbe : Instrumentation() {
         processDeathPermitted = arguments?.getString("allowSyntheticProcessDeathProbe") == "true"
         speechOnly = arguments?.getString("speechOnly") == "true"
         playbackOnly = arguments?.getString("playbackOnly") == "true"
+        allowSyntheticLocalInstallLineage = arguments?.getString("allowSyntheticLocalInstallLineage") == "true"
+        localInstallLineagePhase = arguments?.getString("localInstallLineagePhase")
+            ?.takeIf { it in setOf("prepare-notification-race", "seed", "verify") }
         onlyCase = arguments?.getString("case")?.takeIf { it in setOf("az", "ru", "mixed") }
         start()
     }
 
     override fun onStart() {
+        if (localInstallLineagePhase != null) {
+            val results = LocalInstallLineageProbe.run(
+                targetContext,
+                localInstallLineagePhase!!,
+                allowSyntheticLocalInstallLineage,
+            )
+            finish(if (results.getString("status") in setOf(
+                    "synthetic_lineage_notification_prepared",
+                    "synthetic_lineage_seed_passed",
+                    "synthetic_lineage_verify_passed",
+                ))
+                Activity.RESULT_OK else Activity.RESULT_CANCELED, results)
+            return
+        }
         if (storageProbe) {
             val results = DatabaseStorageProbe.run(targetContext, permitted = true)
             finish(if (results.getString("status") == "passed") Activity.RESULT_OK else Activity.RESULT_CANCELED, results)
