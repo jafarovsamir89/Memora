@@ -12,7 +12,6 @@ import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.Button
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedButton
@@ -37,6 +36,12 @@ import ai.memora.app.data.protectedstore.CaseEvidenceView
 import ai.memora.app.data.protectedstore.CaseTimelineEntry
 import ai.memora.app.data.protectedstore.ProtectedCaseRepository
 import ai.memora.app.ui.EmptyState
+import ai.memora.app.ui.CaseCard
+import ai.memora.app.ui.CaseCardContent
+import ai.memora.app.ui.MemoraStatusTone
+import ai.memora.app.ui.Timeline
+import ai.memora.app.ui.TimelineItem
+import ai.memora.app.ui.PrimaryButton
 import ai.memora.app.ui.LocalStrings
 import ai.memora.app.ui.MemoraCard
 import ai.memora.app.ui.ScreenColumn
@@ -141,9 +146,8 @@ internal fun CasesScreen(onOpenSecretary: () -> Unit = {}) {
             records.isEmpty() && query.isBlank() && statusFilter == "all" -> {
                 EmptyState(s(R.string.working_no_data), s(R.string.cases_empty))
                 Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
-                    Button(onClick = onOpenSecretary, modifier = Modifier.testTag("cases_empty_open_secretary")) {
-                        Text(s(R.string.cases_empty_action))
-                    }
+                    PrimaryButton(s(R.string.cases_empty_action), onOpenSecretary,
+                        testTag = "cases_empty_open_secretary")
                 }
             }
             records.isEmpty() -> {
@@ -163,24 +167,23 @@ internal fun CasesScreen(onOpenSecretary: () -> Unit = {}) {
                     }) { Text(s(R.string.cases_load_newer)) }
                 }
                 records.forEach { record ->
-                    MemoraCard(
+                    CaseCard(
+                        case = CaseCardContent(
+                            title = record.title,
+                            statusLabel = caseStatusLabel(record.status),
+                            statusTone = caseStatusTone(record.status),
+                            summary = record.summary?.takeIf(String::isNotBlank)?.let { summary ->
+                                summary.take(360) + if (summary.length > 360) "…" else ""
+                            },
+                            nextActionLabel = s(R.string.case_next_action),
+                            nextAction = record.nextAction?.takeIf(String::isNotBlank),
+                        ),
                         onClick = {
                             coroutineScope.launch { selected = repository.caseSnapshot(scopeId, record.caseId) }
                         },
                         modifier = Modifier.testTag("case_${record.caseId}"),
-                    ) {
-                        Text(record.title, color = colors.ink, style = androidx.compose.material3.MaterialTheme.typography.titleMedium)
-                        Text(caseStatusLabel(record.status), color = colors.green,
-                            style = androidx.compose.material3.MaterialTheme.typography.labelMedium)
-                        record.summary?.takeIf(String::isNotBlank)?.let { summary ->
-                            Text(summary.take(360) + if (summary.length > 360) "…" else "", color = colors.muted,
-                                style = androidx.compose.material3.MaterialTheme.typography.bodyMedium)
-                        }
-                        record.nextAction?.takeIf(String::isNotBlank)?.let { action ->
-                            Text("${s(R.string.case_next_action)}: $action", color = colors.ink,
-                                style = androidx.compose.material3.MaterialTheme.typography.bodyMedium)
-                        }
-                    }
+                        testTag = "case_${record.caseId}",
+                    )
                 }
                 val maxOffset = if (query.isBlank()) CASES_MAX_LIST_OFFSET else CASES_MAX_SEARCH_OFFSET
                 if (loading && pageOffset > 0) {
@@ -256,28 +259,24 @@ internal fun CasesScreen(onOpenSecretary: () -> Unit = {}) {
                     if (snapshot.timeline.isNotEmpty()) {
                         Text(s(R.string.case_timeline), modifier = Modifier.padding(top = 18.dp),
                             style = androidx.compose.material3.MaterialTheme.typography.titleSmall, color = colors.ink)
-                        snapshot.timeline.asReversed().forEach { event ->
+                        val timelineItems = snapshot.timeline.asReversed().map { event ->
                             val linkedSource = snapshot.evidence.firstOrNull { source ->
                                 source.evidence.sourceKind == event.sourceKind && source.evidence.sourceId == event.sourceId &&
                                     source.evidence.sourceRevisionId == event.sourceRevisionId
                             }
-                            Column(Modifier.padding(top = 10.dp)
-                                .then(if (linkedSource != null) Modifier.clickable { selectedSource = linkedSource } else Modifier)
-                                .testTag("case_timeline_${event.id}")) {
-                                Text(caseTimelineTitle(event), color = colors.ink, style = androidx.compose.material3.MaterialTheme.typography.bodyMedium)
-                                Text(event.at, color = colors.muted, style = androidx.compose.material3.MaterialTheme.typography.labelSmall)
-                                event.detail?.takeIf(String::isNotBlank)?.let { Text(it.take(300), color = colors.muted) }
-                                event.sourceExcerpt?.let { excerpt ->
-                                    Text(LocalStrings.current.getString(R.string.case_source_exact_excerpt, excerpt), color = colors.accent,
-                                        style = androidx.compose.material3.MaterialTheme.typography.bodySmall,
-                                        modifier = Modifier.testTag("case_timeline_exact_excerpt_${event.id}"))
-                                }
-                                if (linkedSource != null) {
-                                    Text(s(R.string.case_source_open_details), color = colors.accent,
-                                        style = androidx.compose.material3.MaterialTheme.typography.labelSmall)
-                                }
-                            }
+                            TimelineItem(
+                                id = event.id,
+                                title = caseTimelineTitle(event),
+                                timestamp = event.at,
+                                detail = event.detail?.takeIf(String::isNotBlank)?.take(300),
+                                excerpt = event.sourceExcerpt?.let { excerpt ->
+                                    LocalStrings.current.getString(R.string.case_source_exact_excerpt, excerpt)
+                                },
+                                sourceActionLabel = if (linkedSource != null) s(R.string.case_source_open_details) else null,
+                                onClick = if (linkedSource != null) ({ selectedSource = linkedSource }) else null,
+                            )
                         }
+                        Timeline(timelineItems, testTagPrefix = "case_timeline")
                     }
                 }
             },
@@ -315,6 +314,13 @@ private fun caseStatusLabel(status: String): String = s(when (status) {
     "cancelled" -> R.string.case_status_cancelled
     else -> R.string.case_status_open
 })
+
+private fun caseStatusTone(status: String): MemoraStatusTone = when (status) {
+    "completed" -> MemoraStatusTone.SUCCESS
+    "waiting" -> MemoraStatusTone.WARNING
+    "cancelled" -> MemoraStatusTone.ERROR
+    else -> MemoraStatusTone.NEUTRAL
+}
 
 @Composable
 private fun caseFilterLabel(status: String): String = s(when (status) {

@@ -42,6 +42,8 @@ import ai.memora.app.data.protectedstore.TaskPersonLinkRow
 import ai.memora.app.domain.Task
 import ai.memora.app.ui.EmptyState
 import ai.memora.app.ui.MemoraCard
+import ai.memora.app.ui.PersonCard
+import ai.memora.app.ui.PersonCardContent
 import ai.memora.app.ui.ScreenColumn
 import ai.memora.app.ui.ScreenHeading
 import ai.memora.app.ui.colors
@@ -121,22 +123,32 @@ internal fun SavedObjectsScreen(kind: DomainKind) {
             records.isEmpty() -> EmptyState(s(ai.memora.app.R.string.working_no_data), s(ai.memora.app.R.string.saved_objects_empty))
             filtered.isEmpty() -> EmptyState(s(ai.memora.app.R.string.working_no_data), s(ai.memora.app.R.string.saved_objects_no_matches))
             else -> filtered.forEach { record ->
-                MemoraCard(
-                    onClick = {
+                val openRecord = {
                         selected = record
                         selectedCaseSource = null
                         selectedCaseDetails = null
                         detailStack = emptyList()
-                    },
-                    modifier = Modifier.testTag("saved_object_${record.objectId}"),
-                ) {
-                    Text(record.title, color = colors.ink, style = androidx.compose.material3.MaterialTheme.typography.titleMedium)
-                    record.body?.takeIf(String::isNotBlank)?.let { body ->
-                        Text(body.take(240) + if (body.length > 240) "…" else "", color = colors.muted,
-                            style = androidx.compose.material3.MaterialTheme.typography.bodyMedium)
                     }
-                    if (record.status == "archived") Text(s(ai.memora.app.R.string.saved_objects_archived), color = colors.muted,
-                        style = androidx.compose.material3.MaterialTheme.typography.labelMedium)
+                val summary = record.body?.takeIf(String::isNotBlank)?.let { body ->
+                    body.take(240) + if (body.length > 240) "…" else ""
+                }
+                if (record.kind == DomainKind.PERSON.name) {
+                    PersonCard(
+                        person = PersonCardContent(
+                            name = record.title,
+                            summary = summary,
+                            supportingLabel = if (record.status == "archived") s(ai.memora.app.R.string.saved_objects_archived) else null,
+                        ),
+                        onClick = openRecord,
+                        testTag = "saved_object_${record.objectId}",
+                    )
+                } else {
+                    MemoraCard(onClick = openRecord, modifier = Modifier.testTag("saved_object_${record.objectId}")) {
+                        Text(record.title, color = colors.ink, style = androidx.compose.material3.MaterialTheme.typography.titleMedium)
+                        summary?.let { Text(it, color = colors.muted, style = androidx.compose.material3.MaterialTheme.typography.bodyMedium) }
+                        if (record.status == "archived") Text(s(ai.memora.app.R.string.saved_objects_archived), color = colors.muted,
+                            style = androidx.compose.material3.MaterialTheme.typography.labelMedium)
+                    }
                 }
             }
         }

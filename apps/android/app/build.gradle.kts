@@ -30,8 +30,8 @@ android {
         applicationId = "ai.memora.app"
         minSdk = 26
         targetSdk = 36
-        versionCode = 92
-        versionName = "1.1.70-ui-redesign-v1"
+        versionCode = 93
+        versionName = "1.1.71-ui-redesign-v1-polish"
         testInstrumentationRunner = "ai.memora.app.GeminiSyntheticProbe"
     }
     buildFeatures { compose = true; buildConfig = true }
@@ -92,4 +92,13 @@ tasks.withType<Test>().configureEach {
     maxHeapSize = "2g"
     systemProperty("robolectric.dependency.repo.url", "https://repo.maven.apache.org/maven2")
     systemProperty("memora.screenshots", layout.buildDirectory.dir("test-screenshots").get().asFile.absolutePath)
+}
+
+tasks.register<Exec>("componentVisualRegression") {
+    group = "verification"
+    description = "Capture the debug-only Compose component gallery and compare it with committed PNG goldens."
+    dependsOn("installDebug")
+    val repositoryRoot = rootProject.projectDir.resolve("../..").canonicalFile
+    commandLine("python3", repositoryRoot.resolve("tools/ui_visual_regression.py").absolutePath)
+    workingDir(repositoryRoot)
 }

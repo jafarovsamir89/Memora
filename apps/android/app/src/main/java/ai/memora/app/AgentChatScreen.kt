@@ -39,6 +39,9 @@ import ai.memora.app.agent.AgentCloudConsentKeys
 import ai.memora.app.ui.Glyph
 import ai.memora.app.ui.LocalStrings
 import ai.memora.app.ui.MemoraCard
+import ai.memora.app.ui.ActionResultCard as SharedActionResultCard
+import ai.memora.app.ui.ActionResultPresentation
+import ai.memora.app.ui.MemoraStatusTone
 import ai.memora.app.ui.ScreenColumn
 import ai.memora.app.ui.colors
 import ai.memora.app.ui.s
@@ -230,11 +233,11 @@ internal fun AgentChatScreen(language: String = "az", showVoiceControl: Boolean 
             if (message.role == "model") actionResults[message.turnId].orEmpty().forEachIndexed { index, result ->
                 ActionResultCard(
                     result = result,
-                    onOpenArea = { route -> onOpenArea(route) },
+                    onOpenArea = onOpenArea,
                     onOpenTarget = onOpenTarget,
                     onOpenSource = { sourceTurnId = message.turnId },
-                sourceMessage = messages.firstOrNull { it.turnId == message.turnId && it.role == "user" }?.message.orEmpty(),
-                onPrepareCorrection = { prompt -> input = prompt.take(20_000); correctionDraftPrepared = true },
+                    sourceMessage = messages.firstOrNull { it.turnId == message.turnId && it.role == "user" }?.message.orEmpty(),
+                    onPrepareCorrection = { prompt -> input = prompt.take(20_000); correctionDraftPrepared = true },
                     modifier = Modifier.testTag("action_result_${message.turnId}_$index"),
                 )
             }
@@ -288,10 +291,10 @@ private fun ActionResultCard(result: AgentActionResultRow, onOpenArea: (String) 
         "UNKNOWN" -> ai.memora.app.R.string.action_status_unknown
         else -> ai.memora.app.R.string.action_status_failed
     }
-    val statusColor = when (result.status) {
-        "APPLIED" -> colors.green
-        "NEEDS_CONFIRMATION", "UNKNOWN" -> colors.amber
-        else -> androidx.compose.material3.MaterialTheme.colorScheme.error
+    val statusTone = when (result.status) {
+        "APPLIED" -> MemoraStatusTone.SUCCESS
+        "NEEDS_CONFIRMATION", "UNKNOWN" -> MemoraStatusTone.WARNING
+        else -> MemoraStatusTone.ERROR
     }
     val areaLabel = when (result.targetKind) {
         "finance" -> ai.memora.app.R.string.action_area_finance
@@ -314,48 +317,32 @@ private fun ActionResultCard(result: AgentActionResultRow, onOpenArea: (String) 
     val correctionTemplate = s(ai.memora.app.R.string.action_correction_draft_template)
     val targetId = result.targetId
     val targetRoute = AppTargetKind.fromAction(result.targetKind, targetId)
-    MemoraCard(tint = if (result.status == "APPLIED") colors.softAccent else colors.card,
-        modifier = modifier.testTag("action_card_${result.status.lowercase()}")) {
-        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            Icon(if (result.status == "APPLIED") Glyph.Check else Glyph.Folder, null, tint = statusColor)
-            androidx.compose.foundation.layout.Column(Modifier.weight(1f)) {
-                Text(s(ai.memora.app.R.string.action_result_title), style = androidx.compose.material3.MaterialTheme.typography.labelSmall,
-                    color = colors.muted)
-                Text(s(statusLabel), style = androidx.compose.material3.MaterialTheme.typography.titleSmall,
-                    color = statusColor, modifier = Modifier.testTag("action_status_label"))
+    val relatedLabel = areaLabel?.let { "${s(ai.memora.app.R.string.action_open_related)} ${s(it)}" }
+    SharedActionResultCard(
+        presentation = ActionResultPresentation(
+            statusLabel = s(statusLabel),
+            statusTone = statusTone,
+            relatedActionLabel = relatedLabel,
+            sourceActionLabel = s(ai.memora.app.R.string.action_open_source),
+            correctionActionLabel = if (result.status == "APPLIED" && targetId != null)
+                s(ai.memora.app.R.string.action_prepare_correction) else null,
+            supportingText = if (result.status == "NEEDS_CONFIRMATION") s(ai.memora.app.R.string.action_not_applied) else null,
+            warningText = if (result.status != "APPLIED" && result.toolName in setOf(
+                    "delete_profile_fact", "delete_memory_episode", "delete_memory_object", "delete_table_row", "delete_table"))
+                s(ai.memora.app.R.string.action_delete_not_confirmed) else null,
+        ),
+        onOpenRelated = if (areaLabel == null) null else ({
+            when {
+                targetRoute != null -> onOpenTarget(targetRoute)
+                else -> areaRoute?.let(onOpenArea)
             }
-        }
-        if (result.status == "NEEDS_CONFIRMATION")
-            Text(s(ai.memora.app.R.string.action_not_applied), style = androidx.compose.material3.MaterialTheme.typography.bodySmall,
-                color = colors.muted)
-        if (result.status != "APPLIED" && result.toolName in setOf(
-                "delete_profile_fact", "delete_memory_episode", "delete_memory_object", "delete_table_row", "delete_table")) {
-            Text(s(ai.memora.app.R.string.action_delete_not_confirmed),
-                modifier = Modifier.testTag("action_delete_not_confirmed"),
-                style = androidx.compose.material3.MaterialTheme.typography.bodySmall, color = colors.muted)
-        }
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
-            areaLabel?.let { label ->
-                OutlinedButton(onClick = {
-                    when {
-                        targetRoute != null -> onOpenTarget(targetRoute)
-                        else -> areaRoute?.let(onOpenArea)
-                    }
-                }, modifier = Modifier.testTag("action_open_related")) {
-                    Text("${s(ai.memora.app.R.string.action_open_related)} ${s(label)}")
-                }
-            }
-            TextButton(onClick = onOpenSource, modifier = Modifier.testTag("action_open_source")) {
-                Text(s(ai.memora.app.R.string.action_open_source))
-            }
-        }
-        if (result.status == "APPLIED" && targetId != null) {
-            OutlinedButton(onClick = {
-                val prompt = String.format(java.util.Locale.ROOT, correctionTemplate, sourceMessage.take(12_000), targetId)
-                onPrepareCorrection(prompt)
-            }, modifier = Modifier.testTag("action_prepare_correction")) {
-                Text(s(ai.memora.app.R.string.action_prepare_correction))
-            }
-        }
-    }
+        }),
+        onOpenSource = onOpenSource,
+        onPrepareCorrection = if (result.status == "APPLIED" && targetId != null) ({
+            val prompt = String.format(java.util.Locale.ROOT, correctionTemplate, sourceMessage.take(12_000), targetId)
+            onPrepareCorrection(prompt)
+        }) else null,
+        modifier = modifier,
+        testTag = "action_card_${result.status.lowercase()}",
+    )
 }

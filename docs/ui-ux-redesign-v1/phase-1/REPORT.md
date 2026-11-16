@@ -1,8 +1,10 @@
 # Memora 2.0 UI/UX Redesign V1 — Stage 1
 
-**Status:** Stage 1 implementation and its requested verification are complete. Stage 2 and Stage 3 have not started; stop here for owner approval.
+**Status:** Stage 1 and the requested finishing pass ACT-0239 are complete. Stage 2 and Stage 3 have not started; stop here for separate owner approval.
 **Branch:** `ui/redesign-v1`. `main` was not checked out or changed in this task.
 **Prior approval:** the owner approved the Stage 0 audit and selected navigation option B, then explicitly authorized Stage 1.
+
+The component inventory, screenshot comparison, `fontScale=1.3`, exact-ID route, rotation/back-stack, and v91→v93 update checks added after the original Stage 1 delivery are documented in the [finishing pass report](finishing-pass/REPORT.md). That report supersedes the original verification snapshot below where it provides newer test/build evidence.
 
 ## Result
 

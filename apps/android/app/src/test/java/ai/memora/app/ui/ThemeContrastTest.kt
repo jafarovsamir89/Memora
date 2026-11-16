@@ -24,8 +24,14 @@ class ThemeContrastTest {
         }
         assertRatioAtLeast(LightColors.onAccent, LightColors.accent, 4.5, "light primary button")
         assertRatioAtLeast(DarkColors.onAccent, DarkColors.accent, 4.5, "dark primary button")
-        assertRatioAtLeast(Color(0xFFFFFFFF), LightColors.mint, 4.5, "light mint surface text")
-        assertRatioAtLeast(Color(0xFF13251E), DarkColors.mint, 4.5, "dark mint surface text")
+        assertRatioAtLeast(LightColors.onSoftMint, LightColors.softMint, 4.5, "light mint surface text")
+        assertRatioAtLeast(DarkColors.onSoftMint, DarkColors.softMint, 4.5, "dark mint surface text")
+        assertRatioAtLeast(LightColors.onSoftBlue, LightColors.softBlue, 4.5, "light blue surface text")
+        assertRatioAtLeast(DarkColors.onSoftBlue, DarkColors.softBlue, 4.5, "dark blue surface text")
+        assertRatioAtLeast(LightColors.onSoftError, LightColors.softError, 4.5, "light error surface text")
+        assertRatioAtLeast(DarkColors.onSoftError, DarkColors.softError, 4.5, "dark error surface text")
+        assertRatioAtLeast(Color.White, LightColors.error, 4.5, "light error button label")
+        assertRatioAtLeast(DarkColors.onAccent, DarkColors.accentFill, 4.5, "dark purple fill label")
     }
 
     private fun assertRatioAtLeast(foreground: Color, background: Color, minimum: Double, label: String) {
