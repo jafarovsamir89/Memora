@@ -254,7 +254,7 @@ fun MemoraApp(initialRoute: String = "home", initialTheme: String = "system", ca
                             AppDestination.TASKS -> TaskPrototype(taskStore, onOpenTarget = navigateRoute)
                             AppDestination.MORE -> MoreScreen(navigate, { about = true }, { openCapture(true) }, language)
                             AppDestination.VOICE_MEMORY -> VoiceMemoryScreen()
-                            AppDestination.NOTES -> SavedObjectsScreen(DomainKind.NOTE)
+                            AppDestination.NOTES -> ProjectNotesScreen(DomainKind.NOTE, navigateRoute)
                             AppDestination.TABLES -> TablesScreen()
                             AppDestination.PORTABLE_BACKUP -> PortableBackupScreen()
                             AppDestination.LICENSES -> OpenSourceLicensesScreen()
@@ -273,7 +273,7 @@ fun MemoraApp(initialRoute: String = "home", initialTheme: String = "system", ca
                             AppDestination.CALENDAR -> CalendarScreen(onOpenTarget = navigateRoute)
                             AppDestination.PEOPLE -> SavedObjectsScreen(DomainKind.PERSON, navigateRoute)
                             AppDestination.CASES -> CasesScreen(onOpenSecretary = { navigate("chat") }, onOpenTarget = navigateRoute)
-                            AppDestination.PROJECTS -> SavedObjectsScreen(DomainKind.PROJECT)
+                            AppDestination.PROJECTS -> ProjectNotesScreen(DomainKind.PROJECT, navigateRoute)
                             AppDestination.SETTINGS -> SettingsScreen(theme, { appearanceModel.change(theme = it) }, language, {
                                 appearanceModel.change(language = it)
                                 (profileState as? LocalProfileState.Ready)?.profile?.let { profile -> profileModel.syncLanguage(it) }

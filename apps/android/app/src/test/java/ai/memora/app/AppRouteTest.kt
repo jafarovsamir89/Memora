@@ -64,6 +64,23 @@ class AppRouteTest {
         assertEquals(conversation, state.back().back().back().current)
     }
 
+    @Test fun projectAndNoteRoutesKeepTypedIdsAndMoreTabAnchor() {
+        val projectId = "429d696e-c2ae-4431-b19f-05d75a2b0f4e"
+        val noteId = "a2aaf74c-102e-40d0-93c9-e8408f6290fd"
+        val project = requireNotNull(AppRoute.target(AppTargetKind.PROJECT, projectId))
+        val note = requireNotNull(AppRoute.target(AppTargetKind.NOTE, noteId))
+        val navigation = AppNavigationState.start(AppRoute.screen(AppDestination.SECRETARY))
+            .navigate(AppRoute.screen(AppDestination.PROJECTS)).navigate(project).navigate(note)
+
+        assertEquals("target:project:$projectId", project.encode())
+        assertEquals(project, AppRoute.decode(project.encode()))
+        assertEquals("target:note:$noteId", note.encode())
+        assertEquals(note, AppRoute.decode(note.encode()))
+        assertEquals(AppDestination.MORE, project.selectedPrimaryTab)
+        assertEquals(project, navigation.back().current)
+        assertEquals(AppRoute.screen(AppDestination.PROJECTS), navigation.back().back().current)
+    }
+
     @Test fun navigationStateSaverRestoresCurrentRouteAndBackStack() {
         val target = requireNotNull(AppTargetKind.fromAction(
             "finance", "b911ad3b-491d-4ed0-8f9a-01b204e1b196",

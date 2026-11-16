@@ -52,6 +52,7 @@ internal fun ActionTargetDetailScreen(route: AppRoute, onOpenTarget: (AppRoute) 
         AppTargetKind.FINANCE -> FinanceTargetDetailScreen(route, onOpenTarget)
         AppTargetKind.TASK -> TaskTargetDetailScreen(route, onOpenTarget)
         AppTargetKind.SOURCE -> SourceTargetDetailScreen(route, onOpenTarget)
+        AppTargetKind.PROJECT, AppTargetKind.NOTE -> ProjectNoteTargetDetailScreen(route, onOpenTarget)
         else -> GenericActionTargetDetailScreen(route)
     }
 }
@@ -212,6 +213,12 @@ private suspend fun loadRelatedDetail(
         AppTargetKind.PERSON -> repository.domainObject(scope, id)?.takeIf {
             it.kind == ai.memora.app.data.protectedstore.DomainKind.PERSON.name && it.deletedAt == null
         }?.let { RelatedDetail(it.title, it.body, listOf(R.string.person_aliases to resources.getString(R.string.person_aliases))) }
+        AppTargetKind.PROJECT -> repository.domainObject(scope, id)?.takeIf {
+            it.kind == ai.memora.app.data.protectedstore.DomainKind.PROJECT.name && it.deletedAt == null
+        }?.let { RelatedDetail(it.title, it.body, listOf(R.string.projects to resources.getString(R.string.projects_notes_active))) }
+        AppTargetKind.NOTE -> repository.domainObject(scope, id)?.takeIf {
+            it.kind == ai.memora.app.data.protectedstore.DomainKind.NOTE.name && it.deletedAt == null
+        }?.let { RelatedDetail(it.title, it.body, listOf(R.string.notes_title to resources.getString(R.string.projects_notes_active))) }
         AppTargetKind.SOURCE -> null
     }?.let(RelatedDetailState::Found)
 }

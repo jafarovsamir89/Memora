@@ -51,6 +51,8 @@ internal enum class AppTargetKind(val key: String, val primaryTab: AppDestinatio
     SOURCE("source", AppDestination.CASES),
     TASK("task", AppDestination.MORE),
     CALENDAR("calendar", AppDestination.MORE),
+    PROJECT("project", AppDestination.MORE),
+    NOTE("note", AppDestination.MORE),
     TABLE("table", AppDestination.MORE);
 
     companion object {

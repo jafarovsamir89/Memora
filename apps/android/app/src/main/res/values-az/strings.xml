@@ -462,6 +462,14 @@
     <string name="saved_objects_archived">Arxivdə</string>
     <string name="saved_objects_no_details">Əlavə məlumat yoxdur.</string>
     <string name="saved_objects_details_truncated">Uzun qeydin ilk hissəsi göstərilir.</string>
+    <string name="projects_notes_count">%1$d / %2$d göstərilir</string>
+    <string name="projects_notes_load_more">Daha çox göstər</string>
+    <string name="projects_notes_search_limit">Axtarış ən uyğun 100 nəticəyədək göstərir.</string>
+    <string name="projects_notes_refresh">Yenilə</string>
+    <string name="projects_notes_related">Əlaqəli qeydlər</string>
+    <string name="projects_notes_related_empty_title">Əlaqə yoxdur</string>
+    <string name="projects_notes_related_empty_body">Bu qeyd üçün təsdiqlənmiş yaddaş əlaqəsi tapılmadı.</string>
+    <string name="projects_notes_active">Aktiv</string>
     <string name="cases_subtitle">Davam edən işlər və onlara bağlı təsdiqlənmiş mənbələr.</string>
     <string name="cases_search_label">İş, iştirakçı və ya mənbədə axtar</string>
     <string name="cases_search_limit_hint">Axtarış nəticələri 30-luq hissələrlə göstərilir.</string>

@@ -462,6 +462,14 @@
     <string name="saved_objects_archived">Archived</string>
     <string name="saved_objects_no_details">No additional details.</string>
     <string name="saved_objects_details_truncated">Only the beginning of this long record is shown.</string>
+    <string name="projects_notes_count">Showing %1$d of %2$d</string>
+    <string name="projects_notes_load_more">Show more</string>
+    <string name="projects_notes_search_limit">Search shows up to 100 of the most relevant matches.</string>
+    <string name="projects_notes_refresh">Refresh</string>
+    <string name="projects_notes_related">Related records</string>
+    <string name="projects_notes_related_empty_title">No linked records</string>
+    <string name="projects_notes_related_empty_body">There are no confirmed memory links for this record.</string>
+    <string name="projects_notes_active">Active</string>
     <string name="cases_subtitle">Ongoing cases and their verified linked sources.</string>
     <string name="cases_search_label">Search cases, people, or source quotes</string>
     <string name="cases_search_limit_hint">Search results are shown 30 cases at a time.</string>

@@ -462,6 +462,14 @@
     <string name="saved_objects_archived">В архиве</string>
     <string name="saved_objects_no_details">Дополнительных сведений нет.</string>
     <string name="saved_objects_details_truncated">Показано начало длинной записи.</string>
+    <string name="projects_notes_count">Показано %1$d из %2$d</string>
+    <string name="projects_notes_load_more">Показать ещё</string>
+    <string name="projects_notes_search_limit">Поиск показывает до 100 наиболее подходящих результатов.</string>
+    <string name="projects_notes_refresh">Обновить</string>
+    <string name="projects_notes_related">Связанные записи</string>
+    <string name="projects_notes_related_empty_title">Нет связанных записей</string>
+    <string name="projects_notes_related_empty_body">Для этой записи нет подтверждённых связей в памяти.</string>
+    <string name="projects_notes_active">Активно</string>
     <string name="cases_subtitle">Текущие дела и связанные подтверждённые источники.</string>
     <string name="cases_search_label">Поиск по делам, участникам и цитатам</string>
     <string name="cases_search_limit_hint">Результаты поиска показываются страницами по 30 дел.</string>
