@@ -1,5 +1,14 @@
 # Memora — дневник ведущего инженера
 
+## ACT-0255 · 2026-11-16 · Inbox UI checkpoint
+
+Inbox переехал на компактный экран с source-ID-keyed `LazyColumn`, saveable search/filter state и оборачиваемыми AZ-действиями; существующие capture/archive/revision/history/delete/SAF callbacks и encrypted capture store сохранены. Schema/domain/retention/consent/provider/privacy/permissions не менялись.
+
+Focused `CaptureUiIntegrationTest` прошёл 8/8. Полные JVM XML: 79 suites / 409 tests, 0 failures/errors, 1 opt-in live skipped; debug/AndroidTest build и Kotlin compile завершились; lint 0/90/2. APK v103 `1.1.81-inbox-ui`, SHA-256 `6433abe2e0456f1456358738acc9910052c88ed7e3ce7404d1508fa017b609d0`. Synthetic emulator показывает v103 и прежний `firstInstallTime=2026-11-15 16:15:34`; post-upgrade Inbox readback не выполнялся.
+
+Владелец попросил остановить работу во время `componentVisualRegression`. Поэтому Gradle invocation не имеет финального `BUILD SUCCESSFUL`; визуальное сравнение, реальные Inbox screenshots, large font/light-dark/keyboard/rotation, ручной Inbox journey и TalkBack — NOT TESTED для этого блока; 31 baseline не изменялись. Подробности: [Phase 9 checkpoint](ui-ux-redesign-v1/phase-9/REPORT.md). Следующий шаг после возобновления: Backup, Settings и итоговая визуальная проверка. Сохранять `main` и owner ADR-012.
+
+
 
 ## ACT-0253 · 2026-11-16 · Tables UI
 

@@ -221,6 +221,8 @@ class CaptureUiIntegrationTest {
         compose.onNodeWithTag("inbox_search").performTextInput("GƏNCƏ")
         compose.onNodeWithText("Salam Gəncə").assertExists()
         compose.onNodeWithText("Salam Bakı").assertDoesNotExist()
+        compose.onNodeWithTag("capture_entry_s2").assertExists()
+        compose.onNodeWithTag("capture_entry_s1").assertDoesNotExist()
         compose.onNodeWithTag("capture_select_0").assertContentDescriptionContains("Salam Gəncə", substring = true)
         compose.onNodeWithTag("capture_select_0").performScrollTo().performClick()
         compose.onNodeWithTag("inbox_selected").assertExists()
@@ -235,5 +237,32 @@ class CaptureUiIntegrationTest {
         compose.waitUntil(10_000) { compose.onAllNodesWithTag("draft_1").fetchSemanticsNodes().isNotEmpty() }
         compose.onNodeWithText("Salam Bakı").assertExists()
         compose.onNodeWithText("Salam Gəncə").assertExists()
+    }
+
+    @Test fun longInboxUsesLazyRowsAndCanScrollToTheExactSyntheticEntry() {
+        val disk = disk()
+        val now = Instant.parse("2026-01-01T12:00:00Z")
+        var version = 0L
+        repeat(40) { index ->
+            val text = "Synthetic inbox item $index"
+            assertEquals(CaptureWrite.Recorded, disk.saveDraft(version, text))
+            version++
+            assertEquals(CaptureWrite.Recorded, disk.submit(
+                commandId = "command-$index",
+                expectedVersion = version,
+                sourceId = "source-$index",
+                revisionId = "revision-$index",
+                text = text,
+                recordedAt = now.plusSeconds(index.toLong()),
+                zone = "Asia/Baku",
+            ))
+            version++
+        }
+        compose.setContent { TestMemoraApp(initialLanguage = "az", initialRoute = "inbox", capturePersistenceOverride = disk) }
+        compose.waitUntil(10_000) { compose.onAllNodesWithTag("draft_0").fetchSemanticsNodes().isNotEmpty() }
+        compose.onNodeWithTag("capture_entry_source-0").assertDoesNotExist()
+        compose.onNodeWithTag("inbox_list").performScrollToIndex(42)
+        compose.onNodeWithTag("capture_entry_source-0").assertExists()
+        compose.onNodeWithText("Synthetic inbox item 0").assertExists()
     }
 }
