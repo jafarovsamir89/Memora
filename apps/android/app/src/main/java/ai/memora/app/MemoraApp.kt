@@ -268,7 +268,7 @@ fun MemoraApp(initialRoute: String = "home", initialTheme: String = "system", ca
                                 { entries, archived -> captureModel.session.archive(entries, archived) },
                                 captureState.managementBusy, { request -> captureModel.session.revise(request) },
                                 { entry -> captureModel.session.delete(entry.source.id, entry.source.revisions.last().id) })
-                            AppDestination.FINANCE -> FinanceScreen()
+                            AppDestination.FINANCE -> FinanceScreen(onOpenTarget = navigateRoute, language = language)
                             AppDestination.CALENDAR -> CalendarScreen()
                             AppDestination.PEOPLE -> SavedObjectsScreen(DomainKind.PERSON, navigateRoute)
                             AppDestination.CASES -> CasesScreen(onOpenSecretary = { navigate("chat") }, onOpenTarget = navigateRoute)

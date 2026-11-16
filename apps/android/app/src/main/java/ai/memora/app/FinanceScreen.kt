@@ -4,9 +4,14 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
@@ -21,22 +26,28 @@ import ai.memora.app.data.protectedstore.FinanceAnalytics
 import ai.memora.app.data.protectedstore.FinanceAnalyticsSnapshot
 import ai.memora.app.data.protectedstore.ProtectedDomainRepository
 import ai.memora.app.ui.MemoraCard
-import ai.memora.app.ui.ScreenColumn
-import ai.memora.app.ui.ScreenHeading
+import ai.memora.app.ui.EmptyState
+import ai.memora.app.ui.Glyph
+import ai.memora.app.ui.IconBubble
+import ai.memora.app.ui.Pill
+import ai.memora.app.ui.SectionHeading
 import ai.memora.app.ui.colors
 import ai.memora.app.ui.s
 import ai.memora.app.voice.AgentVoiceTurnProcessor
 import java.math.BigDecimal
 import java.text.NumberFormat
 import java.time.Instant
+import java.time.LocalDate
+import java.time.LocalDateTime
 import java.time.YearMonth
 import java.time.format.DateTimeFormatter
 import java.time.ZoneId
 import java.util.Locale
+import kotlinx.coroutines.CancellationException
 
 /** Finance view over the same SQLCipher ledger used by Gemini tools. */
 @Composable
-fun FinanceScreen() {
+internal fun FinanceScreen(onOpenTarget: (AppRoute) -> Unit = {}, language: String = "az") {
     val context = LocalContext.current
     val database = rememberUiAgentDatabase()
     val processor = remember(context, database) { AgentVoiceTurnProcessor(context, database) }
@@ -49,10 +60,21 @@ fun FinanceScreen() {
     var remainingDebtByEventId by remember { mutableStateOf<Map<String, Long>>(emptyMap()) }
     var appliedToDebtByReceiptId by remember { mutableStateOf<Map<String, Long>>(emptyMap()) }
     var unavailable by remember { mutableStateOf(false) }
+    var loading by remember { mutableStateOf(true) }
+    var retryToken by remember { mutableIntStateOf(0) }
+    var selectedFilterName by rememberSaveable { mutableStateOf(FinanceScreenFilter.ALL.name) }
+    val selectedFilter = FinanceScreenFilter.entries.firstOrNull { it.name == selectedFilterName } ?: FinanceScreenFilter.ALL
+    val listState = rememberLazyListState()
+    var displayZone by remember { mutableStateOf(ZoneId.of("Asia/Baku")) }
 
-    LaunchedEffect(scopeId) {
+    LaunchedEffect(scopeId, retryToken) {
+        loading = true
+        events = null
         try {
             check(processor.migrateLegacyFinance())
+            displayZone = runCatching {
+                ZoneId.of(database.protectedStoreDao().localProfile()?.timeZoneId ?: "Asia/Baku")
+            }.getOrDefault(ZoneId.of("Asia/Baku"))
             val loadedEvents = repository.allFinanceEvents(scopeId)
             events = loadedEvents.asReversed()
             voidedEventIds = loadedEvents.filter { repository.isFinanceEventVoided(scopeId, it.eventId) }.map { it.eventId }.toSet()
@@ -66,56 +88,172 @@ fun FinanceScreen() {
                 repository.moneyEvent(scopeId, adjustment.obligationId)?.let { event -> adjustment to (loadedPeople[event.personId] ?: "") }
             }.asReversed()
             unavailable = false
-        } catch (_: Exception) { unavailable = true }
+        } catch (cancelled: CancellationException) {
+            throw cancelled
+        } catch (_: Exception) {
+            unavailable = true
+        } finally {
+            loading = false
+        }
     }
 
-    ScreenColumn(Modifier.testTag("finance_screen")) {
-        ScreenHeading(s(R.string.finance), s(R.string.finance_hint))
-        if (unavailable) {
-            MemoraCard { androidx.compose.material3.Text(s(R.string.capture_storage_error)) }
-        } else if (events == null || events!!.isEmpty()) {
-            MemoraCard { androidx.compose.material3.Text(s(R.string.working_no_data)) }
-        } else events!!.forEach { event ->
-            MemoraCard {
-                people[event.personId]?.let { androidx.compose.material3.Text(it, style = androidx.compose.material3.MaterialTheme.typography.titleMedium) }
-                val label = when (event.kind) {
-                    "debt" -> R.string.voice_debt_label
-                    "expense" -> R.string.finance_expense_label
-                    else -> R.string.finance_receipt_label
-                }
-                androidx.compose.material3.Text(s(label))
-                if (event.eventId in voidedEventIds) androidx.compose.material3.Text(s(R.string.finance_reversed_label), color = androidx.compose.material3.MaterialTheme.colorScheme.error)
-                val amount = "${event.minorUnits / 100},${(event.minorUnits % 100).toString().padStart(2, '0')} ${event.currency}"
-                androidx.compose.material3.Text(amount)
-                if (event.kind == "debt") {
-                    val remaining = remainingDebtByEventId[event.eventId]
-                    if (remaining != null) androidx.compose.material3.Text("${s(R.string.finance_debt_remaining)}: ${remaining / 100},${(remaining % 100).toString().padStart(2, '0')} ${event.currency}")
-                }
-                if (event.kind == "receipt") {
-                    val applied = appliedToDebtByReceiptId[event.eventId] ?: 0L
-                    if (applied > 0L) androidx.compose.material3.Text("${s(R.string.finance_receipt_applied)}: ${applied / 100},${(applied % 100).toString().padStart(2, '0')} ${event.currency}")
-                }
-                event.occurredAt?.let { raw ->
-                    val date = runCatching { Instant.parse(raw).atZone(ZoneId.of("Asia/Baku")).toLocalDate().toString() }.getOrNull()
-                    if (date != null) androidx.compose.material3.Text(date)
-                }
-                event.comment?.let { androidx.compose.material3.Text(it) }
-                androidx.compose.material3.Text(event.source)
-            }
+    val visibleEvents = events.orEmpty().filter { selectedFilter.matches(it.kind) }
+    val filterOptions = listOf(
+        FinanceScreenFilter.ALL.name to s(R.string.all),
+        FinanceScreenFilter.RECEIVED.name to s(R.string.finance_filter_received),
+        FinanceScreenFilter.EXPENSES.name to s(R.string.finance_filter_expenses),
+        FinanceScreenFilter.DEBTS.name to s(R.string.finance_filter_debts),
+    )
+    val locale = Locale.forLanguageTag(language)
+
+    Column(Modifier.fillMaxSize().testTag("finance_screen")) {
+        Column(Modifier.fillMaxWidth().padding(horizontal = 20.dp).padding(top = 16.dp, bottom = 8.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            androidx.compose.material3.Text(
+                s(R.string.finance_hint),
+                style = androidx.compose.material3.MaterialTheme.typography.bodyMedium,
+                color = colors.muted,
+                modifier = Modifier.testTag("finance_subtitle"),
+            )
+            Filters(filterOptions, selectedFilterName, { selectedFilterName = it })
         }
-        settlements.forEach { (settlement, personName) ->
-            MemoraCard {
-                if (personName.isNotEmpty()) androidx.compose.material3.Text(personName, style = androidx.compose.material3.MaterialTheme.typography.titleMedium)
-                androidx.compose.material3.Text(s(R.string.finance_settlement_label))
-                androidx.compose.material3.Text("${settlement.minorUnits / 100},${(settlement.minorUnits % 100).toString().padStart(2, '0')} ${settlement.currency}")
-                settlement.occurredAt?.let { raw ->
-                    val date = runCatching { Instant.parse(raw).atZone(ZoneId.of("Asia/Baku")).toLocalDate().toString() }.getOrNull()
-                    if (date != null) androidx.compose.material3.Text(date)
+        LazyColumn(
+            state = listState,
+            modifier = Modifier.weight(1f).fillMaxWidth().padding(horizontal = 20.dp).testTag("finance_event_list"),
+            contentPadding = PaddingValues(top = 8.dp, bottom = 24.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp),
+        ) {
+            when {
+                loading -> item(key = "finance_loading") {
+                    androidx.compose.material3.LinearProgressIndicator(Modifier.fillMaxWidth().testTag("finance_loading"))
                 }
-                androidx.compose.material3.Text(settlement.reason)
+                unavailable -> item(key = "finance_unavailable") {
+                    MemoraCard {
+                        androidx.compose.material3.Text(s(R.string.capture_storage_error), color = androidx.compose.material3.MaterialTheme.colorScheme.error)
+                        androidx.compose.material3.TextButton(onClick = { retryToken++ }, modifier = Modifier.testTag("finance_retry")) {
+                            androidx.compose.material3.Text(s(R.string.capture_retry))
+                        }
+                    }
+                }
+                events.orEmpty().isEmpty() -> item(key = "finance_empty") {
+                    EmptyState(s(R.string.finance_empty_title), s(R.string.finance_empty_body), Glyph.Wallet, "finance_empty")
+                }
+                visibleEvents.isEmpty() -> item(key = "finance_filter_empty") {
+                    EmptyState(s(R.string.finance_filter_empty), s(R.string.finance_empty_body), Glyph.Search, "finance_filter_empty")
+                }
+            }
+            items(visibleEvents, key = { it.eventId }) { event ->
+                val targetRoute = AppRoute.target(AppTargetKind.FINANCE, event.eventId)
+                FinanceEventCard(
+                    event = event,
+                    personName = people[event.personId],
+                    voided = event.eventId in voidedEventIds,
+                    remainingDebtMinor = remainingDebtByEventId[event.eventId],
+                    appliedToDebtMinor = appliedToDebtByReceiptId[event.eventId],
+                    displayZone = displayZone,
+                    locale = locale,
+                    onClick = targetRoute?.let { { onOpenTarget(it) } },
+                    testTag = "finance_event_${event.eventId}",
+                )
+            }
+            if (selectedFilter == FinanceScreenFilter.ALL || selectedFilter == FinanceScreenFilter.DEBTS) {
+                if (settlements.isNotEmpty()) item(key = "finance_settlement_heading") {
+                    SectionHeading(s(R.string.finance_settlement_label))
+                }
+                items(settlements, key = { "settlement:${it.first.eventId}" }) { (settlement, personName) ->
+                    MemoraCard(modifier = Modifier.testTag("finance_settlement_${settlement.eventId}")) {
+                        if (personName.isNotEmpty()) androidx.compose.material3.Text(personName,
+                            style = androidx.compose.material3.MaterialTheme.typography.titleMedium, color = colors.ink)
+                        Pill(s(R.string.finance_settlement_label), tone = 1)
+                        androidx.compose.material3.Text(formatFinanceMoney(settlement.minorUnits, settlement.currency, locale),
+                            style = androidx.compose.material3.MaterialTheme.typography.titleLarge, color = colors.ink)
+                        settlement.occurredAt?.let { raw -> financeDisplayDate(raw, displayZone, locale)?.let { date ->
+                            androidx.compose.material3.Text(date, style = androidx.compose.material3.MaterialTheme.typography.bodySmall, color = colors.muted)
+                        } }
+                        androidx.compose.material3.Text(settlement.reason, style = androidx.compose.material3.MaterialTheme.typography.bodyMedium,
+                            color = colors.muted)
+                    }
+                }
             }
         }
     }
+}
+
+private enum class FinanceScreenFilter {
+    ALL, RECEIVED, EXPENSES, DEBTS;
+
+    fun matches(kind: String): Boolean = when (this) {
+        ALL -> true
+        RECEIVED -> kind == "receipt"
+        EXPENSES -> kind == "expense"
+        DEBTS -> kind == "debt"
+    }
+}
+
+@Composable
+private fun FinanceEventCard(
+    event: MoneyEventRow,
+    personName: String?,
+    voided: Boolean,
+    remainingDebtMinor: Long?,
+    appliedToDebtMinor: Long?,
+    displayZone: ZoneId,
+    locale: Locale,
+    onClick: (() -> Unit)?,
+    testTag: String,
+) {
+    val (label, tone) = when (event.kind) {
+        "debt" -> R.string.finance_direction_debt to 2
+        "expense" -> R.string.finance_direction_spent to 0
+        else -> R.string.finance_direction_received to 1
+    }
+    MemoraCard(modifier = Modifier.testTag(testTag), onClick = onClick) {
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp),
+            verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
+            IconBubble(Glyph.Wallet, tone, size = 44)
+            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                Pill(s(label), tone)
+                personName?.let { androidx.compose.material3.Text(it,
+                    style = androidx.compose.material3.MaterialTheme.typography.titleMedium, color = colors.ink, maxLines = 2) }
+            }
+            if (onClick != null) androidx.compose.material3.Text("›",
+                style = androidx.compose.material3.MaterialTheme.typography.headlineMedium, color = colors.muted)
+        }
+        androidx.compose.material3.Text(formatFinanceMoney(event.minorUnits, event.currency, locale),
+            style = androidx.compose.material3.MaterialTheme.typography.titleLarge, fontWeight = FontWeight.SemiBold,
+            color = if (event.kind == "expense") colors.amber else colors.ink,
+            modifier = Modifier.testTag("finance_event_amount_${event.eventId}"))
+        if (voided) androidx.compose.material3.Text(s(R.string.finance_reversed_label), color = androidx.compose.material3.MaterialTheme.colorScheme.error,
+            modifier = Modifier.testTag("finance_event_voided_${event.eventId}"))
+        if (event.kind == "debt" && remainingDebtMinor != null) androidx.compose.material3.Text(
+            "${s(R.string.finance_debt_remaining)}: ${formatFinanceMoney(remainingDebtMinor, event.currency, locale)}",
+            style = androidx.compose.material3.MaterialTheme.typography.bodySmall, color = colors.muted)
+        if (event.kind == "receipt" && (appliedToDebtMinor ?: 0L) > 0L) androidx.compose.material3.Text(
+            "${s(R.string.finance_receipt_applied)}: ${formatFinanceMoney(appliedToDebtMinor ?: 0L, event.currency, locale)}",
+            style = androidx.compose.material3.MaterialTheme.typography.bodySmall, color = colors.muted)
+        event.occurredAt?.let { raw -> financeDisplayDate(raw, displayZone, locale)?.let { date ->
+            androidx.compose.material3.Text(date, style = androidx.compose.material3.MaterialTheme.typography.bodySmall, color = colors.muted,
+                modifier = Modifier.testTag("finance_event_date_${event.eventId}"))
+        } }
+        event.comment?.takeIf(String::isNotBlank)?.let { androidx.compose.material3.Text(it,
+            style = androidx.compose.material3.MaterialTheme.typography.bodyMedium, color = colors.ink) }
+        androidx.compose.material3.Text("${s(R.string.action_related_source)}: ${event.source}",
+            style = androidx.compose.material3.MaterialTheme.typography.bodySmall, color = colors.muted)
+    }
+}
+
+private fun formatFinanceMoney(minorUnits: Long, currency: String, locale: Locale): String =
+    "${NumberFormat.getNumberInstance(locale).apply {
+        minimumFractionDigits = 2
+        maximumFractionDigits = 2
+    }.format(BigDecimal.valueOf(minorUnits, 2))} $currency"
+
+private fun financeDisplayDate(raw: String, zone: ZoneId, locale: Locale): String? = runCatching {
+    val dateTime = runCatching { Instant.parse(raw).atZone(zone).toLocalDateTime() }
+        .getOrElse { LocalDateTime.parse(raw) }
+    dateTime.format(DateTimeFormatter.ofPattern("d MMM yyyy, HH:mm", locale))
+}.getOrElse {
+    runCatching { LocalDate.parse(raw).format(DateTimeFormatter.ofPattern("d MMM yyyy", locale)) }.getOrNull()
 }
 
 /** Read-only summary over the exact same protected ledger as Gemini's finance tool. */

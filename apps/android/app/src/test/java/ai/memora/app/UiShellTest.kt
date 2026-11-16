@@ -235,9 +235,14 @@ class UiShellTest {
         compose.onNodeWithTag("finance_reports_section").assertExists()
         val semantics = compose.onRoot(useUnmergedTree = true).printToString()
         val directoryIndex = semantics.indexOf("more_tasks")
+        val peopleGroupIndex = semantics.indexOf("more_group_people_work")
+        val planningGroupIndex = semantics.indexOf("more_group_planning_memory")
+        val dataGroupIndex = semantics.indexOf("more_group_data_settings")
         val reportsIndex = semantics.indexOf("finance_reports_section")
         Assert.assertTrue("More directory should appear before finance reports ($directoryIndex, $reportsIndex)",
             directoryIndex >= 0 && reportsIndex > directoryIndex)
+        Assert.assertTrue("More categories should stay in task-oriented order",
+            peopleGroupIndex >= 0 && peopleGroupIndex < planningGroupIndex && planningGroupIndex < dataGroupIndex && dataGroupIndex < reportsIndex)
         screenshot("18-more-directory-first")
     }
 
@@ -300,6 +305,56 @@ class UiShellTest {
         screenshot("16-finance-reports-top")
         compose.onNodeWithTag("more_tasks").performScrollTo().assertExists()
         screenshot("17-finance-reports-tools")
+    }
+
+    @Test fun financeListFiltersByLedgerKindAndOpensTheExactOperation() = kotlinx.coroutines.runBlocking {
+        val context = ApplicationProvider.getApplicationContext<Context>()
+        appearanceStore = AtomicAppearanceStore(File(context.cacheDir, "ui-finance-list-settings-${UUID.randomUUID()}"),
+            AppearanceSettings("az", "light"))
+        val database = agentDatabase.database
+        val scope = ai.memora.app.voice.AgentVoiceTurnProcessor(context, database).conversationScopeId()
+        val repository = ProtectedDomainRepository(database)
+        val now = java.time.Instant.parse("2026-11-16T12:00:00Z").toString()
+        val receiptId = UUID.randomUUID().toString()
+        val debtId = UUID.randomUUID().toString()
+        repository.recordFinanceEvent(scope, "Synthetic Finance Person", "receipt", 12_550, "AZN",
+            "Synthetic finance list source", "Synthetic receipt note", "synthetic-finance-person", receiptId,
+            UUID.randomUUID().toString(), now, now)
+        repository.recordFinanceEvent(scope, "Synthetic Finance Person", "debt", 30_000, "AZN",
+            "Synthetic finance list source", "Synthetic debt note", "synthetic-finance-person", debtId,
+            UUID.randomUUID().toString(), now, now)
+
+        compose.setContent {
+            val currentDensity = LocalDensity.current
+            CompositionLocalProvider(
+                LocalDensity provides Density(currentDensity.density, fontScale = 1.3f),
+                LocalAgentDatabaseOverride provides database,
+            ) {
+                TestMemoraApp(initialRoute = "more", initialTheme = "light", initialLanguage = "az",
+                    capturePersistenceOverride = captureStore, appearanceStoreOverride = appearanceStore)
+            }
+        }
+        compose.onNodeWithTag("more_finance").performScrollTo().performClick()
+        compose.waitUntil(10_000) { compose.onAllNodesWithTag("finance_event_$receiptId").fetchSemanticsNodes().isNotEmpty() }
+        listOf("ALL", "RECEIVED", "EXPENSES", "DEBTS").forEach { filter ->
+            compose.onNodeWithTag("filter_$filter").assertIsDisplayed()
+        }
+        compose.onAllNodesWithText("Maliyyə", useUnmergedTree = true).assertCountEquals(1)
+        compose.onNodeWithTag("finance_subtitle").assertTextContains("Gəlirlər", substring = true)
+        compose.onNodeWithTag("finance_event_amount_$receiptId", useUnmergedTree = true).assertTextContains("125,50 AZN")
+        compose.onNodeWithTag("filter_RECEIVED").performClick()
+        compose.onNodeWithTag("finance_event_$receiptId").assertExists()
+        Assert.assertTrue(compose.onAllNodesWithTag("finance_event_$debtId").fetchSemanticsNodes().isEmpty())
+        compose.onNodeWithTag("finance_event_$receiptId").performClick()
+        compose.waitUntil(10_000) {
+            compose.onAllNodesWithTag("action_target_$receiptId").fetchSemanticsNodes().isNotEmpty()
+        }
+        compose.onNodeWithTag("finance_detail_amount").assertTextContains("125,50 AZN")
+        compose.onNodeWithTag("back").performClick()
+        compose.waitUntil(10_000) { compose.onAllNodesWithTag("finance_event_$receiptId").fetchSemanticsNodes().isNotEmpty() }
+        compose.onNodeWithTag("finance_event_$receiptId").assertExists()
+        compose.onNodeWithTag("filter_RECEIVED").assertIsSelected()
+        Unit
     }
 
     @Test fun todayDashboardUsesSavedTasksCasesAndCalendarEvents() = kotlinx.coroutines.runBlocking {
@@ -705,7 +760,7 @@ class UiShellTest {
                 TestMemoraApp(initialRoute = "finance", initialTheme = "light", capturePersistenceOverride = captureStore, appearanceStoreOverride = appearanceStore)
             }
         }
-        compose.onNodeWithText("Данных пока нет").assertExists()
+        compose.onNodeWithTag("finance_empty_title").assertExists()
         compose.onNodeWithText("230 ₼").assertDoesNotExist()
         screenshot("08-finance-light")
         compose.onNodeWithText("300 ₼").assertDoesNotExist()

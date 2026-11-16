@@ -23,6 +23,9 @@
     <string name="more_title">More</string>
     <string name="more_subtitle">Explore your sections and financial overview</string>
     <string name="more_tools_title">Other sections</string>
+    <string name="more_group_people_work">People and work</string>
+    <string name="more_group_planning_memory">Planning and memory</string>
+    <string name="more_group_data_settings">Data and settings</string>
     <string name="finance_reports_title">Finance overview</string>
     <string name="action_related_details">Related item</string>
     <string name="action_related_loading">Loading item</string>
@@ -96,6 +99,12 @@
     <string name="inbox_hint">Captures and drafts</string>
     <string name="finance">Finances</string>
     <string name="finance_hint">Income, expenses and obligations</string>
+    <string name="finance_filter_received">Received</string>
+    <string name="finance_filter_expenses">Expenses</string>
+    <string name="finance_filter_debts">Debts</string>
+    <string name="finance_empty_title">No financial records yet</string>
+    <string name="finance_empty_body">Confirmed financial records will appear here. The report on More only summarizes entries that exist in the local ledger.</string>
+    <string name="finance_filter_empty">No records in this section</string>
     <string name="people">People</string>
     <string name="people_hint">The context behind your connections</string>
     <string name="cases">Cases</string>

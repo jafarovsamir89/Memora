@@ -23,6 +23,9 @@
     <string name="more_title">Ещё</string>
     <string name="more_subtitle">Разделы приложения и финансовый обзор</string>
     <string name="more_tools_title">Другие разделы</string>
+    <string name="more_group_people_work">Люди и дела</string>
+    <string name="more_group_planning_memory">Планы и память</string>
+    <string name="more_group_data_settings">Данные и настройки</string>
     <string name="finance_reports_title">Финансовый обзор</string>
     <string name="action_related_details">Связанная запись</string>
     <string name="action_related_loading">Загружаем запись</string>
@@ -96,6 +99,12 @@
     <string name="inbox_hint">Записи и черновики</string>
     <string name="finance">Финансы</string>
     <string name="finance_hint">Доходы, расходы и обязательства</string>
+    <string name="finance_filter_received">Поступления</string>
+    <string name="finance_filter_expenses">Расходы</string>
+    <string name="finance_filter_debts">Долги</string>
+    <string name="finance_empty_title">Финансовых записей пока нет</string>
+    <string name="finance_empty_body">Здесь появятся подтверждённые финансовые записи. Обзор во вкладке «Ещё» показывает только данные из локального реестра.</string>
+    <string name="finance_filter_empty">В этом разделе записей нет</string>
     <string name="people">Люди</string>
     <string name="people_hint">Контекст ваших отношений</string>
     <string name="cases">Дела</string>

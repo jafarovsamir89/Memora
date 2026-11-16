@@ -1,5 +1,13 @@
 # Memora — дневник ведущего инженера
 
+## ACT-0247 — 2026-11-16 — More catalog and Finance UI
+
+На `ui/redesign-v1` продолжена разрешённая владельцем UI/UX-разработка. «Ещё» сгруппировано на «Люди и работа», «Планы и память», «Данные и настройки»; каталог остаётся выше отчёта. Finance переведён на компактную верхнюю панель с фильтрами и стабильный lazy-list; добавлены честные loading/error/empty состояния, локализованные карточки ledger events и точный маршрут операции по ID и текущему scope. Повторный заголовок экрана убран. Обнаруженное реальным AZ `fontScale=1.3` обрезание chips исправлено общим `FlowRow` в `Filters`; тест подтверждает видимость всех четырёх категорий. Финансовая детализация теперь использует locale выбранного UI. Финансовая семантика, ledger write path, доменные правила, schema/migrations, provider, consent, permissions, privacy и auth не менялись.
+
+Полный Gradle: **77 suites / 396 tests, 0 failures/errors, 1 opt-in live skipped**; debug/AndroidTest build и AndroidTest Kotlin compile прошли; lint **0/85/3**. `:app:componentVisualRegression` — **31/31 PASS**, baselines неизменны. Synthetic Compose test создаёт две записи только в isolated in-memory БД и проверяет фильтр, сумму AZN, exact finance route и возврат с сохранённым фильтром; все четыре фильтра `assertIsDisplayed()` при `fontScale=1.3`. Synthetic Android 14 emulator `emulator-5556`: v99 установлен через `adb install -r`; `firstInstallTime=2026-11-15 16:15:34` сохранился; MainActivity открыта, данные не очищались. Реальные ADB снимки More/Finance в light/dark и AZ fontScale 1.3 находятся в `docs/ui-ux-redesign-v1/phase-5/screenshots/`. Эмуляторная finance база пустая, поэтому заполненные карточки проверены host Compose-тестом, не device screenshot. Системный fontScale возвращён к 1.0 и тема эмулятора восстановлена к dark. APK v99 `1.1.77-finance-navigation`, SHA-256 `91291d0d36a61047be9c563aa228ff172b73bea0f44dd6dd8509b04dddc23949`; детали — [Phase 5 report](ui-ux-redesign-v1/phase-5/REPORT.md).
+
+Физический Redmi, TalkBack, hardware keyboard, populated-ledger device upgrade readback, live Gemini/audio/network timing, owner acceptance и large-profile device performance — NOT TESTED. M20-05 остаётся partial. Следующий независимый блок: Calendar и Tasks UI, затем Projects/Notes/Tables/Inbox/Backup/Settings. `main` и owner-owned ADR-012 не трогать.
+
 ### Git handoff ACT-0246
 
 ACT-0245 зафиксирован commit `70b366275e5dd83ebf3c22bb87815a31403a9ed7` (`feat(ui): redesign memory library`) и отправлен в `origin/ui/redesign-v1`. После `git fetch` local `HEAD` и `origin/ui/redesign-v1` совпали; `git ls-remote` подтвердил тот же feature SHA. Remote `main` остался `ac621919aca09ece6e292eae708d55cc09de16d7`; merge/force push/history rewrite не выполнялись. Owner ADR-012 остался untracked и исключён; APK, API keys и raw live reports не добавлены. Продолжить автономно с каталога «Ещё» и следующими разделами; `main` не трогать.
@@ -10,7 +18,7 @@ ACT-0245 зафиксирован commit `70b366275e5dd83ebf3c22bb87815a31403a9e
 
 Полный Gradle прошёл: 77 suites / 395 tests, 0 failures/errors, один opt-in live test skipped; debug/AndroidTest builds и AndroidTest Kotlin compile прошли; lint 0/84/3. Компонентное визуальное сравнение — 31/31 без изменения baselines. APK v98 `1.1.76-memory-library-pagination`, SHA-256 `74d47a98ba78edfc860e1d4776d77059dacb546e6c48d09783df26865c179a33`. Synthetic Android 14: v97→v98 через `adb install -r`, firstInstallTime неизменён; введённый через UI synthetic fact сохранился. Light/dark/search и AZ fontScale=1.3 зафиксированы реальными ADB screenshots в `docs/ui-ux-redesign-v1/phase-4/`; при 1.3 видимого clipping не найдено. Очень большие профили, физический Redmi, TalkBack, keyboard и owner acceptance не проверены.
 
-Изменения ещё не закоммичены; следующий технический шаг — проверить и зафиксировать этот законченный пакет, затем продолжить с каталогом «Ещё» и оставшимися экранами в рамках активного разрешения. `main` не трогать; ADR-012 оставить владельцу. Не добавлять APK, ключи, личные данные или raw reports.
+Кодовый commit `70b366275e5dd83ebf3c22bb87815a31403a9ed7` создан и запушен; отдельная handoff-запись ACT-0246 подтвердила remote. Далее — каталог «Ещё» и оставшиеся экраны в рамках активного разрешения. `main` не трогать; ADR-012 оставить владельцу. Не добавлять APK, ключи, личные данные или raw reports.
 
 ## ACT-0243 — 2026-11-16 — Stage 3 details and Today
 

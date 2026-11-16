@@ -34,6 +34,7 @@ import ai.memora.app.data.protectedstore.ProtectedMemoryRepository
 import ai.memora.app.data.protectedstore.TaskPersonLinkRow
 import ai.memora.app.domain.Task
 import ai.memora.app.ui.EmptyState
+import ai.memora.app.ui.LocalStrings
 import ai.memora.app.ui.MemoraCard
 import ai.memora.app.ui.ScreenColumn
 import ai.memora.app.ui.ScreenHeading
@@ -256,6 +257,7 @@ internal fun FinanceTargetDetailScreen(route: AppRoute, onOpenTarget: (AppRoute)
     val database = rememberUiAgentDatabase()
     val processor = remember(context, database) { AgentVoiceTurnProcessor(context, database) }
     val scopeId = remember(processor) { processor.conversationScopeId() }
+    val moneyLocale = LocalStrings.current.configuration.locales[0]
     val repository = remember(database) { ProtectedDomainRepository(database) }
     var detail by remember(route.targetId, scopeId) { mutableStateOf<EntityDetailLoad<FinanceDetail>>(EntityDetailLoad.Loading) }
     LaunchedEffect(route.targetId, scopeId, database) {
@@ -322,7 +324,7 @@ internal fun FinanceTargetDetailScreen(route: AppRoute, onOpenTarget: (AppRoute)
             ScreenColumn(Modifier.testTag("action_target_${event.eventId}")) {
                 ScreenHeading(kindLabel, s(R.string.finance))
                 MemoraCard(modifier = Modifier.testTag("finance_detail_header")) {
-                    Text(entityMoney(event.minorUnits, event.currency), color = colors.ink,
+                    Text(entityMoney(event.minorUnits, event.currency, moneyLocale), color = colors.ink,
                         style = MaterialTheme.typography.headlineMedium, modifier = Modifier.testTag("finance_detail_amount"))
                     Text(direction, color = colors.accent, style = MaterialTheme.typography.titleSmall,
                         modifier = Modifier.testTag("finance_detail_direction"))
@@ -346,7 +348,7 @@ internal fun FinanceTargetDetailScreen(route: AppRoute, onOpenTarget: (AppRoute)
                     Text("${s(R.string.action_related_source)}: ${event.source}", color = colors.muted,
                         modifier = Modifier.testTag("finance_detail_source"))
                     event.comment?.takeIf(String::isNotBlank)?.let { Text(it, color = colors.ink) }
-                    value.remainingDebt?.let { Text("${s(R.string.finance_debt_remaining)}: ${entityMoney(it, event.currency)}",
+                    value.remainingDebt?.let { Text("${s(R.string.finance_debt_remaining)}: ${entityMoney(it, event.currency, moneyLocale)}",
                         color = colors.muted, modifier = Modifier.testTag("finance_detail_debt_remaining")) }
                 }
                 value.sourceTurn?.let { turn ->
@@ -378,7 +380,7 @@ internal fun FinanceTargetDetailScreen(route: AppRoute, onOpenTarget: (AppRoute)
                 } else value.adjustments.forEach { adjustment ->
                     MemoraCard(modifier = Modifier.testTag("finance_detail_adjustment_${adjustment.eventId}")) {
                         Text(adjustmentLabel(adjustment.kind), color = colors.ink, style = MaterialTheme.typography.titleSmall)
-                        if (adjustment.minorUnits != 0L) Text(entityMoney(adjustment.minorUnits, adjustment.currency), color = colors.ink)
+                        if (adjustment.minorUnits != 0L) Text(entityMoney(adjustment.minorUnits, adjustment.currency, moneyLocale), color = colors.ink)
                         adjustment.reason.takeIf(String::isNotBlank)?.let { Text(it, color = colors.muted) }
                         adjustment.occurredAt?.let { Text(entityDate(it, value.dateZone), color = colors.muted,
                             style = MaterialTheme.typography.bodySmall) }
@@ -609,8 +611,8 @@ private fun adjustmentLabel(kind: String): String = s(when (kind) {
     else -> R.string.finance_correction_history
 })
 
-private fun entityMoney(minorUnits: Long, currency: String): String {
-    val amount = NumberFormat.getNumberInstance(Locale.getDefault()).apply {
+private fun entityMoney(minorUnits: Long, currency: String, locale: Locale): String {
+    val amount = NumberFormat.getNumberInstance(locale).apply {
         minimumFractionDigits = 2
         maximumFractionDigits = 2
     }.format(BigDecimal.valueOf(minorUnits, 2))

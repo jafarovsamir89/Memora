@@ -23,6 +23,9 @@
     <string name="more_title">Daha çox</string>
     <string name="more_subtitle">Bütün bölmələr və maliyyə icmalı</string>
     <string name="more_tools_title">Digər bölmələr</string>
+    <string name="more_group_people_work">İnsanlar və iş</string>
+    <string name="more_group_planning_memory">Planlar və yaddaş</string>
+    <string name="more_group_data_settings">Məlumat və ayarlar</string>
     <string name="finance_reports_title">Maliyyə icmalı</string>
     <string name="action_related_details">Əlaqəli qeyd</string>
     <string name="action_related_loading">Məlumat yüklənir</string>
@@ -96,6 +99,12 @@
     <string name="inbox_hint">Qeydlər və qaralamalar</string>
     <string name="finance">Maliyyə</string>
     <string name="finance_hint">Gəlirlər, xərclər və öhdəliklər</string>
+    <string name="finance_filter_received">Daxil olan</string>
+    <string name="finance_filter_expenses">Xərclər</string>
+    <string name="finance_filter_debts">Borclar</string>
+    <string name="finance_empty_title">Hələ maliyyə qeydi yoxdur</string>
+    <string name="finance_empty_body">Təsdiqlənmiş maliyyə qeydləri burada görünəcək. «Daha çox» bölməsindəki icmal yalnız yerli reyestrdəki məlumatları göstərir.</string>
+    <string name="finance_filter_empty">Bu bölmədə qeyd yoxdur</string>
     <string name="people">İnsanlar</string>
     <string name="people_hint">Əlaqələrinizin konteksti</string>
     <string name="cases">İşlər</string>

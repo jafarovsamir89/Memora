@@ -2,7 +2,6 @@ package ai.memora.app
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
@@ -45,7 +44,11 @@ import java.util.UUID
 
 @Composable
 fun Filters(options: List<Pair<String, String>>, selected: String, onSelect: (String) -> Unit, enabled: Boolean = true) {
-    Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+    androidx.compose.foundation.layout.FlowRow(
+        Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        verticalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
         options.forEach { (id, title) ->
             FilterChip(selected == id, { onSelect(id) }, enabled = enabled, label = { Text(title) },
                 modifier = Modifier.heightIn(min = 48.dp).testTag("filter_$id"),
@@ -63,31 +66,33 @@ fun Filters(options: List<Pair<String, String>>, selected: String, onSelect: (St
 fun MoreScreen(navigate: (String) -> Unit, about: () -> Unit, captureVoice: (() -> Unit)? = null, language: String = "az") {
     ScreenColumn {
         Text(s(R.string.more_subtitle), color = colors.muted, style = MaterialTheme.typography.bodyMedium)
-        SectionHeading(s(R.string.more_tools_title))
+        MoreGroupHeading(s(R.string.more_group_people_work), "more_group_people_work")
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-            MoreDestinationCard(Glyph.Tasks, s(R.string.nav_tasks), s(R.string.working_tasks_hint),
-                testTag = "more_tasks") { navigate("tasks") }
+            MoreDestinationCard(Glyph.Folder, s(R.string.cases), s(R.string.cases_hint),
+                testTag = "more_cases") { navigate("cases") }
             MoreDestinationCard(Glyph.Person, s(R.string.people), s(R.string.people_hint), tone = 1,
                 testTag = "more_people") { navigate("people") }
         }
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-            MoreDestinationCard(Glyph.Folder, s(R.string.cases), s(R.string.cases_hint),
-                testTag = "more_cases") { navigate("cases") }
+            MoreDestinationCard(Glyph.Tasks, s(R.string.nav_tasks), s(R.string.working_tasks_hint),
+                testTag = "more_tasks") { navigate("tasks") }
             MoreDestinationCard(Glyph.Folder, s(R.string.projects), s(R.string.projects_hint), tone = 3,
                 testTag = "more_projects") { navigate("projects") }
         }
+        MoreGroupHeading(s(R.string.more_group_planning_memory), "more_group_planning_memory")
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-            MoreDestinationCard(Glyph.Inbox, s(R.string.inbox), s(R.string.inbox_hint), tone = 1,
-                testTag = "more_inbox") { navigate("inbox") }
+            MoreDestinationCard(Glyph.Calendar, s(R.string.calendar_title), s(R.string.calendar_hint), tone = 1,
+                testTag = "more_calendar") { navigate("calendar") }
             MoreDestinationCard(Glyph.Note, s(R.string.notes_title), s(R.string.notes_hint),
                 testTag = "more_notes") { navigate("notes") }
         }
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-            MoreDestinationCard(Glyph.Calendar, s(R.string.calendar_title), s(R.string.calendar_hint), tone = 1,
-                testTag = "more_calendar") { navigate("calendar") }
-            MoreDestinationCard(Glyph.Wallet, s(R.string.finance), s(R.string.finance_hint), tone = 3,
-                testTag = "more_finance") { navigate("finance") }
+            MoreDestinationCard(Glyph.Inbox, s(R.string.inbox), s(R.string.inbox_hint), tone = 1,
+                testTag = "more_inbox") { navigate("inbox") }
+            MoreDestinationCard(Glyph.Mic, s(R.string.voice_memory_title), s(R.string.voice_memory_help),
+                testTag = "more_voice_memory") { navigate("voice_memory") }
         }
+        MoreGroupHeading(s(R.string.more_group_data_settings), "more_group_data_settings")
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
             MoreDestinationCard(Glyph.Grid, s(R.string.tables_title), s(R.string.tables_subtitle),
                 testTag = "more_tables") { navigate("tables") }
@@ -95,8 +100,8 @@ fun MoreScreen(navigate: (String) -> Unit, about: () -> Unit, captureVoice: (() 
                 testTag = "more_portable_backup") { navigate("portable_backup") }
         }
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-            MoreDestinationCard(Glyph.Mic, s(R.string.voice_memory_title), s(R.string.voice_memory_help),
-                testTag = "more_voice_memory") { navigate("voice_memory") }
+            MoreDestinationCard(Glyph.Wallet, s(R.string.finance), s(R.string.finance_hint), tone = 3,
+                testTag = "more_finance") { navigate("finance") }
             MoreDestinationCard(Glyph.Settings, s(R.string.settings), s(R.string.settings_hint), tone = 3,
                 testTag = "more_settings") { navigate("settings") }
         }
@@ -112,6 +117,11 @@ fun MoreScreen(navigate: (String) -> Unit, about: () -> Unit, captureVoice: (() 
         SectionHeading(s(R.string.finance_reports_title))
         FinanceReportsSection(language)
     }
+}
+
+@Composable
+private fun MoreGroupHeading(title: String, testTag: String) {
+    Column(Modifier.fillMaxWidth().testTag(testTag)) { SectionHeading(title) }
 }
 
 

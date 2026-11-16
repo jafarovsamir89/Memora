@@ -1,3 +1,13 @@
+## ACT-0247 · 2026-11-16 · More catalog and Finance
+
+Обновлены три категории меню «Ещё», каталог сохранён выше отчёта. Finance получил типовые локализованные фильтры, `LazyColumn` со стабильными ID, честные состояния загрузки/ошибки/пустого результата, exact scoped event routes и locale-aware отображение суммы/даты. Удалён повторный заголовок Finance. Реальный тест AZ fontScale=1.3 обнаружил обрезание крайнего chip; общий `Filters` переведён на FlowRow и test требует, чтобы все четыре фильтра были видны.
+
+Full Gradle: **77 suites / 396 tests; 0 failures/errors; 1 opt-in live skipped**. Debug/AndroidTest APK и AndroidTest Kotlin compile PASS. Lint **0 errors / 85 warnings / 3 hints**. Component visual regression **31/31 PASS**; goldens unchanged. Synthetic host test создала receipt+debt в in-memory DB, проверила AZN amount, type filter, exact finance detail ID и возврат с сохранением фильтра; при test `fontScale=1.3` все filter nodes displayed. APK v99 `1.1.77-finance-navigation`, SHA-256 `91291d0d36a61047be9c563aa228ff172b73bea0f44dd6dd8509b04dddc23949`.
+
+На synthetic Android 14 `emulator-5556` APK v99 установлен через `adb install -r`; `firstInstallTime=2026-11-15 16:15:34` сохранился. Реальные 1080×2400 скриншоты More dark/light, Finance empty dark/light и Finance AZ fontScale1.3 dark приложены в `docs/ui-ux-redesign-v1/phase-5/`; More AZ fontScale1.3 dark также приложён. Устройство показывает пустой Finance; заполненные записи видны только в isolated host test. Системная font scale восстановлена к 1.0, UI-тема к dark. Personal data, Gemini, mic, external API и сеть не использовались. `git diff --check` прошёл.
+
+Изменения не меняют schema/migrations, ledger/domain write path/semantics, AI/provider, consent, privacy, permissions или auth. Physical Redmi, TalkBack, keyboard, populated-ledger device readback, owner acceptance, network timing и production readiness — NOT TESTED. Коммит и remote handoff будут добавлены отдельной записью после подтверждения Git-команд; далее Calendar/Tasks и другие UI экраны. `main` и ADR-012 исключены.
+
 ## ACT-0246 · 2026-11-16 · Git handoff после библиотеки памяти
 
 ACT-0245 committed as `70b366275e5dd83ebf3c22bb87815a31403a9ed7` (`feat(ui): redesign memory library`) and pushed to `origin/ui/redesign-v1`. Fetch showed local HEAD and tracking ref at the same SHA; `git ls-remote` confirmed remote `refs/heads/ui/redesign-v1` also at that SHA. Remote `main` remains `ac621919aca09ece6e292eae708d55cc09de16d7`; no merge, force push or history rewrite. Owner-owned untracked ADR-012 remains untouched and excluded. No APK, API key or raw report staged. Continue with More and remaining UI screens under the active owner authorization.
