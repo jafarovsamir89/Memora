@@ -27,3 +27,8 @@
 - TalkBack, physical Redmi, large-store performance, SAF round-trip, owner acceptance, native acceptance, and release readiness remain **NOT TESTED / OPEN**.
 
 The current UI scope remains partial. Next, after the owner resumes work, continue with Backup, Settings, and the final visual pass. Preserve `main` and owner-owned `docs/adr/ADR-012-keystore-wrapping-key-rotation.md`.
+
+
+## Git handoff
+
+Implementation commit `cfe6fd1740d4a7b1a15a742e389d336342883030` (`feat(ui): redesign inbox workspace`) is pushed to `origin/ui/redesign-v1`. `git fetch` and `git ls-remote` verified local HEAD, tracking ref, and remote feature ref at the same SHA. Remote `main` remains `ac621919aca09ece6e292eae708d55cc09de16d7`; no merge, force push, or history rewrite. Owner ADR-012 remains untracked and was not staged or changed. APKs and local keys were not committed.
