@@ -1,6 +1,20 @@
 # Memora — дневник ведущего инженера
 
 
+## ACT-0253 · 2026-11-16 · Tables UI
+
+На feature-ветке `ui/redesign-v1` завершён Tables UI пакет. Коллекция и выбранная таблица теперь имеют отдельные keyed `LazyColumn` состояния: title/column search, loading/error/empty/no-match, table mode summary, exact selected ID, independent saved scroll positions и Android Back к прежней коллекции. Поиск/selected ID сохраняются при recreation. Create mode/source controls перенесены в `FlowRow` для AZ `fontScale=1.3`; сохранил существующие editable/linked semantics, row CRUD/restore, schema preview/history/restore, точные totals по валюте, linked-view search/sort/paging и JSON SAF entry points. `tables(scope)` всё ещё materializes TableSnapshots вместе с row payloads; lazy rendering не является storage paging. Никакой domain, Room schema/migration, ledger, AI/provider, consent, permission, privacy или auth логики не изменено.
+
+Проверки финального кода: 79 suites / 408 tests, 0 failures/errors, один opt-in live skipped; `assembleDebug`, `assembleAndroidTest`, `compileDebugAndroidTestKotlin` и lint прошли, lint 0/90/2. В `TablesScreenTest` всего 6 тестов, включая новый large font mode dialog; прежние transfer/schema/aggregate проверки сохранены. Первая составная Gradle-команда нашла нестабильный кадр подтверждающего bottom sheet, захваченный в середине enter animation. Увеличил задержку только для этого preview-компонента с 0.85 до 1.5 сек, ни порог сравнения, ни golden не менял. Целевая Gradle `:app:componentVisualRegression` затем прошла BUILD SUCCESSFUL 31/31.
+
+APK v102 `1.1.80-tables-ui`, SHA-256 `af4e3a0a0eea044916e610203359e027ab64f398d393ac0043e0649bc688cb31`. На synthetic emulator v101→v102: `installDebug` сохранил firstInstallTime `2026-11-15 16:15:34`; пользовательский пустой synthetic профиль получил только специально созданную UI таблицу Demo и строку Sample, которые оставались видны после обновления. При rotation из search-filtered collection в detail выбранный ID сохраняется; system Back вернул к Demo-filtered list. AZ `fontScale=1.3`, светлая/тёмная темы и create dialog без обрезания; search проверен с клавиатурой. Системные настройки восстановлены: fontScale 1.0, portrait/auto-rotation; appearance = prior light.
+
+Реальные ADB screenshots и подробности: [Phase 8 report](ui-ux-redesign-v1/phase-8/REPORT.md). Physical Redmi, TalkBack, force-stop/process-death, SAF import/export round-trip, large populated tables, owner acceptance, release readiness — NOT TESTED. No Gemini/network/mic/personal data. Implementation commit `32e44817dcef5aeddc8315f239ee343fccdc0f93` уже pushed и remote-verified. Следующая задача — Inbox, затем Backup, Settings и общий visual pass в рамках разрешения владельца. `main` остаётся без изменений; ADR-012 не тронут.
+
+### Git handoff ACT-0254
+
+Код и реальные скриншоты ACT-0253 зафиксированы `32e44817dcef5aeddc8315f239ee343fccdc0f93` (`feat(ui): redesign tables workspace`) и pushed в `origin/ui/redesign-v1`. После fetch local HEAD, tracking ref и remote feature SHA совпали; remote `main` остался `ac621919aca09ece6e292eae708d55cc09de16d7`. APK, ключи, raw reports не staged. ADR-012 оставлен owner-owned/untracked. Автономное разрешение на следующий Inbox block действует.
+
 ### Git handoff ACT-0252
 
 ACT-0251 implementation commit `30a9e95ceaa869e6cbea466552b38bc905a3ce38` (`feat(ui): redesign projects and notes`) was pushed to `origin/ui/redesign-v1`. `git fetch` and `git ls-remote` confirmed local `HEAD`, `origin/ui/redesign-v1`, and remote `refs/heads/ui/redesign-v1` all at `30a9e95ceaa869e6cbea466552b38bc905a3ce38`. Remote `main` remains `ac621919aca09ece6e292eae708d55cc09de16d7`; no merge, force push or history rewrite. Owner-owned ADR-012 remains untracked, untouched and excluded. No APK, key or raw report was committed. Implementation checks are recorded in ACT-0251 and Phase 7 report; continue with Tables.
