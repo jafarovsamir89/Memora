@@ -3,6 +3,7 @@
 **Date:** 2026-11-16
 **Branch:** `ui/redesign-v1`
 **Stage 1:** complete after this pass. Stage 2/3 were not started.
+**Commit:** `53628fd876ca2001c1ee18d5e0adecb1995e550e`, pushed to `origin/ui/redesign-v1`.
 
 ## Components and visual regression
 

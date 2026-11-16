@@ -1,3 +1,7 @@
+## ACT-0240 · 2026-11-16 · Git handoff после Stage 1 finishing pass
+
+ACT-0239 committed as `53628fd876ca2001c1ee18d5e0adecb1995e550e` (`feat(ui): complete stage 1 component polish`) and pushed to `origin/ui/redesign-v1`. Post-push fetch and `git ls-remote` confirmed local `HEAD`, tracking branch and remote feature ref all match. Local `main` remains `e627ab3dde4ae27ef866fad4c437ba59ebb94f5b`; remote `main` remains `ac621919aca09ece6e292eae708d55cc09de16d7`. No history rewrite. Only untracked file left is owner-owned ADR-012, untouched and excluded; no local key, APK or raw live report was staged. No tests rerun for docs-only handoff; ACT-0239 results stand. Stop and await separate Stage 2 approval.
+
 ## ACT-0239 · 2026-11-16 · Завершающий проход UI/UX Redesign V1 Stage 1
 
 `ui/Components.kt` сверён со списком ТЗ; переиспользованы существующие реализации и дополнен набор из 12 согласованных компонентов. Три Compose Preview-группы покрывают AZ light, dark/fontScale 1.3 и confirmation. Debug-only `ComponentGalleryActivity` использует только синтетические presentation values и не открывает БД. Светлая палитра приведена к белому ТЗ (`#F8F9FC`, белые surfaces, `#202238`, фиолетовый/мята/blue/lavender); divider `#888EA0` даёт 3:1 boundary contrast. Темная тема сохраняет согласованные цвета.

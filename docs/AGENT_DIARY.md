@@ -1,5 +1,9 @@
 # Memora — дневник ведущего инженера
 
+## ACT-0240 — 2026-11-16 — Git handoff после завершения Stage 1
+
+Завершающий пакет ACT-0239 зафиксирован commit `53628fd876ca2001c1ee18d5e0adecb1995e550e` (`feat(ui): complete stage 1 component polish`) и отправлен в `origin/ui/redesign-v1`. После `git fetch` local `HEAD`, `origin/ui/redesign-v1` и `git ls-remote origin refs/heads/ui/redesign-v1` совпали на этом SHA. `main` не менялась: local `main`=`e627ab3dde4ae27ef866fad4c437ba59ebb94f5b`, remote `main`=`ac621919aca09ece6e292eae708d55cc09de16d7`. Историю не переписывал. Untracked owner-owned ADR-012 оставлен без изменений и исключён. Ключи, APK и raw live reports не добавлялись. Рабочее дерево по tracked changes чистое. Следующий шаг: остановиться и ждать отдельного одобрения Stage 2.
+
 ## ACT-0239 — 2026-11-16 — Завершающий проход UI/UX Redesign V1 Stage 1
 
 Работал в `ui/redesign-v1`; Stage 2/3 не начинал, `main` не трогал. Перед реализацией сверил UI/UX ТЗ, продуктовую спецификацию, чек-лист и Stage 1 handoff. Сопоставил `ui/Components.kt` с обязательным списком: повторные реализации не добавлял; комплект содержит PrimaryButton, SecondaryButton, VoiceInputButton, StatusBadge, ActionResultCard, PersonCard, CaseCard, EmptyState, ErrorState, LoadingState, ConfirmationSheet и Timeline. Добавлены три Compose Preview-группы на азербайджанском (светлая, тёмная с fontScale 1.3, confirmation) и debug-only gallery с фиксированными presentation values, которая не открывает рабочую БД.
