@@ -263,6 +263,8 @@
     <string name="tables_title">Таблицы</string>
     <string name="tables_subtitle">Просматривайте и редактируйте сохранённые таблицы.</string>
     <string name="tables_all">Все таблицы</string>
+    <string name="tables_search">Поиск таблиц или полей</string>
+    <string name="tables_no_matches">Подходящие таблицы не найдены.</string>
     <string name="tables_empty">Таблиц пока нет.</string>
     <string name="table_create">Создать таблицу</string>
     <string name="table_title">Название таблицы</string>

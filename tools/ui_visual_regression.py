@@ -210,7 +210,10 @@ def capture(serial: str, component: str, theme: str) -> bytes:
     run_adb(serial, "shell", "am", "force-stop", "ai.memora.app")
     run_adb(serial, "shell", "am", "start", "-W", "-n", ACTIVITY,
             "--es", "component", component, "--es", "theme", theme)
-    time.sleep(0.85)
+    # The confirmation sheet has a modal enter animation; wait for it to finish
+    # before capture. Other gallery states include intentional looping animation
+    # (for example, loading and active voice), so frame equality is not suitable.
+    time.sleep(1.5 if component == "confirmation" else 0.85)
     return run_adb(serial, "exec-out", "screencap", "-p")
 
 

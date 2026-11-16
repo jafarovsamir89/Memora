@@ -263,6 +263,8 @@
     <string name="tables_title">Cədvəllər</string>
     <string name="tables_subtitle">Yaddaşda saxlanan cədvəllərə baxın və onları redaktə edin.</string>
     <string name="tables_all">Bütün cədvəllər</string>
+    <string name="tables_search">Cədvəl və ya sahə axtarışı</string>
+    <string name="tables_no_matches">Uyğun cədvəl tapılmadı.</string>
     <string name="tables_empty">Hələ cədvəl yoxdur.</string>
     <string name="table_create">Cədvəl yarat</string>
     <string name="table_title">Cədvəlin adı</string>

@@ -1,16 +1,21 @@
 package ai.memora.app
 
 import android.provider.DocumentsContract
+import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
@@ -31,6 +36,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
@@ -56,7 +62,6 @@ import ai.memora.app.data.protectedstore.TableTransferReader
 import ai.memora.app.ui.EmptyState
 import ai.memora.app.ui.MemoraCard
 import ai.memora.app.ui.LocalStrings
-import ai.memora.app.ui.ScreenColumn
 import ai.memora.app.ui.ScreenHeading
 import ai.memora.app.ui.colors
 import ai.memora.app.ui.s
@@ -82,10 +87,15 @@ fun TablesScreen() {
     val repository = remember(database) { ProtectedDomainRepository(database) }
     val activeLocale = LocalLocale.current.platformLocale
     val coroutineScope = rememberCoroutineScope()
+    val collectionListState = rememberLazyListState()
+    val detailListState = rememberLazyListState()
     var tables by remember { mutableStateOf<List<TableSnapshot>>(emptyList()) }
-    var selectedTableId by remember { mutableStateOf<String?>(null) }
+    var selectedTableId by rememberSaveable { mutableStateOf<String?>(null) }
+    var tableQuery by rememberSaveable { mutableStateOf("") }
+    var tablesLoading by remember { mutableStateOf(true) }
+    var refreshVersion by rememberSaveable { mutableIntStateOf(0) }
     var deletedRows by remember { mutableStateOf<List<TableDataRow>>(emptyList()) }
-    var showDeleted by remember { mutableStateOf(false) }
+    var showDeleted by rememberSaveable { mutableStateOf(false) }
     var createTableDialog by remember { mutableStateOf(false) }
     var rowDialog by remember { mutableStateOf(false) }
     var deleteRowTarget by remember { mutableStateOf<TableDataRow?>(null) }
@@ -101,9 +111,9 @@ fun TablesScreen() {
     var newTableColumns by remember { mutableStateOf("") }
     var linkedViewMode by remember { mutableStateOf(false) }
     var linkedSourceKind by remember { mutableStateOf(DomainKind.PERSON) }
-    var linkedQuery by remember { mutableStateOf("") }
-    var linkedPage by remember { mutableIntStateOf(0) }
-    var linkedSortAscending by remember { mutableStateOf(true) }
+    var linkedQuery by rememberSaveable { mutableStateOf("") }
+    var linkedPage by rememberSaveable { mutableIntStateOf(0) }
+    var linkedSortAscending by rememberSaveable { mutableStateOf(true) }
     var linkedPageResult by remember { mutableStateOf<LinkedViewPage?>(null) }
     var linkedPageLoading by remember { mutableStateOf(false) }
     var error by remember { mutableStateOf(false) }
@@ -123,6 +133,7 @@ fun TablesScreen() {
     var showSchemaHistory by remember { mutableStateOf(false) }
     var pendingSchemaRestore by remember { mutableStateOf<TableSchemaRevisionSnapshot?>(null) }
     val selected = tables.firstOrNull { it.table.tableId == selectedTableId }
+    val listState = if (selected == null) collectionListState else detailListState
 
     val exportLauncher = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("application/json")) { uri ->
         val tableId = transferTableId
@@ -183,12 +194,24 @@ fun TablesScreen() {
         aggregateColumnId = selected?.columns?.firstOrNull { it.valueType == ColumnType.MONEY.name }?.columnId
     }
 
-    LaunchedEffect(scopeId, selectedTableId, showDeleted) {
+    LaunchedEffect(scopeId, refreshVersion) {
+        tablesLoading = true
         try {
             tables = repository.tables(scopeId)
-            deletedRows = selectedTableId?.let { repository.deletedRows(scopeId, it) }.orEmpty()
             error = false
-        } catch (_: Exception) { error = true }
+        } catch (_: Exception) {
+            tables = emptyList()
+            error = true
+        } finally { tablesLoading = false }
+    }
+
+    LaunchedEffect(scopeId, selectedTableId, refreshVersion) {
+        deletedRows = try {
+            selectedTableId?.let { repository.deletedRows(scopeId, it) }.orEmpty()
+        } catch (_: Exception) {
+            error = true
+            emptyList()
+        }
     }
 
     LaunchedEffect(scopeId, selectedTableId, tables, linkedQuery, linkedPage, linkedSortAscending, activeLocale) {
@@ -428,7 +451,11 @@ fun TablesScreen() {
         text = { Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(10.dp)) {
             OutlinedTextField(newTableTitle, { newTableTitle = it.take(200) }, Modifier.fillMaxWidth().testTag("table_new_title"),
                 label = { Text(s(ai.memora.app.R.string.table_title)) }, singleLine = true)
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            FlowRow(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
                 FilterChip(selected = !linkedViewMode, onClick = { linkedViewMode = false },
                     label = { Text(s(R.string.table_mode_editable)) }, modifier = Modifier.testTag("table_mode_editable"))
                 FilterChip(selected = linkedViewMode, onClick = { linkedViewMode = true },
@@ -436,7 +463,11 @@ fun TablesScreen() {
             }
             if (linkedViewMode) {
                 Text(s(R.string.table_linked_view_explainer), style = androidx.compose.material3.MaterialTheme.typography.bodySmall)
-                Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                FlowRow(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                    verticalArrangement = Arrangement.spacedBy(6.dp),
+                ) {
                     listOf(DomainKind.PERSON, DomainKind.PROJECT, DomainKind.NOTE).forEach { kind ->
                         FilterChip(selected = linkedSourceKind == kind, onClick = { linkedSourceKind = kind },
                         label = { Text(s(when (kind) {
@@ -580,87 +611,165 @@ fun TablesScreen() {
         dismissButton = { TextButton(onClick = { deleteRowTarget = null }) { Text(s(R.string.task_cancel)) } },
     )
 
-    ScreenColumn {
-        ScreenHeading(s(R.string.tables_title), s(R.string.tables_subtitle))
-        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            OutlinedButton(onClick = { selectedTableId = null }, modifier = Modifier.weight(1f).testTag("tables_all")) {
-                Text(s(R.string.tables_all))
-            }
-            Button(onClick = { createTableDialog = true }, modifier = Modifier.weight(1f).testTag("table_create")) {
-                Text(s(R.string.table_create))
-            }
-        }
-        if (error) Text(s(R.string.table_action_failed), color = androidx.compose.material3.MaterialTheme.colorScheme.error)
-        if (tables.isEmpty()) EmptyState(s(R.string.tables_empty), s(R.string.tables_subtitle))
-        tables.forEach { table ->
-            MemoraCard(onClick = { selectedTableId = table.table.tableId }, modifier = Modifier.testTag("table_${table.table.tableId}")) {
-                Text(table.table.title, style = androidx.compose.material3.MaterialTheme.typography.titleMedium, color = colors.ink)
-                Text(if (table.table.mode == "linked_view")
-                    LocalStrings.current.getString(R.string.table_linked_view_summary, table.linkedTotalCount)
-                    else LocalStrings.current.getString(ai.memora.app.R.string.table_summary, table.rows.size, table.columns.size), color = colors.muted)
-            }
-        }
-        if (selected != null) {
-            Spacer(Modifier.height(4.dp))
-            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                Text(selected.table.title, style = androidx.compose.material3.MaterialTheme.typography.titleLarge, color = colors.ink)
-                if (selected.table.mode == "editable") TextButton(onClick = { beginRowEdit(null) }, modifier = Modifier.testTag("table_add_row")) { Text(s(R.string.table_add_row)) }
-            }
-            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                OutlinedButton(onClick = {
-                    transferTableId = selected.table.tableId
-                    val fileName = selected.table.title.trim().replace(Regex("[^\\p{L}\\p{N}._-]"), "_").take(64).ifBlank { "memora_table" } + ".json"
-                    exportLauncher.launch(fileName)
-                }, enabled = !transferBusy, modifier = Modifier.weight(1f).testTag("table_export")) {
-                    Text(s(R.string.table_export_json))
+    val hasBlockingDialog = createTableDialog || rowDialog || deleteRowTarget != null || referenceColumn != null ||
+        pendingTableImport != null || addColumnsDialog || pendingSchemaChange != null || showSchemaHistory || pendingSchemaRestore != null
+    BackHandler(enabled = selectedTableId != null && !hasBlockingDialog) { selectedTableId = null }
+
+    LazyColumn(
+        state = listState,
+        modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp).padding(top = 20.dp, bottom = 12.dp)
+            .testTag("tables_screen_list"),
+        verticalArrangement = Arrangement.spacedBy(12.dp),
+    ) {
+        if (selected == null) {
+            item(key = "tables-intro") { Text(s(R.string.tables_subtitle), color = colors.muted,
+                style = androidx.compose.material3.MaterialTheme.typography.bodyLarge) }
+            item(key = "tables-create") {
+                Button(onClick = { createTableDialog = true }, modifier = Modifier.fillMaxWidth().height(52.dp).testTag("table_create")) {
+                    Text(s(R.string.table_create))
                 }
-                OutlinedButton(onClick = {
-                    transferTableId = selected.table.tableId
-                    importLauncher.launch(arrayOf("application/json", "text/json", "text/plain"))
-                }, enabled = !transferBusy, modifier = Modifier.weight(1f).testTag("table_import")) {
-                    Text(s(R.string.table_import_json))
+            }
+            if (tables.isNotEmpty()) item(key = "tables-search") {
+                OutlinedTextField(
+                    value = tableQuery,
+                    onValueChange = { tableQuery = it.take(200) },
+                    modifier = Modifier.fillMaxWidth().testTag("tables_search"),
+                    label = { Text(s(R.string.tables_search)) },
+                    singleLine = true,
+                )
+            }
+            if (error) item(key = "tables-error") {
+                MemoraCard(tint = colors.softAccent) {
+                    Text(s(R.string.table_action_failed), color = androidx.compose.material3.MaterialTheme.colorScheme.error)
+                    OutlinedButton(onClick = { error = false; refreshVersion++ },
+                        modifier = Modifier.testTag("tables_retry")) { Text(s(R.string.capture_retry)) }
+                }
+            }
+            if (tablesLoading) item(key = "tables-loading") {
+                Text(s(R.string.ai_loading), color = colors.muted, modifier = Modifier.testTag("tables_loading"))
+            } else if (tables.isEmpty() && !error) item(key = "tables-empty") {
+                EmptyState(s(R.string.tables_empty), s(R.string.tables_subtitle))
+            } else if (tables.isNotEmpty()) {
+                val query = tableQuery.trim()
+                val visibleTables = if (query.isEmpty()) tables else tables.filter { table ->
+                    table.table.title.contains(query, ignoreCase = true) ||
+                        table.columns.any { it.name.contains(query, ignoreCase = true) }
+                }
+                if (visibleTables.isEmpty()) item(key = "tables-no-matches") {
+                    EmptyState(s(R.string.tables_no_matches), s(R.string.tables_search))
+                } else items(visibleTables, key = { "table:${it.table.tableId}" }) { table ->
+                    MemoraCard(onClick = { selectedTableId = table.table.tableId },
+                        modifier = Modifier.testTag("table_${table.table.tableId}"), contentPadding = 18.dp) {
+                        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                            Text(table.table.title, style = androidx.compose.material3.MaterialTheme.typography.titleMedium,
+                                color = colors.ink, modifier = Modifier.weight(1f))
+                            Text(s(if (table.table.mode == "linked_view") R.string.table_mode_linked_view else R.string.table_mode_editable),
+                                style = androidx.compose.material3.MaterialTheme.typography.labelMedium, color = colors.accent)
+                        }
+                        Text(if (table.table.mode == "linked_view")
+                            LocalStrings.current.getString(R.string.table_linked_view_summary, table.linkedTotalCount)
+                            else LocalStrings.current.getString(ai.memora.app.R.string.table_summary, table.rows.size, table.columns.size),
+                            color = colors.muted)
+                    }
+                }
+            }
+        } else {
+            item(key = "table-detail-back") {
+                OutlinedButton(onClick = { selectedTableId = null }, modifier = Modifier.fillMaxWidth().testTag("tables_all")) {
+                    Text(s(R.string.tables_all))
+                }
+            }
+            item(key = "table-detail-heading") {
+                ScreenHeading(selected.table.title, if (selected.table.mode == "linked_view")
+                    LocalStrings.current.getString(R.string.table_linked_view_summary, selected.linkedTotalCount)
+                    else LocalStrings.current.getString(ai.memora.app.R.string.table_summary, selected.rows.size, selected.columns.size))
+            }
+            if (error) item(key = "table-detail-error") {
+                MemoraCard(tint = colors.softAccent) {
+                    Text(s(R.string.table_action_failed), color = androidx.compose.material3.MaterialTheme.colorScheme.error)
+                    OutlinedButton(onClick = { error = false; refreshVersion++ },
+                        modifier = Modifier.testTag("table_detail_retry")) { Text(s(R.string.capture_retry)) }
+                }
+            }
+            item(key = "table-transfer-actions") {
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    OutlinedButton(onClick = {
+                        transferTableId = selected.table.tableId
+                        val fileName = selected.table.title.trim()
+                            .replace(Regex("[^\\p{L}\\p{N}._-]"), "_").take(64).ifBlank { "memora_table" } + ".json"
+                        exportLauncher.launch(fileName)
+                    }, enabled = !transferBusy, modifier = Modifier.weight(1f).testTag("table_export")) {
+                        Text(s(R.string.table_export_json))
+                    }
+                    OutlinedButton(onClick = {
+                        transferTableId = selected.table.tableId
+                        importLauncher.launch(arrayOf("application/json", "text/json", "text/plain"))
+                    }, enabled = !transferBusy, modifier = Modifier.weight(1f).testTag("table_import")) {
+                        Text(s(R.string.table_import_json))
+                    }
                 }
             }
             if (selected.table.mode == "editable") {
-                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    OutlinedButton(onClick = { addColumnsInput = ""; error = false; addColumnsDialog = true },
-                        modifier = Modifier.weight(1f).testTag("table_add_columns")) { Text(s(R.string.table_add_columns_title)) }
-                    OutlinedButton(onClick = {
-                        coroutineScope.launch {
-                            try {
-                                schemaHistory = repository.tableSchemaHistory(scopeId, selected.table.tableId)
-                                showSchemaHistory = true
-                                error = false
-                            } catch (_: Exception) { error = true }
+                item(key = "table-editable-actions") {
+                    Button(onClick = { beginRowEdit(null) }, modifier = Modifier.fillMaxWidth().height(52.dp)
+                        .testTag("table_add_row")) { Text(s(R.string.table_add_row)) }
+                }
+                item(key = "table-schema-actions") {
+                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        OutlinedButton(onClick = { addColumnsInput = ""; error = false; addColumnsDialog = true },
+                            modifier = Modifier.weight(1f).testTag("table_add_columns")) {
+                            Text(s(R.string.table_add_columns_title))
                         }
-                    }, modifier = Modifier.weight(1f).testTag("table_schema_history")) { Text(s(R.string.table_schema_history_title)) }
+                        OutlinedButton(onClick = {
+                            coroutineScope.launch {
+                                try {
+                                    schemaHistory = repository.tableSchemaHistory(scopeId, selected.table.tableId)
+                                    showSchemaHistory = true
+                                    error = false
+                                } catch (_: Exception) { error = true }
+                            }
+                        }, modifier = Modifier.weight(1f).testTag("table_schema_history")) {
+                            Text(s(R.string.table_schema_history_title))
+                        }
+                    }
                 }
             }
-            if (transferSuccess) Text(s(R.string.table_transfer_success), color = colors.accent,
-                modifier = Modifier.testTag("table_transfer_success"))
-            if (schemaSuccess) Text(s(R.string.table_schema_saved), color = colors.accent,
-                modifier = Modifier.testTag("table_schema_saved"))
-            if (transferBusy) Text(s(R.string.today_loading), color = colors.muted)
+            if (transferSuccess) item(key = "table-transfer-success") { Text(s(R.string.table_transfer_success), color = colors.accent,
+                modifier = Modifier.testTag("table_transfer_success")) }
+            if (schemaSuccess) item(key = "table-schema-success") { Text(s(R.string.table_schema_saved), color = colors.accent,
+                modifier = Modifier.testTag("table_schema_saved")) }
+            if (transferBusy) item(key = "table-transfer-loading") { Text(s(R.string.today_loading), color = colors.muted) }
             if (selected.table.mode == "linked_view") {
-                OutlinedTextField(value = linkedQuery, onValueChange = { linkedQuery = it; linkedPage = 0 },
-                    modifier = Modifier.fillMaxWidth().testTag("linked_view_filter"),
-                    label = { Text(s(R.string.table_linked_view_filter)) }, singleLine = true)
-                TextButton(onClick = { linkedSortAscending = !linkedSortAscending; linkedPage = 0 },
-                    modifier = Modifier.testTag("linked_view_sort")) {
-                    Text(s(if (linkedSortAscending) R.string.table_linked_view_sort_ascending else R.string.table_linked_view_sort_descending))
+                item(key = "linked-view-filter") {
+                    OutlinedTextField(value = linkedQuery, onValueChange = { linkedQuery = it; linkedPage = 0 },
+                        modifier = Modifier.fillMaxWidth().testTag("linked_view_filter"),
+                        label = { Text(s(R.string.table_linked_view_filter)) }, singleLine = true)
+                }
+                item(key = "linked-view-sort") {
+                    TextButton(onClick = { linkedSortAscending = !linkedSortAscending; linkedPage = 0 },
+                        modifier = Modifier.testTag("linked_view_sort")) {
+                        Text(s(if (linkedSortAscending) R.string.table_linked_view_sort_ascending else R.string.table_linked_view_sort_descending))
+                    }
                 }
                 val pageSize = 25
                 val viewPage = linkedPageResult
-                if (linkedPageLoading) Text(s(R.string.table_linked_view_loading), color = colors.muted)
-                else if (viewPage == null) Text(s(R.string.table_action_failed), color = androidx.compose.material3.MaterialTheme.colorScheme.error)
+                if (linkedPageLoading) item(key = "linked-view-loading") {
+                    Text(s(R.string.table_linked_view_loading), color = colors.muted,
+                        modifier = Modifier.testTag("linked_view_loading"))
+                }
+                else if (viewPage == null) item(key = "linked-view-error") {
+                    Text(s(R.string.table_action_failed), color = androidx.compose.material3.MaterialTheme.colorScheme.error)
+                }
                 val pageCount = viewPage?.let { (it.matchingCount + pageSize - 1) / pageSize } ?: 0
                 val pageIndex = viewPage?.let { if (it.matchingCount == 0) 0 else it.offset / pageSize } ?: 0
-                Text(LocalStrings.current.getString(R.string.table_linked_view_count,
-                    viewPage?.matchingCount ?: 0, viewPage?.totalCount ?: selected.linkedTotalCount),
-                    color = colors.muted)
-                if (viewPage?.continuationLimitReached == true) Text(s(R.string.table_linked_view_page_limit), color = colors.muted)
-                if (!linkedPageLoading && viewPage?.rows.isNullOrEmpty()) Text(s(R.string.table_linked_view_empty), color = colors.muted)
-                viewPage?.rows.orEmpty().forEach { source ->
+                item(key = "linked-view-count") {
+                    Text(LocalStrings.current.getString(R.string.table_linked_view_count,
+                        viewPage?.matchingCount ?: 0, viewPage?.totalCount ?: selected.linkedTotalCount),
+                        color = colors.muted)
+                }
+                if (viewPage?.continuationLimitReached == true) item(key = "linked-view-limit") { Text(s(R.string.table_linked_view_page_limit), color = colors.muted) }
+                if (!linkedPageLoading && viewPage?.rows.isNullOrEmpty()) item(key = "linked-view-empty") { EmptyState(s(R.string.table_linked_view_empty), "") }
+                items(viewPage?.rows.orEmpty(), key = { "linked-source:${it.objectId}" }) { source ->
                     MemoraCard(modifier = Modifier.testTag("linked_view_source_${source.objectId}")) {
                         Text(source.title, style = androidx.compose.material3.MaterialTheme.typography.titleMedium, color = colors.ink)
                         source.body?.takeIf(String::isNotBlank)?.let { Text(it, color = colors.muted) }
@@ -669,20 +778,20 @@ fun TablesScreen() {
                     }
                 }
                 if (pageCount > 1) {
-                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                    item(key = "linked-view-pagination") { Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
                         TextButton(onClick = { linkedPage = (pageIndex - 1).coerceAtLeast(0) }, enabled = pageIndex > 0,
                             modifier = Modifier.testTag("linked_view_previous")) { Text(s(R.string.table_linked_view_previous)) }
                         Text(LocalStrings.current.getString(R.string.table_linked_view_page, pageIndex + 1, pageCount), color = colors.muted)
                         TextButton(onClick = { linkedPage = (pageIndex + 1).coerceAtMost(pageCount - 1) }, enabled = viewPage?.nextOffset != null,
                             modifier = Modifier.testTag("linked_view_next")) { Text(s(R.string.table_linked_view_next)) }
-                    }
+                    } }
                 }
             } else {
             val moneyColumns = selected.columns.filter { it.valueType == ColumnType.MONEY.name }
             if (moneyColumns.isNotEmpty()) {
                 if (aggregateColumnId !in moneyColumns.map { it.columnId }) aggregateColumnId = moneyColumns.first().columnId
                 val aggregateColumn = moneyColumns.first { it.columnId == aggregateColumnId }
-                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                item(key = "table-aggregate-controls") { Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     Box {
                         TextButton(onClick = { aggregateMenuExpanded = true }, modifier = Modifier.testTag("table_aggregate_column")) {
                             Text(aggregateColumn.name)
@@ -708,23 +817,25 @@ fun TablesScreen() {
                     }, enabled = !aggregateLoading, modifier = Modifier.testTag("table_aggregate_run")) {
                         Text(s(R.string.table_aggregate))
                     }
-                }
-                if (aggregateLoading) Text(s(R.string.today_loading), color = colors.muted)
+                } }
+                if (aggregateLoading) item(key = "table-aggregate-loading") { Text(s(R.string.today_loading), color = colors.muted) }
                 aggregateTotals?.let { totals ->
-                    if (totals.isEmpty()) Text(s(R.string.table_aggregate_no_values), color = colors.muted)
-                    totals.forEach { (currency, minorUnits) ->
+                    if (totals.isEmpty()) item(key = "table-aggregate-empty") { Text(s(R.string.table_aggregate_no_values), color = colors.muted) }
+                    items(totals.toList(), key = { "aggregate:${it.first}" }) { (currency, minorUnits) ->
                         val amount = BigDecimal.valueOf(minorUnits, 2).toPlainString()
                         Text(LocalStrings.current.getString(R.string.table_aggregate_total, amount, currency),
                             color = colors.accent, modifier = Modifier.testTag("table_aggregate_$currency"))
                     }
                 }
             }
-            OutlinedButton(onClick = { showDeleted = !showDeleted }, modifier = Modifier.fillMaxWidth().testTag("table_show_deleted")) {
-                Text(s(if (showDeleted) R.string.table_show_active else R.string.table_show_deleted))
+            item(key = "table-row-filter") {
+                OutlinedButton(onClick = { showDeleted = !showDeleted }, modifier = Modifier.fillMaxWidth().testTag("table_show_deleted")) {
+                    Text(s(if (showDeleted) R.string.table_show_active else R.string.table_show_deleted))
+                }
             }
             val visibleRows = if (showDeleted) deletedRows else selected.rows
-            if (visibleRows.isEmpty()) Text(s(R.string.table_no_rows), color = colors.muted)
-            visibleRows.forEach { row ->
+            if (visibleRows.isEmpty()) item(key = "table-no-rows") { EmptyState(s(R.string.table_no_rows), "") }
+            items(visibleRows, key = { "row:${it.rowId}" }) { row ->
                 val values = runCatching { JSONObject(row.valuesJson) }.getOrDefault(JSONObject())
                 MemoraCard(tint = if (row.deletedAt != null) colors.softAccent else colors.card) {
                     selected.columns.forEach { column ->

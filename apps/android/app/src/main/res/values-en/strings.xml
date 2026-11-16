@@ -263,6 +263,8 @@
     <string name="tables_title">Tables</string>
     <string name="tables_subtitle">View and edit tables stored in your memory.</string>
     <string name="tables_all">All tables</string>
+    <string name="tables_search">Search tables or fields</string>
+    <string name="tables_no_matches">No matching tables found.</string>
     <string name="tables_empty">There are no tables yet.</string>
     <string name="table_create">Create table</string>
     <string name="table_title">Table name</string>
