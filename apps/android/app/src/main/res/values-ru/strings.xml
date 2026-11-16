@@ -39,6 +39,7 @@
     <string name="action_related_amount">Сумма</string>
     <string name="action_related_person">Человек</string>
     <string name="action_related_date">Дата</string>
+    <string name="action_related_source">Источник</string>
     <string name="action_related_until">До</string>
     <string name="report_source_ledger">Источник: защищённый финансовый реестр</string>
     <string name="report_previous_month">Предыдущий месяц</string>
@@ -219,6 +220,8 @@
     <string name="agent_memory_allow">Разрешить</string>
     <string name="agent_memory_revoke">Отключить доступ к памяти</string>
     <string name="agent_text_revoke">Отключить отправку текста в Gemini</string>
+    <string name="agent_memory_revoke_title">Отключить доступ к памяти?</string>
+    <string name="agent_memory_revoke_body">Сохранённые записи останутся на устройстве. После отключения будущие запросы к Gemini не будут содержать записи памяти и историю разговоров; инструменты памяти также будут недоступны. Отправка текущего сообщения регулируется отдельным разрешением на текстовые запросы.</string>
     <string name="tables_title">Таблицы</string>
     <string name="tables_subtitle">Просматривайте и редактируйте сохранённые таблицы.</string>
     <string name="tables_all">Все таблицы</string>
@@ -317,10 +320,17 @@
     <string name="audio_note_writing_failed">Не удалось проверить письменность. Внимательно проверьте исходное распознавание.</string>
     <string name="audio_note_review_notice">Проверьте имена, суммы и отрицания. Сохранится только подтверждённый вами текст.</string>
     <string name="voice_first_button">Удерживайте, чтобы говорить</string>
+    <string name="voice_first_accessible_start">Начать голосовую запись</string>
+    <string name="voice_first_accessible_stop">Остановить голосовую запись</string>
     <string name="voice_first_hint">Удерживайте кнопку и говорите</string>
     <string name="voice_first_listening">Слушаю…</string>
     <string name="voice_first_release">Отпустите кнопку, чтобы продолжить</string>
     <string name="voice_first_processing">Думаю…</string>
+    <string name="voice_first_transcribing">Распознаю речь…</string>
+    <string name="voice_first_thinking">Понимаю запрос…</string>
+    <string name="voice_first_executing_tool">Выполняю подтверждённое действие…</string>
+    <string name="voice_first_responding">Готовлю ответ…</string>
+    <string name="voice_first_cancelled">Отменено</string>
     <string name="voice_first_speaking">Отвечаю…</string>
     <string name="voice_first_error">Не получилось. Попробуйте ещё раз.</string>
     <string name="voice_first_error_code">Не получилось (%1$s). Попробуйте ещё раз; этот код поможет найти причину.</string>

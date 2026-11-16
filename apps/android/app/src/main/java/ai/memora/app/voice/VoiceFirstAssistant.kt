@@ -59,7 +59,28 @@ sealed interface VoiceFirstResult {
     data class Failed(val code: String) : VoiceFirstResult
     data object Unavailable : VoiceFirstResult
 }
-interface VoiceTurnProcessor { suspend fun handle(transcript: String): VoiceFirstResult }
+data class VoiceTurnActionResult(
+    val resultId: String,
+    val turnId: String,
+    val toolName: String,
+    val status: String,
+    val code: String,
+    val targetKind: String?,
+    val targetId: String?,
+)
+
+sealed interface VoiceTurnProgress {
+    data class Stage(val key: String) : VoiceTurnProgress
+    data class ConfirmedActions(val turnId: String, val results: List<VoiceTurnActionResult>) : VoiceTurnProgress
+}
+
+interface VoiceTurnProcessor {
+    suspend fun handle(transcript: String): VoiceFirstResult
+    suspend fun handle(transcript: String, onProgress: (VoiceTurnProgress) -> Unit): VoiceFirstResult {
+        onProgress(VoiceTurnProgress.Stage("thinking"))
+        return handle(transcript)
+    }
+}
 
 /** Local-only facts and calculations. Completion is spoken only after an acknowledged write. */
 class VoiceFirstAssistant(private val store: VoiceMoneyStore, private val parser: SpokenIntentParser,

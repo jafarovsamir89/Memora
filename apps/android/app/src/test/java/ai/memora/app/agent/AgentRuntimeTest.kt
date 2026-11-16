@@ -239,6 +239,34 @@ class AgentRuntimeTest {
         assertEquals(2, requests)
     }
 
+    @Test fun verifiedWriteProgressArrivesBeforeTheFinalModelReply() = runBlocking {
+        val tool = FakeTool(toolName = "save_note")
+        val finalReply = CompletableDeferred<AgentModelReply>()
+        val followupStarted = CompletableDeferred<Unit>()
+        var requests = 0
+        val model = object : AgentModelGateway {
+            override suspend fun complete(request: AgentModelRequest): AgentModelReply = if (++requests == 1) {
+                AgentModelReply.Calls(listOf(call("save", "save_note")))
+            } else {
+                followupStarted.complete(Unit)
+                finalReply.await()
+            }
+        }
+        val confirmed = CompletableDeferred<List<AgentToolObservation>>()
+        val runner = async {
+            runtime(model, DefaultAgentToolRegistry(listOf(tool))).run(turn) { progress ->
+                if (progress is AgentTurnProgress.ConfirmedActionResults) confirmed.complete(progress.observations)
+            }
+        }
+        withTimeout(2_000) { followupStarted.await() }
+        val results = withTimeout(2_000) { confirmed.await() }
+        assertEquals(ToolObservationStatus.APPLIED, results.single().status)
+        assertEquals(1, tool.commits)
+        assertFalse("The verified result should be available before the assistant's final sentence", runner.isCompleted)
+        finalReply.complete(AgentModelReply.Answer("Yadda saxlanıldı"))
+        assertEquals(AgentRunResultStatus.COMPLETED, withTimeout(2_000) { runner.await() }.status)
+    }
+
     @Test fun emptyFollowupAfterAppliedWriteRemainsPartialAndDoesNotRepeatCommit() = runBlocking {
         val tool = FakeTool(toolName = "save_note", access = ToolAccess.PERSISTED_MEMORY)
         var requests = 0

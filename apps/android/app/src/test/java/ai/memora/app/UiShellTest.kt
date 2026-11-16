@@ -184,7 +184,7 @@ class UiShellTest {
         compose.onNodeWithTag("nav_chat").performClick()
         compose.onNodeWithTag("secretary_voice_card").assertIsDisplayed()
         screenshot("13-secretary-light")
-        compose.onNodeWithTag("chat_input").performScrollTo().assertIsDisplayed()
+        compose.onNodeWithTag("chat_input").assertIsDisplayed()
         compose.onNodeWithTag("nav_more").performClick()
         compose.onNodeWithTag("more_tasks").performScrollTo().assertIsDisplayed()
         compose.onNodeWithTag("more_voice_memory").performScrollTo().assertIsDisplayed()
@@ -388,6 +388,12 @@ class UiShellTest {
         }
         compose.waitUntil(10_000) { compose.onAllNodesWithTag("chat_turn_${turnId}_model").fetchSemanticsNodes().isNotEmpty() }
         compose.onNodeWithTag("action_result_${turnId}_0").performScrollTo().assertIsDisplayed()
+        compose.waitUntil(10_000) {
+            compose.onAllNodesWithText("Mənbə: Synthetic action fixture", substring = true)
+                .fetchSemanticsNodes().isNotEmpty()
+        }
+        compose.onNodeWithText("42,50 AZN", substring = true).assertExists()
+        compose.onNodeWithText("Synthetic Receipt Person", substring = true).assertExists()
         compose.onNodeWithText("Yadda saxlanıldı").assertIsDisplayed()
         compose.onNodeWithTag("action_result_${turnId}_1").performScrollTo().assertIsDisplayed()
         compose.onNodeWithTag("action_delete_not_confirmed").assertTextEquals(
@@ -396,7 +402,7 @@ class UiShellTest {
         compose.onAllNodesWithTag("action_open_source").onFirst().performScrollTo().performClick()
         compose.onNodeWithTag("action_source_user_message").assertExists()
         compose.onNodeWithTag("action_source_assistant_message").assertExists()
-        compose.onNodeWithText("Bağla").performClick()
+        compose.onNodeWithTag("action_source_close").performClick()
         compose.onNodeWithTag("action_prepare_correction").performScrollTo().performClick()
         val correctionDraft = compose.onNodeWithTag("chat_input").fetchSemanticsNode().config[SemanticsProperties.EditableText].text
         Assert.assertTrue(correctionDraft.contains(targetId))
@@ -439,6 +445,119 @@ class UiShellTest {
             .config[SemanticsProperties.EditableText].text
         Assert.assertEquals(request, restored)
         Assert.assertEquals(1, calls)
+    }
+
+    @Test fun secretaryConsentRevocationExplainsMemoryAndKeepsTextVoiceScopesSeparate() {
+        val context = ApplicationProvider.getApplicationContext<Context>()
+        val preferences = context.getSharedPreferences("voice-first-consent", Context.MODE_PRIVATE)
+        preferences.edit()
+            .putBoolean(ai.memora.app.agent.AgentCloudConsentKeys.TEXT, true)
+            .putBoolean(ai.memora.app.agent.AgentCloudConsentKeys.VOICE, true)
+            .putBoolean("gemini-persisted-memory-v1", true)
+            .commit()
+        var turnCalls = 0
+        compose.setContent {
+            CompositionLocalProvider(LocalAgentDatabaseOverride provides agentDatabase.database) {
+                TestMemoraApp(initialRoute = "chat", initialLanguage = "ru",
+                    capturePersistenceOverride = captureStore, appearanceStoreOverride = appearanceStore,
+                    textTurnOverride = {
+                        turnCalls++
+                        ai.memora.app.voice.VoiceFirstResult.Ready("Synthetic response", false)
+                    })
+            }
+        }
+
+        compose.onNodeWithTag("agent_memory_consent_toggle").performClick()
+        compose.onNodeWithText("Отключить доступ к памяти?").assertIsDisplayed()
+        compose.onNodeWithText("останутся на устройстве", substring = true).assertIsDisplayed()
+        compose.onNodeWithTag("agent_memory_revoke_cancel").performClick()
+        Assert.assertTrue(preferences.getBoolean("gemini-persisted-memory-v1", false))
+
+        compose.onNodeWithTag("agent_memory_consent_toggle").performClick()
+        compose.onNodeWithTag("agent_memory_revoke_confirm").performClick()
+        compose.runOnIdle {
+            Assert.assertFalse(preferences.getBoolean("gemini-persisted-memory-v1", true))
+            Assert.assertTrue(preferences.getBoolean(ai.memora.app.agent.AgentCloudConsentKeys.TEXT, false))
+            Assert.assertTrue(preferences.getBoolean(ai.memora.app.agent.AgentCloudConsentKeys.VOICE, false))
+        }
+
+        compose.onNodeWithTag("agent_text_consent_toggle").performClick()
+        Assert.assertFalse(preferences.getBoolean(ai.memora.app.agent.AgentCloudConsentKeys.TEXT, true))
+        compose.onNodeWithTag("chat_input").performTextInput("Synthetic text after revocation")
+        compose.onNodeWithTag("chat_send").performClick()
+        compose.onNodeWithTag("agent_text_consent_confirm").assertIsDisplayed()
+        compose.onNodeWithText("Synthetic text after revocation").assertIsDisplayed()
+        Assert.assertEquals("Revoked text consent must block provider dispatch", 0, turnCalls)
+    }
+
+    @Test fun confirmedActionCardAppearsBeforeTheFinalTextTurnReturns() {
+        val context = ApplicationProvider.getApplicationContext<Context>()
+        context.getSharedPreferences("voice-first-consent", Context.MODE_PRIVATE).edit()
+            .putBoolean(ai.memora.app.agent.AgentCloudConsentKeys.TEXT, true).commit()
+        val turnId = UUID.randomUUID().toString()
+        val targetId = UUID.randomUUID().toString()
+        val callbackSeen = kotlinx.coroutines.CompletableDeferred<Unit>()
+        val finishTurn = kotlinx.coroutines.CompletableDeferred<ai.memora.app.voice.VoiceFirstResult>()
+        val request = "Synthetic pending request"
+        compose.setContent {
+            CompositionLocalProvider(LocalAgentDatabaseOverride provides agentDatabase.database) {
+                TestMemoraApp(initialRoute = "chat", initialLanguage = "az",
+                    capturePersistenceOverride = captureStore, appearanceStoreOverride = appearanceStore,
+                    textTurnProgressOverride = { _, onProgress ->
+                        onProgress(ai.memora.app.voice.VoiceTurnProgress.ConfirmedActions(turnId, listOf(
+                            ai.memora.app.voice.VoiceTurnActionResult(
+                                UUID.randomUUID().toString(), turnId, "record_money_event", "APPLIED",
+                                "receipt_recorded", "finance", targetId,
+                            ),
+                        )))
+                        callbackSeen.complete(Unit)
+                        finishTurn.await()
+                    })
+            }
+        }
+        compose.onNodeWithTag("chat_input").performTextInput(request)
+        compose.onNodeWithTag("chat_send").performClick()
+        compose.waitUntil(5_000) { callbackSeen.isCompleted }
+        compose.waitUntil(5_000) { compose.onAllNodesWithTag("action_result_${turnId}_0").fetchSemanticsNodes().isNotEmpty() }
+        compose.onNodeWithText(request).assertExists()
+        compose.onNodeWithTag("action_status_label").assertIsDisplayed()
+        compose.onNodeWithTag("action_open_source").performClick()
+        compose.onNodeWithTag("action_source_user_message").assertTextContains(request)
+        compose.onNodeWithTag("action_source_close").performClick()
+        finishTurn.complete(ai.memora.app.voice.VoiceFirstResult.Failed("synthetic_final_reply_stopped"))
+    }
+
+    @Test fun secretaryDraftAndHistoryScrollSurviveUiRecreation() {
+        kotlinx.coroutines.runBlocking {
+            val context = ApplicationProvider.getApplicationContext<Context>()
+            val processor = ai.memora.app.voice.AgentVoiceTurnProcessor(context, agentDatabase.database)
+            val scopeId = processor.conversationScopeId()
+            val repository = ai.memora.app.data.protectedstore.ProtectedConversationRepository(agentDatabase.database)
+            val turnIds = (0..6).map { UUID.randomUUID().toString() }
+            turnIds.forEachIndexed { index, turnId ->
+                repository.appendTurn(scopeId, turnId, "Synthetic history request $index", "Synthetic history answer $index",
+                    1_800_000_000_000L + index * 1_000L)
+            }
+            val restoration = StateRestorationTester(compose)
+            restoration.setContent {
+                CompositionLocalProvider(LocalAgentDatabaseOverride provides agentDatabase.database) {
+                    TestMemoraApp(initialRoute = "chat", initialLanguage = "az", capturePersistenceOverride = captureStore,
+                        appearanceStoreOverride = appearanceStore)
+                }
+            }
+            val oldestTurn = turnIds.first()
+            compose.waitUntil(10_000) {
+                compose.onAllNodesWithTag("chat_turn_${turnIds.last()}_user").fetchSemanticsNodes().isNotEmpty()
+            }
+            compose.onNodeWithTag("chat_history").performScrollToNode(hasTestTag("chat_turn_${oldestTurn}_user"))
+            compose.onNodeWithTag("chat_turn_${oldestTurn}_user").assertIsDisplayed()
+            compose.onNodeWithTag("chat_input").performTextInput("Synthetic secretary draft")
+
+            restoration.emulateSavedInstanceStateRestore()
+
+            compose.onNodeWithTag("chat_input").assertTextContains("Synthetic secretary draft")
+            compose.onNodeWithTag("chat_turn_${oldestTurn}_user").assertIsDisplayed()
+        }
     }
 
     @Test fun textDraftGoesToInboxWithoutAi() {

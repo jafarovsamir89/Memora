@@ -35,7 +35,7 @@ import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
-private data class RelatedDetail(val title: String, val description: String?, val metadata: List<Pair<Int, String>> = emptyList())
+internal data class RelatedDetail(val title: String, val description: String?, val metadata: List<Pair<Int, String>> = emptyList())
 private sealed interface RelatedDetailState {
     data object Loading : RelatedDetailState
     data class Found(val value: RelatedDetail) : RelatedDetailState
@@ -99,6 +99,27 @@ internal fun ActionTargetDetailScreen(route: AppRoute) {
     }
 }
 
+internal suspend fun loadActionCardSummary(
+    database: AgentDatabase,
+    scope: String,
+    targetKind: String?,
+    targetId: String?,
+    resources: android.content.res.Resources,
+): List<String>? {
+    val route = AppTargetKind.fromAction(targetKind, targetId) ?: return null
+    val details = when (val result = loadRelatedDetail(database, scope, route, resources)) {
+        is RelatedDetailState.Found -> result.value
+        else -> null
+    } ?: return null
+    return buildList {
+        details.title.takeIf(String::isNotBlank)?.let(::add)
+        details.description?.takeIf(String::isNotBlank)?.let { add(it.take(180)) }
+        details.metadata.forEach { (labelId, value) ->
+            if (value.isNotBlank()) add("${resources.getString(labelId)}: ${value.take(140)}")
+        }
+    }.take(5)
+}
+
 private suspend fun loadRelatedDetail(
     database: AgentDatabase,
     scope: String,
@@ -138,6 +159,7 @@ private suspend fun loadRelatedDetail(
                 metadata = buildList {
                     add(R.string.action_related_amount to formatMoney(event.minorUnits, event.currency, resources))
                     person?.let { add(R.string.action_related_person to it) }
+                    add(R.string.action_related_source to event.source)
                     event.occurredAt?.let { add(R.string.action_related_date to formatTimestamp(it, displayZone)) }
                 },
             )
@@ -176,7 +198,10 @@ private suspend fun loadRelatedDetail(
 }
 
 private fun formatMoney(minorUnits: Long, currency: String, resources: android.content.res.Resources): String =
-    "${NumberFormat.getNumberInstance(resources.configuration.locales[0]).format(BigDecimal.valueOf(minorUnits, 2))} $currency"
+    "${NumberFormat.getNumberInstance(resources.configuration.locales[0]).apply {
+        minimumFractionDigits = 2
+        maximumFractionDigits = 2
+    }.format(BigDecimal.valueOf(minorUnits, 2))} $currency"
 
 private fun formatTimestamp(raw: String, zone: ZoneId): String = runCatching {
     val date = runCatching { Instant.parse(raw) }.getOrNull()?.atZone(zone)?.toLocalDateTime()

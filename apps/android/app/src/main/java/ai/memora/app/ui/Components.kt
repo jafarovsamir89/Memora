@@ -399,6 +399,7 @@ data class ActionResultPresentation(
     val correctionActionLabel: String? = null,
     val supportingText: String? = null,
     val warningText: String? = null,
+    val detailLines: List<String> = emptyList(),
 )
 
 @Composable
@@ -425,6 +426,10 @@ fun ActionResultCard(
                 Text(presentation.statusLabel, style = MaterialTheme.typography.titleSmall, color = toneColor,
                     modifier = Modifier.testTag("action_status_label"))
             }
+        }
+        presentation.detailLines.forEachIndexed { index, line ->
+            Text(line, style = MaterialTheme.typography.bodySmall, color = colors.ink,
+                modifier = Modifier.testTag("action_detail_$index"))
         }
         presentation.supportingText?.let { Text(it, style = MaterialTheme.typography.bodySmall, color = colors.muted) }
         presentation.warningText?.let { Text(it, style = MaterialTheme.typography.bodySmall,

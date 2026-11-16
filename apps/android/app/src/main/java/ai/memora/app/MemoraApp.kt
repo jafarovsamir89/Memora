@@ -51,7 +51,8 @@ private data class PendingCaptureImport(val text: String, val preview: CaptureIm
 @Composable
 fun MemoraApp(initialRoute: String = "home", initialTheme: String = "system", capturePersistenceOverride: CapturePersistence? = null,
     appearanceStoreOverride: AppearanceStore? = null, initialLanguage: String = "az", taskStoreOverride: EncryptedTaskStore? = null,
-    textTurnOverride: (suspend (String) -> ai.memora.app.voice.VoiceFirstResult)? = null) {
+    textTurnOverride: (suspend (String) -> ai.memora.app.voice.VoiceFirstResult)? = null,
+    textTurnProgressOverride: (suspend (String, (ai.memora.app.voice.VoiceTurnProgress) -> Unit) -> ai.memora.app.voice.VoiceFirstResult)? = null) {
     val context = LocalContext.current
     val appearanceFactory = remember(context, appearanceStoreOverride, initialTheme, initialLanguage) { AppearanceViewModel.Factory(context, AppearanceSettings(initialLanguage, initialTheme), appearanceStoreOverride) }
     val appearanceModel: AppearanceViewModel = viewModel(factory = appearanceFactory)
@@ -234,7 +235,7 @@ fun MemoraApp(initialRoute: String = "home", initialTheme: String = "system", ca
                       screens.SaveableStateProvider(route.stateKey) {
                         when (route.destination) {
                             AppDestination.TODAY -> WorkingHomeScreen(language, captureState, navigate, openCapture, { detailId = it }, taskStore) {
-                                VoiceFirstScreen(onOpenSettings = { navigate("settings") })
+                                VoiceFirstScreen(onOpenSettings = { navigate("settings") }, onShortTap = { navigate("chat") })
                             }
                             AppDestination.MEMORY -> WorkingMemoryScreen(captureState, { detailId = it }, { openCapture(false) }, { navigate("inbox") },
                                 localProfile = profile.profile, updateLocalProfile = { input, done ->
@@ -272,7 +273,7 @@ fun MemoraApp(initialRoute: String = "home", initialTheme: String = "system", ca
                             }, appearance.ready && !appearance.busy, appearance.error, { appearanceModel.load() }, { about = true })
                             AppDestination.SECRETARY -> AgentChatScreen(language, showVoiceControl = true, onOpenArea = navigate,
                                 onOpenTarget = navigateRoute,
-                                textTurnOverride = textTurnOverride)
+                                textTurnOverride = textTurnOverride, textTurnProgressOverride = textTurnProgressOverride)
                             AppDestination.ACTION_TARGET -> ActionTargetDetailScreen(route)
                         }
                       }

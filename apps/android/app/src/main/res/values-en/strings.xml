@@ -39,6 +39,7 @@
     <string name="action_related_amount">Amount</string>
     <string name="action_related_person">Person</string>
     <string name="action_related_date">Date</string>
+    <string name="action_related_source">Source</string>
     <string name="action_related_until">Until</string>
     <string name="report_source_ledger">Source: protected finance ledger</string>
     <string name="report_previous_month">Previous month</string>
@@ -219,6 +220,8 @@
     <string name="agent_memory_allow">Allow</string>
     <string name="agent_memory_revoke">Revoke memory access</string>
     <string name="agent_text_revoke">Revoke Gemini text access</string>
+    <string name="agent_memory_revoke_title">Turn off memory access?</string>
+    <string name="agent_memory_revoke_body">Saved records will remain on this device. Future Gemini requests will no longer include memory records or conversation history, and memory tools will be unavailable. Sending the current message is controlled by separate text consent.</string>
     <string name="tables_title">Tables</string>
     <string name="tables_subtitle">View and edit tables stored in your memory.</string>
     <string name="tables_all">All tables</string>
@@ -317,10 +320,17 @@
     <string name="audio_note_writing_failed">Writing system check failed. Review the original recognition carefully.</string>
     <string name="audio_note_review_notice">Check names, amounts and negation. Only the text you confirm will be saved.</string>
     <string name="voice_first_button">Hold to talk</string>
+    <string name="voice_first_accessible_start">Start voice input</string>
+    <string name="voice_first_accessible_stop">Stop voice input</string>
     <string name="voice_first_hint">Hold the button and speak</string>
     <string name="voice_first_listening">Listening…</string>
     <string name="voice_first_release">Release the button to continue</string>
     <string name="voice_first_processing">Thinking…</string>
+    <string name="voice_first_transcribing">Recognizing speech…</string>
+    <string name="voice_first_thinking">Understanding the request…</string>
+    <string name="voice_first_executing_tool">Completing a confirmed action…</string>
+    <string name="voice_first_responding">Preparing a reply…</string>
+    <string name="voice_first_cancelled">Cancelled</string>
     <string name="voice_first_speaking">Speaking…</string>
     <string name="voice_first_error">Something went wrong. Try again.</string>
     <string name="voice_first_error_code">Could not complete (%1$s). Try again; this code helps identify the issue.</string>

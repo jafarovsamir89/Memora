@@ -5,4 +5,6 @@ internal class MemoraVoiceTurnProcessor(context: android.content.Context) : Voic
     private val agent = AgentVoiceTurnProcessor(context)
 
     override suspend fun handle(transcript: String): VoiceFirstResult = agent.handle(transcript)
+    override suspend fun handle(transcript: String, onProgress: (VoiceTurnProgress) -> Unit): VoiceFirstResult =
+        agent.handle(transcript, onProgress)
 }

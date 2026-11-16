@@ -41,8 +41,12 @@ internal class AgentVoiceTurnProcessor(context: Context, private val databaseOve
     )
 
     override suspend fun handle(transcript: String): VoiceFirstResult = process(transcript, AgentInputChannel.VOICE)
+    override suspend fun handle(transcript: String, onProgress: (VoiceTurnProgress) -> Unit): VoiceFirstResult =
+        process(transcript, AgentInputChannel.VOICE, onProgress)
 
     suspend fun handleText(message: String): VoiceFirstResult = process(message, AgentInputChannel.TEXT)
+    suspend fun handleText(message: String, onProgress: (VoiceTurnProgress) -> Unit): VoiceFirstResult =
+        process(message, AgentInputChannel.TEXT, onProgress)
     fun conversationScopeId(): String = scopeId
     suspend fun conversationMessages(limit: Int = 80) = conversations.recent(scopeId, limit)
     suspend fun migrateLegacyFinance(): Boolean = runCatching {
@@ -56,7 +60,8 @@ internal class AgentVoiceTurnProcessor(context: Context, private val databaseOve
         domainRepository.migrateLegacyFinance(scopeId, snapshot.snapshot, digest, snapshot.sourceSchema)
     }.isSuccess
 
-    private suspend fun process(message: String, channel: AgentInputChannel): VoiceFirstResult {
+    private suspend fun process(message: String, channel: AgentInputChannel,
+        onProgress: (VoiceTurnProgress) -> Unit = {}): VoiceFirstResult {
         if (message.isBlank() || message.length > 20_000) return VoiceFirstResult.Ready("Zəhmət olmasa, bir daha deyin.", false)
         return try {
             // Retention is a local user setting; apply it even when cloud-memory consent is disabled.
@@ -86,7 +91,20 @@ internal class AgentVoiceTurnProcessor(context: Context, private val databaseOve
             val result = orchestrator.run(AgentTurnRequest(turnId, scopeId, actorId, null,
                 locale = responsePreferences?.language?.let(::languageTag) ?: "az-AZ",
                 text = message, channel = channel, conversationHistory = history,
-                responsePreferences = responsePreferences, authoritativeLocalDate = authoritativeLocalDate))
+                responsePreferences = responsePreferences, authoritativeLocalDate = authoritativeLocalDate)) { event ->
+                when (event) {
+                    ai.memora.app.agent.AgentTurnProgress.Thinking -> onProgress(VoiceTurnProgress.Stage("thinking"))
+                    ai.memora.app.agent.AgentTurnProgress.ExecutingTool -> onProgress(VoiceTurnProgress.Stage("executing_tool"))
+                    is ai.memora.app.agent.AgentTurnProgress.ConfirmedActionResults -> {
+                        val rows = AgentActionResultMapper.map(scopeId, turnId, event.observations, System.currentTimeMillis())
+                        onProgress(VoiceTurnProgress.ConfirmedActions(turnId, rows.map { row ->
+                            VoiceTurnActionResult(row.resultId, row.turnId, row.toolName, row.status, row.code,
+                                row.targetKind, row.targetId)
+                        }))
+                    }
+                }
+            }
+            onProgress(VoiceTurnProgress.Stage("responding"))
             val completedAt = Instant.now().toEpochMilli()
             val actionResults = AgentActionResultMapper.map(scopeId, turnId, result.toolResults, completedAt)
             if (result.status == AgentRunResultStatus.FAILED || result.status == AgentRunResultStatus.RECOVERY_REQUIRED) {

@@ -95,6 +95,13 @@ data class AgentToolObservation(
     val operationKey: String? = null,
 )
 
+/** Ephemeral UI progress from the existing agent pipeline; it never enters the journal or provider request. */
+sealed interface AgentTurnProgress {
+    data object Thinking : AgentTurnProgress
+    data object ExecutingTool : AgentTurnProgress
+    data class ConfirmedActionResults(val observations: List<AgentToolObservation>) : AgentTurnProgress
+}
+
 enum class ToolObservationStatus { APPLIED, REJECTED, CONFLICT, FAILED, UNKNOWN, NEEDS_CONFIRMATION }
 
 class AgentTurnCancelledException(val recoveryRequired: Boolean) : CancellationException(
@@ -247,8 +254,9 @@ class AgentOrchestrator(
         require(modelTimeoutMillis in 1..30_000 && modelFollowupTimeoutMillis in 1..30_000 && turnTimeoutMillis in 1..60_000)
     }
 
-    suspend fun run(turn: AgentTurnRequest): AgentRunResult {
+    suspend fun run(turn: AgentTurnRequest, onProgress: (AgentTurnProgress) -> Unit = {}): AgentRunResult {
         validateTurn(turn)
+        fun publish(progress: AgentTurnProgress) { runCatching { onProgress(progress) } }
         journal.beginTurn(turn.turnId)
         val observations = ArrayList<AgentToolObservation>()
         val seenCallIds = hashSetOf<String>()
@@ -260,7 +268,9 @@ class AgentOrchestrator(
         try {
             return withTimeout(turnTimeoutMillis) {
             journal.setTurnStatus(turn.turnId, AgentTurnStatus.THINKING)
+            publish(AgentTurnProgress.Thinking)
             repeat(maxModelRounds) { round ->
+                publish(AgentTurnProgress.Thinking)
                 failureStage = "consent_gate"
                 val consent = policy.beforeModelSend(turn, includesStoredMemory)
                 logStage(turn.turnId, "policy_model", consent.action.name.lowercase(), consent.code)
@@ -390,6 +400,7 @@ class AgentOrchestrator(
 
                             if (handler.descriptor.effect == ToolEffect.READ) {
                                 failureStage = "tool_read"
+                                publish(AgentTurnProgress.ExecutingTool)
                                 val readResult = try {
                                     handler.read(call, turn)
                                 } catch (cancelled: CancellationException) {
@@ -486,6 +497,7 @@ class AgentOrchestrator(
                                     journal.recordCommand(entry)
                                     journal.setCommandStatus(commandId, "prepared", "applying")
                                     failureStage = "tool_commit"
+                                    publish(AgentTurnProgress.ExecutingTool)
                                     val committed = try {
                                         handler.commit(prepared.command)
                                     } catch (cancelled: CancellationException) {
@@ -537,6 +549,9 @@ class AgentOrchestrator(
                                         return@withTimeout finish(turn, terminal, code = "tool_result_limit_exceeded", observations = observations)
                                     }
                                     observations += observation
+                                    if (observation.status == ToolObservationStatus.APPLIED && call.name in AGENT_PERSISTED_WRITE_TOOLS) {
+                                        publish(AgentTurnProgress.ConfirmedActionResults(observations.toList()))
+                                    }
                                     if (committed.status != ToolObservationStatus.APPLIED && call.name !in AGENT_PERSISTED_WRITE_TOOLS)
                                         failedTools = true
                                     if (committed.status == ToolObservationStatus.UNKNOWN) {
@@ -547,6 +562,7 @@ class AgentOrchestrator(
                             }
                         }
                         journal.setTurnStatus(turn.turnId, AgentTurnStatus.THINKING)
+                        publish(AgentTurnProgress.Thinking)
                     }
                 }
                 if (round == maxModelRounds - 1) {

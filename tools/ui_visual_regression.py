@@ -16,6 +16,11 @@ import time
 import zlib
 from pathlib import Path
 
+try:
+    import numpy as np
+except ImportError:  # Keep the regression runner dependency-free on clean machines.
+    np = None
+
 ROOT = Path(__file__).resolve().parents[1]
 GOLDEN_DIR = ROOT / "docs/ui-ux-redesign-v1/phase-1/component-goldens"
 OUTPUT_DIR = ROOT / "apps/android/app/build/ui-visual-regression"
@@ -181,6 +186,15 @@ def png_pixels(png: bytes) -> tuple[int, int, bytes]:
 
 
 def compare_pixels(expected: bytes, actual: bytes) -> tuple[float, float]:
+    if np is not None:
+        expected_pixels = np.frombuffer(expected, dtype=np.uint8).reshape((-1, 4)).astype(np.int16)
+        actual_pixels = np.frombuffer(actual, dtype=np.uint8).reshape((-1, 4)).astype(np.int16)
+        delta = np.abs(expected_pixels - actual_pixels)
+        pixels = expected_pixels.shape[0]
+        changed = int(np.count_nonzero(np.any(delta > PIXEL_TOLERANCE, axis=1)))
+        total_delta = int(delta[:, :3].sum(dtype=np.int64))
+        return changed / pixels, total_delta / (pixels * 3)
+
     changed = 0
     total_delta = 0
     pixels = len(expected) // 4

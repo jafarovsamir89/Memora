@@ -32,3 +32,7 @@ The script rejects physical devices, requires an emulator, and restores font sca
 settings on exit. It changes no production data and does not call Gemini, open the microphone, or
 access SQLCipher. Golden images are deterministic Azerbaijani UI examples, not screenshots of user
 records.
+
+If NumPy is installed, RGBA comparison uses its vectorized path. The pure-Python
+implementation remains the fallback on clean machines; both paths preserve the
+same per-pixel tolerance and mean-delta thresholds.
