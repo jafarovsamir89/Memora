@@ -1,3 +1,7 @@
+## ACT-0248 · 2026-11-16 · Git handoff ACT-0247
+
+ACT-0247 code, tests, screenshots and product handoff documents were committed as `6b0e09d970357bd27dd6ab78d11b8e285a81d1f3` (`feat(ui): redesign More and finance`) and pushed to `origin/ui/redesign-v1`. `git fetch` and `git ls-remote` confirmed local HEAD, tracking ref and remote feature ref at this SHA. Remote `main` remains `ac621919aca09ece6e292eae708d55cc09de16d7`; no merge, force push or history rewrite. Owner-owned untracked ADR-012 remains untouched and excluded. APK, API keys and raw reports were not staged. The commit preserves ACT-0247's full Gradle/lint/visual regression results; tests were not rerun for this docs-only handoff. Continue with Calendar/Tasks and other permitted UI screens.
+
 ## ACT-0247 · 2026-11-16 · More catalog and Finance
 
 Обновлены три категории меню «Ещё», каталог сохранён выше отчёта. Finance получил типовые локализованные фильтры, `LazyColumn` со стабильными ID, честные состояния загрузки/ошибки/пустого результата, exact scoped event routes и locale-aware отображение суммы/даты. Удалён повторный заголовок Finance. Реальный тест AZ fontScale=1.3 обнаружил обрезание крайнего chip; общий `Filters` переведён на FlowRow и test требует, чтобы все четыре фильтра были видны.

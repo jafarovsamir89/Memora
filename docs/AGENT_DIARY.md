@@ -1,5 +1,10 @@
 # Memora — дневник ведущего инженера
 
+
+### Git handoff ACT-0248
+
+ACT-0247 committed as `6b0e09d970357bd27dd6ab78d11b8e285a81d1f3` (`feat(ui): redesign More and finance`) and pushed to `origin/ui/redesign-v1`. After `git fetch`, local `HEAD`, `origin/ui/redesign-v1` and `git ls-remote origin refs/heads/ui/redesign-v1` all matched `6b0e09d970357bd27dd6ab78d11b8e285a81d1f3`. Remote `main` remains `ac621919aca09ece6e292eae708d55cc09de16d7`; no merge, force push or history rewrite. The only untracked item is owner-owned `docs/adr/ADR-012-keystore-wrapping-key-rotation.md`, untouched and excluded. No APK, API key or raw report staged. Continue on `ui/redesign-v1` with Calendar/Tasks; autonomous UI authorization remains active.
+
 ## ACT-0247 — 2026-11-16 — More catalog and Finance UI
 
 На `ui/redesign-v1` продолжена разрешённая владельцем UI/UX-разработка. «Ещё» сгруппировано на «Люди и работа», «Планы и память», «Данные и настройки»; каталог остаётся выше отчёта. Finance переведён на компактную верхнюю панель с фильтрами и стабильный lazy-list; добавлены честные loading/error/empty состояния, локализованные карточки ledger events и точный маршрут операции по ID и текущему scope. Повторный заголовок экрана убран. Обнаруженное реальным AZ `fontScale=1.3` обрезание chips исправлено общим `FlowRow` в `Filters`; тест подтверждает видимость всех четырёх категорий. Финансовая детализация теперь использует locale выбранного UI. Финансовая семантика, ledger write path, доменные правила, schema/migrations, provider, consent, permissions, privacy и auth не менялись.
