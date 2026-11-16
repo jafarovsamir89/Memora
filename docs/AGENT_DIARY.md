@@ -1,9 +1,19 @@
 # Memora — дневник ведущего инженера
 
 
-### Git handoff ACT-0250
+### Git handoff ACT-0252
 
-ACT-0249 implementation and Phase 6 evidence were committed as `2794595169593053aaf23dded49da8f68ad58c0e` (`feat(ui): redesign calendar and tasks`) and pushed to `origin/ui/redesign-v1`. `git fetch` and `git ls-remote` confirmed local `HEAD`, `origin/ui/redesign-v1`, and remote `refs/heads/ui/redesign-v1` at the same SHA. Remote `main` remains `ac621919aca09ece6e292eae708d55cc09de16d7`; no merge, force push or history rewrite. The owner-owned ADR-012 remains untracked, untouched and excluded. No APK, API key or raw report was committed. Continue with Projects and Notes under the active owner authorization.
+ACT-0251 implementation commit `30a9e95ceaa869e6cbea466552b38bc905a3ce38` (`feat(ui): redesign projects and notes`) was pushed to `origin/ui/redesign-v1`. `git fetch` and `git ls-remote` confirmed local `HEAD`, `origin/ui/redesign-v1`, and remote `refs/heads/ui/redesign-v1` all at `30a9e95ceaa869e6cbea466552b38bc905a3ce38`. Remote `main` remains `ac621919aca09ece6e292eae708d55cc09de16d7`; no merge, force push or history rewrite. Owner-owned ADR-012 remains untracked, untouched and excluded. No APK, key or raw report was committed. Implementation checks are recorded in ACT-0251 and Phase 7 report; continue with Tables.
+
+## ACT-0251 · 2026-11-16 · Projects and Notes UI
+
+На `ui/redesign-v1` заменены generic списки Projects и Notes общим read-only Compose screen поверх существующего `ProtectedDomainRepository`. Экран поддерживает 30-row paging, scoped existing search с раскрытым лимитом 100 результатов, loading/error/empty/retry и refresh, устойчивые строки и точные typed маршруты по ID. Страница детали проверяет точный kind и активный conversation scope; связанные PERSON/PROJECT/NOTE записи открываются по собственным ID. Добавлены default/AZ/EN/RU строки. Production экран не создаёт тестовых записей; домен, schema, ledger, AI provider, consent, privacy и permissions не менялись.
+
+Полный Gradle PASS: **79 suites / 405 tests, 0 failures/errors, 1 opt-in live skipped**; debug/AndroidTest APK builds и Kotlin compile PASS; lint **0/90/2**; component visual regression **31/31 PASS**, baselines/thresholds unchanged. Четыре isolated host Compose regressions покрывают project paging и cross-scope exclusion, note search после первой страницы, project detail с exact same-scope links и отказ для wrong-kind ID. Route tests проверяют typed ID round-trip и back stack.
+
+APK v101 `1.1.79-projects-notes-ui`, SHA-256 `b067281ac3eabfafeb0789feeb17bc19acdc18991fa3d4266d7c43d1a33cab52`. Synthetic Android 14 `emulator-5556`: light/dark, AZ fontScale=1.3, Projects search с открытой IME, landscape, in-place install lineage и версия проверены. Empty Projects/Notes кадры — direct `adb screencap`; на эмуляторе записей нет, заполненные списки и переходы покрыты только host Compose synthetic fixtures. Тема оставлена light, fontScale 1.0, portrait. Физический Redmi, TalkBack, process death, populated-profile field readback и owner acceptance — NOT TESTED. Gemini, mic, personal data и network не использовались.
+
+Implementation commit/push handoff is recorded in ACT-0252. Следующая задача: Tables, затем Inbox, Backup, Settings и общий visual pass; автономное разрешение владельца остаётся активным. Preserve `main` and owner ADR-012.
 
 ## ACT-0249 · 2026-11-16 · Calendar and Tasks UI
 
