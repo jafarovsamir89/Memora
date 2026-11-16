@@ -207,7 +207,8 @@ fun MemoraApp(initialRoute: String = "home", initialTheme: String = "system", ca
                     AppTargetKind.PERSON -> R.string.people
                     AppTargetKind.CASE -> R.string.cases
                     AppTargetKind.FINANCE -> R.string.finance
-                    AppTargetKind.TASK -> R.string.tasks_title
+                    AppTargetKind.TASK -> R.string.nav_tasks
+                    AppTargetKind.CALENDAR -> R.string.calendar_title
                     AppTargetKind.SOURCE -> R.string.entity_source_turn
                     else -> R.string.action_related_details
                 }
@@ -250,7 +251,7 @@ fun MemoraApp(initialRoute: String = "home", initialTheme: String = "system", ca
                                         done(saved)
                                     }
                                 }, onOpenTarget = navigateRoute)
-                            AppDestination.TASKS -> ScreenColumn { ScreenHeading(s(R.string.tasks_title), s(R.string.working_tasks_hint)); TaskPrototype(taskStore) }
+                            AppDestination.TASKS -> TaskPrototype(taskStore, onOpenTarget = navigateRoute)
                             AppDestination.MORE -> MoreScreen(navigate, { about = true }, { openCapture(true) }, language)
                             AppDestination.VOICE_MEMORY -> VoiceMemoryScreen()
                             AppDestination.NOTES -> SavedObjectsScreen(DomainKind.NOTE)
@@ -269,7 +270,7 @@ fun MemoraApp(initialRoute: String = "home", initialTheme: String = "system", ca
                                 captureState.managementBusy, { request -> captureModel.session.revise(request) },
                                 { entry -> captureModel.session.delete(entry.source.id, entry.source.revisions.last().id) })
                             AppDestination.FINANCE -> FinanceScreen(onOpenTarget = navigateRoute, language = language)
-                            AppDestination.CALENDAR -> CalendarScreen()
+                            AppDestination.CALENDAR -> CalendarScreen(onOpenTarget = navigateRoute)
                             AppDestination.PEOPLE -> SavedObjectsScreen(DomainKind.PERSON, navigateRoute)
                             AppDestination.CASES -> CasesScreen(onOpenSecretary = { navigate("chat") }, onOpenTarget = navigateRoute)
                             AppDestination.PROJECTS -> SavedObjectsScreen(DomainKind.PROJECT)

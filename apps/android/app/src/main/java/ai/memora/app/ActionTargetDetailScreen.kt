@@ -184,10 +184,13 @@ private suspend fun loadRelatedDetail(
                 task.personLabel?.let { add(R.string.action_related_person to it) }
             }) }
         AppTargetKind.CALENDAR -> repository.calendarEvent(scope, id)?.let { event ->
+            val locale = resources.configuration.locales[0] ?: Locale.getDefault()
             RelatedDetail(event.title, null, buildList {
-                add(R.string.action_related_date to event.startLocal.replace('T', ' '))
-                add(R.string.action_related_status to event.status)
-                event.endLocal?.let { add(R.string.action_related_until to it.replace('T', ' ')) }
+                add(R.string.action_related_date to calendarEventDateLabel(event, locale))
+                add(R.string.action_related_status to resources.getString(
+                    if (event.status == "cancelled") R.string.calendar_cancelled else R.string.calendar_active,
+                ))
+                if (event.timePrecision != "date") add(R.string.calendar_zone_label to event.zoneId)
             })
         }
         AppTargetKind.TABLE -> repository.table(scope, id)?.takeIf { it.deletedAt == null }?.let { table ->

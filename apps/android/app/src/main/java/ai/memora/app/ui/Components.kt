@@ -270,14 +270,33 @@ internal fun MemoraBottomNavigation(selected: AppDestination, onSelect: (AppDest
 }
 
 @Composable
-fun EmptyState(title: String, body: String, icon: ImageVector = Glyph.Search, testTag: String = "empty_state") {
-    Column(Modifier.fillMaxWidth().padding(vertical = 28.dp).testTag(testTag), horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.spacedBy(12.dp)) {
-        IconBubble(icon, size = 64)
-        Text(title, style = MaterialTheme.typography.titleMedium, color = colors.ink,
-            modifier = Modifier.semantics { heading() }.testTag("${testTag}_title"))
-        Text(body, style = MaterialTheme.typography.bodyMedium, color = colors.muted,
-            textAlign = androidx.compose.ui.text.style.TextAlign.Center, modifier = Modifier.testTag("${testTag}_body"))
+fun EmptyState(
+    title: String,
+    body: String,
+    icon: ImageVector = Glyph.Search,
+    testTag: String = "empty_state",
+    compact: Boolean = false,
+) {
+    if (compact) {
+        Row(Modifier.fillMaxWidth().padding(vertical = 8.dp).testTag(testTag),
+            horizontalArrangement = Arrangement.Center, verticalAlignment = Alignment.CenterVertically) {
+            IconBubble(icon, size = 40)
+            Column(Modifier.weight(1f).padding(start = 12.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                Text(title, style = MaterialTheme.typography.titleSmall, color = colors.ink,
+                    modifier = Modifier.semantics { heading() }.testTag("${testTag}_title"))
+                Text(body, style = MaterialTheme.typography.bodySmall, color = colors.muted,
+                    modifier = Modifier.testTag("${testTag}_body"))
+            }
+        }
+    } else {
+        Column(Modifier.fillMaxWidth().padding(vertical = 28.dp).testTag(testTag), horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            IconBubble(icon, size = 64)
+            Text(title, style = MaterialTheme.typography.titleMedium, color = colors.ink,
+                modifier = Modifier.semantics { heading() }.testTag("${testTag}_title"))
+            Text(body, style = MaterialTheme.typography.bodyMedium, color = colors.muted,
+                textAlign = androidx.compose.ui.text.style.TextAlign.Center, modifier = Modifier.testTag("${testTag}_body"))
+        }
     }
 }
 

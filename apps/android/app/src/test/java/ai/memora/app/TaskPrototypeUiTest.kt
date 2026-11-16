@@ -3,7 +3,6 @@ package ai.memora.app
 import ai.memora.app.data.EncryptedTaskStore
 import ai.memora.app.ui.LocalStrings
 import ai.memora.app.ui.MemoraTheme
-import ai.memora.app.ui.ScreenColumn
 import android.content.Context
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.ui.test.*
@@ -31,7 +30,7 @@ class TaskPrototypeUiTest {
         val store = EncryptedTaskStore(File(context.cacheDir, "ui-${java.util.UUID.randomUUID()}")) { key }
         compose.setContent {
             CompositionLocalProvider(LocalStrings provides context.resources, LocalAgentDatabaseOverride provides agentDatabase.database) {
-                MemoraTheme("light") { ScreenColumn { TaskPrototype(store) } }
+                MemoraTheme("light") { TaskPrototype(store) }
             }
         }
         compose.waitUntil(10_000) {
@@ -42,6 +41,7 @@ class TaskPrototypeUiTest {
             compose.onAllNodes(hasTestTag("prototype_add") and isEnabled()).fetchSemanticsNodes().isNotEmpty()
         }
         compose.onNodeWithTag("prototype_add").performScrollTo().performClick()
+        compose.onNodeWithTag("tasks_screen").performScrollToNode(hasText("Synthetic test task"))
         compose.waitUntil(10_000) { compose.onAllNodesWithText("Synthetic test task").fetchSemanticsNodes().isNotEmpty() }
         compose.waitUntil(10_000) {
             compose.onAllNodes(hasTestTag("prototype_input") and isEnabled()).fetchSemanticsNodes().isNotEmpty()
@@ -58,9 +58,10 @@ class TaskPrototypeUiTest {
         store.append(created)
         compose.setContent {
             CompositionLocalProvider(LocalStrings provides context.resources, LocalAgentDatabaseOverride provides agentDatabase.database) {
-                MemoraTheme("light") { ScreenColumn { TaskPrototype(store) } }
+                MemoraTheme("light") { TaskPrototype(store) }
             }
         }
+        compose.onNodeWithTag("tasks_screen").performScrollToNode(hasTestTag("edit_sample"))
         compose.waitUntil(10_000) { compose.onAllNodesWithTag("edit_sample").fetchSemanticsNodes().isNotEmpty() }
         compose.onNodeWithTag("edit_sample").performScrollTo().performClick()
         compose.onNodeWithTag("task_edit_input").performTextClearance()
@@ -83,5 +84,31 @@ class TaskPrototypeUiTest {
         compose.waitUntil(10_000) { compose.onAllNodesWithTag("task_delete_confirm").fetchSemanticsNodes().isNotEmpty() }
         compose.onNodeWithTag("task_delete_confirm").performClick()
         compose.waitUntil(10_000) { (store.load() as? ai.memora.app.data.StoreRead.Ready)?.tasks?.isEmpty() == true }
+    }
+
+    @Test fun assistantTaskOpensItsExactProtectedRoute() = kotlinx.coroutines.runBlocking {
+        val context = ApplicationProvider.getApplicationContext<Context>()
+        val database = agentDatabase.database
+        val scopeId = ai.memora.app.voice.AgentVoiceTurnProcessor(context, database).conversationScopeId()
+        val taskId = java.util.UUID.randomUUID().toString()
+        val create = ai.memora.app.domain.TaskRules.create(taskId, scopeId, "synthetic-owner", "synthetic-create",
+            "Synthetic assistant task") as ai.memora.app.domain.TaskDecision.Changed
+        ai.memora.app.data.protectedstore.ProtectedDomainRepository(database).appendTaskEvent(create.event)
+        val key = KeyGenerator.getInstance("AES").apply { init(256) }.generateKey()
+        val store = EncryptedTaskStore(File(context.cacheDir, "ui-${java.util.UUID.randomUUID()}")) { key }
+        var opened: AppRoute? = null
+        compose.setContent {
+            CompositionLocalProvider(LocalStrings provides context.resources, LocalAgentDatabaseOverride provides database) {
+                MemoraTheme("light") { TaskPrototype(store, onOpenTarget = { opened = it }) }
+            }
+        }
+        compose.waitUntil(10_000) {
+            compose.onAllNodesWithTag("assistant_task_open_$taskId").fetchSemanticsNodes().isNotEmpty()
+        }
+        compose.onNodeWithTag("assistant_task_open_$taskId").performClick()
+        compose.runOnIdle {
+            org.junit.Assert.assertEquals(AppRoute.target(AppTargetKind.TASK, taskId), opened)
+        }
+        Unit
     }
 }

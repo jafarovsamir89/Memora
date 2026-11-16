@@ -1,6 +1,16 @@
 # Memora — дневник ведущего инженера
 
 
+## ACT-0249 · 2026-11-16 · Calendar and Tasks UI
+
+На `ui/redesign-v1` обновлены Calendar и Tasks без изменения доменной логики и хранилищ. Calendar показывает фильтры, число результатов, обновление и честные загрузку/ошибку/пустое состояние; события открываются exact typed route по ID в текущем scope. Отдельно исправлена обрезка текста пустого состояния в коротком landscape: добавлен компактный вариант общего EmptyState, описание скрывается при малой высоте. Calendar ограничивает отображение 200 событиями, но текущий repository загружает все scoped rows до UI cap; большие профили требуют отдельной проверки/пагинации.
+
+Tasks переведён на полноэкранный `LazyColumn` с фильтрами, разделением assistant-задач из защищённого хранилища и legacy-задач устройства, сохранением draft/filter, локальными датами, точными ID detail route и существующими create/edit/complete/delete/export путями. Schema/migration, DB/domain/ledger semantics, AI/provider, consent, privacy, auth и permissions не менялись.
+
+Полный Gradle PASS: **78 suites / 400 tests, 0 failures/errors, 1 opt-in live skipped**; debug/AndroidTest APK builds и Kotlin compile PASS; lint **0/89/2**; component visual regression **31/31 PASS**, baselines unchanged. APK v100 `1.1.78-calendar-tasks-ui`, SHA-256 `ed0a9f4746b3bc0f57f17d5300c4fe9f632829d1d8782a8287efad4be261f44f`. Synthetic Android 14 emulator `emulator-5556`: `adb install -r` preserved `firstInstallTime`; MainActivity launched. UI-created synthetic task was completed/read back, filtered, then deleted; only the synthetic task was removed. AZ fontScale 1.3, light/dark, keyboard visibility, route/draft rotation and landscape Calendar empty state checked. System font/theme/orientation restored. Actual screenshots: [Phase 6](ui-ux-redesign-v1/phase-6/REPORT.md). No Gemini/API/audio/personal data used.
+
+Physical Redmi, TalkBack, populated device Calendar, populated profile field readback after update, large-profile performance, owner acceptance and release readiness remain NOT TESTED. Commit/push handoff pending. Next: Projects and Notes, then Tables, Inbox, Backup, Settings and final visual review. Preserve `main` and owner ADR-012.
+
 ### Git handoff ACT-0248
 
 ACT-0247 committed as `6b0e09d970357bd27dd6ab78d11b8e285a81d1f3` (`feat(ui): redesign More and finance`) and pushed to `origin/ui/redesign-v1`. After `git fetch`, local `HEAD`, `origin/ui/redesign-v1` and `git ls-remote origin refs/heads/ui/redesign-v1` all matched `6b0e09d970357bd27dd6ab78d11b8e285a81d1f3`. Remote `main` remains `ac621919aca09ece6e292eae708d55cc09de16d7`; no merge, force push or history rewrite. The only untracked item is owner-owned `docs/adr/ADR-012-keystore-wrapping-key-rotation.md`, untouched and excluded. No APK, API key or raw report staged. Continue on `ui/redesign-v1` with Calendar/Tasks; autonomous UI authorization remains active.

@@ -30,8 +30,8 @@ android {
         applicationId = "ai.memora.app"
         minSdk = 26
         targetSdk = 36
-        versionCode = 99
-        versionName = "1.1.77-finance-navigation"
+        versionCode = 100
+        versionName = "1.1.78-calendar-tasks-ui"
         testInstrumentationRunner = "ai.memora.app.GeminiSyntheticProbe"
     }
     buildFeatures { compose = true; buildConfig = true }
