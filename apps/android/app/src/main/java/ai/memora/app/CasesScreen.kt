@@ -59,7 +59,10 @@ private const val CASES_MAX_LIST_OFFSET = 99_990
 
 /** A local, source-linked view over cases written by the same secretary tools. */
 @Composable
-internal fun CasesScreen(onOpenSecretary: () -> Unit = {}) {
+internal fun CasesScreen(
+    onOpenSecretary: () -> Unit = {},
+    onOpenTarget: ((AppRoute) -> Unit)? = null,
+) {
     val context = LocalContext.current
     val processor = remember(context) { AgentVoiceTurnProcessor(context) }
     val scopeId = remember(processor) { processor.conversationScopeId() }
@@ -179,7 +182,9 @@ internal fun CasesScreen(onOpenSecretary: () -> Unit = {}) {
                             nextAction = record.nextAction?.takeIf(String::isNotBlank),
                         ),
                         onClick = {
-                            coroutineScope.launch { selected = repository.caseSnapshot(scopeId, record.caseId) }
+                            val target = AppRoute.target(AppTargetKind.CASE, record.caseId)
+                            if (onOpenTarget != null && target != null) onOpenTarget(target)
+                            else coroutineScope.launch { selected = repository.caseSnapshot(scopeId, record.caseId) }
                         },
                         modifier = Modifier.testTag("case_${record.caseId}"),
                         testTag = "case_${record.caseId}",

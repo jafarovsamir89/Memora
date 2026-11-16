@@ -46,6 +46,24 @@ class AppRouteTest {
         assertEquals(emptyList<AppRoute>(), state.backStack)
     }
 
+    @Test fun personAndSourceRoutesRetainExactIdsAndReturnToTheConversation() {
+        val conversation = AppRoute.screen(AppDestination.SECRETARY)
+        val personId = UUID.randomUUID().toString()
+        val sourceId = UUID.randomUUID().toString()
+        val person = requireNotNull(AppRoute.target(AppTargetKind.PERSON, personId))
+        val source = requireNotNull(AppRoute.source(sourceId))
+        val state = AppNavigationState.start(conversation).navigate(
+            requireNotNull(AppRoute.target(AppTargetKind.CASE, UUID.randomUUID().toString())),
+        ).navigate(person).navigate(source)
+
+        assertEquals(personId, AppRoute.decode(person.encode())?.targetId)
+        assertEquals(sourceId, AppRoute.decode(source.encode())?.targetId)
+        assertEquals(AppDestination.MORE, person.selectedPrimaryTab)
+        assertEquals(AppDestination.CASES, source.selectedPrimaryTab)
+        assertEquals(person, state.back().current)
+        assertEquals(conversation, state.back().back().back().current)
+    }
+
     @Test fun navigationStateSaverRestoresCurrentRouteAndBackStack() {
         val target = requireNotNull(AppTargetKind.fromAction(
             "finance", "b911ad3b-491d-4ed0-8f9a-01b204e1b196",

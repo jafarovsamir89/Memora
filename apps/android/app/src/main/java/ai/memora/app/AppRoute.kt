@@ -45,8 +45,10 @@ internal enum class AppDestination(val key: String) {
 /** Only persisted, UUID-backed targets emitted by the agent action mapper can become object routes. */
 internal enum class AppTargetKind(val key: String, val primaryTab: AppDestination) {
     MEMORY("memory", AppDestination.MEMORY),
+    PERSON("person", AppDestination.MORE),
     FINANCE("finance", AppDestination.MORE),
     CASE("case", AppDestination.CASES),
+    SOURCE("source", AppDestination.CASES),
     TASK("task", AppDestination.MORE),
     CALENDAR("calendar", AppDestination.MORE),
     TABLE("table", AppDestination.MORE);
@@ -85,6 +87,9 @@ internal data class AppRoute(
 
     companion object {
         fun screen(destination: AppDestination) = AppRoute(destination)
+        fun target(kind: AppTargetKind, id: String): AppRoute? =
+            runCatching { AppRoute(AppDestination.ACTION_TARGET, kind, id) }.getOrNull()
+        fun source(evidenceId: String): AppRoute? = target(AppTargetKind.SOURCE, evidenceId)
         fun fromLegacyRoute(key: String) = decode(key) ?: screen(AppDestination.fromLegacyRoute(key))
         fun decode(value: String): AppRoute? {
             if (value.startsWith("screen:")) {

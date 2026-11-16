@@ -5,5 +5,10 @@
             android:exported="true"
             android:label="Memora component gallery"
             android:theme="@style/Theme.Memora" />
+        <activity
+            android:name=".SyntheticEntityDetailActivity"
+            android:exported="true"
+            android:label="Memora synthetic detail screenshots"
+            android:theme="@style/Theme.Memora" />
     </application>
 </manifest>

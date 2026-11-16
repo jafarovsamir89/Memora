@@ -258,8 +258,8 @@ class UiShellTest {
         }
         compose.waitUntil(10_000) { compose.onAllNodesWithTag("action_target_$id").fetchSemanticsNodes().isNotEmpty() }
         compose.onNodeWithTag("nav_cases").assertIsSelected()
-        compose.onNodeWithText("Synthetic exact target").assertExists()
-        compose.onNodeWithText("Stable target details").assertExists()
+        compose.onNodeWithTag("case_detail_header").assertExists()
+        compose.onNodeWithTag("case_detail_summary").assertTextEquals("Stable target details")
         screenshot("19-exact-action-target")
     }
 
@@ -304,19 +304,30 @@ class UiShellTest {
 
     @Test fun todayDashboardUsesSavedTasksCasesAndCalendarEvents() = kotlinx.coroutines.runBlocking {
         val context = ApplicationProvider.getApplicationContext<Context>()
+        appearanceStore = AtomicAppearanceStore(
+            File(context.cacheDir, "ui-today-settings-${UUID.randomUUID()}"),
+            AppearanceSettings("az", "light"),
+        )
         val scope = ai.memora.app.voice.AgentVoiceTurnProcessor(context).conversationScopeId()
         val today = java.time.LocalDate.now(java.time.ZoneId.of("Asia/Baku"))
         val due = today.plusDays(1)
-        taskStore.append(ai.memora.app.domain.TaskEvent.Created("synthetic-priority", scope, "owner", "synthetic-create",
+        val taskId = UUID.randomUUID().toString()
+        val caseId = UUID.randomUUID().toString()
+        val calendarId = UUID.randomUUID().toString()
+        val debtId = UUID.randomUUID().toString()
+        taskStore.append(ai.memora.app.domain.TaskEvent.Created(taskId, scope, "owner", "synthetic-create",
             "Synthetic priority task"))
-        taskStore.append(ai.memora.app.domain.TaskEvent.Updated("synthetic-priority", scope, "owner", "synthetic-due", 1,
+        taskStore.append(ai.memora.app.domain.TaskEvent.Updated(taskId, scope, "owner", "synthetic-due", 1,
             "Synthetic priority task", due.atTime(9, 0).toString(), "Asia/Baku", false, null, null))
         val cases = ProtectedCaseRepository(agentDatabase.database)
         val domains = ProtectedDomainRepository(agentDatabase.database)
-        cases.createCase(scope, "synthetic-open-case", "Synthetic open case", null, nextAction = "Review synthetic item",
-            sourceTurnId = "00000000-0000-4000-8000-000000000301", now = java.time.Instant.now().toString())
-        domains.createCalendarEvent(CalendarInput("synthetic-upcoming-event", scope, "Synthetic upcoming event",
+        cases.createCase(scope, caseId, "Synthetic open case", null, nextAction = "Review synthetic item",
+            sourceTurnId = UUID.randomUUID().toString(), now = java.time.Instant.now().toString())
+        domains.createCalendarEvent(CalendarInput(calendarId, scope, "Synthetic upcoming event",
             due.toString(), null, "Asia/Baku", "date"))
+        domains.recordFinanceEvent(scope, "Synthetic debtor", "debt", 31_500, "AZN", "Synthetic obligation",
+            "Fictional unpaid balance", UUID.randomUUID().toString(), debtId, UUID.randomUUID().toString(),
+            java.time.Instant.now().toString(), java.time.Instant.now().toString())
 
         compose.setContent {
             CompositionLocalProvider(LocalAgentDatabaseOverride provides agentDatabase.database) {
@@ -324,15 +335,38 @@ class UiShellTest {
             }
         }
         compose.waitUntil(10_000) {
-            compose.onAllNodesWithTag("today_task_synthetic-priority").fetchSemanticsNodes().isNotEmpty() &&
-                compose.onAllNodesWithTag("today_case_synthetic-open-case").fetchSemanticsNodes().isNotEmpty() &&
-                compose.onAllNodesWithTag("today_event_synthetic-upcoming-event").fetchSemanticsNodes().isNotEmpty()
+            compose.onAllNodesWithTag("today_task_$taskId").fetchSemanticsNodes().isNotEmpty() &&
+                compose.onAllNodesWithTag("today_case_$caseId").fetchSemanticsNodes().isNotEmpty() &&
+                compose.onAllNodesWithTag("today_event_$calendarId").fetchSemanticsNodes().isNotEmpty() &&
+                compose.onAllNodesWithTag("today_debt_$debtId").fetchSemanticsNodes().isNotEmpty()
         }
-        compose.onNodeWithTag("today_task_synthetic-priority").performScrollTo().assertIsDisplayed()
-        compose.onNodeWithTag("today_case_synthetic-open-case").performScrollTo().assertIsDisplayed()
-        compose.onNodeWithTag("today_event_synthetic-upcoming-event").performScrollTo().assertIsDisplayed()
+        compose.onNodeWithTag("today_conversation_entry").assertExists()
+        compose.onNodeWithTag("today_shared_voice_control").assertExists()
+        compose.onNodeWithTag("capture_voice").assertDoesNotExist()
+        compose.onNodeWithTag("today_task_$taskId").performScrollTo().assertIsDisplayed()
+        compose.onNodeWithTag("today_case_$caseId").performScrollTo().assertIsDisplayed()
+        compose.onNodeWithTag("today_event_$calendarId").performScrollTo().assertIsDisplayed()
+        compose.onNodeWithTag("today_debt_$debtId").performScrollTo().assertTextContains("315.00 AZN", substring = true)
         Assert.assertEquals(1, cases.openCaseCount(scope))
         screenshot("14-today-with-local-data")
+
+        compose.onNodeWithTag("today_debt_$debtId").performScrollTo().performClick()
+        compose.waitUntil(10_000) { compose.onAllNodesWithTag("finance_detail_header").fetchSemanticsNodes().isNotEmpty() }
+        compose.onNodeWithTag("finance_detail_direction").assertTextContains(
+            "Borc qeydi · gəlir deyil", substring = true)
+        compose.onNodeWithTag("back").performClick()
+        compose.waitUntil(10_000) { compose.onAllNodesWithTag("today_case_$caseId").fetchSemanticsNodes().isNotEmpty() }
+        compose.onNodeWithTag("today_case_$caseId").performScrollTo().performClick()
+        compose.waitUntil(10_000) { compose.onAllNodesWithTag("case_detail_header").fetchSemanticsNodes().isNotEmpty() }
+        compose.onNodeWithTag("case_action_complete").performScrollTo().performClick()
+        compose.waitUntil(10_000) {
+            kotlinx.coroutines.runBlocking { agentDatabase.database.protectedStoreDao().caseRecord(scope, caseId)?.status == "completed" }
+        }
+        compose.onNodeWithTag("back").performClick()
+        compose.waitUntil(10_000) { compose.onAllNodesWithTag("today_cases_metric").fetchSemanticsNodes().isNotEmpty() }
+        compose.onNodeWithTag("today_case_$caseId").assertDoesNotExist()
+        compose.onNodeWithTag("today_cases_metric").assertTextContains("0", substring = true)
+        Unit
     }
 
     @Test fun dailyAttentionIsVisibleButStartsOptedOut() {

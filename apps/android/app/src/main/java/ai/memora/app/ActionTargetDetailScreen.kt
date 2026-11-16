@@ -45,7 +45,19 @@ private sealed interface RelatedDetailState {
 
 /** Read-only, owner-scoped screen for the exact stable ID returned by a completed assistant action. */
 @Composable
-internal fun ActionTargetDetailScreen(route: AppRoute) {
+internal fun ActionTargetDetailScreen(route: AppRoute, onOpenTarget: (AppRoute) -> Unit = {}) {
+    when (route.targetKind) {
+        AppTargetKind.PERSON -> PersonTargetDetailScreen(route, onOpenTarget)
+        AppTargetKind.CASE -> CaseTargetDetailScreen(route, onOpenTarget)
+        AppTargetKind.FINANCE -> FinanceTargetDetailScreen(route, onOpenTarget)
+        AppTargetKind.TASK -> TaskTargetDetailScreen(route, onOpenTarget)
+        AppTargetKind.SOURCE -> SourceTargetDetailScreen(route, onOpenTarget)
+        else -> GenericActionTargetDetailScreen(route)
+    }
+}
+
+@Composable
+private fun GenericActionTargetDetailScreen(route: AppRoute) {
     val context = LocalContext.current
     val resources = LocalStrings.current
     val database = rememberUiAgentDatabase()
@@ -194,6 +206,10 @@ private suspend fun loadRelatedDetail(
                     listOf(R.string.action_related_status to it.status)) }
             }
         }
+        AppTargetKind.PERSON -> repository.domainObject(scope, id)?.takeIf {
+            it.kind == ai.memora.app.data.protectedstore.DomainKind.PERSON.name && it.deletedAt == null
+        }?.let { RelatedDetail(it.title, it.body, listOf(R.string.person_aliases to resources.getString(R.string.person_aliases))) }
+        AppTargetKind.SOURCE -> null
     }?.let(RelatedDetailState::Found)
 }
 

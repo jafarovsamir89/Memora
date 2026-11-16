@@ -705,6 +705,8 @@ internal interface ProtectedStoreDao {
     suspend fun taskPersonLinkById(scope: String, id: String): TaskPersonLinkRow?
     @androidx.room.Query("SELECT l.* FROM task_person_link l WHERE l.scopeId=:scope AND l.domainPersonId=:personId AND l.deletedAt IS NULL AND NOT EXISTS (SELECT 1 FROM deleted_task d WHERE d.taskId=l.taskId) ORDER BY l.createdAt, l.linkId")
     suspend fun activeTaskPersonLinks(scope: String, personId: String): List<TaskPersonLinkRow>
+    @androidx.room.Query("SELECT * FROM task_person_link WHERE scopeId=:scope AND taskId=:taskId AND deletedAt IS NULL AND NOT EXISTS (SELECT 1 FROM deleted_task d WHERE d.taskId=:taskId) ORDER BY createdAt, linkId")
+    suspend fun activeTaskPersonLinksForTask(scope: String, taskId: String): List<TaskPersonLinkRow>
     @androidx.room.Insert(onConflict = androidx.room.OnConflictStrategy.ABORT) suspend fun insertTaskPersonLink(row: TaskPersonLinkRow)
     @androidx.room.Query("UPDATE task_person_link SET version=:nextVersion, relation=:relation, updatedAt=:at, deletedAt=NULL WHERE scopeId=:scope AND linkId=:id AND version=:expected AND deletedAt IS NOT NULL")
     suspend fun restoreTaskPersonLink(scope: String, id: String, expected: Long, nextVersion: Long, relation: String, at: String): Int
@@ -762,6 +764,10 @@ internal interface ProtectedStoreDao {
     suspend fun unlinkCaseParticipant(scope: String, id: String, at: String): Int
     @androidx.room.Query("SELECT * FROM case_evidence WHERE scopeId=:scope AND caseId=:id AND deletedAt IS NULL ORDER BY occurredAt, evidenceId")
     suspend fun caseEvidence(scope: String, id: String): List<CaseEvidenceRow>
+    @androidx.room.Query("SELECT * FROM case_evidence WHERE scopeId=:scope AND evidenceId=:id AND deletedAt IS NULL")
+    suspend fun caseEvidenceById(scope: String, id: String): CaseEvidenceRow?
+    @androidx.room.Query("SELECT * FROM case_evidence WHERE scopeId=:scope AND sourceKind=:kind AND sourceId=:sourceId AND deletedAt IS NULL ORDER BY occurredAt, evidenceId")
+    suspend fun caseEvidenceForSource(scope: String, kind: String, sourceId: String): List<CaseEvidenceRow>
     @androidx.room.Query("SELECT * FROM case_evidence WHERE scopeId=:scope AND caseId=:caseId AND sourceKind=:kind AND sourceId=:sourceId")
     suspend fun caseEvidence(scope: String, caseId: String, kind: String, sourceId: String): CaseEvidenceRow?
     @androidx.room.Insert(onConflict = androidx.room.OnConflictStrategy.ABORT) suspend fun insertCaseEvidence(row: CaseEvidenceRow)
@@ -784,6 +790,8 @@ internal interface ProtectedStoreDao {
     suspend fun putActionResults(rows: List<AgentActionResultRow>)
     @androidx.room.Query("SELECT * FROM agent_action_result WHERE scopeId=:scope AND turnId=:turn ORDER BY createdAtMillis, resultId")
     suspend fun actionResultsForTurn(scope: String, turn: String): List<AgentActionResultRow>
+    @androidx.room.Query("SELECT * FROM agent_action_result WHERE scopeId=:scope AND targetKind=:kind AND targetId=:targetId ORDER BY createdAtMillis DESC, resultId LIMIT :limit")
+    suspend fun actionResultsForTarget(scope: String, kind: String, targetId: String, limit: Int): List<AgentActionResultRow>
     @androidx.room.Query("SELECT * FROM agent_action_result WHERE scopeId=:scope AND turnId IN (:turnIds) ORDER BY createdAtMillis, resultId")
     suspend fun actionResultsForTurns(scope: String, turnIds: List<String>): List<AgentActionResultRow>
     @androidx.room.Query("DELETE FROM agent_action_result WHERE scopeId=:scope AND turnId=:turn")

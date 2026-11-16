@@ -23,6 +23,7 @@ import ai.memora.app.data.protectedstore.ProfileFactEvidence
 import ai.memora.app.data.protectedstore.DomainHit
 import ai.memora.app.data.protectedstore.DomainKind
 import ai.memora.app.data.protectedstore.DomainObjectRow
+import ai.memora.app.data.protectedstore.MoneyEventRow
 import ai.memora.app.data.protectedstore.ProtectedCaseRepository
 import ai.memora.app.data.protectedstore.ProtectedConversationRepository
 import ai.memora.app.data.protectedstore.ProtectedDomainRepository
@@ -34,6 +35,7 @@ import ai.memora.app.reminders.AttentionKind
 import ai.memora.app.reminders.AttentionSuggestion
 import ai.memora.app.ui.*
 import ai.memora.app.voice.AgentVoiceTurnProcessor
+import ai.memora.app.voice.VoiceFirstScreen
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import java.time.LocalDate
@@ -43,36 +45,48 @@ import java.util.Date
 import java.util.Locale
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import java.math.BigDecimal
+import java.text.NumberFormat
 
 private data class ProfileFactSourceDisplay(val message: String, val exactQuote: String?)
+private data class TodayDebtObligation(val event: MoneyEventRow, val personName: String?, val remainingMinor: Long)
 
 @Composable
-fun WorkingHomeScreen(language: String, state: CaptureSessionState, navigate: (String) -> Unit,
-    capture: (Boolean) -> Unit, detail: (String) -> Unit, taskStore: EncryptedTaskStore? = null,
-    voiceContent: @Composable () -> Unit) {
+internal fun WorkingHomeScreen(language: String, state: CaptureSessionState, navigate: (String) -> Unit,
+    detail: (String) -> Unit, taskStore: EncryptedTaskStore? = null,
+    onOpenTarget: (AppRoute) -> Unit = {}) {
     val context = LocalContext.current
     val database = rememberOptionalUiAgentDatabase()
-    val processor = remember(context) { AgentVoiceTurnProcessor(context) }
+    val processor = remember(context, database) {
+        AgentVoiceTurnProcessor(context, database)
+    }
     val scopeId = remember(processor) { processor.conversationScopeId() }
     val caseRepository = remember(database) { database?.let(::ProtectedCaseRepository) }
     val domainRepository = remember(database) { database?.let(::ProtectedDomainRepository) }
     var dueTasks by remember { mutableStateOf<List<ai.memora.app.domain.Task>>(emptyList()) }
     var openCaseCount by remember { mutableIntStateOf(0) }
     var upcomingEvents by remember { mutableStateOf<List<ai.memora.app.data.protectedstore.LocalCalendarEventRow>>(emptyList()) }
+    var debtObligations by remember { mutableStateOf<List<TodayDebtObligation>>(emptyList()) }
     var attentionSuggestions by remember { mutableStateOf<List<AttentionSuggestion>>(emptyList()) }
     var overviewLoading by remember { mutableStateOf(true) }
     var overviewError by remember { mutableStateOf(false) }
-    LaunchedEffect(scopeId, taskStore, database) {
+    var overviewVersion by remember { mutableIntStateOf(0) }
+    var dateZone by remember { mutableStateOf(ZoneId.systemDefault()) }
+    LaunchedEffect(scopeId, taskStore, database, overviewVersion) {
         overviewLoading = true
         overviewError = false
         try {
-            val deviceZone = ZoneId.systemDefault()
+            val memory = database ?: error("protected_overview_unavailable")
+            val deviceZone = withContext(Dispatchers.IO) {
+                runCatching { ZoneId.of(memory.protectedStoreDao().localProfile()?.timeZoneId ?: "Asia/Baku") }
+                    .getOrDefault(ZoneId.of("Asia/Baku"))
+            }
+            dateZone = deviceZone
             val today = LocalDate.now(deviceZone)
             val through = today.plusDays(7)
             val taskRead = taskStore?.let { withContext(Dispatchers.IO) { it.load() } }
             if (taskRead == null || taskRead == StoreRead.Unavailable) overviewError = true
             val legacyTasks = (taskRead as? StoreRead.Ready)?.tasks.orEmpty()
-            val memory = database ?: error("protected_overview_unavailable")
             val protectedTasks = withContext(Dispatchers.IO) {
                 ProtectedMemoryRepository(memory).tasks().tasks.filter { it.scopeId == scopeId }
             }
@@ -86,6 +100,18 @@ fun WorkingHomeScreen(language: String, state: CaptureSessionState, navigate: (S
             val domains = domainRepository ?: error("protected_overview_unavailable")
             openCaseCount = cases.openCaseCount(scopeId)
             upcomingEvents = domains.calendarBetween(scopeId, today.atStartOfDay().toString(), today.plusDays(8).atStartOfDay().toString())
+            debtObligations = withContext(Dispatchers.IO) {
+                val finance = ProtectedDomainRepository(memory)
+                val dao = memory.protectedStoreDao()
+                buildList {
+                    finance.allFinanceEvents(scopeId).filter { it.kind == "debt" }.forEach { event ->
+                        if (finance.isFinanceEventVoided(scopeId, event.eventId)) return@forEach
+                        val remaining = finance.outstandingDebtMinor(scopeId, event.eventId)
+                        if (remaining <= 0L) return@forEach
+                        add(TodayDebtObligation(event, dao.person(scopeId, event.personId)?.displayName, remaining))
+                    }
+                }.sortedByDescending { it.event.occurredAt ?: it.event.recordedAt }.take(20)
+            }
             val attentionCases = cases.openCases(scopeId, limit = 100)
             attentionSuggestions = AttentionEngine.suggest(scopeId, mergedTasks, attentionCases, upcomingEvents,
                 System.currentTimeMillis(), deviceZone, limit = 3)
@@ -96,15 +122,25 @@ fun WorkingHomeScreen(language: String, state: CaptureSessionState, navigate: (S
         }
     }
     ScreenColumn {
-        Text(LocalDate.now(ZoneId.systemDefault()).format(DateTimeFormatter.ofPattern("EEEE, d MMMM", Locale.forLanguageTag(language))),
+        Text(LocalDate.now(dateZone).format(DateTimeFormatter.ofPattern("EEEE, d MMMM", Locale.forLanguageTag(language))),
             style = MaterialTheme.typography.labelSmall, color = colors.muted)
         ScreenHeading(s(R.string.home_title), s(R.string.working_home_hint))
-        MemoraCard(tint = colors.hero) {
-            Text(s(R.string.home_hero_title), style = MaterialTheme.typography.titleLarge)
-            Text(s(R.string.working_capture_hint))
-            voiceContent()
-            Button(onClick = { capture(true) }, modifier = Modifier.fillMaxWidth().testTag("capture_voice")) { Text(s(R.string.tell)) }
-            OutlinedButton(onClick = { capture(false) }, modifier = Modifier.fillMaxWidth().testTag("capture_text")) { Text(s(R.string.write)) }
+        MemoraCard(tint = colors.hero, contentPadding = 14.dp, modifier = Modifier.testTag("today_conversation_entry")) {
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp),
+                verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
+                Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                    Text(s(R.string.home_hero_title), style = MaterialTheme.typography.titleMedium, color = colors.ink)
+                    Text(s(R.string.secretary_voice_hint), style = MaterialTheme.typography.bodySmall, color = colors.muted)
+                }
+                VoiceFirstScreen(
+                    compact = true,
+                    processorOverride = processor,
+                    onOpenSettings = { navigate("settings") },
+                    onShortTap = { navigate("chat") },
+                    onTurnSettled = { overviewVersion++ },
+                    modifier = Modifier.testTag("today_shared_voice_control"),
+                )
+            }
         }
         SectionHeading(s(R.string.today_priorities))
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -115,18 +151,41 @@ fun WorkingHomeScreen(language: String, state: CaptureSessionState, navigate: (S
         if (overviewLoading) Text(s(R.string.today_loading), color = colors.muted, modifier = Modifier.testTag("today_loading"))
         if (overviewError) Text(s(R.string.today_partial_error), color = MaterialTheme.colorScheme.error,
             modifier = Modifier.testTag("today_data_error"))
-        if (!overviewLoading && !overviewError && dueTasks.isEmpty() && openCaseCount == 0 && upcomingEvents.isEmpty()) {
+        if (debtObligations.isNotEmpty()) {
+            SectionHeading(s(R.string.today_financial_obligations), { navigate("finance") })
+            debtObligations.take(5).forEach { item ->
+                val route = AppRoute.target(AppTargetKind.FINANCE, item.event.eventId)
+                MemoraCard(
+                    onClick = { if (route != null) onOpenTarget(route) else navigate("finance") },
+                    modifier = Modifier.testTag("today_debt_${item.event.eventId}"),
+                ) {
+                    Text(item.personName ?: s(R.string.finance_direction_debt), color = colors.ink,
+                        style = MaterialTheme.typography.titleSmall)
+                    Text("${s(R.string.finance_debt_remaining)}: ${todayMoney(item.remainingMinor, item.event.currency)}",
+                        color = colors.accent, style = MaterialTheme.typography.titleMedium)
+                }
+            }
+            if (debtObligations.size > 5) TextButton(onClick = { navigate("finance") },
+                modifier = Modifier.fillMaxWidth().testTag("today_debts_open_all")) { Text(s(R.string.finance)) }
+        }
+        if (!overviewLoading && !overviewError && dueTasks.isEmpty() && openCaseCount == 0 && upcomingEvents.isEmpty() && debtObligations.isEmpty()) {
             EmptyState(s(R.string.today_clear_title), s(R.string.today_clear_body), Glyph.Calendar)
         }
         if (attentionSuggestions.isNotEmpty()) {
             SectionHeading(s(R.string.today_attention_suggestions))
             attentionSuggestions.forEach { suggestion ->
-                val (label, route, tag) = when (suggestion.kind) {
-                    AttentionKind.TASK -> Triple(R.string.today_due_tasks, "tasks", "today_task_${suggestion.sourceId}")
-                    AttentionKind.CASE -> Triple(R.string.today_open_cases, "cases", "today_case_${suggestion.sourceId}")
-                    AttentionKind.CALENDAR -> Triple(R.string.today_upcoming, "calendar", "today_event_${suggestion.sourceId}")
+                val (label, section, targetKind) = when (suggestion.kind) {
+                    AttentionKind.TASK -> Triple(R.string.today_due_tasks, "tasks", AppTargetKind.TASK)
+                    AttentionKind.CASE -> Triple(R.string.today_open_cases, "cases", AppTargetKind.CASE)
+                    AttentionKind.CALENDAR -> Triple(R.string.today_upcoming, "calendar", AppTargetKind.CALENDAR)
                 }
-                MemoraCard(onClick = { navigate(route) }, modifier = Modifier.testTag(tag)) {
+                val tag = when (suggestion.kind) {
+                    AttentionKind.TASK -> "today_task_${suggestion.sourceId}"
+                    AttentionKind.CASE -> "today_case_${suggestion.sourceId}"
+                    AttentionKind.CALENDAR -> "today_event_${suggestion.sourceId}"
+                }
+                val target = AppRoute.target(targetKind, suggestion.sourceId)
+                MemoraCard(onClick = { if (target != null) onOpenTarget(target) else navigate(section) }, modifier = Modifier.testTag(tag)) {
                     Text(s(label), style = MaterialTheme.typography.labelSmall, color = colors.accent)
                     Text(suggestion.title, style = MaterialTheme.typography.titleMedium, color = colors.ink)
                     suggestion.sourceLocalTime?.let { Text(it.replace('T', ' '), style = MaterialTheme.typography.bodySmall, color = colors.muted) }
@@ -134,8 +193,6 @@ fun WorkingHomeScreen(language: String, state: CaptureSessionState, navigate: (S
                 }
             }
         }
-        OutlinedButton(onClick = { navigate("chat") }, modifier = Modifier.fillMaxWidth().testTag("open_chat")) { Text(s(R.string.ask_memory)) }
-        OutlinedButton(onClick = { navigate("tasks") }, modifier = Modifier.fillMaxWidth()) { Text(s(R.string.tasks_title)) }
         SectionHeading(s(R.string.recent), { navigate("memory") })
         MemoryLoadState(state)
         if (state.ready && state.captures.none { !it.archived }) EmptyState(s(R.string.working_memory_empty), s(R.string.working_capture_hint))
@@ -147,9 +204,16 @@ fun WorkingHomeScreen(language: String, state: CaptureSessionState, navigate: (S
 private fun TodayMetricCard(count: Int, label: Int, modifier: Modifier = Modifier, onClick: () -> Unit) {
     MemoraCard(tint = colors.softAccent, modifier = modifier.heightIn(min = 76.dp), onClick = onClick, contentPadding = 12.dp) {
         Text(count.toString(), style = MaterialTheme.typography.titleLarge, color = colors.accent)
-        Text(s(label), style = MaterialTheme.typography.labelSmall, color = colors.muted, maxLines = 2,
-            overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis)
+        Text(s(label), style = MaterialTheme.typography.labelSmall, color = colors.muted, maxLines = 2)
     }
+}
+
+private fun todayMoney(minorUnits: Long, currency: String): String {
+    val amount = NumberFormat.getNumberInstance(Locale.getDefault()).apply {
+        minimumFractionDigits = 2
+        maximumFractionDigits = 2
+    }.format(BigDecimal.valueOf(minorUnits, 2))
+    return "$amount $currency"
 }
 
 @Composable

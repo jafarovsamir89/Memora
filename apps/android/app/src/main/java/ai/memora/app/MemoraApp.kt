@@ -17,7 +17,6 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import ai.memora.app.ui.*
-import ai.memora.app.voice.VoiceFirstScreen
 import ai.memora.app.voice.VoiceMemoryScreen
 import ai.memora.app.data.protectedstore.DomainKind
 import ai.memora.app.data.EncryptedTaskStore
@@ -204,7 +203,14 @@ fun MemoraApp(initialRoute: String = "home", initialTheme: String = "system", ca
                 AppDestination.TABLES -> R.string.tables_title
                 AppDestination.PORTABLE_BACKUP -> R.string.backup_title
                 AppDestination.LICENSES -> R.string.open_source_licenses
-                AppDestination.ACTION_TARGET -> R.string.action_related_details
+                AppDestination.ACTION_TARGET -> when (route.targetKind) {
+                    AppTargetKind.PERSON -> R.string.people
+                    AppTargetKind.CASE -> R.string.cases
+                    AppTargetKind.FINANCE -> R.string.finance
+                    AppTargetKind.TASK -> R.string.tasks_title
+                    AppTargetKind.SOURCE -> R.string.entity_source_turn
+                    else -> R.string.action_related_details
+                }
                 AppDestination.TODAY -> R.string.app_name
             }
 
@@ -234,9 +240,9 @@ fun MemoraApp(initialRoute: String = "home", initialTheme: String = "system", ca
                     Box(Modifier.widthIn(max = 720.dp).fillMaxSize()) {
                       screens.SaveableStateProvider(route.stateKey) {
                         when (route.destination) {
-                            AppDestination.TODAY -> WorkingHomeScreen(language, captureState, navigate, openCapture, { detailId = it }, taskStore) {
-                                VoiceFirstScreen(onOpenSettings = { navigate("settings") }, onShortTap = { navigate("chat") })
-                            }
+                            AppDestination.TODAY -> WorkingHomeScreen(
+                                language, captureState, navigate, { detailId = it }, taskStore, onOpenTarget = navigateRoute,
+                            )
                             AppDestination.MEMORY -> WorkingMemoryScreen(captureState, { detailId = it }, { openCapture(false) }, { navigate("inbox") },
                                 localProfile = profile.profile, updateLocalProfile = { input, done ->
                                     profileModel.updateProfile(input) { saved ->
@@ -264,8 +270,8 @@ fun MemoraApp(initialRoute: String = "home", initialTheme: String = "system", ca
                                 { entry -> captureModel.session.delete(entry.source.id, entry.source.revisions.last().id) })
                             AppDestination.FINANCE -> FinanceScreen()
                             AppDestination.CALENDAR -> CalendarScreen()
-                            AppDestination.PEOPLE -> SavedObjectsScreen(DomainKind.PERSON)
-                            AppDestination.CASES -> CasesScreen { navigate("chat") }
+                            AppDestination.PEOPLE -> SavedObjectsScreen(DomainKind.PERSON, navigateRoute)
+                            AppDestination.CASES -> CasesScreen(onOpenSecretary = { navigate("chat") }, onOpenTarget = navigateRoute)
                             AppDestination.PROJECTS -> SavedObjectsScreen(DomainKind.PROJECT)
                             AppDestination.SETTINGS -> SettingsScreen(theme, { appearanceModel.change(theme = it) }, language, {
                                 appearanceModel.change(language = it)
@@ -274,7 +280,7 @@ fun MemoraApp(initialRoute: String = "home", initialTheme: String = "system", ca
                             AppDestination.SECRETARY -> AgentChatScreen(language, showVoiceControl = true, onOpenArea = navigate,
                                 onOpenTarget = navigateRoute,
                                 textTurnOverride = textTurnOverride, textTurnProgressOverride = textTurnProgressOverride)
-                            AppDestination.ACTION_TARGET -> ActionTargetDetailScreen(route)
+                            AppDestination.ACTION_TARGET -> ActionTargetDetailScreen(route, navigateRoute)
                         }
                       }
                     }
