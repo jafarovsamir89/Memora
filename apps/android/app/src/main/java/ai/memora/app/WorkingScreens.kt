@@ -4,6 +4,10 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -50,6 +54,7 @@ import java.text.NumberFormat
 
 private data class ProfileFactSourceDisplay(val message: String, val exactQuote: String?)
 private data class TodayDebtObligation(val event: MoneyEventRow, val personName: String?, val remainingMinor: Long)
+private const val MEMORY_DOMAIN_PAGE_SIZE = 30
 
 @Composable
 internal fun WorkingHomeScreen(language: String, state: CaptureSessionState, navigate: (String) -> Unit,
@@ -234,7 +239,8 @@ fun StoredMemoryCard(entry: CaptureEntry, onClick: () -> Unit) {
 @Composable
 internal fun WorkingMemoryScreen(state: CaptureSessionState, detail: (String) -> Unit, capture: () -> Unit, manage: () -> Unit,
     localProfile: LocalProfileRow? = null,
-    updateLocalProfile: ((LocalProfileInput, (Boolean) -> Unit) -> Unit)? = null) {
+    updateLocalProfile: ((LocalProfileInput, (Boolean) -> Unit) -> Unit)? = null,
+    onOpenTarget: (AppRoute) -> Unit = {}) {
     var query by rememberSaveable { mutableStateOf("") }
     var includeArchived by rememberSaveable { mutableStateOf(false) }
     val matches = LocalMemoryIndex.search(state.captures, query, includeArchived)
@@ -249,6 +255,8 @@ internal fun WorkingMemoryScreen(state: CaptureSessionState, detail: (String) ->
     var conversationTurns by remember { mutableStateOf<List<ConversationTurnEvidence>>(emptyList()) }
     var conversationEpisodes by remember { mutableStateOf<List<ConversationEpisodeEvidence>>(emptyList()) }
     var domainFacts by remember { mutableStateOf<List<MemoryDomainFact>>(emptyList()) }
+    var domainNextOffsets by remember { mutableStateOf<Map<DomainKind, Int>>(emptyMap()) }
+    var domainPageLoadingKinds by remember { mutableStateOf<Set<DomainKind>>(emptySet()) }
     var profileFacts by remember { mutableStateOf<List<ProfileFactEvidence>>(emptyList()) }
     var archiveReady by remember { mutableStateOf(false) }
     var archiveLoading by remember { mutableStateOf(false) }
@@ -276,6 +284,9 @@ internal fun WorkingMemoryScreen(state: CaptureSessionState, detail: (String) ->
     var showLocalProfileEditor by remember { mutableStateOf(false) }
     var localProfileSaveError by remember { mutableStateOf(false) }
     var localProfileSaving by remember { mutableStateOf(false) }
+    var selectedFilterName by rememberSaveable { mutableStateOf(MemoryScreenFilter.ALL.name) }
+    val selectedFilter = MemoryScreenFilter.entries.firstOrNull { it.name == selectedFilterName } ?: MemoryScreenFilter.ALL
+    val listState = rememberLazyListState()
 
     LaunchedEffect(scopeId) {
         try {
@@ -293,6 +304,8 @@ internal fun WorkingMemoryScreen(state: CaptureSessionState, detail: (String) ->
         val queryGeneration = conversationQueryGeneration
         conversationTurns = emptyList()
         conversationNextCursor = null
+        domainNextOffsets = emptyMap()
+        domainPageLoadingKinds = emptySet()
         archiveLoading = true
         delay(250)
         try {
@@ -304,11 +317,20 @@ internal fun WorkingMemoryScreen(state: CaptureSessionState, detail: (String) ->
             conversationNextCursor = conversationPage.nextBeforeSequence
             conversationEpisodes = conversations.searchEpisodes(scopeId, query.trim(), limit = 30)
             domainFacts = if (query.isBlank()) {
-                DomainKind.entries.flatMap { kind -> domain.domainObjects(scopeId, kind, 12).map(::MemoryDomainFact) }
+                val firstPages = mutableListOf<MemoryDomainFact>()
+                val nextOffsets = mutableMapOf<DomainKind, Int>()
+                DomainKind.entries.forEach { kind ->
+                    val page = domain.domainObjectsPage(scopeId, kind, MEMORY_DOMAIN_PAGE_SIZE + 1, 0)
+                    if (queryGeneration != conversationQueryGeneration) return@LaunchedEffect
+                    firstPages += page.take(MEMORY_DOMAIN_PAGE_SIZE).map(::MemoryDomainFact)
+                    if (page.size > MEMORY_DOMAIN_PAGE_SIZE) nextOffsets[kind] = MEMORY_DOMAIN_PAGE_SIZE
+                }
+                domainNextOffsets = nextOffsets
+                firstPages
             } else {
                 domain.search(scopeId, query.trim(), limit = 30).map(::MemoryDomainFact)
             }
-            profileFacts = profileMemoryRepository?.list(scopeId, query.trim(), limit = 30).orEmpty()
+            profileFacts = profileMemoryRepository?.list(scopeId, query.trim(), limit = 200).orEmpty()
             archiveError = false
         } catch (_: Exception) {
             archiveError = true
@@ -339,6 +361,33 @@ internal fun WorkingMemoryScreen(state: CaptureSessionState, detail: (String) ->
                 }
             } finally {
                 conversationPageLoading = false
+            }
+        }
+    }
+
+    fun loadMoreDomainObjects(kind: DomainKind) {
+        val offset = domainNextOffsets[kind] ?: return
+        if (kind in domainPageLoadingKinds || query.isNotBlank()) return
+        val requestedQuery = query.trim()
+        val requestedRefresh = refreshVersion
+        val requestedGeneration = conversationQueryGeneration
+        domainPageLoadingKinds = domainPageLoadingKinds + kind
+        coroutineScope.launch {
+            try {
+                val domain = domainRepository ?: error("protected_memory_unavailable")
+                val page = domain.domainObjectsPage(scopeId, kind, MEMORY_DOMAIN_PAGE_SIZE + 1, offset)
+                if (requestedGeneration != conversationQueryGeneration || requestedQuery != query.trim() ||
+                    requestedRefresh != refreshVersion) return@launch
+                val visible = page.take(MEMORY_DOMAIN_PAGE_SIZE).map(::MemoryDomainFact)
+                domainFacts = (domainFacts + visible).distinctBy { it.id }
+                domainNextOffsets = if (page.size > MEMORY_DOMAIN_PAGE_SIZE) {
+                    domainNextOffsets + (kind to (offset + visible.size))
+                } else domainNextOffsets - kind
+            } catch (_: Exception) {
+                if (requestedGeneration == conversationQueryGeneration && requestedQuery == query.trim() &&
+                    requestedRefresh == refreshVersion) archiveError = true
+            } finally {
+                domainPageLoadingKinds = domainPageLoadingKinds - kind
             }
         }
     }
@@ -613,91 +662,233 @@ internal fun WorkingMemoryScreen(state: CaptureSessionState, detail: (String) ->
         dismissButton = { TextButton(onClick = { pendingDeleteProfileFact = null }) { Text(s(R.string.task_cancel)) } },
     ) }
 
-    ScreenColumn {
-        ScreenHeading(s(R.string.memory_title), s(R.string.memory_unified_hint))
-        if (localProfile != null) OutlinedButton(onClick = { showLocalProfileEditor = true },
-            modifier = Modifier.fillMaxWidth().testTag("profile_preferences")) { Text(s(R.string.profile_preferences_title)) }
-        OutlinedTextField(query, { query = it.take(200) }, modifier = Modifier.fillMaxWidth().testTag("memory_search"),
-            label = { Text(s(R.string.memory_unified_search)) }, singleLine = true)
-        Text(s(R.string.memory_archive_notice), style = MaterialTheme.typography.bodySmall, color = colors.muted)
-        OutlinedButton(onClick = { showRetention = true }, enabled = conversationRepository != null,
-            modifier = Modifier.fillMaxWidth().testTag("memory_retention")) {
-            Text(LocalStrings.current.getString(R.string.memory_retention_current, s(memoryRetentionLabel(retentionDays))))
-        }
-        FilterChip(selected = includeArchived, onClick = { includeArchived = !includeArchived },
-            label = { Text(s(R.string.inbox_archived)) }, modifier = Modifier.testTag("memory_include_archived"))
-        SectionHeading(s(R.string.profile_memory_title))
-        Text(s(R.string.profile_memory_hint), style = MaterialTheme.typography.bodySmall, color = colors.muted)
-        OutlinedButton(onClick = {
-            creatingProfileFact = true
-            editingProfileFact = null
-            profileFactSaveError = false
-        }, modifier = Modifier.fillMaxWidth().testTag("profile_fact_add")) { Text(s(R.string.profile_memory_add)) }
-        if (archiveReady && !archiveLoading && !archiveError && profileFacts.isEmpty())
-            Text(s(R.string.profile_memory_empty), color = colors.muted)
-        profileFacts.forEachIndexed { index, fact ->
-            MemoraCard(onClick = { openProfileFact(fact) }, modifier = Modifier.testTag("profile_fact_$index")) {
-                Text(fact.fact, color = colors.ink, style = MaterialTheme.typography.bodyLarge)
-                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                    Text(s(profileFactCategoryLabel(fact.category)), style = MaterialTheme.typography.labelSmall, color = colors.accent)
-                    Text(LocalStrings.current.getString(R.string.profile_memory_sources_count, fact.sourceTurnIds.size),
-                        style = MaterialTheme.typography.labelSmall, color = colors.muted)
-                }
-                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
-                    TextButton(onClick = { editingProfileFact = fact }, modifier = Modifier.testTag("profile_fact_edit_$index")) {
-                        Text(s(R.string.profile_memory_edit))
-                    }
-                    TextButton(onClick = { pendingDeleteProfileFact = fact }, modifier = Modifier.testTag("profile_fact_forget_$index")) {
-                        Text(s(R.string.profile_memory_forget))
-                    }
+    LaunchedEffect(selectedFilterName, query) { listState.scrollToItem(0) }
+
+    val showAll = selectedFilter == MemoryScreenFilter.ALL
+    val showConversations = showAll || selectedFilter == MemoryScreenFilter.CONVERSATIONS
+    val showProfileFacts = showAll || selectedFilter == MemoryScreenFilter.FACTS
+    val showSources = showAll || selectedFilter == MemoryScreenFilter.SOURCES
+    val people = domainFacts.filter { it.kindLabel == R.string.people }
+    val projects = domainFacts.filter { it.kindLabel == R.string.projects }
+    val notes = domainFacts.filter { it.kindLabel == R.string.notes_title }
+    val domainGroups = listOf(
+        Triple(MemoryScreenFilter.PEOPLE, people, s(R.string.people)),
+        Triple(MemoryScreenFilter.PROJECTS, projects, s(R.string.projects)),
+        Triple(MemoryScreenFilter.NOTES, notes, s(R.string.memory_saved_sources)),
+    )
+    val hasAnyResult = matches.isNotEmpty() || domainFacts.isNotEmpty() || profileFacts.isNotEmpty() ||
+        conversationEpisodes.isNotEmpty() || conversationTurns.isNotEmpty()
+    val showAllEmpty = showAll && query.isBlank() && state.ready && archiveReady && !archiveLoading && !archiveError && !hasAnyResult
+
+    Column(Modifier.fillMaxSize()) {
+        Column(
+            Modifier.fillMaxWidth().padding(horizontal = 20.dp).padding(top = 10.dp, bottom = 8.dp),
+            verticalArrangement = Arrangement.spacedBy(10.dp),
+        ) {
+            Row(verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
+                Column(Modifier.weight(1f)) {
+                    Text(s(R.string.memory_unified_hint), style = MaterialTheme.typography.bodySmall,
+                        color = colors.muted, maxLines = 3)
                 }
             }
-        }
-        MemoryLoadState(state)
-        SectionHeading(s(R.string.memory_saved_sources))
-        if (state.ready && matches.isEmpty() && domainFacts.isEmpty()) Text(s(R.string.memory_no_saved_sources), color = colors.muted)
-        matches.forEach { match -> StoredMemoryCard(match.entry) { detail(match.entry.source.id) } }
-        domainFacts.forEach { fact ->
-            MemoraCard(onClick = { selectedFact = fact }, modifier = Modifier.testTag("memory_domain_${fact.id}")) {
-                Text(fact.title, color = colors.ink, style = MaterialTheme.typography.titleMedium)
-                fact.body?.takeIf(String::isNotBlank)?.let { Text(it.take(260) + if (it.length > 260) "…" else "", color = colors.muted) }
-                Text(s(fact.kindLabel), style = MaterialTheme.typography.labelSmall, color = colors.accent)
-            }
-        }
-        SectionHeading(s(R.string.memory_conversation_archive))
-        if (archiveLoading) Text(s(R.string.capture_loading), color = colors.muted)
-        if (archiveError) Text(s(R.string.memory_archive_error), color = MaterialTheme.colorScheme.error, modifier = Modifier.testTag("memory_archive_error"))
-        SectionHeading(s(R.string.memory_episodes))
-        if (archiveReady && !archiveLoading && !archiveError && conversationEpisodes.isEmpty()) Text(s(R.string.memory_no_episodes), color = colors.muted)
-        conversationEpisodes.forEachIndexed { index, episode ->
-            MemoraCard(onClick = { selectedEpisode = episode }, modifier = Modifier.testTag("memory_episode_$index")) {
-                Text(episode.title, color = colors.ink, style = MaterialTheme.typography.titleMedium)
-                Text(episode.summary.take(360) + if (episode.summary.length > 360) "…" else "", color = colors.muted)
-                Text(LocalStrings.current.getString(R.string.memory_episode_sources_count, episode.sourceTurnIds.size),
-                    style = MaterialTheme.typography.labelSmall, color = colors.accent)
-                Text(DateFormatters.memoryDate(episode.updatedAtMillis), style = MaterialTheme.typography.bodySmall, color = colors.muted)
-            }
-        }
-        if (archiveReady && !archiveLoading && !archiveError && conversationTurns.isEmpty()) Text(s(R.string.memory_no_conversation_results), color = colors.muted)
-        conversationTurns.forEach { turn ->
-            MemoraCard(onClick = { selectedTurn = turn }, modifier = Modifier.testTag("memory_turn_${turn.turnId}")) {
-                Text(turn.matchedSnippet ?: turn.userMessage.take(280), color = colors.ink, style = MaterialTheme.typography.bodyLarge)
-                Text(DateFormatters.memoryDate(turn.createdAtMillis), style = MaterialTheme.typography.bodySmall, color = colors.muted)
-                Text(s(R.string.memory_open_dialogue), style = MaterialTheme.typography.labelSmall, color = colors.accent)
-            }
-        }
-        if (conversationNextCursor != null) {
-            OutlinedButton(
-                onClick = ::loadMoreConversationTurns,
-                enabled = !conversationPageLoading,
-                modifier = Modifier.fillMaxWidth().testTag("memory_conversation_load_more"),
+            OutlinedTextField(
+                value = query,
+                onValueChange = { query = it.take(200) },
+                modifier = Modifier.fillMaxWidth().testTag("memory_search"),
+                label = { Text(s(R.string.memory_unified_search)) },
+                leadingIcon = { Icon(Glyph.Search, null, tint = colors.muted) },
+                trailingIcon = if (query.isNotEmpty()) ({
+                    IconButton(onClick = { query = "" }, modifier = Modifier.testTag("memory_search_clear")) {
+                        Icon(Glyph.Close, s(R.string.close), tint = colors.muted)
+                    }
+                }) else null,
+                singleLine = true,
+            )
+            androidx.compose.foundation.layout.FlowRow(
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalArrangement = Arrangement.spacedBy(4.dp),
             ) {
-                Text(if (conversationPageLoading) s(R.string.capture_loading) else s(R.string.memory_conversation_load_more))
+                MemoryScreenFilter.entries.forEach { filter ->
+                    FilterChip(
+                        selected = selectedFilter == filter,
+                        onClick = { selectedFilterName = filter.name },
+                        label = { Text(s(filter.label), maxLines = 1) },
+                        modifier = Modifier.testTag("memory_filter_${filter.name.lowercase(Locale.ROOT)}"),
+                    )
+                }
+            }
+            if (selectedFilter == MemoryScreenFilter.ALL || showSources) {
+                FilterChip(selected = includeArchived, onClick = { includeArchived = !includeArchived },
+                    label = { Text(s(R.string.inbox_archived)) }, modifier = Modifier.testTag("memory_include_archived"))
             }
         }
-        OutlinedButton(onClick = manage, modifier = Modifier.fillMaxWidth().testTag("memory_manage")) { Text(s(R.string.working_manage)) }
-        Button(onClick = capture, modifier = Modifier.fillMaxWidth().testTag("capture_text")) { Text(s(R.string.new_memory)) }
+
+        LazyColumn(
+            state = listState,
+            modifier = Modifier.weight(1f).fillMaxWidth().padding(horizontal = 20.dp).testTag("memory_content_list"),
+            contentPadding = PaddingValues(top = 8.dp, bottom = 20.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp),
+        ) {
+            item(key = "memory_new_action") {
+                OutlinedButton(onClick = capture, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)
+                    .testTag("capture_text")) {
+                    Icon(Glyph.Plus, null, Modifier.size(18.dp))
+                    Spacer(Modifier.width(8.dp))
+                    Text(s(R.string.new_memory))
+                }
+            }
+            item(key = "memory_status") {
+                MemoryLoadState(state)
+                if (archiveLoading) LinearProgressIndicator(Modifier.fillMaxWidth().testTag("memory_archive_loading"))
+                if (archiveError) Text(s(R.string.memory_archive_error), color = MaterialTheme.colorScheme.error,
+                    modifier = Modifier.testTag("memory_archive_error"))
+                if (selectedFilter == MemoryScreenFilter.CONVERSATIONS) {
+                    MemoraCard(tint = colors.softAccent, contentPadding = 14.dp) {
+                        Text(s(R.string.memory_archive_notice), style = MaterialTheme.typography.bodySmall, color = colors.muted)
+                    }
+                }
+                if (query.isNotBlank() && archiveReady && !archiveLoading && !archiveError && !hasAnyResult) {
+                    EmptyState(s(R.string.memory_filter_empty), s(R.string.memory_unified_hint), Glyph.Search,
+                        testTag = "memory_no_results")
+                }
+                if (showAllEmpty) EmptyState(s(R.string.memory_no_saved_sources), s(R.string.memory_unified_hint), Glyph.Memory,
+                    testTag = "memory_library_empty")
+            }
+
+            if (!showAllEmpty && showProfileFacts && (profileFacts.isNotEmpty() || (query.isBlank() && selectedFilter == MemoryScreenFilter.ALL) ||
+                    selectedFilter == MemoryScreenFilter.FACTS)) {
+                item(key = "memory_profile_heading") {
+                    SectionHeading(s(R.string.profile_memory_title))
+                    Text(s(R.string.profile_memory_hint), style = MaterialTheme.typography.bodySmall, color = colors.muted)
+                    OutlinedButton(onClick = {
+                        creatingProfileFact = true
+                        editingProfileFact = null
+                        profileFactSaveError = false
+                    }, modifier = Modifier.fillMaxWidth().testTag("profile_fact_add")) { Text(s(R.string.profile_memory_add)) }
+                    if (archiveReady && !archiveLoading && !archiveError && profileFacts.isEmpty())
+                        Text(s(R.string.profile_memory_empty), color = colors.muted)
+                }
+                itemsIndexed(profileFacts, key = { _, fact -> "profile:${fact.factId}" }) { index, fact ->
+                    MemoraCard(onClick = { openProfileFact(fact) }, modifier = Modifier.testTag("profile_fact_$index")) {
+                        Text(fact.fact, color = colors.ink, style = MaterialTheme.typography.bodyLarge)
+                        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                            Text(s(profileFactCategoryLabel(fact.category)), style = MaterialTheme.typography.labelSmall, color = colors.accent)
+                            Text(LocalStrings.current.getString(R.string.profile_memory_sources_count, fact.sourceTurnIds.size),
+                                style = MaterialTheme.typography.labelSmall, color = colors.muted)
+                        }
+                        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
+                            TextButton(onClick = { editingProfileFact = fact }, modifier = Modifier.testTag("profile_fact_edit_$index")) {
+                                Text(s(R.string.profile_memory_edit))
+                            }
+                            TextButton(onClick = { pendingDeleteProfileFact = fact }, modifier = Modifier.testTag("profile_fact_forget_$index")) {
+                                Text(s(R.string.profile_memory_forget))
+                            }
+                        }
+                    }
+                }
+            }
+
+            if (!showAllEmpty && showConversations && (conversationEpisodes.isNotEmpty() || conversationTurns.isNotEmpty() ||
+                    (query.isBlank() && selectedFilter == MemoryScreenFilter.ALL) || selectedFilter == MemoryScreenFilter.CONVERSATIONS)) {
+                item(key = "memory_conversation_heading") {
+                    SectionHeading(s(R.string.memory_conversation_archive))
+                    if (archiveReady && !archiveLoading && !archiveError && conversationEpisodes.isEmpty() && conversationTurns.isEmpty())
+                        EmptyState(s(R.string.memory_no_conversation_results), s(R.string.memory_unified_hint), Glyph.Chat,
+                            testTag = "memory_no_conversations")
+                }
+                if (conversationEpisodes.isNotEmpty()) item(key = "memory_episode_heading") { SectionHeading(s(R.string.memory_episodes)) }
+                itemsIndexed(conversationEpisodes, key = { _, episode -> "episode:${episode.episodeId}" }) { index, episode ->
+                    MemoraCard(onClick = { selectedEpisode = episode }, modifier = Modifier.testTag("memory_episode_$index")) {
+                        Text(episode.title, color = colors.ink, style = MaterialTheme.typography.titleMedium)
+                        Text(episode.summary.take(360) + if (episode.summary.length > 360) "…" else "", color = colors.muted)
+                        Text(LocalStrings.current.getString(R.string.memory_episode_sources_count, episode.sourceTurnIds.size),
+                            style = MaterialTheme.typography.labelSmall, color = colors.accent)
+                        Text(DateFormatters.memoryDate(episode.updatedAtMillis), style = MaterialTheme.typography.bodySmall, color = colors.muted)
+                    }
+                }
+                items(conversationTurns, key = { "turn:${it.turnId}" }) { turn ->
+                    MemoraCard(onClick = { selectedTurn = turn }, modifier = Modifier.testTag("memory_turn_${turn.turnId}")) {
+                        Text(turn.matchedSnippet ?: turn.userMessage.take(280), color = colors.ink, style = MaterialTheme.typography.bodyLarge)
+                        Text(DateFormatters.memoryDate(turn.createdAtMillis), style = MaterialTheme.typography.bodySmall, color = colors.muted)
+                        Text(s(R.string.memory_open_dialogue), style = MaterialTheme.typography.labelSmall, color = colors.accent)
+                    }
+                }
+                if (conversationNextCursor != null) item(key = "memory_conversation_load_more") {
+                    OutlinedButton(onClick = ::loadMoreConversationTurns, enabled = !conversationPageLoading,
+                        modifier = Modifier.fillMaxWidth().testTag("memory_conversation_load_more")) {
+                        Text(if (conversationPageLoading) s(R.string.capture_loading) else s(R.string.memory_conversation_load_more))
+                    }
+                }
+            }
+
+            domainGroups.forEach { (filter, entries, title) ->
+                val kind = when (filter) {
+                    MemoryScreenFilter.PEOPLE -> DomainKind.PERSON
+                    MemoryScreenFilter.PROJECTS -> DomainKind.PROJECT
+                    else -> DomainKind.NOTE
+                }
+                if (!showAllEmpty && (showAll || selectedFilter == filter) && (entries.isNotEmpty() || selectedFilter == filter)) {
+                    item(key = "memory_domain_heading:${filter.name}") {
+                        SectionHeading(title)
+                        if (archiveReady && !archiveLoading && !archiveError && entries.isEmpty())
+                            EmptyState(s(R.string.memory_filter_empty), s(R.string.memory_unified_hint), Glyph.Memory,
+                                testTag = "memory_empty_${filter.name.lowercase(Locale.ROOT)}")
+                    }
+                    items(entries, key = { "domain:${it.id}" }) { fact ->
+                        MemoraCard(onClick = {
+                            if (fact.kind == DomainKind.PERSON) {
+                                AppRoute.target(AppTargetKind.PERSON, fact.id)?.let(onOpenTarget) ?: run { selectedFact = fact }
+                            } else selectedFact = fact
+                        }, modifier = Modifier.testTag("memory_domain_${fact.id}")) {
+                            Text(fact.title, color = colors.ink, style = MaterialTheme.typography.titleMedium)
+                            fact.body?.takeIf(String::isNotBlank)?.let {
+                                Text(it.take(260) + if (it.length > 260) "…" else "", color = colors.muted)
+                            }
+                            Text(s(fact.kindLabel), style = MaterialTheme.typography.labelSmall, color = colors.accent)
+                        }
+                    }
+                    if (domainNextOffsets[kind] != null) item(key = "memory_domain_more:${kind.name}") {
+                        OutlinedButton(onClick = { loadMoreDomainObjects(kind) },
+                            enabled = kind !in domainPageLoadingKinds,
+                            modifier = Modifier.fillMaxWidth().testTag("memory_domain_load_more_${kind.name.lowercase(Locale.ROOT)}")) {
+                            Text(s(if (kind in domainPageLoadingKinds) R.string.capture_loading else R.string.memory_domain_load_more))
+                        }
+                    }
+                }
+            }
+
+            if (!showAllEmpty && showSources && (matches.isNotEmpty() || (query.isBlank() && selectedFilter == MemoryScreenFilter.ALL) ||
+                    selectedFilter == MemoryScreenFilter.SOURCES)) {
+                item(key = "memory_sources_heading") {
+                    SectionHeading(s(R.string.recent))
+                    if (state.ready && matches.isEmpty()) Text(s(R.string.memory_no_saved_sources), color = colors.muted)
+                }
+                items(matches, key = { "capture:${it.entry.source.id}" }) { match ->
+                    StoredMemoryCard(match.entry) { detail(match.entry.source.id) }
+                }
+            }
+
+            item(key = "memory_management") {
+                SectionHeading(s(R.string.settings))
+                OutlinedButton(onClick = { showRetention = true }, enabled = conversationRepository != null,
+                    modifier = Modifier.fillMaxWidth().testTag("memory_retention")) {
+                    Text(LocalStrings.current.getString(R.string.memory_retention_current, s(memoryRetentionLabel(retentionDays))))
+                }
+                if (localProfile != null) OutlinedButton(onClick = { showLocalProfileEditor = true },
+                    modifier = Modifier.fillMaxWidth().testTag("profile_preferences_secondary")) {
+                    Text(s(R.string.profile_preferences_title))
+                }
+                OutlinedButton(onClick = manage, modifier = Modifier.fillMaxWidth().testTag("memory_manage")) {
+                    Text(s(R.string.working_manage))
+                }
+            }
+        }
     }
+}
+
+private enum class MemoryScreenFilter(val label: Int) {
+    ALL(R.string.all), CONVERSATIONS(R.string.memory_conversation_archive), FACTS(R.string.memory_filter_facts),
+    PEOPLE(R.string.people), PROJECTS(R.string.projects), NOTES(R.string.notes_title), SOURCES(R.string.memory_filter_sources),
 }
 
 @Composable
@@ -798,10 +989,11 @@ private fun ProfileFactEditorDialog(
     )
 }
 
-private data class MemoryDomainFact(val id: String, val title: String, val body: String?, val kindLabel: Int,
+private data class MemoryDomainFact(val id: String, val title: String, val body: String?, val kind: DomainKind,
     val provenanceLabel: Int? = null) {
-    constructor(row: DomainObjectRow) : this(row.objectId, row.title, row.body, domainKindResource(row.kind), R.string.memory_source_saved)
-    constructor(hit: DomainHit) : this(hit.objectId, hit.title, hit.evidenceText, domainKindResource(hit.kind.name), R.string.memory_source_linked)
+    val kindLabel: Int get() = domainKindResource(kind.name)
+    constructor(row: DomainObjectRow) : this(row.objectId, row.title, row.body, DomainKind.valueOf(row.kind), R.string.memory_source_saved)
+    constructor(hit: DomainHit) : this(hit.objectId, hit.title, hit.evidenceText, hit.kind, R.string.memory_source_linked)
 }
 
 private fun domainKindResource(kind: String): Int = when (kind) {

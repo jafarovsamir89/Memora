@@ -441,6 +441,12 @@ internal class ProtectedDomainRepository(private val db: AgentDatabase) {
         return dao.activeDomainObjects(scope, kind.name, limit)
     }
 
+    /** Stable, read-only browse page for a single object kind in the active scope. */
+    suspend fun domainObjectsPage(scope: String, kind: DomainKind, limit: Int, offset: Int): List<DomainObjectRow> {
+        require(scope.isNotBlank() && limit in 1..100 && offset in 0..LINKED_VIEW_MAX_OFFSET)
+        return dao.activeDomainObjectsPage(scope, kind.name, limit, offset)
+    }
+
     /** Returns only persisted, active, same-scope links. It never infers identity from a matching name. */
     suspend fun linkedObjects(scope: String, objectId: String, limit: Int = 50): List<LinkedDomainObject> {
         require(scope.isNotBlank() && objectId.isNotBlank() && limit in 1..100)

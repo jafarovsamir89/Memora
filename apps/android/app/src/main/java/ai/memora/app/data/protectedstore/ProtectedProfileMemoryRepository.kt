@@ -40,7 +40,7 @@ internal class ProtectedProfileMemoryRepository(private val db: AgentDatabase) {
     private val dao = db.protectedStoreDao()
 
     suspend fun list(scopeId: String, query: String = "", limit: Int = 30): List<ProfileFactEvidence> {
-        require(scopeId.isNotBlank() && query.length <= 200 && limit in 1..100)
+        require(scopeId.isNotBlank() && query.length <= 200 && limit in 1..MAX_PROFILE_FACTS)
         val rows = dao.profileFacts(scopeId, MAX_PROFILE_FACTS)
         val terms = TOKEN.findAll(foldSearch(query)).map { it.value }.filter { it.length > 1 && it !in SEARCH_STOP_WORDS }
             .distinct().take(12).toList()

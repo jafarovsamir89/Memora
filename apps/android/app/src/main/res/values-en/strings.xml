@@ -575,6 +575,9 @@
     <string name="profile_memory_forget_confirmation">The fact, all its revisions, and source links will be deleted. Conversation history remains separate.</string>
     <string name="profile_memory_fact">Fact</string>
     <string name="memory_unified_search">Search memory</string>
+    <string name="memory_filter_facts">Facts</string>
+    <string name="memory_filter_sources">Sources</string>
+    <string name="memory_filter_empty">Nothing here yet</string>
     <string name="memory_archive_notice">The previous version kept only the latest 240 messages. From now on, history follows the retention period you choose.</string>
     <string name="memory_retention_title">Conversation retention</string>
     <string name="memory_retention_explainer">Choose how long to keep conversations on this device. “Keep forever” disables automatic deletion.</string>
@@ -600,6 +603,7 @@
     <string name="memory_episode_delete_confirmation">Only this summary will be deleted. Its source conversations will remain.</string>
     <string name="memory_no_conversation_results">No matching conversations.</string>
     <string name="memory_conversation_load_more">Show older conversations</string>
+    <string name="memory_domain_load_more">Show more</string>
     <string name="memory_archive_error">Could not open memory. No data was changed.</string>
     <string name="memory_conversation_detail">Conversation</string>
     <string name="memory_user_said">You said</string>

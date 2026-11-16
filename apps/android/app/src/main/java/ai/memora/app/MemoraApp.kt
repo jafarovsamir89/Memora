@@ -249,7 +249,7 @@ fun MemoraApp(initialRoute: String = "home", initialTheme: String = "system", ca
                                         if (saved) appearanceModel.change(language = input.language)
                                         done(saved)
                                     }
-                                })
+                                }, onOpenTarget = navigateRoute)
                             AppDestination.TASKS -> ScreenColumn { ScreenHeading(s(R.string.tasks_title), s(R.string.working_tasks_hint)); TaskPrototype(taskStore) }
                             AppDestination.MORE -> MoreScreen(navigate, { about = true }, { openCapture(true) }, language)
                             AppDestination.VOICE_MEMORY -> VoiceMemoryScreen()

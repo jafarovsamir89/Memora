@@ -1,5 +1,13 @@
 # Memora — дневник ведущего инженера
 
+## ACT-0245 — 2026-11-16 — Stage 4: библиотека памяти
+
+По автономному разрешению владельца продолжил UI-этапы на `ui/redesign-v1`. Перевёл экран «Память» на `LazyColumn` со стабильными ключами и сохраняемыми поиском, фильтром, архивом и позицией. Добавил фильтры по существующим локальным источникам: разговоры, факты профиля, люди, проекты, заметки и источники. Разговоры используют прежнюю cursor-pagination по 30; страницы людей/проектов/заметок используют существующий scoped DAO query через новый read-only repository wrapper и по 30 записей. Лимит профильных фактов остаётся существующим 200. Точный маршрут человека открывается по ID и active scope. Поиск, retention, consent, удаление, capture, доменная семантика и ledger не менялись; schema/migrations и AI/provider не менялись.
+
+Полный Gradle прошёл: 77 suites / 395 tests, 0 failures/errors, один opt-in live test skipped; debug/AndroidTest builds и AndroidTest Kotlin compile прошли; lint 0/84/3. Компонентное визуальное сравнение — 31/31 без изменения baselines. APK v98 `1.1.76-memory-library-pagination`, SHA-256 `74d47a98ba78edfc860e1d4776d77059dacb546e6c48d09783df26865c179a33`. Synthetic Android 14: v97→v98 через `adb install -r`, firstInstallTime неизменён; введённый через UI synthetic fact сохранился. Light/dark/search и AZ fontScale=1.3 зафиксированы реальными ADB screenshots в `docs/ui-ux-redesign-v1/phase-4/`; при 1.3 видимого clipping не найдено. Очень большие профили, физический Redmi, TalkBack, keyboard и owner acceptance не проверены.
+
+Изменения ещё не закоммичены; следующий технический шаг — проверить и зафиксировать этот законченный пакет, затем продолжить с каталогом «Ещё» и оставшимися экранами в рамках активного разрешения. `main` не трогать; ADR-012 оставить владельцу. Не добавлять APK, ключи, личные данные или raw reports.
+
 ## ACT-0243 — 2026-11-16 — Stage 3 details and Today
 
 Владелец разрешил автономно пройти Stage 2, Stage 3 и последующие UI/UX-экраны без остановок. Реализованы человек, дело, финансовая операция, задача и точный source detail по UUID и активному scope; добавлены компактный Today с тем же Secretary voice control, реальными задачами/делами/событиями и остатками долгов из существующего ledger. Данные источника, ledger semantics, owner-confirmed identity links, correction flows, Room schema и AI provider не изменялись. Новые DB запросы — только read-only. В `WorkingHomeScreen` processor передаёт optional injected DB, не открывая SQLCipher synchronously во время Compose; это сохранило изолируемость host screen tests.
