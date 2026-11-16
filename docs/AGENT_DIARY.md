@@ -1,6 +1,10 @@
 # Memora — дневник ведущего инженера
 
 
+### Git handoff ACT-0250
+
+ACT-0249 implementation and Phase 6 evidence were committed as `2794595169593053aaf23dded49da8f68ad58c0e` (`feat(ui): redesign calendar and tasks`) and pushed to `origin/ui/redesign-v1`. `git fetch` and `git ls-remote` confirmed local `HEAD`, `origin/ui/redesign-v1`, and remote `refs/heads/ui/redesign-v1` at the same SHA. Remote `main` remains `ac621919aca09ece6e292eae708d55cc09de16d7`; no merge, force push or history rewrite. The owner-owned ADR-012 remains untracked, untouched and excluded. No APK, API key or raw report was committed. Continue with Projects and Notes under the active owner authorization.
+
 ## ACT-0249 · 2026-11-16 · Calendar and Tasks UI
 
 На `ui/redesign-v1` обновлены Calendar и Tasks без изменения доменной логики и хранилищ. Calendar показывает фильтры, число результатов, обновление и честные загрузку/ошибку/пустое состояние; события открываются exact typed route по ID в текущем scope. Отдельно исправлена обрезка текста пустого состояния в коротком landscape: добавлен компактный вариант общего EmptyState, описание скрывается при малой высоте. Calendar ограничивает отображение 200 событиями, но текущий repository загружает все scoped rows до UI cap; большие профили требуют отдельной проверки/пагинации.
