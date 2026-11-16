@@ -1,5 +1,9 @@
 # Memora — дневник ведущего инженера
 
+### Git handoff ACT-0246
+
+ACT-0245 зафиксирован commit `70b366275e5dd83ebf3c22bb87815a31403a9ed7` (`feat(ui): redesign memory library`) и отправлен в `origin/ui/redesign-v1`. После `git fetch` local `HEAD` и `origin/ui/redesign-v1` совпали; `git ls-remote` подтвердил тот же feature SHA. Remote `main` остался `ac621919aca09ece6e292eae708d55cc09de16d7`; merge/force push/history rewrite не выполнялись. Owner ADR-012 остался untracked и исключён; APK, API keys и raw live reports не добавлены. Продолжить автономно с каталога «Ещё» и следующими разделами; `main` не трогать.
+
 ## ACT-0245 — 2026-11-16 — Stage 4: библиотека памяти
 
 По автономному разрешению владельца продолжил UI-этапы на `ui/redesign-v1`. Перевёл экран «Память» на `LazyColumn` со стабильными ключами и сохраняемыми поиском, фильтром, архивом и позицией. Добавил фильтры по существующим локальным источникам: разговоры, факты профиля, люди, проекты, заметки и источники. Разговоры используют прежнюю cursor-pagination по 30; страницы людей/проектов/заметок используют существующий scoped DAO query через новый read-only repository wrapper и по 30 записей. Лимит профильных фактов остаётся существующим 200. Точный маршрут человека открывается по ID и active scope. Поиск, retention, consent, удаление, capture, доменная семантика и ledger не менялись; schema/migrations и AI/provider не менялись.

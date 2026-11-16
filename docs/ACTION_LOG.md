@@ -1,3 +1,7 @@
+## ACT-0246 · 2026-11-16 · Git handoff после библиотеки памяти
+
+ACT-0245 committed as `70b366275e5dd83ebf3c22bb87815a31403a9ed7` (`feat(ui): redesign memory library`) and pushed to `origin/ui/redesign-v1`. Fetch showed local HEAD and tracking ref at the same SHA; `git ls-remote` confirmed remote `refs/heads/ui/redesign-v1` also at that SHA. Remote `main` remains `ac621919aca09ece6e292eae708d55cc09de16d7`; no merge, force push or history rewrite. Owner-owned untracked ADR-012 remains untouched and excluded. No APK, API key or raw report staged. Continue with More and remaining UI screens under the active owner authorization.
+
 ## ACT-0245 · 2026-11-16 · UI/UX Stage 4 — библиотека памяти
 
 Экран «Память» в `WorkingScreens.kt` переведён на `LazyColumn` со стабильными ключами; сохранены поисковый запрос, фильтр, архивный режим и позиция. Добавлены локальные фильтры All/Conversations/Facts/People/Projects/Notes/Sources, точный scoped person route и 30-записные страницы разговоров/людей/проектов/заметок. Conversation cursor paging и search semantics сохранены. Новый `ProtectedDomainRepository.domainObjectsPage` только читает уже существующую scoped DAO-страницу; профильные факты по-прежнему ограничены существующим максимумом 200. Правила retention, consent, deletion, ledger, доменные мутации, схема/миграции и AI/provider не менялись.
