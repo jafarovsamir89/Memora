@@ -1,5 +1,21 @@
 # Memora — дневник ведущего инженера
 
+## ACT-0261 · 2026-11-18 · Reliability Lab: безопасный acceptance harness
+
+Начата утверждённая работа только в `ui/redesign-v1`, исключительно на Android Emulator и синтетических данных. Фактический HEAD до изменений: `6d09fee21f57ec214cd433062e3e4d491a690516`; upstream feature ref совпадал. Owner-owned untracked `docs/adr/ADR-012-keystore-wrapping-key-rotation.md` не читался, не менялся и не добавлялся.
+
+Добавлен [runner](../tools/run_memora_acceptance.py) и [README](acceptance-lab/README.md) с `preflight`, `quick`, `full`, `device-smoke`. Он выбирает только `emulator-*`, подтверждает QEMU по системным properties, отбрасывает физические serials до отчёта и закрепляет каждую дальнейшую ADB-команду через `-s`. Проверяются ветка и свободное место; результаты пишутся JSON под ignored `app/build/acceptance-lab/`. Нет команды очистки профиля; smoke обновляет APK через `install -r`, проверяет `firstInstallTime` и сохраняет реальный кадр. Добавлены 9 Python safety/report тестов.
+
+Проверки: `py_compile` PASS; `python3 -m unittest tools.tests.test_memora_acceptance -v` — 9/9 PASS. Первый быстрый запуск выявил ложный PASS: параллельные запуски столкнулись по секундному ID, Gradle вернул `UP-TO-DATE` и 0 свежих тестов; его ignored JSON теперь явно помечен FAIL. Добавлены микросекундные ID и принудительное выполнение только `testDebugUnitTest`. Достоверный повтор `20261118T114622.275410Z`: 11 JVM suites / 105 tests, 0 failures/errors/skips за 22.198 s. `device-smoke --serial emulator-5556` собрал APK v106 (`1.1.84-case-filter-wrap`), установил через `adb -s emulator-5556 install -r`, запустил `MainActivity`, прочитал тот же `firstInstallTime` до/после (`2026-11-15 16:15:34`) и снял [реальный screenshot](../apps/android/app/build/acceptance-lab/20261118T114020Z/screenshots/main-activity.png); кадр вручную просмотрен и показывает полностью загруженный Today. ActivityManager сообщил старт `7925 ms`. Более ранний кадр до ожидания показывал профиль-загрузку, поэтому runner теперь ждёт 15 секунд до screenshot. Это ожидание не является performance PASS: задержка старта и конкурентное открытие Room/SQLCipher остаются предметом измерения LAB-08/09. Полный Gradle, AndroidTest instrumentation, live Gemini, микрофон, TalkBack, наполненный профиль и backup round-trip не запускались.
+
+Физический Redmi не использовался. Не выполнялись `pm clear`, uninstall, чтение базы/личных данных, live API или cloud операции. Эмулятор — Google SDK/QEMU Android 14/API34; preflight видит только `emulator-5556`. Текущий APK/профиль не очищен. Игнорируемый локальный checkpoint: `apps/android/app/build/acceptance-lab/state.json`.
+
+Следующий шаг: **LAB-02 P0.2**, построить единый детерминированный synthetic fixture и snapshot ожидаемых инвариантов на изолированной in-memory DB/test stores; затем связать существующие fake-provider сценарии с ним. Не переносить фикстуры в обычный продуктовый путь.
+
+### Git handoff ACT-0261
+
+На момент записи код и документы ещё не закоммичены; после финальной проверки зафиксировать только runner, его unit tests, README, `TODO.md`, дневник и лог, затем отправить commit только в `origin/ui/redesign-v1`. Исключить ADR-012, APK и acceptance reports.
+
 ## ACT-0260 · 2026-11-18 · Redmi Cases → Secretary Back check
 
 После установки v106 выполнена дополнительная read-only проверка физической навигации: кнопка пустого состояния Cases открыла Secretary, а системный Android Back вернул к тому же списку Cases и выбранному фильтру «Все». Микрофон и consent controls не нажимались; пользовательские данные не создавались, не изменялись и не удалялись. Добавлены два прямых Redmi screenshot в ACT-0258 Phase 11 evidence. Это ручная проверка одного маршрута, не полная native acceptance и не регрессия других сценариев.

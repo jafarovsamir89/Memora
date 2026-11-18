@@ -1,3 +1,14 @@
+## ACT-0261 — 2026-11-18 — Emulator-only acceptance harness (P0.1)
+
+- Branch `ui/redesign-v1`, baseline HEAD `6d09fee21f57ec214cd433062e3e4d491a690516`; feature remote was equal. Owner ADR-012 was left untouched and unstaged.
+- Confirmed the permitted test target as Google SDK Android Emulator/API34/QEMU `emulator-5556`. Preflight checks QEMU/system markers, current branch and host/emulator free storage. Physical serials are discarded from report data; every post-discovery ADB command is explicitly `adb -s emulator-5556 ...`.
+- Added `tools/run_memora_acceptance.py` with `preflight`, `quick`, `full`, `device-smoke`; bounded credential-redacted machine JSON; JUnit rollup; package version/first-install lineage; and real screenshot capture. Reports are ignored under `apps/android/app/build/acceptance-lab/`. No reset/clear-data mode.
+- Added 9 Python runner tests covering emulator-property verification, physical-device rejection, multiple emulators, explicit target scoping, credential scrubbing, JUnit aggregation, test-task invalidation and unique run IDs: 9/9 PASS. `python3 -m py_compile ...` PASS; `git diff --check` PASS.
+- `quick` first exposed an invalid stale report: two concurrent runs collided at second-resolution, Gradle returned UP-TO-DATE, and zero fresh tests had run. That ignored report is now marked FAIL. Run IDs now include microseconds and an init script forces only the unit-test task to execute. Fresh rerun `20261118T114622.275410Z`: 11 JVM suites / 105 tests, 0 failures/errors/skips, 22.198 s.
+- `device-smoke --serial emulator-5556`: `:app:assembleDebug` PASS; v106 installed with `adb -s ... install -r`; MainActivity launched; `firstInstallTime` before/after identical (`2026-11-15 16:15:34`); visually reviewed settled Today screenshot at `apps/android/app/build/acceptance-lab/20261118T114020Z/screenshots/main-activity.png`. ActivityManager startup metric was 7,925 ms. A short initial capture caught the app's startup placeholder; smoke capture wait raised to 15s. Startup performance is not counted as passing and remains for P1 measurement.
+- No physical device, personal database, live Gemini/Firebase request, microphone, app-data reset, or backup restore used. P0.2 onward remain open. Exact statuses are in TODO and the diary.
+- Local commit/push remains pending the final block review. Stage only intended files; exclude ADR-012, APK and ignored reports.
+
 ## ACT-0260 — 2026-11-18 — Redmi Cases→Secretary→Back navigation
 
 - После проверки ACT-0258 на физическом Redmi нажата только пустая кнопка Cases→Secretary, затем Android Back.

@@ -80,6 +80,23 @@
 | M20-09 Future server | Design only after native acceptance. | Keep IDs/scope/contracts portable; do not add signup/sync before MEM-14.09 approval. |
 
 Существующие этапы остаются применимыми: E0 — идея и основания (раздел 00), E1 — контракты (01–03), E2 — нативный фундамент (локальные части 04–06), E3 — первый сквозной результат (07–09), E4 — связанные домены (10–12), E5 — голос и надёжность (13–14), E6.A — весь нативный функционал / MEM-14.09, E6.B — сервер после принятия нативного этапа (MEM-14.10–14), E6.C — остальные клиенты, E7 — контролируемый выпуск (23–25), после выпуска — поддержка (26). M20 описывает целевой продукт и не закрывает прежние IDs автоматически.
+## Reliability Lab — синтетическая проверка Android Emulator (ACT-0261)
+
+Этот отдельный план отслеживает разрешённую владельцем работу от 2026-11-18. Он не закрывает прежние M20/release gates автоматически. Все Android-команды выполняются только через явно выбранный и проверенный Emulator serial; личный телефон и реальные данные запрещены.
+
+- [x] **LAB-01 / P0.1 — Emulator-only acceptance harness:** `tools/run_memora_acceptance.py` modes `preflight`, `quick`, `full`, `device-smoke`; checks branch/serial/QEMU/disk, scoped ADB, JSON results, screenshot and install lineage. Nine Python safety/report tests pass. Emulator 14/API34 device smoke installed v106 with `adb -s emulator-5556 install -r`, launched MainActivity and captured a visually reviewed settled screenshot; `firstInstallTime` unchanged. Focused synthetic suite: 11 suites / 105 tests, 0 failures/errors/skips. Evidence: [acceptance lab README](docs/acceptance-lab/README.md); ignored reports under `apps/android/app/build/acceptance-lab/`.
+- [ ] **LAB-02 / P0.2 — Deterministic synthetic profile:** people/same-name identity, aliases, case, finance, tasks, calendar, projects/notes, conversations/memory, Inbox and editable tables; known IDs and invariant snapshot. No fixture in a normal user install.
+- [ ] **LAB-03 / P0.3 — Cross-domain secretary journeys:** money/ambiguity/correction, exact linked object navigation, AZ/RU dates and source-backed memory after restart.
+- [ ] **LAB-04 / P0.4 — Agent failure and idempotence matrix:** retries, timeout, 503, offline, duplicate calls, unknown tool outcomes and process interruption; no duplicate ledger effects.
+- [ ] **LAB-05 / P0.5 — Persistence:** restart/recreation/rotation and `adb install -r` on a seeded synthetic profile; verify values, IDs, links, onboarding and `firstInstallTime`.
+- [ ] **LAB-06 / P0.6 — Backup gap assessment:** synthetic SAF attempt and negative coverage evidence. Production backup implementation, schemas, keys and restore activation remain untouched; mark known missing stores FAIL / KNOWN GAP.
+- [ ] **LAB-07 / P1.1 — Emulator visual/navigation matrix:** screens, themes, AZ/RU, large text, keyboard, landscape, back stack, populated/empty/error states; real screenshots.
+- [ ] **LAB-08 / P1.2 — Synthetic data-volume measurements:** bounded profile sizes, startup, first item, search, memory, ANR and per-screen opening.
+- [ ] **LAB-09 / P1.3 — Fault/recovery acceptance:** offline/provider failures, denied mic, cancellation, interruption, rotation and retry without false success or duplicate writes.
+- [ ] **LAB-10 / P1.4 — Proven safe fixes:** each regression reproduced, fixed within approved boundaries and covered by automated regression.
+
+Current observation, not yet a confirmed product defect: the initial Android 14 emulator activity startup reported 7.925 s from ActivityManager and the first screen screenshot was still in profile loading; a later settled screenshot was ready after the runner's 15 s wait. Review startup/DB-open cost during LAB-08/09 instead of treating the wait as a passed performance target.
+
 ## 00. Идея, границы и личные сценарии — E0
 
 **Основание:** [VISION](docs/VISION.md), [SCENARIOS](docs/SCENARIOS.md). **Зависимости:** нет.
