@@ -117,6 +117,26 @@ or a latency guarantee. Cold/startup timing, scroll-to-end, long conversations,
 peak memory and ANR remain open. Case search p95 at 1,000 rows also needs UI
 tracing; its repository latency alone does not prove main-thread jank.
 
+
+
+ACT-0269 extends the isolated user-11 AndroidTest probe with 1,000 synthetic
+conversation turns. It verifies exact row readback and deterministic digest,
+rejects unexpected scope rows, walks the archive in 34 exact pages, and searches
+for the unique oldest turn. A repeated `volume-probe --volume-count 1000` run
+inserted zero turns and preserved package `firstInstallTime` across v137→v138.
+The latest 20 warm repository search samples measured p50 1,094 ms / p95
+1,284 ms; they exclude UI, network and model time. The Memory Compose test opens
+the oldest search result and full assistant reply, and the emulator check confirms
+Back restores the query. The list preview is capped to four lines while details
+retain the complete turn.
+
+The visual capture runner waits until UIAutomator exposes the Compose gallery
+heading (or the confirmation modal title) before taking a screenshot. This avoids
+comparing a partially drawn cold-start frame with a golden. It does not change
+thresholds or goldens. The standalone 31-state result is 30/31;
+`confirmation-light` remains a known mismatch. The full Gradle run was not repeated
+after this gate change, so keep overall acceptance as FAIL.
+
 Each run writes `apps/android/app/build/acceptance-lab/<UTC run id>/report.json`.
 The report includes mode/status, branch/HEAD, emulator properties, disk space,
 step exit codes and durations, JUnit totals when available, ActivityManager
