@@ -10,6 +10,8 @@
 
 Никаких физических устройств, user 0, личных данных, Gemini/network/mic, ledger/domain/schema/provider/consent изменений или тестовых данных в production-профиле не использовал. Следующий безопасный шаг: когда свободного места будет не меньше 1 GiB, повторить `finance-ui-journey` на user 10 с тем же v148 lineage, подтвердить header после scroll-to-top, выполнить Case→Person→Finance→Task→exact source→Conversation и Back на каждом уровне; затем продолжить persistent ambiguity/correction и retry/no-duplicate UI. LAB-03 остаётся **partial**.
 
+**Git handoff ACT-0273.** Код и синхронизированные проверки зафиксированы коммитом `d2155ea912f9d4a40b228e965d63b6b9a5dbf770` (`test(acceptance): verify synthetic BMW journey`) и отправлены в `origin/ui/redesign-v1`. После fetch local HEAD, tracking ref и `git ls-remote` совпали на этом SHA; remote `main` осталась `ac621919aca09ece6e292eae708d55cc09de16d7`. Owner ADR-012 оставлен unstaged и нетронутым.
+
 ## ACT-0272 · 2026-11-18 · Persistent finance source route (LAB-03/P0.3 partial)
 
 Продолжил только на ветке `ui/redesign-v1`. `adb devices -l` показывал один доступный target — Android 14/API34 Emulator `emulator-5556` (`qemu=1`, `ranchu`); физический Redmi, user 0 и личные данные не использовались. Работал с уже созданным синтетическим Android user 10 `MemoraReliabilityLab`, приложением v142; после проверки вернул foreground user 11. Данные нигде не очищались.
