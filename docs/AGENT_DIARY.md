@@ -10,6 +10,10 @@
 
 Только синтетические данные/fake gateway и Android 14/API34 Emulator `emulator-5556`; нет физического телефона, live HTTP/Gemini/Firebase, микрофона, платного API, очистки/удаления приложения или пользовательской базы. **P0.4 принят как PASS в синтетической runtime failure matrix.** Реальный offline/HTTP-тракт, OS process death/reboot, многократные новые пользовательские turns, seeded persistent emulator UI и APK persistence остаются NOT TESTED и не подразумеваются этим результатом. Следом по зависимостям — LAB-05: отдельная синтетическая install/update + restart проверка; она нужна и для оставшихся UI-route частей LAB-03.
 
+### Git handoff ACT-0264
+
+Implementation commit `02d809ed4729d7d95dca0baf443d8f91bb6ecacc` (`fix(agent): deduplicate applied writes within a turn`) was pushed to `origin/ui/redesign-v1`. After `git fetch`, local HEAD, upstream feature ref and `git ls-remote` match that SHA. Remote `main` remains `ac621919aca09ece6e292eae708d55cc09de16d7`. The seven reviewed P0.4 files were the only staged files; owner ADR-012 and ignored reports/APKs were excluded.
+
 ## ACT-0263 · 2026-11-18 · Reliability Lab: сквозные synthetic journeys (P0.3, частично)
 
 Ветка `ui/redesign-v1`, базовый HEAD перед пакетом `fdb9dd7656308003fe7b2e238ae9bd8c34edd5bc`. Три новых Robolectric journey проходят через существующие `AgentOrchestrator`, fake provider, runtime tools, защищённые репозитории и readback. Добавлены: вымышленная цепочка Elçin/BMW — долг 300 AZN, поступление 100 AZN, привязка точного ID к делу, погашение, correction до 120 AZN, итоговый долг 180 AZN и подтверждённые ledger/case source IDs; неоднозначный «Ruslan Əliyev» останавливается на уточнении без новых финансовых событий или correction rows; unified-memory journey читает AZ дату/задачу, точный BMW case, финансы, source-backed RU turn и оригинальный source ID в том же scope.
