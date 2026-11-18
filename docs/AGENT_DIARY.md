@@ -12,7 +12,7 @@
 
 **Статус.** LAB-08 и LAB-10 остаются partial. Нет измерений cold/startup, полного прокручивания 1,000 записей, пикового RSS/heap, репрезентативных UI frame metrics или ANR; p50/p95 repository поиска не заменяют UI timing. LAB-07 остаётся partial/fail из-за confirmation. Cross-domain persisted UI journey, backup coverage gap, fault-recovery Android acceptance и TalkBack остаются открытыми; release readiness не заявляется. Следующий шаг — диагностировать geometry/animation `confirmation-light` без обновления baseline, затем отдельно измерить холодный старт и UI-путь поиска без слабых/коротких выборок.
 
-Реализация зафиксирована в `660eb39` (`perf(memory): cover long conversation archives`), `828e5d8` (`test(ui): wait for gallery before screenshots`) и handoff `e9131c8`. `git fetch`/`git ls-remote` подтвердили remote `origin/ui/redesign-v1` = `e9131c8946ad2f735a307fdb8ac830f75231fdb9`; remote `main` = `ac621919aca09ece6e292eae708d55cc09de16d7`. Пользовательский ADR-012 оставался unstaged. Этот sync-note будет отдельным коммитом; последующая проверка проверит его отправку.
+Реализация зафиксирована в `660eb39` (`perf(memory): cover long conversation archives`), `828e5d8` (`test(ui): wait for gallery before screenshots`), документационном handoff `e9131c8` и sync-note `c817a65`. `git fetch`/`git ls-remote` подтвердили remote `origin/ui/redesign-v1` = `c817a651ab7e98f73950848611b5ba8b982b1a20`; remote `main` = `ac621919aca09ece6e292eae708d55cc09de16d7`. Пользовательский ADR-012 оставался untracked и исключён. Последнее документальное обновление будет отправлено отдельным коммитом в ту же feature-ветку.
 
 
 ## ACT-0268 · 2026-11-18 · Reliability Lab: 100 People, eager-list fix and update verification (P1.2/P1.4, partial)
