@@ -8,6 +8,10 @@
 
 M20-05 остаётся частичной: TalkBack, physical onboarding, physical fontScale 1.3, populated upgrade readback, SAF round-trip, consent persistence, device end-to-end journeys B–G, owner/native acceptance и release readiness не закрыты. Дальше: безопасно пройти независимые синтетические end-to-end/UI flows и устранить только подтверждённые UI-ошибки; затем пересмотреть оставшиеся device-acceptance gaps. `main` и owner-owned ADR-012 не трогать; APK/key/raw personal data не коммитить.
 
+### Git handoff ACT-0257
+
+ACT-0256 implementation, tests, report and screenshots committed as `c23858223935b1637c69bd8633716fcd9de4c493` (`feat(ui): polish settings backup and onboarding`) and pushed to `origin/ui/redesign-v1`. Fetch and `git ls-remote` confirmed local HEAD, tracking ref, and remote feature ref at that SHA. Remote `main` remains `ac621919aca09ece6e292eae708d55cc09de16d7`; local `main` remains `e627ab3dde4ae27ef866fad4c437ba59ebb94f5b`. No merge or history rewrite. Owner ADR-012 remains untracked and excluded. APK, local API keys, and raw reports were not committed.
+
 ## ACT-0255 · 2026-11-16 · Inbox UI checkpoint
 
 Inbox переехал на компактный экран с source-ID-keyed `LazyColumn`, saveable search/filter state и оборачиваемыми AZ-действиями; существующие capture/archive/revision/history/delete/SAF callbacks и encrypted capture store сохранены. Schema/domain/retention/consent/provider/privacy/permissions не менялись.

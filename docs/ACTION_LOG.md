@@ -8,6 +8,10 @@
 
 Evidence and remaining limitations: [Phase 10 report](ui-ux-redesign-v1/phase-10/REPORT.md). **TODO:** commit and push this verified package to `ui/redesign-v1`, then record the remote handoff SHA here.
 
+### Git handoff ACT-0257
+
+ACT-0256 implementation/docs/screenshots commit `c23858223935b1637c69bd8633716fcd9de4c493` (`feat(ui): polish settings backup and onboarding`) is pushed to `origin/ui/redesign-v1`. Fetch and `git ls-remote` confirmed local HEAD, tracking ref, and remote feature ref at this SHA. Remote `main` remains `ac621919aca09ece6e292eae708d55cc09de16d7`; local `main` remains `e627ab3dde4ae27ef866fad4c437ba59ebb94f5b`. No merge or history rewrite. Owner-owned ADR-012 remains untouched and excluded; APK, local API keys, and raw live reports were not staged. No tests rerun for this docs-only handoff; verification is in ACT-0256 and [Phase 10 report](ui-ux-redesign-v1/phase-10/REPORT.md).
+
 ## ACT-0255 · 2026-11-16 · Inbox UI checkpoint
 
 Replaced the Inbox's long `ScreenColumn` with a compact header/new-note action and a source-ID-keyed `LazyColumn`. Search/filter and list position use saveable Compose state; existing edit/revision history/delete, archive/restore, and SAF import/export callbacks stay connected to the current encrypted capture store. Added synthetic UI regression for stable source IDs under search and a 40-entry lazy-list scroll. No domain/storage/retention/consent/provider/privacy/permission changes.

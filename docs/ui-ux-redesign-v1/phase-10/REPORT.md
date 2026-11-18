@@ -69,3 +69,7 @@ All images below are direct Android screenshots. Settings and Backup shots are f
 - End-to-end scenarios B–G, device consent-state persistence, owner acceptance, native acceptance, and release readiness remain open. No production-readiness claim is made.
 
 M20-05 remains **partial**. Continue the authorized UI work from the remaining synthetic end-to-end/navigation and device-acceptance gaps; keep `main` and owner-owned ADR-012 untouched.
+
+## Git handoff
+
+Implementation commit `c23858223935b1637c69bd8633716fcd9de4c493` is pushed to `origin/ui/redesign-v1`. Local HEAD, tracking ref, and remote feature ref were verified equal after push. Remote `main` remains `ac621919aca09ece6e292eae708d55cc09de16d7`; no merge or history rewrite. Owner ADR-012 remains untracked and excluded.
