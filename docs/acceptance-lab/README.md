@@ -118,6 +118,19 @@ UI data finished loading, or a physical-device benchmark. The runner does not
 invoke the assistant or an AI/model API. The report is written under the run ID
 folder described above.
 
+### P1.3 recovery checks (partial)
+
+ACT-0271 adds an emulator UI check on synthetic user 11: a clearly marked
+unsent Secretary draft survives portrait→landscape Activity recreation and
+return to portrait; the draft is then cleared and the original rotation settings
+are restored. A focused fake-permission Compose test verifies that denied
+`RECORD_AUDIO` never reaches the recorder or STT gateway. The 54-test synthetic
+fault/recovery set also covers provider 503/offline/timeout, post-write partial
+results, same-turn duplicate suppression, cancellation, and simulated journal
+reconciliation. These do not prove real network faults, OS process-death recovery,
+physical-device behavior, microphone permission-dialog acceptance, live audio,
+or TalkBack. Do not treat the partial set as LAB-09 completion.
+
 ACT-0268 also changed the People/Projects/Notes `SavedObjectsScreen` from eager
 card composition to a stable-ID-keyed `LazyColumn`. A Compose test with 100
 synthetic people proves the last record is not composed initially and is

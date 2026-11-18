@@ -104,6 +104,38 @@ class VoiceFirstScreenTest {
         compose.onNodeWithTag("voice_first_status").assertTextContains("model_permission_denied", substring = true)
     }
 
+    @Test fun deniedMicrophoneDoesNotReachAudioOrTranscriptionPorts() {
+        shadowOf(ApplicationProvider.getApplicationContext<android.app.Application>())
+            .denyPermissions(Manifest.permission.RECORD_AUDIO)
+        assertEquals(android.content.pm.PackageManager.PERMISSION_DENIED,
+            context.checkSelfPermission(Manifest.permission.RECORD_AUDIO))
+        context.getSharedPreferences("voice-first-consent", 0).edit()
+            .putBoolean(ai.memora.app.agent.AgentCloudConsentKeys.VOICE, true).commit()
+        var recordings = 0
+        var transcriptions = 0
+        val recorder = object : AudioNoteRecorder {
+            override suspend fun record(): ByteArray { recordings++; return byteArrayOf(1, 2) }
+            override fun stop() {}
+        }
+        val gateway = object : AudioNoteGateway {
+            override suspend fun transcribe(wav: ByteArray): String { transcriptions++; return "synthetic" }
+        }
+        val processor = object : VoiceTurnProcessor {
+            override suspend fun handle(transcript: String) = VoiceFirstResult.Ready("synthetic", false)
+        }
+        val speech = object : SpeechOutput { override suspend fun speak(text: String) {} }
+        compose.setContent { CompositionLocalProvider(LocalStrings provides context.resources) {
+            MemoraTheme("light") { Column(Modifier.verticalScroll(rememberScrollState())) {
+                VoiceFirstScreen(gateway, recorder, processor, speech)
+            } }
+        } }
+
+        compose.onNodeWithTag("voice_first_button").performSemanticsAction(SemanticsActions.OnClick) { it() }
+        compose.waitForIdle()
+        assertEquals("Denied permission must not start microphone capture", 0, recordings)
+        assertEquals("Denied permission must not send audio for transcription", 0, transcriptions)
+    }
+
     @Test fun shortPhysicalTapDoesNotStartRecordingButAccessibleToggleDoes() {
         context.getSharedPreferences("voice-first-consent", 0).edit()
             .putBoolean(ai.memora.app.agent.AgentCloudConsentKeys.VOICE, true).commit()
