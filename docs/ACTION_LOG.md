@@ -7,7 +7,7 @@
 - `quick` first exposed an invalid stale report: two concurrent runs collided at second-resolution, Gradle returned UP-TO-DATE, and zero fresh tests had run. That ignored report is now marked FAIL. Run IDs now include microseconds and an init script forces only the unit-test task to execute. Fresh rerun `20261118T114622.275410Z`: 11 JVM suites / 105 tests, 0 failures/errors/skips, 22.198 s.
 - `device-smoke --serial emulator-5556`: `:app:assembleDebug` PASS; v106 installed with `adb -s ... install -r`; MainActivity launched; `firstInstallTime` before/after identical (`2026-11-15 16:15:34`); visually reviewed settled Today screenshot at `apps/android/app/build/acceptance-lab/20261118T114020Z/screenshots/main-activity.png`. ActivityManager startup metric was 7,925 ms. A short initial capture caught the app's startup placeholder; smoke capture wait raised to 15s. Startup performance is not counted as passing and remains for P1 measurement.
 - No physical device, personal database, live Gemini/Firebase request, microphone, app-data reset, or backup restore used. P0.2 onward remain open. Exact statuses are in TODO and the diary.
-- Local commit/push remains pending the final block review. Stage only intended files; exclude ADR-012, APK and ignored reports.
+- Verified Git handoff: commit `e032750cea1db80f9ab7ef1d49186920899078bb` is present locally and remotely on `ui/redesign-v1`; `main` untouched. The owner ADR-012 remains untracked and excluded.
 
 ## ACT-0260 — 2026-11-18 — Redmi Cases→Secretary→Back navigation
 

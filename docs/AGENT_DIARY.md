@@ -14,7 +14,7 @@
 
 ### Git handoff ACT-0261
 
-На момент записи код и документы ещё не закоммичены; после финальной проверки зафиксировать только runner, его unit tests, README, `TODO.md`, дневник и лог, затем отправить commit только в `origin/ui/redesign-v1`. Исключить ADR-012, APK и acceptance reports.
+Реализация и документация закоммичены `e032750cea1db80f9ab7ef1d49186920899078bb` (`test(android): add emulator-only acceptance harness`) и отправлены в `origin/ui/redesign-v1`. Fetch, локальный HEAD, tracking ref и `git ls-remote origin refs/heads/ui/redesign-v1` совпали на SHA. В staged commit вошли только TODO, diary, action log, README и harness/tests; owner ADR-012 не включён. APK и acceptance JSON/screenshots остаются ignored. Далее LAB-02.
 
 ## ACT-0260 · 2026-11-18 · Redmi Cases → Secretary Back check
 
