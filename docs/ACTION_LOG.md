@@ -1,3 +1,13 @@
+## ACT-0258 — 2026-11-18 — Исправление переноса фильтров «Дел» на Redmi
+
+- Прочитаны актуальные AGENTS.md, дневник, лог и продуктовые требования; проверены feature branch и незавершённые изменения ACT-0258. Ветка `ui/redesign-v1`; `main` не трогалась.
+- На физическом Redmi 2201117SG / Android 13 в read-only режиме просмотрены Today, Secretary, Cases, Memory и More. Видимые экраны без записей; Today показывает 0 задач/дел/событий. Private DB не открывалась; это не подтверждает пустоту скрытых/неотображаемых stores.
+- Обнаружено обрезание пятого статусного фильтра на Cases. Изменён только `CasesScreen`: horizontal scrolling заменён переносом `FlowRow`, min touch height 48dp. Добавлен large-font Compose regression; domain, route, paging, filter semantics и data stores не менялись.
+- Redmi обновлён через `adb install -r` с v105 до v106. `firstInstallTime` сохранился: `2026-11-18 02:05:36`; `lastUpdateTime`: `2026-11-18 02:40:51`; физический fontScale после проверки восстановлен к 1.0.
+- Реальные кадры Redmi и synthetic Android 14/AZ при fontScale 1.3 сохранены в `docs/ui-ux-redesign-v1/phase-11/screenshots/`.
+- Targeted `CasesAndPersonCardTest`: 9/9. Полный Gradle: 80 suites / 412 tests, 0 failures/errors, 1 opt-in live skipped; debug/AndroidTest build and AndroidTest Kotlin compile PASS; lint 0/90/2; component visual regression 31/31 PASS; no baselines/thresholds changed. APK v106 SHA-256 `ab7628e61b4c6b7981045d2c8181c1698228fd7a5717d9a63245e7fdc2f08fb2`.
+- Проверено: `git diff --check`. Далее точечно проверить финальные UI/navigation gaps, не менять main и не трогать owner-owned ADR-012.
+
 ## ACT-0256 · 2026-11-18 · Backup, Settings and onboarding UI verification
 
 **Changes:** reorganized Settings cards, separated Backup encryption disclosure from transfer actions, removed duplicate Backup heading, and raised relevant action/retry controls to at least 48dp. Onboarding/loading/error screens now apply safe drawing insets and themed backgrounds. Added light/dark palette contrast tests. Component screenshot settling delay now accounts for Android 14 system-bar transitions; committed goldens and limits are unchanged. No schema, ledger, domain, consent, AI/provider, privacy or permission semantics changed.

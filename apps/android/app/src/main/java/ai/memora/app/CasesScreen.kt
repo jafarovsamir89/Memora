@@ -8,7 +8,6 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
@@ -131,14 +130,17 @@ internal fun CasesScreen(
         if (query.isNotBlank()) Text(s(R.string.cases_search_limit_hint),
             modifier = Modifier.padding(start = 4.dp, top = 4.dp), color = colors.muted,
             style = androidx.compose.material3.MaterialTheme.typography.bodySmall)
-        Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
-            horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        androidx.compose.foundation.layout.FlowRow(
+            Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
             listOf("all", "open", "waiting", "completed", "cancelled").forEach { status ->
                 FilterChip(
                     selected = statusFilter == status,
                     onClick = { statusFilter = status; pageOffset = 0 },
                     label = { Text(caseFilterLabel(status)) },
-                    modifier = Modifier.testTag("cases_filter_$status"),
+                    modifier = Modifier.heightIn(min = 48.dp).testTag("cases_filter_$status"),
                 )
             }
         }

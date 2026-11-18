@@ -7,6 +7,8 @@ import android.view.inspector.WindowInspector
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.ui.test.*
 import androidx.compose.ui.test.junit4.v2.createComposeRule
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.unit.Density
 import androidx.test.core.app.ApplicationProvider
 import ai.memora.app.data.protectedstore.DomainKind
 import ai.memora.app.data.protectedstore.CaseRecordRow
@@ -38,6 +40,26 @@ import java.io.File
 class CasesAndPersonCardTest {
     @get:Rule(order = 0) val databaseRule = UiAgentDatabaseRule()
     @get:Rule(order = 1) val compose = createComposeRule()
+
+    @Test fun caseStatusFiltersWrapAndRemainVisibleAtLargeFontScale() {
+        val context = ApplicationProvider.getApplicationContext<Context>()
+        compose.setContent {
+            CompositionLocalProvider(
+                LocalStrings provides context.resources,
+                LocalAgentDatabaseOverride provides databaseRule.database,
+                LocalDensity provides Density(1f, 1.3f),
+            ) {
+                MemoraTheme("light") { CasesScreen() }
+            }
+        }
+        listOf("all", "open", "waiting", "completed", "cancelled").forEach { status ->
+            compose.onNodeWithTag("cases_filter_$status").assertIsDisplayed()
+        }
+        compose.waitUntil(10_000) {
+            compose.onAllNodesWithTag("cases_empty_open_secretary").fetchSemanticsNodes().isNotEmpty()
+        }
+        compose.onNodeWithTag("cases_empty_open_secretary").performScrollTo().assertIsDisplayed()
+    }
 
     @Test fun caseSearchPagesKeepStableRankOrderWithoutDuplicateRows() = runBlocking {
         val scope = AgentVoiceTurnProcessor(ApplicationProvider.getApplicationContext<Context>()).conversationScopeId()
