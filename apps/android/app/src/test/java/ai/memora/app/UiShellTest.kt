@@ -649,6 +649,29 @@ class UiShellTest {
         }
     }
 
+    @Test fun exactConversationRouteShowsBothMessagesForFocusedTurn() = kotlinx.coroutines.runBlocking<Unit> {
+        val context = ApplicationProvider.getApplicationContext<Context>()
+        val processor = ai.memora.app.voice.AgentVoiceTurnProcessor(context, agentDatabase.database)
+        val scopeId = processor.conversationScopeId()
+        val repository = ai.memora.app.data.protectedstore.ProtectedConversationRepository(agentDatabase.database)
+        val focusedTurn = UUID.randomUUID().toString()
+        repository.appendTurn(scopeId, focusedTurn, "Synthetic focused request", "Synthetic focused assistant reply", 1_800_000_000_001L)
+
+        compose.setContent {
+            CompositionLocalProvider(LocalAgentDatabaseOverride provides agentDatabase.database) {
+                TestMemoraApp(initialRoute = "conversation:$focusedTurn", initialLanguage = "az",
+                    capturePersistenceOverride = captureStore, appearanceStoreOverride = appearanceStore)
+            }
+        }
+
+        compose.waitUntil(10_000) {
+            compose.onAllNodesWithTag("chat_turn_${focusedTurn}_model").fetchSemanticsNodes().isNotEmpty()
+        }
+        compose.onNodeWithTag("chat_turn_${focusedTurn}_user").assertIsDisplayed()
+        compose.onNodeWithTag("chat_turn_${focusedTurn}_model").assertIsDisplayed()
+        compose.onNodeWithText("Synthetic focused assistant reply").assertIsDisplayed()
+    }
+
     @Test fun textDraftGoesToInboxWithoutAi() {
         compose.setContent { TestMemoraApp(initialTheme = "light", capturePersistenceOverride = captureStore, appearanceStoreOverride = appearanceStore) }
         compose.onNodeWithTag("nav_memory").performClick()

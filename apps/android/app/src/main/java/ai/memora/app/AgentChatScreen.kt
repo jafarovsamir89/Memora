@@ -150,7 +150,13 @@ internal fun AgentChatScreen(language: String = "az", showVoiceControl: Boolean 
         focusTurnId, pendingConversationFocus, historyLoaded) {
         if (messages.isEmpty()) return@LaunchedEffect
         if (focusTurnId != null && pendingConversationFocus) {
-            val targetIndex = messages.asReversed().indexOfFirst {
+            val newestFirst = messages.asReversed()
+            // The reverse-layout list places the model reply at the turn's leading edge.
+            // Focusing the user row alone can leave the assistant response below the viewport.
+            val responseIndex = newestFirst.indexOfFirst {
+                it.turnId == focusTurnId && it.role == "model"
+            }
+            val targetIndex = responseIndex.takeIf { it >= 0 } ?: newestFirst.indexOfFirst {
                 it.turnId == focusTurnId && it.role == "user"
             }
             if (targetIndex >= 0) {

@@ -136,11 +136,14 @@ ACT-0273 updated the detail check to scroll to the top before asserting its amou
 and direction: navigating back to the same Finance detail can restore the prior
 scroll offset, leaving header fields above the viewport. The v148 AndroidTest
 fixture/readback passed and the v147→v148 update preserved `firstInstallTime`.
-The corrected full UI route has **not** yet passed: the earlier integrated run
-failed on a stale expectation for a case action card, and a later UI-only attempt
-reached Person Finance before stopping on the saved-scroll assertion. The runner
-fix passes its host regression, but the emulator retest was blocked at 905 MiB
-free disk, below the 1 GiB floor. Therefore the full BMW/person/task/source UI
+Subsequent UI-only v148 runs proved the header check and case/person/finance/task
+routes, then exposed repeated source labels and a missing visible assistant reply
+after opening the exact conversation. The runner now targets the clickable lower
+source link. ACT-0274 changes Secretary's reverse-layout focus to the model row of
+the exact turn; the focused Compose regression passes 1/1 and the Python runner
+suite passes 42/42. The emulator still runs old v148, so this runtime fix is not
+device-verified. Host free disk is 836 MiB, below the 1 GiB lab floor; no new APK
+was built or installed. The complete BMW/person/task/source/conversation/Back UI
 journey, persistent ambiguity/correction, and retry/no-duplicate UI behavior
 remain open; do not mark LAB-03 complete.
 

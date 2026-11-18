@@ -131,6 +131,16 @@ class UiHierarchyTests(unittest.TestCase):
                             maximum_center_y_fraction=0.6)
         adb.assert_called_once_with("emulator-5556", "shell", "input", "tap", "350", "740")
 
+    def test_tap_can_select_later_of_repeated_labels_by_screen_region(self) -> None:
+        root = lab.ET.fromstring("""<hierarchy><node bounds="[0,0][1080,2400]">
+          <node text="Source" bounds="[100,1140][400,1200]" />
+          <node text="Source" bounds="[100,1280][400,1340]" />
+        </node></hierarchy>""")
+        with patch.object(lab, "ui_tree", return_value=root), patch.object(lab, "adb") as adb:
+            lab.tap_ui_text("emulator-5556", Path("/tmp"), "task", "Source",
+                            minimum_center_y_fraction=0.52)
+        adb.assert_called_once_with("emulator-5556", "shell", "input", "tap", "250", "1310")
+
     def test_swipe_uses_screen_relative_coordinates(self) -> None:
         root = lab.ET.fromstring("""<hierarchy><node bounds="[0,0][1080,2400]">
           <node text="conversation" bounds="[0,200][1080,2100]" />

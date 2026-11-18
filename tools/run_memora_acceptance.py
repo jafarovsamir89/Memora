@@ -428,7 +428,8 @@ def capture_finance_ui_journey(serial: str, out_dir: Path) -> list[str]:
     screenshot(serial, screenshot_path)
     screenshot_names.append(str(screenshot_path.relative_to(ROOT)))
 
-    tap_ui_text(serial, out_dir, "task-before-exact-source", "İlkin söhbət")
+    tap_ui_text(serial, out_dir, "task-before-exact-source", "İlkin söhbət",
+                minimum_center_y_fraction=0.52)
     task_source_expected = {
         bmw_user_message,
         bmw_model_message,
