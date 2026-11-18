@@ -7,7 +7,7 @@
 - Verification: `:app:assembleDebugAndroidTest :app:compileDebugAndroidTestKotlin` BUILD SUCCESSFUL; `python3 -m unittest discover -s tools/tests -q` 35/35 PASS; `py_compile` and `git diff --check` PASS. Full Gradle was not run; app APK was not rebuilt or installed.
 - Scope: emulator only, synthetic user 10 only; emulator returned to synthetic user 11. No physical Android, user 0, personal data, AI/network/mic, schema/domain/ledger/provider/consent changes. The persistent finance event count remained exactly one across repeated fixture runs.
 - LAB-03 remains partial: BMW→person→task/finance→source chain, ambiguity clarification through persistent UI, and UI retry/no-duplicate acceptance remain open. This test proves only the exact persistent finance/source/Back route.
-- Implementation commit `c65512795debbd83b2768c871ca1c7ec8de67cbb` (`test(acceptance): verify persistent finance source navigation`) was created locally; docs handoff follows. `main` and owner ADR-012 were not touched.
+- Implementation commit `c65512795debbd83b2768c871ca1c7ec8de67cbb` (`test(acceptance): verify persistent finance source navigation`) and docs handoff `bde8925fff329c754196b6847a31b67dbb64685d` are pushed to `origin/ui/redesign-v1`. After fetch, local HEAD/tracking ref/remote feature ref match at bde8925; remote `main` remains `ac621919aca09ece6e292eae708d55cc09de16d7`. Owner ADR-012 remains untouched and excluded.
 
 ## ACT-0271 — 2026-11-18 — Secretary recovery checks on synthetic emulator (P1.3 partial)
 
