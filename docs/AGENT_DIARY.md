@@ -8,6 +8,8 @@
 
 LAB-09/P1.3 теперь **partial**, не закрыт: fake-provider faults, denied permission boundary, cancellation/retry logic, simulated write interruption и реальная Activity rotation покрыты; реальные provider/offline ошибки, системный process kill/reboot, физический Redmi, live audio/API и TalkBack не тестировались. Нет production runtime, domain, ledger, schema, provider, consent, permission-policy или DB изменений. Следующий приоритет — продолжить точные synthetic cross-domain UI journeys и recovery gaps; не менять golden.
 
+**Git handoff ACT-0271.** Test/docs commit `298e8f8a221457e7126eef442df64191b385cf59` was pushed to `origin/ui/redesign-v1`. Fetch, local HEAD, tracking ref and `git ls-remote` confirm the same SHA. Remote `main` remains `ac621919aca09ece6e292eae708d55cc09de16d7`; local `main` remains `e627ab3dde4ae27ef866fad4c437ba59ebb94f5b`. Owner ADR-012 remains untracked, untouched and excluded.
+
 ## ACT-0270 · 2026-11-18 · Process-cold startup probe and synthetic profile lineage (P0.5/P1.2 partial)
 
 Работа только в `ui/redesign-v1`. До ADB проверен список устройств: единственная доступная цель `emulator-5556`, Android 14/API 34, `ro.boot.qemu=1`, `ranchu`; физический телефон не использовался. Применялись только изолированные Android users 10 (`MemoraReliabilityLab`) и 11 (`MemoraCleanInstallLab`). `main`, user 0 и владелецкий ADR-012 не затрагивались.

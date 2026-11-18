@@ -6,6 +6,8 @@
 - Initial denied-mic assertion expected a system permission-result label that Robolectric did not deliver; the test was narrowed to the executable safety invariant (no audio/STT port invocation while permission is denied). Final focused run passes. `git diff --check` passes.
 - LAB-09/P1.3 becomes **partial**. Still NOT TESTED: physical Redmi, real provider/offline fault, OS process kill/reboot recovery, live audio/API and TalkBack. No production runtime/domain/ledger/schema/provider/consent/permission-policy changes; no user-0 or personal data.
 
+**Git handoff ACT-0271:** `298e8f8a221457e7126eef442df64191b385cf59` (`test(acceptance): verify secretary recovery paths`) is pushed to `origin/ui/redesign-v1`; fetch/local/tracking/remote feature SHA match. Remote `main` remains `ac621919aca09ece6e292eae708d55cc09de16d7`. Owner ADR-012 remains untouched and unstaged.
+
 ## ACT-0270 — 2026-11-18 — Process-cold startup probe and synthetic update lineage
 
 - Added `startup-probe` to `tools/run_memora_acceptance.py`. It requires a named non-owner synthetic user (exact `MemoraReliabilityLab` or `MemoraCleanInstallLab`), verifies that user is current and Memora is installed, then performs 5–50 explicit user-scoped `force-stop` / `am start -W` samples. The machine report contains nearest-rank p50/p95 for ActivityManager TotalTime/WaitTime and ADB round-trip, sample count, app version and unchanged `firstInstallTime`; it saves a final screenshot. No app data/cache or OS state is cleared, no assistant/model request is initiated.
