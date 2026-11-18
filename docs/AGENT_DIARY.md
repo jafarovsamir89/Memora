@@ -1,5 +1,17 @@
 # Memora — дневник ведущего инженера
 
+## ACT-0263 · 2026-11-18 · Reliability Lab: сквозные synthetic journeys (P0.3, частично)
+
+Ветка `ui/redesign-v1`, базовый HEAD перед пакетом `fdb9dd7656308003fe7b2e238ae9bd8c34edd5bc`. Три новых Robolectric journey проходят через существующие `AgentOrchestrator`, fake provider, runtime tools, защищённые репозитории и readback. Добавлены: вымышленная цепочка Elçin/BMW — долг 300 AZN, поступление 100 AZN, привязка точного ID к делу, погашение, correction до 120 AZN, итоговый долг 180 AZN и подтверждённые ledger/case source IDs; неоднозначный «Ruslan Əliyev» останавливается на уточнении без новых финансовых событий или correction rows; unified-memory journey читает AZ дату/задачу, точный BMW case, финансы, source-backed RU turn и оригинальный source ID в том же scope.
+
+Тест обнаружил, что unified memory не показывала задачу, связанную с найденным canonical person через явное owner-confirmed task/person link, если названия/текст задачи не совпадали лексически. Исправление только read-only: добавлен ограниченный SQL lookup того же scope по найденным точным person IDs, исключаются удалённые task links, результат возвращает точный person ID и причину `explicit_person_task_link`; пределы — 3 человека и 100 связей на каждого, превышение отмечается как truncated. Схема/версия БД, записи домена, ledger, провайдер и согласия не менялись.
+
+Проверки: прицельный `SyntheticReliabilityJourneyTest`, `SyntheticReliabilityProfileTest`, `AgentFakeProviderUnifiedMemoryTest` — PASS; acceptance quick на проверенном Android 14/API34 эмуляторе `emulator-5556` — 13 suites / 112 tests, 0 failures/errors/skips; Python harness 10/10 PASS. Общий Gradle `:app:testDebugUnitTest :app:assembleDebug :app:assembleDebugAndroidTest :app:compileDebugAndroidTestKotlin :app:lintDebug :app:componentVisualRegression` — PASS: 82 suites / 419 tests, 0 failures/errors, 1 opt-in live test skipped; lint 0 errors / 90 warnings / 2 hints; screenshot comparison 31/31 PASS без обновления эталонов. Отчёт полного runner: ignored `apps/android/app/build/acceptance-lab/20261118T121710.238150Z/report.json`; прицельный quick: ignored `.../20261118T122828.509927Z/report.json`.
+
+Границы результата: это автоматизированная проверка runtime/tool/readback, не проверка Compose-навигации от карточки разговора к подробному экрану. Seeded persistent emulator profile, точные UI routes/Back stack, process restart и обновление APK с заполненным профилем пока не проверены; LAB-03 остаётся частично завершённым, LAB-05 остаётся открытым. Только synthetic test stores; физические устройства, app-data reset/uninstall, пользовательская БД, Gemini/Firebase, микрофон и сетевые AI вызовы не использовались. Полный запуск установил debug APK с `install -r` для component-gallery screenshot-проверки; это не считается проверкой seeded persistence.
+
+Следующий пункт по порядку — LAB-04: матрица сбоев и идемпотентности на fake provider, затем оставить неустранённые/непроверенные UI journey явно открытыми. Git handoff записывается после проверенного commit/push; owner ADR-012 исключён.
+
 ## ACT-0262 · 2026-11-18 · Reliability Lab: детерминированный синтетический профиль (P0.2)
 
 Ветка остаётся `ui/redesign-v1`; текущий контрольный HEAD перед пакетом — `556aa0ea446c6343ea8bb6fc47e45a3303e95aa1`, удалённая feature-ветка совпадала. Работа ограничена `app/src/test`: production-код, схема БД, финансовая логика, AI и согласия не менялись.

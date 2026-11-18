@@ -1,3 +1,12 @@
+## ACT-0263 — 2026-11-18 — Synthetic cross-domain agent journeys (P0.3 partial)
+
+- Added three fake-provider Robolectric journeys through the existing `AgentOrchestrator`, production runtime/tool handlers and isolated Room stores: exact BMW/Elçin debt/receipt/correction/readback chain; duplicate-name Ruslan clarification with no finance/adjustment mutation; and scoped AZ date/task, exact case/person/finance IDs, source-backed memory, Russian source-turn readback.
+- The new task-memory assertion exposed that a task with no matching lexical labels was omitted even when the owner had explicitly linked it to the exact matched person. Added bounded read-only same-scope lookup of active canonical task/person links, capped at 3 people × 100 links, with explicit retrieval reason and matched person IDs; no schema, writes, ledger, provider or consent change.
+- Focused JVM regressions PASS. `quick --serial emulator-5556`: 13 suites / 112 tests, 0 failures/errors/skips. Python harness: 10/10 PASS. Full runner `20261118T121710.238150Z`: 82 suites / 419 tests, 0 failures/errors, 1 opt-in live test skipped; debug and AndroidTest build/Kotlin compile PASS; lint 0/90/2; component screenshot comparison 31/31 PASS. Baselines unchanged.
+- Full Gradle took 10m29s; report JSON and screenshots remain under ignored `app/build`. Only verified Android 14/API34 emulator serial `emulator-5556` was used. No physical device, live AI/API, microphone, app-data clear/uninstall, personal DB, or real user data.
+- **P0.3 remains partial:** exact entity/tool/readback IDs are verified at fake-runtime level, but persistent seeded emulator UI routes, source navigation/Back stack, process restart and populated `install -r` preservation remain NOT TESTED (see LAB-05). Do not count this package as full native E2E acceptance.
+- Implementation/docs are prepared for a scoped commit; owner ADR-012 and generated APK/raw acceptance reports must stay unstaged.
+
 ## ACT-0262 — 2026-11-18 — Deterministic synthetic reliability profile (P0.2)
 
 - Implemented `SyntheticReliabilityProfile` and four Robolectric tests entirely under `app/src/test`; no production source, DB schema, migration, ledger, AI, consent, or permission changes.

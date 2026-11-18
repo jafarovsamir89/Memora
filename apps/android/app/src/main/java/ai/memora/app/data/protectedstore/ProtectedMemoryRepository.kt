@@ -28,6 +28,7 @@ internal sealed interface MigrationResult {
 }
 
 internal data class CanonicalTaskSnapshot(val tasks: List<Task>, val deletedIds: Set<String>)
+internal data class TaskPersonLinkSearch(val taskPersonIds: Map<String, List<String>>, val truncated: Boolean)
 
 /** One SQLCipher-backed local repository boundary. Does not change any app workflow or legacy file. */
 internal class ProtectedMemoryRepository(private val db: AgentDatabase) {
@@ -104,6 +105,24 @@ internal class ProtectedMemoryRepository(private val db: AgentDatabase) {
             projection[row.taskId] = applied.task
         }
         return CanonicalTaskSnapshot(projection.values.toList(), deleted)
+    }
+
+    /** Bounded, same-scope lookup of owner-confirmed task/person links for unified evidence search. */
+    suspend fun taskPersonLinksForSearch(scopeId: String, personIds: List<String>,
+        maxPeople: Int = 3, perPersonLimit: Int = 100): TaskPersonLinkSearch {
+        require(scopeId.isNotBlank() && maxPeople in 1..20 && perPersonLimit in 1..500)
+        val distinctPeople = personIds.distinct()
+        val selectedPeople = distinctPeople.take(maxPeople)
+        val byTask = linkedMapOf<String, MutableList<String>>()
+        var truncated = distinctPeople.size > selectedPeople.size
+        selectedPeople.forEach { personId ->
+            val rows = dao.activeTaskPersonLinksLimited(scopeId, personId, perPersonLimit + 1)
+            if (rows.size > perPersonLimit) truncated = true
+            rows.take(perPersonLimit).forEach { link ->
+                byTask.getOrPut(link.taskId) { mutableListOf() }.add(link.domainPersonId)
+            }
+        }
+        return TaskPersonLinkSearch(byTask.mapValues { (_, ids) -> ids.distinct().sorted() }, truncated)
     }
 
     /** Journal contains recovery metadata only. Call only for a command with an unresolved effect. */

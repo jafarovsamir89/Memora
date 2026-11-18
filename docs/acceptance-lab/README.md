@@ -27,7 +27,14 @@ python3 tools/run_memora_acceptance.py device-smoke --serial emulator-5556
   linked BMW case/finance/project/note/task/calendar records, exact correction
   balances, past/future dates, AZ/RU/mixed dialogue, source-backed memory,
   Inbox, and an editable table. Independent database runs must yield the same
-  snapshot.
+  snapshot. Fake-provider journeys exercise the existing orchestrator and
+  tools: a 300 AZN BMW obligation, 100 AZN repayment, correction to 120 AZN,
+  exact 180 AZN remaining readback and case-source links; ambiguous same-name
+  Ruslan is clarified without a write; and a scoped AZ task/date, case, ledger,
+  memory and original Russian conversation source are read back by stable IDs.
+  Unified memory search includes tasks through bounded owner-confirmed canonical
+  person links or existing lexical/date matches; unconfirmed alias suggestions
+  never become identity links.
 - `full` runs the complete unit suite, debug and AndroidTest builds, test Kotlin
   compile, lint, and the existing 31-state component visual comparison. Gradle
   receives `ANDROID_SERIAL` for the already-verified emulator.
@@ -63,9 +70,12 @@ be raised or lowered only explicitly with the corresponding CLI options.
 
 There is intentionally no app-profile reset or normal-install data-seeding
 command. The host test fixture seeds only isolated in-memory/test stores and
-must never be wired into the production app path. Further device profile
-fixtures and end-to-end scenario automation remain separate acceptance work and
-must use clearly named synthetic data. The current
+must never be wired into the production app path. Fake-provider journey tests
+exercise runtime tools and exact readbacks in those isolated stores; they do
+not cover persistent emulator UI routes, Back-stack restoration, process
+restart or populated-install retention. Any future device profile fixture
+must use a clearly named synthetic dataset and explicit emulator-only
+instrumentation. The current
 `LocalInstallLineageProbe` is a test-only migration/onboarding probe, not yet a
 general-purpose synthetic profile seeder.
 

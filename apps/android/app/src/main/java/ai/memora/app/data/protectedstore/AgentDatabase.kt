@@ -705,6 +705,8 @@ internal interface ProtectedStoreDao {
     suspend fun taskPersonLinkById(scope: String, id: String): TaskPersonLinkRow?
     @androidx.room.Query("SELECT l.* FROM task_person_link l WHERE l.scopeId=:scope AND l.domainPersonId=:personId AND l.deletedAt IS NULL AND NOT EXISTS (SELECT 1 FROM deleted_task d WHERE d.taskId=l.taskId) ORDER BY l.createdAt, l.linkId")
     suspend fun activeTaskPersonLinks(scope: String, personId: String): List<TaskPersonLinkRow>
+    @androidx.room.Query("SELECT l.* FROM task_person_link l WHERE l.scopeId=:scope AND l.domainPersonId=:personId AND l.deletedAt IS NULL AND NOT EXISTS (SELECT 1 FROM deleted_task d WHERE d.taskId=l.taskId) ORDER BY l.createdAt, l.linkId LIMIT :limit")
+    suspend fun activeTaskPersonLinksLimited(scope: String, personId: String, limit: Int): List<TaskPersonLinkRow>
     @androidx.room.Query("SELECT * FROM task_person_link WHERE scopeId=:scope AND taskId=:taskId AND deletedAt IS NULL AND NOT EXISTS (SELECT 1 FROM deleted_task d WHERE d.taskId=:taskId) ORDER BY createdAt, linkId")
     suspend fun activeTaskPersonLinksForTask(scope: String, taskId: String): List<TaskPersonLinkRow>
     @androidx.room.Insert(onConflict = androidx.room.OnConflictStrategy.ABORT) suspend fun insertTaskPersonLink(row: TaskPersonLinkRow)

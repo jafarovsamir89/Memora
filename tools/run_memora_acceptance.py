@@ -42,6 +42,7 @@ QUICK_TESTS = [
     "ai.memora.app.data.EncryptedTaskStoreTest",
     "ai.memora.app.data.EncryptedCaptureStoreTest",
     "ai.memora.app.acceptance.SyntheticReliabilityProfileTest",
+    "ai.memora.app.acceptance.SyntheticReliabilityJourneyTest",
 ]
 
 FULL_TASKS = [

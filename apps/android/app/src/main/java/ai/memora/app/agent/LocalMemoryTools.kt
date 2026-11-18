@@ -564,14 +564,19 @@ internal class LocalMemoryTools(private val repository: ProtectedDomainRepositor
             }
         }
 
+        val linkedTaskPeople = memory.taskPersonLinksForSearch(scope, matchedPersonIds, MAX_PERSON_CASE_LOOKUPS)
         memory.tasks().tasks.asSequence().filter { it.scopeId == scope }.forEach { task ->
             val dates = listOfNotNull(localDate(task.dueLocal, task.dueZone))
-            val relevance = score(listOfNotNull(task.title, task.personLabel, task.projectLabel) + dates, task.title)
+            val matchedTaskPersonIds = linkedTaskPeople.taskPersonIds[task.id].orEmpty()
+            val relevance = maxOf(score(listOfNotNull(task.title, task.personLabel, task.projectLabel) + dates, task.title),
+                if (matchedTaskPersonIds.isNotEmpty()) 150 else 0)
             if (relevance > 0) hits += RankedActivity(relevance, task.dueLocal.orEmpty(), "task", task.id,
                 mapOf("kind" to "task", "source_id" to task.id, "source_revision_id" to "${task.id}:${task.version}",
                     "task_id" to task.id, "version" to task.version, "title" to task.title,
                     "completed" to task.completed, "due_local" to task.dueLocal, "due_zone" to task.dueZone,
                     "person_label" to task.personLabel, "project_label" to task.projectLabel,
+                    "retrieval_reason" to if (matchedTaskPersonIds.isNotEmpty()) "explicit_person_task_link" else "ranked_lexical",
+                    "matched_person_ids" to matchedTaskPersonIds,
                     "completion_timestamp_available" to false))
         }
 
@@ -679,7 +684,8 @@ internal class LocalMemoryTools(private val repository: ProtectedDomainRepositor
         val ranked = hits.sortedWith(compareByDescending<RankedActivity> { it.score }
             .thenByDescending { it.sortAt }.thenBy { it.kind }.thenBy { it.id })
         return UnifiedActivitySearch(ranked.take(MAX_UNIFIED_ACTIVITY_HITS).map { it.data },
-            ranked.size > MAX_UNIFIED_ACTIVITY_HITS || caseCandidates.size == MAX_CASE_CANDIDATES || linkedCaseSearchTruncated)
+            ranked.size > MAX_UNIFIED_ACTIVITY_HITS || caseCandidates.size == MAX_CASE_CANDIDATES ||
+                linkedCaseSearchTruncated || linkedTaskPeople.truncated)
     }
 
     private fun resolveRelativeSearchDates(query: String): List<String> {
