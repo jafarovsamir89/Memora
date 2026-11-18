@@ -22,6 +22,7 @@ Added a Compose regression at `fontScale=1.3`. It asserts that all five filters 
   Result: `BUILD SUCCESSFUL`; 80 JVM suites / 412 tests, 0 failures, 0 errors, 1 opt-in live test skipped; debug and AndroidTest APKs assembled, AndroidTest Kotlin compiled; lint 0 errors / 90 warnings / 2 hints; visual regression 31/31 PASS. Existing image baselines and comparison thresholds were unchanged.
 - **PASS, physical Redmi Note 2201117SG / Android 13:** v106 was installed over v105 with `adb install -r`. Package manager reports versionCode 106, `firstInstallTime=2026-11-18 02:05:36`, `lastUpdateTime=2026-11-18 02:40:51`; the original install time survived the update. The five Russian filters are fully visible at system font scale 1.3; the screen's empty-state action is visible after scrolling. System font scale was restored to 1.0. No app data was cleared and the private database was not read.
 - **PASS, synthetic Android 14 emulator:** the Azerbaijani screen was checked at font scale 1.3; all five translated filters wrap into two rows and remain visible, and the empty-state action is reachable by scrolling. Emulator font scale was restored to 1.0.
+- **PASS, physical Redmi navigation:** tapping the empty Cases action opened Secretary; Android Back returned to the Cases screen with the same empty state and selected “All” filter. The microphone and consent controls were not tapped.
 - **PASS:** `git diff --check` before packaging.
 
 APK: `ai.memora.app`, versionCode 106, versionName `1.1.84-case-filter-wrap`, SHA-256 `ab7628e61b4c6b7981045d2c8181c1698228fd7a5717d9a63245e7fdc2f08fb2`.
@@ -50,6 +51,12 @@ These read-only captures document what was visible in the app. Empty screens and
 
 ![Redmi Cases empty state and action after scrolling at fontScale 1.3, v106](screenshots/redmi-cases-filters-v106-font-1_3-bottom.png)
 
+### Redmi route and Back behavior
+
+![Cases empty-state action opens Secretary, v106](screenshots/redmi-cases-empty-to-secretary-v106.png)
+
+![Android Back returns from Secretary to the same Cases state, v106](screenshots/redmi-secretary-back-restores-cases-v106.png)
+
 ### Azerbaijani, synthetic Android 14 emulator
 
 ![Azerbaijani Cases filters at fontScale 1.3, v106](screenshots/emulator-az-cases-v106-font-1_3-top.png)
@@ -65,3 +72,5 @@ TalkBack, populated-profile update/readback, physical AZ locale, keyboard, backu
 ## Git handoff
 
 Implementation, regression test, report and screenshots are committed as `6ac8d61822fdd4c4d79dc6bcf0ad77c5e5540055` (`fix(ui): wrap case status filters on narrow screens`) and pushed to `origin/ui/redesign-v1`. Fetch, local HEAD, tracking ref and `git ls-remote` confirmed that feature SHA. Remote `main` remains `ac621919aca09ece6e292eae708d55cc09de16d7`; no merge or history rewrite. Owner-owned `docs/adr/ADR-012-keystore-wrapping-key-rotation.md` is excluded.
+
+The later read-only Redmi Back-stack evidence was documented separately as ACT-0260; it does not change the v106 implementation or test result.

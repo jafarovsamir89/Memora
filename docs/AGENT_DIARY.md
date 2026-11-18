@@ -1,10 +1,18 @@
 # Memora — дневник ведущего инженера
 
+## ACT-0260 · 2026-11-18 · Redmi Cases → Secretary Back check
+
+После установки v106 выполнена дополнительная read-only проверка физической навигации: кнопка пустого состояния Cases открыла Secretary, а системный Android Back вернул к тому же списку Cases и выбранному фильтру «Все». Микрофон и consent controls не нажимались; пользовательские данные не создавались, не изменялись и не удалялись. Добавлены два прямых Redmi screenshot в ACT-0258 Phase 11 evidence. Это ручная проверка одного маршрута, не полная native acceptance и не регрессия других сценариев.
+
+### Git handoff ACT-0260
+
+Only test evidence and documentation/screenshots were added after ACT-0258. They are committed and pushed as a docs-only follow-up; `ui/redesign-v1` stays isolated and `main` is unchanged. The final continuation SHA is recorded below after remote verification.
+
 ## ACT-0258 · 2026-11-18 · Redmi large-text Cases filter repair
 
 Владелец повторно подключил Redmi и попросил проверить UI. При read-only просмотре видимых маршрутов Today, Secretary, Cases, Memory и More данные не отображались; Today показывал 0 задач, 0 дел и 0 событий. Это не доказывает пустоту всех stores: private DB не читалась. В «Делах» на физическом Redmi был найден конкретный дефект — пятый status filter обрезался справа, поскольку фильтры находились в горизонтально прокручиваемом ряду. Заменён на `FlowRow`, минимальная высота chips — 48dp; domain/filter/paging semantics не менялись. Добавлен Compose regression с `fontScale=1.3`, проверяющий пять фильтров и прокручиваемое пустое состояние.
 
-Полный Gradle PASS: 80 suites / 412 tests, 0 failures/errors, 1 opt-in live skipped; debug/AndroidTest builds и AndroidTest Kotlin compile PASS; lint 0/90/2; component visual regression 31/31 PASS, baselines/thresholds unchanged. Focused `CasesAndPersonCardTest`: 9/9. APK v106 `1.1.84-case-filter-wrap`, SHA-256 `ab7628e61b4c6b7981045d2c8181c1698228fd7a5717d9a63245e7fdc2f08fb2`. Установлен через `adb install -r` поверх Redmi v105; `firstInstallTime=2026-11-18 02:05:36` сохранён. RU fontScale 1.3 проверен на Redmi; AZ fontScale 1.3 проверен на synthetic Android 14 emulator. Оба устройства возвращены к fontScale 1.0. Реальные кадры и ограничения: [Phase 11 report](ui-ux-redesign-v1/phase-11/REPORT.md). DB не открывалась; реальные записи не добавлялись/не менялись/не удалялись.
+Полный Gradle PASS: 80 suites / 412 tests, 0 failures/errors, 1 opt-in live skipped; debug/AndroidTest builds и AndroidTest Kotlin compile PASS; lint 0/90/2; component visual regression 31/31 PASS, baselines/thresholds unchanged. Focused `CasesAndPersonCardTest`: 9/9. APK v106 `1.1.84-case-filter-wrap`, SHA-256 `ab7628e61b4c6b7981045d2c8181c1698228fd7a5717d9a63245e7fdc2f08fb2`. Установлен через `adb install -r` поверх Redmi v105; `firstInstallTime=2026-11-18 02:05:36` сохранён. RU fontScale 1.3 проверен на Redmi; AZ fontScale 1.3 проверен на synthetic Android 14 emulator. Физический empty-state CTA открывает Secretary, Android Back возвращает к исходному фильтрованному Cases state; microphone/consent controls не нажимались. Оба устройства возвращены к fontScale 1.0. Реальные кадры и ограничения: [Phase 11 report](ui-ux-redesign-v1/phase-11/REPORT.md). DB не открывалась; реальные записи не добавлялись/не менялись/не удалялись.
 
 M20-05, M20-08, TalkBack/device/owner acceptance и release readiness остаются частичными/открытыми. Следующий шаг — проверить точечные визуальные и навигационные дефекты оставшихся экранов на синтетическом профиле; не выводить полную пустоту хранилищ из пустых карточек. Сохранять `main` и owner ADR-012.
 
