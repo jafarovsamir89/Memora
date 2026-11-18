@@ -74,6 +74,9 @@ class ReportSafetyTests(unittest.TestCase):
         self.assertIn("outputs.upToDateWhen { false }", script)
         self.assertNotIn("--rerun-tasks", script)
 
+    def test_deterministic_profile_fixture_is_in_quick_suite(self) -> None:
+        self.assertIn("ai.memora.app.acceptance.SyntheticReliabilityProfileTest", lab.QUICK_TESTS)
+
     def test_common_api_credentials_are_redacted(self) -> None:
         text = "gemini.apiKey=AIzaSyABCDEFGHIJKLMNOPQRSTUVWXYZ123456789"
         self.assertNotIn("AIzaSy", lab.scrub(text))

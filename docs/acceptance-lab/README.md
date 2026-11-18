@@ -18,8 +18,16 @@ python3 tools/run_memora_acceptance.py device-smoke --serial emulator-5556
 
 - `preflight` verifies the branch, host/emulator free disk, and the selected
   target's Android system properties. It is read-only apart from the report.
-- `quick` runs the current focused agent, finance, task, memory, routing, and
-  encrypted-store JVM tests; it does not install or launch the app.
+- `quick` runs the current focused agent, finance, task, memory, routing,
+  encrypted-store, and deterministic synthetic-profile JVM tests; it does not
+  install or launch the app. The profile fixture is test-source-only, uses an
+  in-memory Room database plus dedicated temporary encrypted files, and refuses
+  to seed a non-empty database. It covers fixed object IDs, same-name identities,
+  confirmed aliases, unconfirmed alias suggestions kept out of persistence,
+  linked BMW case/finance/project/note/task/calendar records, exact correction
+  balances, past/future dates, AZ/RU/mixed dialogue, source-backed memory,
+  Inbox, and an editable table. Independent database runs must yield the same
+  snapshot.
 - `full` runs the complete unit suite, debug and AndroidTest builds, test Kotlin
   compile, lint, and the existing 31-state component visual comparison. Gradle
   receives `ANDROID_SERIAL` for the already-verified emulator.
@@ -53,11 +61,17 @@ characteristics, or build fingerprint marker. With multiple emulators, pass
 need at least 2 GiB and 1 GiB free by default before Gradle runs. Thresholds can
 be raised or lowered only explicitly with the corresponding CLI options.
 
-There is intentionally no reset or data-seeding command in this first harness
-slice. Profile fixtures and end-to-end scenario automation remain separate
-acceptance work and must use clearly named synthetic data. The current
+There is intentionally no app-profile reset or normal-install data-seeding
+command. The host test fixture seeds only isolated in-memory/test stores and
+must never be wired into the production app path. Further device profile
+fixtures and end-to-end scenario automation remain separate acceptance work and
+must use clearly named synthetic data. The current
 `LocalInstallLineageProbe` is a test-only migration/onboarding probe, not yet a
 general-purpose synthetic profile seeder.
+
+The current identity model persists only owner-confirmed aliases. Pending alias
+suggestions in the synthetic acceptance manifest are deliberately not database
+rows; no pending-alias product model or schema was added for testing.
 
 ## Current limits
 

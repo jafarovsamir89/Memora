@@ -1,3 +1,14 @@
+## ACT-0262 — 2026-11-18 — Deterministic synthetic reliability profile (P0.2)
+
+- Implemented `SyntheticReliabilityProfile` and four Robolectric tests entirely under `app/src/test`; no production source, DB schema, migration, ledger, AI, consent, or permission changes.
+- Fixture has stable known IDs for a synthetic owner/scope, four canonical people including two distinct same-name Elçin records, three persisted owner-confirmed aliases, two test-only pending alias suggestions that must not appear in persisted aliases, two projects/notes, project-note links, BMW case, participant/evidence rows, owner-confirmed finance/task/calendar links, a foreign-scope decoy and an editable table.
+- Finance seeded through existing repository methods: 30,000 minor-unit AZN debt, 10,000 partial repayment, then existing amount-correction API sets receipt to 12,000 and allocation correction to +2,000; verified outstanding debt = 18,000. Also a separate 15,000 AZN Ruslan receipt. No ledger implementation changes.
+- Includes past/future task events and calendar items, encrypted legacy task/inbox temp files, three deterministic AZ/RU/mixed turns, a source-backed episode and two source-backed facts. Alias and fact rows use stable IDs in the test seeder; independent in-memory Room runs compare complete captured snapshot values.
+- Safety: in-memory Room only; task/inbox files only under fresh `memora-acceptance-synthetic-*` temp directories with per-test AES keys; test refuses non-empty Room/profile stores and fixture location cannot be the normal app DB. No APK data clear/uninstall, physical device, personal DB, live API or audio.
+- One targeted run first failed because fixture category `project` is unsupported by the existing profile-memory contract; corrected only the test fixture to supported `context`. Final focused fixture suite: 4/4 PASS. Final acceptance `quick --serial emulator-5556`: **12 suites / 109 tests, 0 failures/errors/skips**. Python harness tests **10/10 PASS**, `py_compile` and `git diff --check` PASS.
+- Limitation: unconfirmed aliases are represented only as unpersisted scenario metadata because product persistence supports owner-confirmed aliases only. This fixture is not yet installed as an emulator DB and does not prove UI/E2E or process/install persistence; those remain LAB-03/LAB-05.
+- Next: LAB-03 fake-provider agent journeys over these isolated stores; exact tool/readback, ambiguity/no-write, correction and scoped source navigation checks. Commit/push after review; owner ADR-012 excluded.
+
 ## ACT-0261 — 2026-11-18 — Emulator-only acceptance harness (P0.1)
 
 - Branch `ui/redesign-v1`, baseline HEAD `6d09fee21f57ec214cd433062e3e4d491a690516`; feature remote was equal. Owner ADR-012 was left untouched and unstaged.

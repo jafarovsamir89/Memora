@@ -1,5 +1,21 @@
 # Memora — дневник ведущего инженера
 
+## ACT-0262 · 2026-11-18 · Reliability Lab: детерминированный синтетический профиль (P0.2)
+
+Ветка остаётся `ui/redesign-v1`; текущий контрольный HEAD перед пакетом — `556aa0ea446c6343ea8bb6fc47e45a3303e95aa1`, удалённая feature-ветка совпадала. Работа ограничена `app/src/test`: production-код, схема БД, финансовая логика, AI и согласия не менялись.
+
+Создан тестовый `SyntheticReliabilityProfile` со стабильными UUID для локального профиля, людей, дел, финансовых операций/связей, задач, событий, разговоров, источников и editable table. В данных есть два разных Elçin с одним именем, Ruslan и Leyla, подтверждённые алиасы, неперсистентные тестовые предложения алиасов, изолированный чужой scope, BMW-кейс, проект/заметка, долг 300 AZN, частичная выплата 100 AZN и существующая ledger-коррекция до 120 AZN; readback остатка — 180 AZN. Есть receipt Руслана, прошедшая и будущая даты, owner-confirmed связи, AZ/RU/mixed turns, source-backed episode/facts, два Inbox source, legacy tasks и редактируемая таблица. Идентификаторы и точные суммы/сроки входят в snapshot.
+
+Фикстура расположена в JVM/Robolectric `src/test`, Room база in-memory, Inbox/tasks пишутся только в выделенный временный каталог `memora-acceptance-synthetic-*` через существующие зашифрованные store adapters. Перед заполнением проверяется пустота обеих scope и ключевых хранилищ; повторное заполнение не перезаписывает существующие данные. Два независимых Room store дают идентичный snapshot. Нет команды очистки данных приложения. Неподтверждённые варианты алиаса существуют только в манифесте сценария и проверяются на отсутствие среди persisted aliases: продуктовая модель имеет только owner-confirmed aliases; схему/домен ради теста не расширяли.
+
+Проверки: четыре `SyntheticReliabilityProfileTest` — PASS; включая точную сумму остатка, различение same-name людей через подтверждённый ID, foreign scope exclusion, повторяемый snapshot, отказ от заполнения уже непустой БД. Общий `quick --serial emulator-5556` — 12 suites / 109 tests, 0 failures/errors/skips; 10 Python harness tests PASS; `py_compile` и `git diff --check` PASS. Сначала тестовая фикстура использовала категорию profile fact вне поддерживаемого списка; тест упал на валидации существующего repository, fixture исправлен на `context`, production-код не менялся. Никакие personal records, physical phone, Gemini, Firebase, audio или внешние API не использовались.
+
+P0.2 принят как завершённый для воспроизводимого host test profile. Ограничение: это ещё не persistent seeded emulator DB и не проверка экранов приложения; UI/E2E, process restart, install update — LAB-03/LAB-05. Следующий пункт — LAB-03: провести fake-provider money/identity/case/task/memory journeys через реальные agent contracts на тех же изолированных stores и сверить readback/navigation invariants.
+
+### Git handoff ACT-0262
+
+Code/tests/docs package pending final commit/push. Stage only `TODO.md`, diary/action log, acceptance README, runner Python test list, and the new test-only acceptance fixture/tests. Never stage owner ADR-012, APK, ignored reports, or local secrets. Prior P0.1 commits `e032750` and `556aa0e` are already confirmed on `origin/ui/redesign-v1`.
+
 ## ACT-0261 · 2026-11-18 · Reliability Lab: безопасный acceptance harness
 
 Начата утверждённая работа только в `ui/redesign-v1`, исключительно на Android Emulator и синтетических данных. Фактический HEAD до изменений: `6d09fee21f57ec214cd433062e3e4d491a690516`; upstream feature ref совпадал. Owner-owned untracked `docs/adr/ADR-012-keystore-wrapping-key-rotation.md` не читался, не менялся и не добавлялся.
