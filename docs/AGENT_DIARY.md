@@ -14,7 +14,7 @@ Latest repeat v125, twenty warm local samples on Android 14 emulator, 1,000 rows
 
 Следующий шаг: зафиксировать этот проверенный test-only пакет, затем продолжить LAB-08 с изолированным объёмом для Tasks/People и измерить реальные screen-entry/first-item timings, не выдавая repository timing за UI performance. Отдельно продолжить поиск причины `confirmation-light` без смены baseline; если root cause в системной геометрии останется неразрешимым, сохранить FAIL и перейти к следующей независимой recovery проверке.
 
-Код/документация этого пакета ещё не закоммичены на момент записи; локальный API key, APK, raw reports и owner ADR-012 исключены.
+Тестовый harness и сопутствующие документы зафиксированы коммитом `9b3479c` (`test(acceptance): expand synthetic volume coverage`). Локальный API key, APK, сырые отчёты и owner ADR-012 исключены. Пуш и сверка удалённой ветки ожидаются.
 
 ## ACT-0265 · 2026-11-18 · Reliability Lab: persistence, backup gap и finance volume (P0.5/P0.6/P1.2, частично)
 
