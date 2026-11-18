@@ -102,6 +102,8 @@ internal object SyntheticVolumeProbe {
             val domainMetrics = SyntheticDomainVolumeProbe.run(database, scope, targetCount)
             stage = "synthetic_task_volume_probe"
             val taskMetrics = SyntheticTaskVolumeProbe.run(context, scope, targetCount)
+            stage = "synthetic_conversation_volume_probe"
+            val conversationMetrics = SyntheticConversationVolumeProbe.run(database, scope, targetCount)
 
             val memory = Debug.MemoryInfo()
             Debug.getMemoryInfo(memory)
@@ -123,6 +125,7 @@ internal object SyntheticVolumeProbe {
             result
                 .apply { putAll(domainMetrics) }
                 .apply { putAll(taskMetrics) }
+                .apply { putAll(conversationMetrics) }
         }.getOrElse { error ->
             result.putString("status", "synthetic_volume_probe_failed")
             result.putString("stage", stage)

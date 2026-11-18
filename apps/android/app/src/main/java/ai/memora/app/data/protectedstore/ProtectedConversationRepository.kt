@@ -3,6 +3,8 @@ package ai.memora.app.data.protectedstore
 import androidx.room.withTransaction
 import java.security.MessageDigest
 import java.text.Normalizer
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 
 internal data class ConversationEvidence(
     val turnId: String,
@@ -75,6 +77,15 @@ internal class ProtectedConversationRepository(private val db: AgentDatabase) {
         query: String,
         beforeSequence: Long? = null,
         limit: Int = 30,
+    ): ConversationTurnPage = withContext(Dispatchers.Default) {
+        conversationTurnPageOnWorker(scopeId, query, beforeSequence, limit)
+    }
+
+    private suspend fun conversationTurnPageOnWorker(
+        scopeId: String,
+        query: String,
+        beforeSequence: Long?,
+        limit: Int,
     ): ConversationTurnPage {
         require(scopeId.isNotBlank() && query.length <= 300 && (beforeSequence == null || beforeSequence > 0) && limit in 1..100)
         val foldedQuery = fold(query.trim())
@@ -189,7 +200,15 @@ internal class ProtectedConversationRepository(private val db: AgentDatabase) {
     }
 
     /** Search the full retained encrypted archive locally and return only bounded, relevance-ranked evidence snippets. */
-    suspend fun search(scopeId: String, query: String, daysBack: Int? = null, limit: Int = 8): List<ConversationEvidence> {
+    suspend fun search(scopeId: String, query: String, daysBack: Int? = null, limit: Int = 8): List<ConversationEvidence> =
+        withContext(Dispatchers.Default) { searchOnWorker(scopeId, query, daysBack, limit) }
+
+    private suspend fun searchOnWorker(
+        scopeId: String,
+        query: String,
+        daysBack: Int?,
+        limit: Int,
+    ): List<ConversationEvidence> {
         require(scopeId.isNotBlank() && query.length <= 300 && limit in 1..100 && (daysBack == null || daysBack in 1..365))
         val queryFolded = fold(query)
         val terms = TOKEN.findAll(queryFolded).map { it.value }.filter { it.length > 1 && it !in STOP_WORDS }.distinct().take(12).toList()

@@ -1,12 +1,15 @@
 package ai.memora.app
 
 import android.content.Context
+import androidx.room.withTransaction
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertCountEquals
+import androidx.compose.ui.test.assertTextEquals
 import androidx.compose.ui.test.junit4.v2.createComposeRule
 import androidx.compose.ui.test.onAllNodesWithTag
 import androidx.compose.ui.test.onNodeWithTag
+import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollTo
 import androidx.compose.ui.test.performScrollToNode
@@ -15,6 +18,7 @@ import androidx.compose.ui.test.hasTestTag
 import androidx.test.core.app.ApplicationProvider
 import ai.memora.app.data.CaptureSessionState
 import ai.memora.app.data.protectedstore.ProtectedConversationRepository
+import ai.memora.app.data.protectedstore.AgentConversationMessageRow
 import ai.memora.app.data.protectedstore.ProtectedDomainRepository
 import ai.memora.app.data.protectedstore.ProtectedProfileMemoryRepository
 import ai.memora.app.data.protectedstore.DomainKind
@@ -111,6 +115,61 @@ class MemoryArchiveScreenTest {
 
         compose.waitUntil(10_000) { runBlocking { repository.turn(scopeId, "synthetic-memory-turn").isEmpty() } }
         assertTrue(repository.turn(scopeId, "synthetic-memory-turn").isEmpty())
+    }
+
+    @Test fun memoryArchiveSearchFindsAndOpensOldestTurnAcrossThousandSyntheticTurns() = runBlocking<Unit> {
+        val context = ApplicationProvider.getApplicationContext<Context>()
+        val scopeId = AgentVoiceTurnProcessor(context).conversationScopeId()
+        val oldestTurnId = "synthetic-long-archive-0000"
+        val archive = ProtectedConversationRepository(databaseRule.database)
+        val messages = (0 until 1_000).flatMap { index ->
+            val turnId = "synthetic-long-archive-${index.toString().padStart(4, '0')}"
+            val filler = "Synthetic archived dialogue segment $index contains ordinary local test text. ".repeat(6)
+            listOf(
+                AgentConversationMessageRow(
+                    scopeId = scopeId,
+                    turnId = turnId,
+                    role = "user",
+                    message = if (index == 0) "oldestarchive needle $filler" else filler,
+                    createdAtMillis = 1_800_000_000_000L + index,
+                ),
+                AgentConversationMessageRow(
+                    scopeId = scopeId,
+                    turnId = turnId,
+                    role = "model",
+                    message = "Synthetic reply $index. $filler",
+                    createdAtMillis = 1_800_000_000_000L + index,
+                ),
+            )
+        }
+        databaseRule.database.withTransaction {
+            databaseRule.database.protectedStoreDao().putConversationMessages(messages)
+        }
+        val expectedTurn = archive.conversationTurnPage(scopeId, "oldestarchive needle", limit = 30).turns.single()
+        assertEquals(oldestTurnId, expectedTurn.turnId)
+
+        compose.setContent {
+            CompositionLocalProvider(LocalAgentDatabaseOverride provides databaseRule.database) {
+                CompositionLocalProvider(LocalStrings provides context.resources) {
+                    MemoraTheme("light") {
+                        WorkingMemoryScreen(CaptureSessionState(ready = true, loading = false), {}, {}, {})
+                    }
+                }
+            }
+        }
+        prepareMemoryFilter("memory_filter_conversations")
+        compose.onNodeWithTag("memory_search").performTextInput("oldestarchive needle")
+        repeat(3) { compose.mainClock.advanceTimeBy(300) }
+
+        val resultTag = "memory_turn_$oldestTurnId"
+        compose.waitUntil(10_000) { compose.onAllNodesWithTag(resultTag).fetchSemanticsNodes().isNotEmpty() }
+        compose.onNodeWithTag("memory_content_list").performScrollToNode(hasTestTag(resultTag))
+        compose.onNodeWithTag(resultTag).assertIsDisplayed()
+        val preview = expectedTurn.matchedSnippet.orEmpty().let { it.take(280) + if (it.length > 280) "…" else "" }
+        compose.onNodeWithTag("memory_turn_preview_$oldestTurnId", useUnmergedTree = true).assertTextEquals(preview)
+        compose.onNodeWithTag(resultTag).performClick()
+        compose.onNodeWithTag("memory_turn_delete").assertIsDisplayed()
+        compose.onNodeWithText(expectedTurn.assistantMessage).assertExists()
     }
 
     @Test fun memoryDomainListsLoadMoreInStableScopedPages() = runBlocking<Unit> {

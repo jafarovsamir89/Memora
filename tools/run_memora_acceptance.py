@@ -95,6 +95,17 @@ def scrub(text: str) -> str:
     return text[-5000:]
 
 
+def volume_probe_measurements(fields: dict[str, str]) -> dict[str, Any]:
+    numeric_suffixes = ("_ms", "_us", "_kib", "_bytes", "_rows", "_count", "_turns", "_pages", "_run")
+    measurements: dict[str, Any] = {
+        key: int(value) for key, value in fields.items()
+        if key.endswith(numeric_suffixes) and value.isdigit()
+    }
+    if "conversation_pagination_exact" in fields:
+        measurements["conversation_pagination_exact"] = fields["conversation_pagination_exact"].lower() == "true"
+    return measurements
+
+
 def run(command: list[str], *, timeout: int = 1800, env: dict[str, str] | None = None) -> dict[str, Any]:
     started = time.monotonic()
     proc = subprocess.run(
@@ -619,8 +630,7 @@ def run_synthetic_volume_probe(serial: str, user_id: int, env: dict[str, str],
         fields = {match.group(1): match.group(2) for match in
                   re.finditer(r"INSTRUMENTATION_RESULT: ([a-z0-9_]+)=([^\s]+)", output)}
         passed = fields.get("status") == "synthetic_volume_probe_passed"
-        numeric = {key: int(value) for key, value in fields.items()
-                   if key.endswith(("_ms", "_us", "_kib", "_bytes", "_rows", "_count")) and value.isdigit()}
+        numeric = volume_probe_measurements(fields)
         steps.append({
             "name": f"synthetic_cross_domain_volume_{count}",
             "status": "PASS" if passed else "FAIL",
@@ -637,6 +647,10 @@ def run_synthetic_volume_probe(serial: str, user_id: int, env: dict[str, str],
             "cross_domain_fixture_digest_sha256": fields.get("cross_domain_fixture_digest_sha256"),
             "task_fixture_digest_sha256": fields.get("task_fixture_digest_sha256"),
             "person_fixture_digest_sha256": fields.get("person_fixture_digest_sha256"),
+            "conversation_volume_status": fields.get("conversation_volume_status"),
+            "conversation_fixture_digest_sha256": fields.get("conversation_fixture_digest_sha256"),
+            "conversation_oldest_search_expected_turn": fields.get("conversation_oldest_search_expected_turn"),
+            "conversation_measurement_scope": fields.get("conversation_measurement_scope"),
         })
         if not passed:
             break

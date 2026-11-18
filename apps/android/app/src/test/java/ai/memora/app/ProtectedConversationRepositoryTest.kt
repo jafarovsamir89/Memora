@@ -57,6 +57,44 @@ class ProtectedConversationRepositoryTest {
         assertFalse(collected.contains("paged-foreign-turn"))
     }
 
+    @Test fun thousandTurnArchiveSearchesOldestEvidenceAndPagesWithoutGapsOrDuplicates() = runBlocking {
+        val repository = ProtectedConversationRepository(databaseRule.database)
+        val scope = "scope-long-archive"
+        val messages = (0 until 1_000).flatMap { index ->
+            val id = "synthetic-long-archive-$index"
+            val filler = "Synthetic archived dialogue segment $index contains ordinary local test text. ".repeat(6)
+            listOf(
+                ai.memora.app.data.protectedstore.AgentConversationMessageRow(
+                    scopeId = scope, turnId = id, role = "user",
+                    message = if (index == 0) "oldestarchive needle $filler" else filler,
+                    createdAtMillis = 1_800_000_000_000L + index,
+                ),
+                ai.memora.app.data.protectedstore.AgentConversationMessageRow(
+                    scopeId = scope, turnId = id, role = "model", message = "Synthetic reply $index. $filler",
+                    createdAtMillis = 1_800_000_000_000L + index,
+                ),
+            )
+        }
+        databaseRule.database.protectedStoreDao().putConversationMessages(messages)
+
+        val oldest = repository.conversationTurnPage(scope, "oldestarchive needle", limit = 30)
+        assertEquals("synthetic-long-archive-0", oldest.turns.single().turnId)
+        assertFalse(oldest.hasMore)
+
+        val ids = mutableListOf<String>()
+        var cursor: Long? = null
+        do {
+            val page = repository.conversationTurnPage(scope, "", cursor, limit = 30)
+            assertTrue(page.turns.size <= 30)
+            ids += page.turns.map { it.turnId }
+            cursor = page.nextBeforeSequence
+        } while (cursor != null)
+        assertEquals(1_000, ids.size)
+        assertEquals(1_000, ids.distinct().size)
+        assertEquals("synthetic-long-archive-999", ids.first())
+        assertEquals("synthetic-long-archive-0", ids.last())
+    }
+
     @Test fun deletingTurnRemovesUserAndAssistantTogetherOnlyInRequestedScope() = runBlocking {
         val repository = ProtectedConversationRepository(databaseRule.database)
         repository.appendTurn("scope-a", "same-turn-id", "synthetic first user", "synthetic first answer")

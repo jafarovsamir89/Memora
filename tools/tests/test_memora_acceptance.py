@@ -64,6 +64,23 @@ class EmulatorSelectionTests(unittest.TestCase):
 
 
 class ReportSafetyTests(unittest.TestCase):
+    def test_volume_report_preserves_conversation_count_paging_and_measurements(self) -> None:
+        report = lab.volume_probe_measurements({
+            "synthetic_conversation_turns": "1000",
+            "conversation_rows_inserted_this_run": "0",
+            "conversation_archive_pages": "34",
+            "conversation_pagination_exact": "true",
+            "conversation_oldest_search_p95_ms": "1262",
+            "conversation_oldest_search_expected_turn": "synthetic-volume-conversation-0000",
+        })
+        self.assertEqual(report, {
+            "synthetic_conversation_turns": 1000,
+            "conversation_rows_inserted_this_run": 0,
+            "conversation_archive_pages": 34,
+            "conversation_oldest_search_p95_ms": 1262,
+            "conversation_pagination_exact": True,
+        })
+
     def test_run_id_contains_subsecond_precision(self) -> None:
         self.assertIn(".", lab.utc_stamp())
 

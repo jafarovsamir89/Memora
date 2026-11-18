@@ -14,6 +14,7 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import ai.memora.app.data.CaptureEntry
 import ai.memora.app.data.CaptureSessionState
@@ -808,7 +809,11 @@ internal fun WorkingMemoryScreen(state: CaptureSessionState, detail: (String) ->
                 }
                 items(conversationTurns, key = { "turn:${it.turnId}" }) { turn ->
                     MemoraCard(onClick = { selectedTurn = turn }, modifier = Modifier.testTag("memory_turn_${turn.turnId}")) {
-                        Text(turn.matchedSnippet ?: turn.userMessage.take(280), color = colors.ink, style = MaterialTheme.typography.bodyLarge)
+                        val previewSource = turn.matchedSnippet ?: turn.userMessage
+                        val preview = previewSource.take(280) + if (previewSource.length > 280) "…" else ""
+                        Text(preview, color = colors.ink, style = MaterialTheme.typography.bodyLarge,
+                            maxLines = 4, overflow = TextOverflow.Ellipsis,
+                            modifier = Modifier.testTag("memory_turn_preview_${turn.turnId}"))
                         Text(DateFormatters.memoryDate(turn.createdAtMillis), style = MaterialTheme.typography.bodySmall, color = colors.muted)
                         Text(s(R.string.memory_open_dialogue), style = MaterialTheme.typography.labelSmall, color = colors.accent)
                     }
