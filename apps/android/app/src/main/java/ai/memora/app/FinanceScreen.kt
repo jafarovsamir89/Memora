@@ -75,18 +75,13 @@ internal fun FinanceScreen(onOpenTarget: (AppRoute) -> Unit = {}, language: Stri
             displayZone = runCatching {
                 ZoneId.of(database.protectedStoreDao().localProfile()?.timeZoneId ?: "Asia/Baku")
             }.getOrDefault(ZoneId.of("Asia/Baku"))
-            val loadedEvents = repository.allFinanceEvents(scopeId)
-            events = loadedEvents.asReversed()
-            voidedEventIds = loadedEvents.filter { repository.isFinanceEventVoided(scopeId, it.eventId) }.map { it.eventId }.toSet()
-            remainingDebtByEventId = loadedEvents.filter { it.kind == "debt" }
-                .associate { it.eventId to repository.outstandingDebtMinor(scopeId, it.eventId) }
-            appliedToDebtByReceiptId = loadedEvents.filter { it.kind == "receipt" }
-                .associate { it.eventId to repository.appliedToDebtMinor(scopeId, it.eventId) }
-            val loadedPeople = repository.financePeople(scopeId).associate { it.personId to it.displayName }
-            people = loadedPeople
-            settlements = repository.financeAdjustments(scopeId).filter { it.kind == "settlement" && it.reversesEventId == null }.mapNotNull { adjustment ->
-                repository.moneyEvent(scopeId, adjustment.obligationId)?.let { event -> adjustment to (loadedPeople[event.personId] ?: "") }
-            }.asReversed()
+            val snapshot = repository.financePresentationSnapshot(scopeId)
+            events = snapshot.events.asReversed()
+            voidedEventIds = snapshot.voidedEventIds
+            remainingDebtByEventId = snapshot.remainingDebtByEventId
+            appliedToDebtByReceiptId = snapshot.appliedToDebtByReceiptId
+            people = snapshot.people
+            settlements = snapshot.settlements.asReversed()
             unavailable = false
         } catch (cancelled: CancellationException) {
             throw cancelled

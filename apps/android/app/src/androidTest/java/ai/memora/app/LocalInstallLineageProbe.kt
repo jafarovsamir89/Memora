@@ -34,7 +34,7 @@ internal object LocalInstallLineageProbe {
 
     fun run(context: Context, phase: String, permitted: Boolean): Bundle {
         val result = Bundle()
-        if (!permitted || phase !in setOf("prepare-notification-race", "seed", "verify") ||
+        if (!permitted || phase !in setOf("prepare-notification-race", "seed", "verify", "verify-new-install") ||
             context.packageName != "ai.memora.app" ||
             context.applicationInfo.flags and ApplicationInfo.FLAG_DEBUGGABLE == 0 ||
             !(Build.FINGERPRINT.contains("generic", ignoreCase = true) ||
@@ -57,6 +57,19 @@ internal object LocalInstallLineageProbe {
                 result.putString("status", "synthetic_lineage_notification_prepared")
                 result.putBoolean("database_created_before_profile_ui", true)
                 result.putBoolean("install_marker_still_absent", true)
+                return@runCatching result
+            }
+            if (phase == "verify-new-install") {
+                check(marker.isFile && marker.readText(Charsets.UTF_8) == "new") {
+                    "fresh_install_marker_not_new"
+                }
+                val database = AgentDatabase.open(context)
+                val emptyProfile = runBlocking { database.protectedStoreDao().localProfile() == null }
+                check(emptyProfile) { "fresh_install_profile_not_empty" }
+                result.putString("status", "synthetic_lineage_new_install_passed")
+                result.putBoolean("database_created_before_ui_without_legacy_state", true)
+                result.putBoolean("onboarding_marker_new", true)
+                result.putBoolean("profile_empty", true)
                 return@runCatching result
             }
             val database = AgentDatabase.open(context)

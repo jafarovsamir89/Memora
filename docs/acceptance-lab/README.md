@@ -14,6 +14,8 @@ python3 tools/run_memora_acceptance.py preflight --serial emulator-5556
 python3 tools/run_memora_acceptance.py quick --serial emulator-5556
 python3 tools/run_memora_acceptance.py full --serial emulator-5556
 python3 tools/run_memora_acceptance.py device-smoke --serial emulator-5556
+python3 tools/run_memora_acceptance.py device-lineage --serial emulator-5556 --synthetic-user-id 10 --seed-synthetic-profile
+python3 tools/run_memora_acceptance.py volume-probe --serial emulator-5556 --synthetic-user-id 11
 ```
 
 - `preflight` verifies the branch, host/emulator free disk, and the selected
@@ -49,6 +51,49 @@ python3 tools/run_memora_acceptance.py device-smoke --serial emulator-5556
   version and `firstInstallTime`. It records ActivityManager startup time and
   waits 15 seconds after launch so the frame is not the brief Room/profile
   startup placeholder. It never runs `pm clear` or uninstalls.
+
+For a populated-profile version update, use an isolated Android Emulator user
+and the test-only `LocalInstallLineageProbe` through
+`ai.memora.app.test/ai.memora.app.GeminiSyntheticProbe`. The probe refuses to
+seed unless the profile and target stores are empty and the install marker is
+absent. Never use it against a physical device or the owner's existing emulator
+user. One-time setup on the verified emulator: create a secondary user named
+`MemoraReliabilityLab`, install the already-present app and AndroidTest packages
+for that user with `pm install-existing --user <id>`, start and switch to that
+user, then run `device-lineage ... --seed-synthetic-profile`. Record the ID
+returned by Android; it must be non-zero and the runner checks the exact user
+name and current-user ID before any profile operation. The seed flag is
+one-time; omit it on later runs, which first require the existing sentinel
+profile to verify successfully.
+
+For a clean-first-run check, use a separate fresh secondary user: the
+test-only `prepare-notification-race` phase creates the empty Room file through
+notification reconciliation and asserts that the marker is still absent;
+launch `MainActivity`, visually confirm onboarding, then run
+`localInstallLineagePhase=verify-new-install`. It verifies the per-user marker
+is `new` and the local profile remains empty. Do not reuse a seeded user or
+clear an existing user's data for this check.
+
+The lineage mode builds a debug APK with a strictly higher temporary version
+using both `-PmemoraAcceptanceVersionCode=<higher integer>` and
+`-PmemoraAcceptanceVersionName=<test label>`; these overrides are rejected for
+other Gradle tasks and do not change the checked-in version. It installs only
+for the named synthetic user via `adb -s SERIAL install --user <id> -r`,
+launches, verifies exact sentinel readback, force-stops/restarts, and performs a
+rotation/recreation check while restoring the user's original rotation
+settings. Reports and real screenshots stay under ignored `app/build` output.
+Review screenshots manually for onboarding/UI state; the runner does not
+claim visual acceptance from screenshot capture alone. Keep the seeded user
+isolated; do not clear or uninstall the owner's app profile.
+
+The bounded `volume-probe` mode is restricted to the separately named
+`MemoraCleanInstallLab` Android user (the confirmed ID on this emulator is 11).
+It adds deterministic 100-row and then 1,000-row expense fixtures to that
+synthetic profile, refusing unexpected people or finance rows. It records
+device-local Room/repository p50/p95 timings and process-memory snapshots; it
+does not represent full UI-frame latency or peak memory. The initial campaign
+uses both sizes; a later 1,000-row retest can use `--volume-count 1000` because
+the fixture is monotonic and stays in that isolated synthetic profile.
 
 Each run writes `apps/android/app/build/acceptance-lab/<UTC run id>/report.json`.
 The report includes mode/status, branch/HEAD, emulator properties, disk space,

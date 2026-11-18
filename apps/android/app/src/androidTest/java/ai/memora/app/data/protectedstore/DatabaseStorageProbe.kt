@@ -160,6 +160,7 @@ object DatabaseStorageProbe {
             source!!.close()
             source = null
             val importPassphrase = "synthetic portable backup passphrase".toCharArray()
+            stage = "prepare_authenticated_import_candidate"
             val imported = try {
                 PortableBackupImporter.prepare(
                     context,
@@ -171,14 +172,18 @@ object DatabaseStorageProbe {
                 importPassphrase.fill('\u0000')
                 portableFile.fill(0)
             }
+            stage = "check_import_manifest_matches_export"
             val validation = try {
                 check(imported.manifest == decoded.manifest)
                 decoded.snapshotKeyMaterial.fill(0)
                 decoded.encryptedSnapshot.fill(0)
+                stage = "validate_isolated_import_candidate"
                 PortableBackupValidator.validate(context, imported)
             } finally {
+                stage = "close_import_candidate"
                 imported.close()
             }
+            stage = "check_import_candidate_cleanup"
             val authenticatedImportCandidateCleaned = !imported.encryptedSnapshotFile.exists()
             check(authenticatedImportCandidateCleaned)
             result.putBoolean("authenticated_import_candidate_cleaned", authenticatedImportCandidateCleaned)

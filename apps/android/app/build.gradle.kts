@@ -18,6 +18,27 @@ val geminiTestProperties = Properties().apply {
 val geminiDebugApiKey = geminiTestProperties.getProperty("gemini.apiKey", "").trim()
 fun String.asBuildConfigString(): String = "\"" + replace("\\", "\\\\").replace("\"", "\\\"") + "\""
 
+// A higher debug version lets the emulator acceptance lab exercise
+// `adb install -r` against a populated synthetic profile without changing the
+// checked-in release version. Both overrides are required and only accepted
+// for an explicit debug assembly task.
+val acceptanceVersionCodeProperty = providers.gradleProperty("memoraAcceptanceVersionCode").orNull
+val acceptanceVersionNameProperty = providers.gradleProperty("memoraAcceptanceVersionName").orNull
+check((acceptanceVersionCodeProperty == null) == (acceptanceVersionNameProperty == null)) {
+    "Set both memoraAcceptanceVersionCode and memoraAcceptanceVersionName for an acceptance update build."
+}
+val acceptanceVersionCode = acceptanceVersionCodeProperty?.toIntOrNull()
+if (acceptanceVersionCodeProperty != null) {
+    check(acceptanceVersionCode != null && acceptanceVersionCode > 106) {
+        "Acceptance update versionCode must be an integer greater than the checked-in version 106."
+    }
+    check(gradle.startParameter.taskNames.any { it.endsWith("assembleDebug") }) {
+        "Acceptance version overrides are allowed only for an explicit assembleDebug task."
+    }
+}
+val resolvedVersionCode = acceptanceVersionCode ?: 106
+val resolvedVersionName = acceptanceVersionNameProperty ?: "1.1.84-case-filter-wrap"
+
 // A local Firebase configuration is optional; the application remains usable without it.
 if (file("google-services.json").exists()) {
     apply(plugin = "com.google.gms.google-services")
@@ -30,8 +51,8 @@ android {
         applicationId = "ai.memora.app"
         minSdk = 26
         targetSdk = 36
-        versionCode = 106
-        versionName = "1.1.84-case-filter-wrap"
+        versionCode = resolvedVersionCode
+        versionName = resolvedVersionName
         testInstrumentationRunner = "ai.memora.app.GeminiSyntheticProbe"
     }
     buildFeatures { compose = true; buildConfig = true }

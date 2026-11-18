@@ -104,6 +104,14 @@ private fun canonicalJson(value: Any?): String = when (value) {
 internal data class CalendarInput(val eventId: String, val scopeId: String, val title: String, val startLocal: String, val endLocal: String?, val zoneId: String, val precision: String)
 internal data class FinanceHistory(val person: PersonRow, val events: List<MoneyEventRow>, val remainingDebtMinorByEvent: Map<String, Long>,
     val voidedEventIds: Set<String>)
+internal data class FinancePresentationSnapshot(
+    val events: List<MoneyEventRow>,
+    val voidedEventIds: Set<String>,
+    val remainingDebtByEventId: Map<String, Long>,
+    val appliedToDebtByReceiptId: Map<String, Long>,
+    val people: Map<String, String>,
+    val settlements: List<Pair<MoneyAdjustmentRow, String>>,
+)
 internal data class FinanceReversedAllocation(val obligationId: String, val minorUnits: Long)
 internal data class FinanceReversalResult(val event: MoneyEventRow, val reversedAllocations: List<FinanceReversedAllocation>)
 internal data class FinanceCorrectionResult(val event: MoneyEventRow, val adjustedAllocations: List<FinanceReversedAllocation>,
@@ -320,6 +328,96 @@ internal class ProtectedDomainRepository(private val db: AgentDatabase) {
     suspend fun allFinanceEvents(scope: String): List<MoneyEventRow> = dao.moneyEvents(scope).map { effectiveMoneyEvent(scope, it) }
     suspend fun financePeople(scope: String): List<PersonRow> = dao.people(scope)
     suspend fun financeAdjustments(scope: String): List<MoneyAdjustmentRow> = dao.adjustments(scope)
+
+    /**
+     * Reads the finance list's existing ledger semantics in one consistent snapshot. This only changes the
+     * read path; canonical events, correction rules, and all ledger mutation commands remain unchanged.
+     */
+    suspend fun financePresentationSnapshot(scope: String): FinancePresentationSnapshot {
+        require(scope.isNotBlank())
+        return db.withTransaction {
+            val events = dao.moneyEvents(scope)
+            val adjustments = dao.adjustments(scope)
+            val people = dao.people(scope).associate { it.personId to it.displayName }
+            val eventsById = events.associateBy { it.eventId }
+            val adjustmentsByObligation = adjustments.groupBy { it.obligationId }
+            val amountCorrectionsByEvent = events.associate { event ->
+                val corrections = adjustmentsByObligation[event.eventId].orEmpty().filter {
+                    it.kind == "amount_correction" && it.reversesEventId == event.eventId
+                }
+                event.eventId to corrections.fold(0L) { total, item -> Math.addExact(total, item.minorUnits) }
+            }
+            val effectiveAmounts = events.associate { event ->
+                event.eventId to Math.addExact(event.minorUnits, requireNotNull(amountCorrectionsByEvent[event.eventId]))
+            }
+            val voidedEventIds = events.filter { event ->
+                adjustmentsByObligation[event.eventId].orEmpty()
+                    .asSequence()
+                    .filter { it.kind == "event_void" || it.kind == "event_restore" }
+                    .sortedWith(compareBy<MoneyAdjustmentRow> { it.occurredAt.orEmpty() }.thenBy { it.eventId })
+                    .fold(false) { _, item -> item.kind == "event_void" }
+            }.map { it.eventId }.toSet()
+
+            val remainingDebt = events.asSequence().filter { it.kind == "debt" }.associate { debt ->
+                val eventAdjustments = adjustmentsByObligation[debt.eventId].orEmpty()
+                val remaining = if (debt.eventId in voidedEventIds) {
+                    0L
+                } else {
+                    check(eventAdjustments.all { it.kind in setOf(
+                        "settlement", "correction", "reversal", "amount_correction", "event_restore", "event_void", "annotation",
+                    ) }) { "invalid_ledger_event" }
+                    val settled = eventAdjustments.asSequence()
+                        .filter { it.kind == "settlement" || it.kind == "correction" || it.kind == "reversal" }
+                        .fold(0L) { total, item -> when (item.kind) {
+                            "settlement", "correction" -> Math.addExact(total, item.minorUnits)
+                            "reversal" -> Math.subtractExact(total, item.minorUnits)
+                            else -> error("invalid_ledger_event")
+                        } }
+                    val principal = requireNotNull(effectiveAmounts[debt.eventId])
+                    check(settled in 0..principal) { "invalid_ledger_balance" }
+                    Math.subtractExact(principal, settled)
+                }
+                debt.eventId to remaining
+            }
+
+            val correctionsBySettlement = adjustments.asSequence()
+                .filter { it.kind == "correction" && it.reversesEventId != null }
+                .groupBy { requireNotNull(it.reversesEventId) }
+            val reversalsBySettlement = adjustments.asSequence()
+                .filter { it.kind == "reversal" && it.reversesEventId != null }
+                .groupBy { requireNotNull(it.reversesEventId) }
+            val appliedToDebt = events.asSequence().filter { it.kind == "receipt" }.associate { receipt ->
+                val linkedSettlements = adjustments.filter {
+                    it.kind == "settlement" && it.reversesEventId == receipt.eventId
+                }
+                val applied = linkedSettlements.fold(0L) { total, settlement ->
+                    val corrections = correctionsBySettlement[settlement.eventId].orEmpty()
+                        .fold(0L) { value, item -> Math.addExact(value, item.minorUnits) }
+                    val reversals = reversalsBySettlement[settlement.eventId].orEmpty()
+                        .fold(0L) { value, item -> Math.addExact(value, item.minorUnits) }
+                    val effective = Math.subtractExact(Math.addExact(settlement.minorUnits, corrections), reversals)
+                    Math.addExact(total, effective)
+                }
+                check(applied >= 0L) { "invalid_ledger_event" }
+                receipt.eventId to applied
+            }
+            val settlements = adjustments.asSequence()
+                .filter { it.kind == "settlement" && it.reversesEventId == null }
+                .mapNotNull { adjustment ->
+                    val event = eventsById[adjustment.obligationId] ?: return@mapNotNull null
+                    adjustment to (people[event.personId] ?: "")
+                }.toList()
+
+            FinancePresentationSnapshot(
+                events = events.map { it.copy(minorUnits = requireNotNull(effectiveAmounts[it.eventId])) },
+                voidedEventIds = voidedEventIds,
+                remainingDebtByEventId = remainingDebt,
+                appliedToDebtByReceiptId = appliedToDebt,
+                people = people,
+                settlements = settlements,
+            )
+        }
+    }
 
     /** Exact month comparison over the canonical ledger; debt originations and outstanding debt stay separate. */
     suspend fun financeAnalytics(scope: String, month: YearMonth, zone: ZoneId = FinanceAnalytics.bakuZone): FinanceAnalyticsSnapshot {

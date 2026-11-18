@@ -4,6 +4,7 @@ import importlib.util
 import tempfile
 import unittest
 from pathlib import Path
+from types import SimpleNamespace
 from unittest.mock import patch
 
 
@@ -82,6 +83,66 @@ class ReportSafetyTests(unittest.TestCase):
         self.assertNotIn("AIzaSy", lab.scrub(text))
         self.assertIn("[REDACTED]", lab.scrub(text))
         self.assertNotIn("abcdef0123456789abcdef0123456789", lab.scrub("abcdef0123456789abcdef0123456789"))
+
+    def test_package_lineage_parser_uses_only_the_selected_android_user(self) -> None:
+        package_info = """versionCode=108 minSdk=26 targetSdk=36
+versionName=acceptance-lab-v108
+  User 0: installed=true stopped=false
+    firstInstallTime=2026-11-15 16:15:34
+  User 10: installed=true stopped=false
+    firstInstallTime=2026-11-18 04:54:50
+"""
+        self.assertEqual(lab.package_install_state(package_info, 10), {
+            "version_code": 108,
+            "version_name": "acceptance-lab-v108",
+            "first_install_time": "2026-11-18 04:54:50",
+            "installed_for_user": True,
+        })
+
+    def test_acceptance_debug_version_moves_above_globally_installed_package(self) -> None:
+        package_info = "versionCode=109 minSdk=26 targetSdk=36\nversionName=acceptance-lab-v109\n"
+        with patch.object(lab, "adb", return_value=SimpleNamespace(stdout=package_info)):
+            self.assertEqual(lab.acceptance_debug_version("emulator-5556"), (
+                110,
+                "acceptance-lab-v110",
+                ["-PmemoraAcceptanceVersionCode=110", "-PmemoraAcceptanceVersionName=acceptance-lab-v110"],
+            ))
+
+    def test_acceptance_debug_version_leaves_default_build_when_package_is_absent(self) -> None:
+        with patch.object(lab, "adb", return_value=SimpleNamespace(stdout="Package [ai.memora.app] not found")):
+            self.assertEqual(lab.acceptance_debug_version("emulator-5556"), (
+                None, None, []
+            ))
+
+    def test_acceptance_debug_version_starts_above_checked_in_version_floor(self) -> None:
+        package_info = "versionCode=105 minSdk=26 targetSdk=36\nversionName=1.1.83-old\n"
+        with patch.object(lab, "adb", return_value=SimpleNamespace(stdout=package_info)):
+            code, name, args = lab.acceptance_debug_version("emulator-5556")
+        self.assertEqual((code, name), (106, "acceptance-lab-v106"))
+        self.assertEqual(len(args), 2)
+
+    def test_lineage_mode_refuses_owner_user_before_adb(self) -> None:
+        with patch.object(lab, "adb") as adb_call:
+            with self.assertRaisesRegex(RuntimeError, "greater than owner user 0"):
+                lab.run_device_lineage("emulator-5556", 0, False, {}, Path("/tmp"), [])
+        adb_call.assert_not_called()
+
+    def test_volume_mode_refuses_owner_user_before_adb(self) -> None:
+        with patch.object(lab, "adb") as adb_call:
+            with self.assertRaisesRegex(RuntimeError, "greater than owner user 0"):
+                lab.run_synthetic_volume_probe("emulator-5556", 0, {}, [], [])
+        adb_call.assert_not_called()
+
+    def test_clean_install_probe_requires_new_marker_and_empty_profile(self) -> None:
+        output = """INSTRUMENTATION_RESULT: status=synthetic_lineage_new_install_passed
+INSTRUMENTATION_RESULT: onboarding_marker_new=true
+INSTRUMENTATION_RESULT: profile_empty=true
+"""
+        with patch.object(lab, "adb", return_value=SimpleNamespace(stdout=output, stderr="")):
+            result = lab.run_lineage_probe("emulator-5556", 11, "verify-new-install")
+        self.assertEqual(result["status"], "PASS")
+        self.assertTrue(result["fresh_install_marker_new"])
+        self.assertTrue(result["fresh_install_profile_empty"])
 
     def test_junit_totals_are_aggregated(self) -> None:
         with tempfile.TemporaryDirectory() as directory:

@@ -39,7 +39,7 @@ import kotlinx.serialization.json.JsonPrimitive
 import java.security.MessageDigest
 import java.util.UUID
 
-/** Manual, opt-in API probe. No microphone, UI, app storage reads or generated test fixtures in memory. */
+/** Opt-in instrumentation probes; acceptance storage writes are synthetic, bounded, and profile-gated. */
 class GeminiSyntheticProbe : Instrumentation() {
     private var permitted = false
     private var storageProbe = false
@@ -65,6 +65,8 @@ class GeminiSyntheticProbe : Instrumentation() {
     private var playbackOnly = false
     private var allowSyntheticLocalInstallLineage = false
     private var localInstallLineagePhase: String? = null
+    private var syntheticVolumeCount: Int? = null
+    private var syntheticVolumePermitted = false
     private var onlyCase: String? = null
     override fun onCreate(arguments: Bundle?) {
         super.onCreate(arguments)
@@ -98,7 +100,9 @@ class GeminiSyntheticProbe : Instrumentation() {
         playbackOnly = arguments?.getString("playbackOnly") == "true"
         allowSyntheticLocalInstallLineage = arguments?.getString("allowSyntheticLocalInstallLineage") == "true"
         localInstallLineagePhase = arguments?.getString("localInstallLineagePhase")
-            ?.takeIf { it in setOf("prepare-notification-race", "seed", "verify") }
+            ?.takeIf { it in setOf("prepare-notification-race", "seed", "verify", "verify-new-install") }
+        syntheticVolumeCount = arguments?.getString("syntheticVolumeCount")?.toIntOrNull()
+        syntheticVolumePermitted = arguments?.getString("allowSyntheticVolumeProbe") == "true"
         onlyCase = arguments?.getString("case")?.takeIf { it in setOf("az", "ru", "mixed") }
         start()
     }
@@ -114,7 +118,18 @@ class GeminiSyntheticProbe : Instrumentation() {
                     "synthetic_lineage_notification_prepared",
                     "synthetic_lineage_seed_passed",
                     "synthetic_lineage_verify_passed",
+                    "synthetic_lineage_new_install_passed",
                 ))
+                Activity.RESULT_OK else Activity.RESULT_CANCELED, results)
+            return
+        }
+        if (syntheticVolumeCount != null) {
+            val results = SyntheticVolumeProbe.run(
+                targetContext,
+                permitted = syntheticVolumePermitted,
+                targetCount = syntheticVolumeCount!!,
+            )
+            finish(if (results.getString("status") == "synthetic_volume_probe_passed")
                 Activity.RESULT_OK else Activity.RESULT_CANCELED, results)
             return
         }
