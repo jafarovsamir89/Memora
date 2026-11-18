@@ -17,6 +17,7 @@ python3 tools/run_memora_acceptance.py device-smoke --serial emulator-5556
 python3 tools/run_memora_acceptance.py device-lineage --serial emulator-5556 --synthetic-user-id 10 --seed-synthetic-profile
 python3 tools/run_memora_acceptance.py volume-probe --serial emulator-5556 --synthetic-user-id 11
 python3 tools/run_memora_acceptance.py startup-probe --serial emulator-5556 --synthetic-user-id 11 --startup-samples 20
+python3 tools/run_memora_acceptance.py finance-ui-journey --serial emulator-5556 --synthetic-user-id 10 --min-host-free-gib 1.0
 ```
 
 - `preflight` verifies the branch, host/emulator free disk, and the selected
@@ -117,6 +118,20 @@ launch with a warm emulator/OS cache; it is not a cold boot, a guarantee that al
 UI data finished loading, or a physical-device benchmark. The runner does not
 invoke the assistant or an AI/model API. The report is written under the run ID
 folder described above.
+
+`finance-ui-journey` requires the already seeded `MemoraReliabilityLab` user 10
+to be the current emulator user, with both app and AndroidTest packages present.
+It verifies the exact lineage sentinels before idempotently adding one clearly
+synthetic Finance receipt and source conversation through the existing protected
+repositories. It then cold-starts MainActivity and drives the real Compose UI by
+visible accessibility text: Secretary result card → exact Finance detail → exact
+source turn → Android Back → Finance → Android Back → the originating Secretary
+card. Exact displayed amount, person and source messages are required; ambiguous
+UI labels fail closed. Five real screenshots and temporary UI hierarchy captures
+are saved in that run's ignored output directory. The journey does not send or
+retry a command, call an AI API, or clean up/delete data. It is a single finance
+route regression, not full LAB-03 acceptance: BMW/person/task links, ambiguity
+and correction flows, and UI retry/no-duplicate behavior remain open.
 
 ### P1.3 recovery checks (partial)
 
