@@ -545,7 +545,10 @@ internal fun SourceTargetDetailScreen(route: AppRoute, onOpenTarget: (AppRoute) 
                     }
                     TextButton(
                         modifier = Modifier.testTag("source_detail_open_conversation"),
-                        onClick = { onOpenTarget(AppRoute.screen(AppDestination.SECRETARY)) },
+                        onClick = {
+                            source.messages.firstOrNull { it.role == "user" }?.turnId
+                                ?.let(AppRoute::conversation)?.let(onOpenTarget)
+                        },
                     ) { Text(s(R.string.entity_source_open_conversation)) }
                 }
                 is SourceDetail.Evidence -> {

@@ -81,6 +81,23 @@ class AppRouteTest {
         assertEquals(AppRoute.screen(AppDestination.PROJECTS), navigation.back().back().current)
     }
 
+    @Test fun openingSourceConversationCarriesExactTurnAndBackRestoresSource() {
+        val turnId = "f190344d-b632-4d8f-ae25-bb60e16f99e1"
+        val source = requireNotNull(AppRoute.source(turnId))
+        val conversation = requireNotNull(AppRoute.conversation(turnId))
+        val navigation = AppNavigationState.start(source).navigate(conversation)
+
+        assertEquals(AppDestination.SECRETARY, conversation.destination)
+        assertEquals(turnId, conversation.conversationTurnId)
+        assertEquals("conversation:$turnId", conversation.encode())
+        assertEquals(conversation, AppRoute.decode(conversation.encode()))
+        assertEquals(source, navigation.back().current)
+        assertNull(AppRoute.conversation("not-a-uuid"))
+        org.junit.Assert.assertThrows(IllegalArgumentException::class.java) {
+            AppRoute(AppDestination.FINANCE, conversationTurnId = turnId)
+        }
+    }
+
     @Test fun navigationStateSaverRestoresCurrentRouteAndBackStack() {
         val target = requireNotNull(AppTargetKind.fromAction(
             "finance", "b911ad3b-491d-4ed0-8f9a-01b204e1b196",

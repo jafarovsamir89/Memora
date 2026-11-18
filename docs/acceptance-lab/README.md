@@ -121,17 +121,28 @@ folder described above.
 
 `finance-ui-journey` requires the already seeded `MemoraReliabilityLab` user 10
 to be the current emulator user, with both app and AndroidTest packages present.
-It verifies the exact lineage sentinels before idempotently adding one clearly
-synthetic Finance receipt and source conversation through the existing protected
-repositories. It then cold-starts MainActivity and drives the real Compose UI by
-visible accessibility text: Secretary result card → exact Finance detail → exact
-source turn → Android Back → Finance → Android Back → the originating Secretary
-card. Exact displayed amount, person and source messages are required; ambiguous
-UI labels fail closed. Five real screenshots and temporary UI hierarchy captures
-are saved in that run's ignored output directory. The journey does not send or
-retry a command, call an AI API, or clean up/delete data. It is a single finance
-route regression, not full LAB-03 acceptance: BMW/person/task links, ambiguity
-and correction flows, and UI retry/no-duplicate behavior remain open.
+It verifies exact lineage sentinels, then idempotently adds and reads synthetic
+data through existing protected repositories: a 300 AZN BMW obligation, 100 AZN
+advance allocated against it, 200 AZN remaining, a person, case, one task, four
+case evidence links and an exact source turn. It cold-starts MainActivity and
+drives the real Compose UI by visible accessibility text through Secretary →
+Finance → Case → Person → Finance → Task → exact source → exact conversation,
+then checks Android Back restoration. Exact IDs, displayed amounts/person/source
+and unambiguous UI labels are required; ambiguous labels fail closed. Screenshots
+and UI hierarchy captures are saved in the run's ignored output directory. The
+journey does not send or retry a command, call an AI API, or clean up/delete data.
+
+ACT-0273 updated the detail check to scroll to the top before asserting its amount
+and direction: navigating back to the same Finance detail can restore the prior
+scroll offset, leaving header fields above the viewport. The v148 AndroidTest
+fixture/readback passed and the v147→v148 update preserved `firstInstallTime`.
+The corrected full UI route has **not** yet passed: the earlier integrated run
+failed on a stale expectation for a case action card, and a later UI-only attempt
+reached Person Finance before stopping on the saved-scroll assertion. The runner
+fix passes its host regression, but the emulator retest was blocked at 905 MiB
+free disk, below the 1 GiB floor. Therefore the full BMW/person/task/source UI
+journey, persistent ambiguity/correction, and retry/no-duplicate UI behavior
+remain open; do not mark LAB-03 complete.
 
 ### P1.3 recovery checks (partial)
 

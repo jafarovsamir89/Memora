@@ -70,30 +70,43 @@ internal data class AppRoute(
     val destination: AppDestination,
     val targetKind: AppTargetKind? = null,
     val targetId: String? = null,
+    val conversationTurnId: String? = null,
 ) {
     init {
         require((targetKind == null) == (targetId == null)) { "route_target_incomplete" }
         require((destination == AppDestination.ACTION_TARGET) == (targetKind != null)) { "route_target_destination_invalid" }
         if (targetId != null) require(runCatching { UUID.fromString(targetId) }.isSuccess) { "route_target_id_invalid" }
+        require(conversationTurnId == null || destination == AppDestination.SECRETARY) {
+            "conversation_route_destination_invalid"
+        }
+        if (conversationTurnId != null) require(runCatching { UUID.fromString(conversationTurnId) }.isSuccess) {
+            "conversation_route_id_invalid"
+        }
     }
 
     val stateKey: String get() = encode()
     val selectedPrimaryTab: AppDestination
         get() = targetKind?.primaryTab ?: destination.primaryTab()
 
-    fun encode(): String = if (targetKind == null) {
-        "screen:${destination.key}"
-    } else {
-        "target:${targetKind.key}:${requireNotNull(targetId)}"
+    fun encode(): String = when {
+        conversationTurnId != null -> "conversation:$conversationTurnId"
+        targetKind != null -> "target:${targetKind.key}:${requireNotNull(targetId)}"
+        else -> "screen:${destination.key}"
     }
 
     companion object {
         fun screen(destination: AppDestination) = AppRoute(destination)
+        fun conversation(turnId: String): AppRoute? = runCatching {
+            AppRoute(AppDestination.SECRETARY, conversationTurnId = turnId)
+        }.getOrNull()
         fun target(kind: AppTargetKind, id: String): AppRoute? =
             runCatching { AppRoute(AppDestination.ACTION_TARGET, kind, id) }.getOrNull()
         fun source(evidenceId: String): AppRoute? = target(AppTargetKind.SOURCE, evidenceId)
         fun fromLegacyRoute(key: String) = decode(key) ?: screen(AppDestination.fromLegacyRoute(key))
         fun decode(value: String): AppRoute? {
+            if (value.startsWith("conversation:")) {
+                return conversation(value.removePrefix("conversation:"))
+            }
             if (value.startsWith("screen:")) {
                 val destination = AppDestination.fromKey(value.removePrefix("screen:")) ?: return null
                 if (destination == AppDestination.ACTION_TARGET) return null

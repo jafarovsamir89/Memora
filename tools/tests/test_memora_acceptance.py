@@ -85,6 +85,19 @@ class StartupProbeMetricTests(unittest.TestCase):
 
 
 class UiHierarchyTests(unittest.TestCase):
+    def test_finance_detail_header_is_checked_after_restoring_saved_scroll_position(self) -> None:
+        events: list[tuple[str, tuple[object, ...]]] = []
+        expected = {"100,00 AZN", "Daxil olan pul"}
+        with patch.object(lab, "swipe_ui", side_effect=lambda *args: events.append(("swipe", args))), \
+             patch.object(lab, "wait_for_ui_texts", side_effect=lambda *args: events.append(("wait", args))):
+            lab.scroll_to_top_and_wait_for_ui_texts(
+                "emulator-5556", Path("/tmp"), "finance-detail", expected
+            )
+
+        self.assertEqual([event[0] for event in events], ["swipe", "wait"])
+        self.assertEqual(events[0][1][2:], ("finance-detail-scroll-to-top", 0.5, 0.34, 0.5, 0.76))
+        self.assertEqual(events[1][1][2:], ("finance-detail", expected))
+
     def test_ui_bounds_parse_android_accessibility_bounds(self) -> None:
         self.assertEqual(lab.ui_bounds("[276,2188][365,2230]"), (276, 2188, 365, 2230))
 
@@ -108,6 +121,32 @@ class UiHierarchyTests(unittest.TestCase):
                 lab.tap_ui_text("emulator-5556", Path("/tmp"), "state", "Open")
         adb.assert_not_called()
 
+    def test_tap_can_select_earlier_of_repeated_labels_by_screen_region(self) -> None:
+        root = lab.ET.fromstring("""<hierarchy><node bounds="[0,0][1080,2400]">
+          <node text="Synthetic person" bounds="[100,700][600,780]" />
+          <node text="Synthetic person" bounds="[100,1700][600,1780]" />
+        </node></hierarchy>""")
+        with patch.object(lab, "ui_tree", return_value=root), patch.object(lab, "adb") as adb:
+            lab.tap_ui_text("emulator-5556", Path("/tmp"), "case", "Synthetic person",
+                            maximum_center_y_fraction=0.6)
+        adb.assert_called_once_with("emulator-5556", "shell", "input", "tap", "350", "740")
+
+    def test_swipe_uses_screen_relative_coordinates(self) -> None:
+        root = lab.ET.fromstring("""<hierarchy><node bounds="[0,0][1080,2400]">
+          <node text="conversation" bounds="[0,200][1080,2100]" />
+        </node></hierarchy>""")
+        with patch.object(lab, "ui_tree", return_value=root), patch.object(lab, "adb") as adb:
+            lab.swipe_ui("emulator-5556", Path("/tmp"), "conversation", .5, .3, .5, .76)
+        adb.assert_called_once_with("emulator-5556", "shell", "input", "swipe",
+                                    "540", "720", "540", "1824", "500")
+
+    def test_swipe_rejects_out_of_bounds_fractions_without_adb(self) -> None:
+        root = lab.ET.fromstring("""<hierarchy bounds="[0,0][1080,2400]" />""")
+        with patch.object(lab, "ui_tree", return_value=root), patch.object(lab, "adb") as adb:
+            with self.assertRaisesRegex(RuntimeError, "fractions are out of bounds"):
+                lab.swipe_ui("emulator-5556", Path("/tmp"), "conversation", .5, -.1, .5, .76)
+        adb.assert_not_called()
+
     def test_startup_probe_rejects_owner_user_before_any_adb_call(self) -> None:
         with patch.object(lab, "adb") as adb:
             with self.assertRaisesRegex(RuntimeError, "non-owner synthetic"):
@@ -122,6 +161,40 @@ class UiHierarchyTests(unittest.TestCase):
 
 
 class ReportSafetyTests(unittest.TestCase):
+    def test_bmw_ui_fixture_requires_exact_300_100_200_and_link_readback(self) -> None:
+        fields = {
+            "status": "synthetic_finance_ui_journey_fixture_passed",
+            "obligation_minor_units": "30000",
+            "advance_minor_units": "10000",
+            "outstanding_minor_units": "20000",
+            "advance_applied_minor_units": "10000",
+            "task_event_count": "1",
+            "case_evidence_count": "4",
+            "bmw_conversation_message_count": "2",
+            "bmw_action_result_count": "2",
+        }
+        passed, checks = lab.validate_bmw_ui_fixture_readback(fields)
+        self.assertTrue(passed)
+        self.assertTrue(all(checks.values()))
+
+    def test_bmw_ui_fixture_rejects_incorrect_finance_or_missing_link_readback(self) -> None:
+        fields = {
+            "status": "synthetic_finance_ui_journey_fixture_passed",
+            "obligation_minor_units": "30000",
+            "advance_minor_units": "10000",
+            "outstanding_minor_units": "19000",
+            "advance_applied_minor_units": "10000",
+            "task_event_count": "1",
+            "case_evidence_count": "3",
+            "bmw_conversation_message_count": "2",
+            "bmw_action_result_count": "1",
+        }
+        passed, checks = lab.validate_bmw_ui_fixture_readback(fields)
+        self.assertFalse(passed)
+        self.assertFalse(checks["outstanding_minor_units"])
+        self.assertFalse(checks["case_evidence_count"])
+        self.assertFalse(checks["bmw_action_result_count"])
+
     def test_volume_report_preserves_conversation_count_paging_and_measurements(self) -> None:
         report = lab.volume_probe_measurements({
             "synthetic_conversation_turns": "1000",

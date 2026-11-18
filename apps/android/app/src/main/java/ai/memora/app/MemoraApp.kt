@@ -280,6 +280,7 @@ fun MemoraApp(initialRoute: String = "home", initialTheme: String = "system", ca
                             }, appearance.ready && !appearance.busy, appearance.error, { appearanceModel.load() }, { about = true })
                             AppDestination.SECRETARY -> AgentChatScreen(language, showVoiceControl = true, onOpenArea = navigate,
                                 onOpenTarget = navigateRoute,
+                                focusTurnId = route.conversationTurnId,
                                 textTurnOverride = textTurnOverride, textTurnProgressOverride = textTurnProgressOverride)
                             AppDestination.ACTION_TARGET -> ActionTargetDetailScreen(route, navigateRoute)
                         }

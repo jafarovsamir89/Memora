@@ -267,7 +267,8 @@ def ui_bounds(value: str) -> tuple[int, int, int, int]:
 
 
 def tap_ui_text(serial: str, out_dir: Path, name: str, text: str,
-                minimum_center_y_fraction: float = 0.0) -> None:
+                minimum_center_y_fraction: float = 0.0,
+                maximum_center_y_fraction: float = 1.0) -> None:
     root = ui_tree(serial, out_dir, name)
     root_bounds_value = root.attrib.get("bounds", "")
     if not root_bounds_value:
@@ -281,12 +282,45 @@ def tap_ui_text(serial: str, out_dir: Path, name: str, text: str,
             continue
         left, top, right, bottom = ui_bounds(node.attrib.get("bounds", ""))
         center_y = (top + bottom) // 2
-        if screen_height > 0 and center_y / screen_height >= minimum_center_y_fraction:
+        center_fraction = center_y / screen_height if screen_height > 0 else 0.0
+        if minimum_center_y_fraction <= center_fraction <= maximum_center_y_fraction:
             candidates.append(((left + right) // 2, center_y))
     if len(candidates) != 1:
         raise RuntimeError(f"expected one visible UI target for {text!r}; found {len(candidates)}")
     x, y = candidates[0]
     adb(serial, "shell", "input", "tap", str(x), str(y))
+
+
+def swipe_ui(serial: str, out_dir: Path, name: str,
+             start_x_fraction: float, start_y_fraction: float,
+             end_x_fraction: float, end_y_fraction: float) -> None:
+    """Swipe within the current emulator UI using screen-relative coordinates."""
+    root = ui_tree(serial, out_dir, name)
+    root_bounds_value = root.attrib.get("bounds", "")
+    if not root_bounds_value:
+        root_bounds_value = next((node.attrib.get("bounds", "") for node in root.iter("node")
+                                  if node.attrib.get("bounds")), "")
+    left, top, right, bottom = ui_bounds(root_bounds_value)
+    width, height = right - left, bottom - top
+    if width <= 0 or height <= 0:
+        raise RuntimeError("emulator UI has invalid dimensions for swipe")
+    coordinates = (
+        left + round(width * start_x_fraction), top + round(height * start_y_fraction),
+        left + round(width * end_x_fraction), top + round(height * end_y_fraction),
+    )
+    if any(value < 0 for value in coordinates) or not (
+        0.0 <= start_x_fraction <= 1.0 and 0.0 <= end_x_fraction <= 1.0
+        and 0.0 <= start_y_fraction <= 1.0 and 0.0 <= end_y_fraction <= 1.0
+    ):
+        raise RuntimeError("emulator UI swipe fractions are out of bounds")
+    adb(serial, "shell", "input", "swipe", *(str(value) for value in coordinates), "500")
+
+
+def scroll_to_top_and_wait_for_ui_texts(serial: str, out_dir: Path, name: str,
+                                        expected: set[str]) -> ET.Element:
+    """Restore the top of a saved detail scroll position before checking header fields."""
+    swipe_ui(serial, out_dir, f"{name}-scroll-to-top", 0.5, 0.34, 0.5, 0.76)
+    return wait_for_ui_texts(serial, out_dir, name, expected)
 
 
 def wait_for_ui_texts(serial: str, out_dir: Path, name: str, expected: set[str],
@@ -313,47 +347,136 @@ def wait_for_ui_texts(serial: str, out_dir: Path, name: str, expected: set[str],
 
 
 def capture_finance_ui_journey(serial: str, out_dir: Path) -> list[str]:
-    """Drive the persisted synthetic conversation → finance → source → Back route."""
+    """Drive exact Finance and linked Case → Person → Finance → Task → source routes."""
     screenshots = out_dir / "screenshots"
     screenshot_names: list[str] = []
     adb(serial, "shell", "am", "force-stop", "--user", "10", PACKAGE)
     adb(serial, "shell", "am", "start", "--user", "10", "-n", f"{PACKAGE}/.MainActivity")
     wait_for_ui_texts(serial, out_dir, "today-ready", {"Katibə"})
     tap_ui_text(serial, out_dir, "today-before-secretary", "Katibə", minimum_center_y_fraction=0.8)
-    conversation = "Synthetic UI fixture: the exact receipt is linked below."
-    wait_for_ui_texts(serial, out_dir, "secretary-card", {conversation, "Bölməni aç Maliyyə"})
-    screenshot_path = screenshots / "p0-3-finance-conversation-card.png"
+    bmw_user_message = "Sintetik ssenari: Synthetic Elçin BMW təmiri üçün 100 AZN avans verdi; servis görüşünü təsdiqlə."
+    bmw_model_message = "Sintetik ssenari: 300 AZN razılaşdırılıb, 100 AZN avans alınıb və 200 AZN qalıb; görüş tapşırığı yaradılıb."
+    wait_for_ui_texts(serial, out_dir, "secretary-bmw-advance-turn", {
+        "Bölməni aç Maliyyə",
+        "Bölməni aç Tapşırıqlar",
+    })
+    screenshot_path = screenshots / "p0-3-bmw-conversation-actions.png"
     screenshot(serial, screenshot_path)
     screenshot_names.append(str(screenshot_path.relative_to(ROOT)))
 
-    tap_ui_text(serial, out_dir, "secretary-before-finance", "Bölməni aç Maliyyə")
-    finance_expected = {"123,45 AZN", "Şəxs: Synthetic P0.3 Receipt Person", "İlkin söhbət"}
-    wait_for_ui_texts(serial, out_dir, "finance-detail", finance_expected)
-    screenshot_path = screenshots / "p0-3-finance-detail.png"
-    screenshot(serial, screenshot_path)
-    screenshot_names.append(str(screenshot_path.relative_to(ROOT)))
-
-    tap_ui_text(serial, out_dir, "finance-before-source", "İlkin söhbət")
-    source_expected = {
-        "Synthetic UI fixture: open the saved 123.45 AZN receipt.",
-        conversation,
-        "Yadda saxlanıldı",
-        "Söhbəti katibədə aç",
+    tap_ui_text(serial, out_dir, "secretary-before-bmw-advance", "Bölməni aç Maliyyə")
+    finance_expected = {
+        "100,00 AZN",
+        "Synthetic P0.3 Receipt Person",
+        "Daxil olan pul",
+        "Synthetic BMW repair advance received.",
+        "İlkin söhbət",
     }
-    wait_for_ui_texts(serial, out_dir, "source-detail", source_expected)
-    screenshot_path = screenshots / "p0-3-finance-source.png"
+    scroll_to_top_and_wait_for_ui_texts(serial, out_dir, "bmw-advance-detail", finance_expected)
+    screenshot_path = screenshots / "p0-3-bmw-advance-detail.png"
+    screenshot(serial, screenshot_path)
+    screenshot_names.append(str(screenshot_path.relative_to(ROOT)))
+
+    swipe_ui(serial, out_dir, "advance-finance-scroll-to-case", 0.5, 0.72, 0.5, 0.34)
+    wait_for_ui_texts(serial, out_dir, "advance-finance-linked-case", {"Synthetic BMW repair"})
+    tap_ui_text(serial, out_dir, "advance-finance-before-case", "Synthetic BMW repair")
+    case_expected = {"Synthetic BMW repair", "Synthetic P0.3 Receipt Person",
+                     "Növbəti addım: Review the linked synthetic receipt"}
+    wait_for_ui_texts(serial, out_dir, "case-detail", case_expected)
+    screenshot_path = screenshots / "p0-3-case-detail.png"
+    screenshot(serial, screenshot_path)
+    screenshot_names.append(str(screenshot_path.relative_to(ROOT)))
+
+    tap_ui_text(serial, out_dir, "case-before-person", "Synthetic P0.3 Receipt Person",
+                maximum_center_y_fraction=0.7)
+    person_expected = {"Synthetic P0.3 Receipt Person", "Maliyyə"}
+    wait_for_ui_texts(serial, out_dir, "person-detail", person_expected)
+    screenshot_path = screenshots / "p0-3-person-detail.png"
+    screenshot(serial, screenshot_path)
+    screenshot_names.append(str(screenshot_path.relative_to(ROOT)))
+
+    tap_ui_text(serial, out_dir, "person-before-finance-section", "Maliyyə")
+    person_finance_expected = {
+        "100 AZN",
+        "Synthetic BMW repair advance received.",
+    }
+    wait_for_ui_texts(serial, out_dir, "person-finance", person_finance_expected)
+    screenshot_path = screenshots / "p0-3-person-finance.png"
+    screenshot(serial, screenshot_path)
+    screenshot_names.append(str(screenshot_path.relative_to(ROOT)))
+
+    tap_ui_text(serial, out_dir, "person-finance-before-advance", "Synthetic BMW repair advance received.")
+    scroll_to_top_and_wait_for_ui_texts(
+        serial, out_dir, "case-linked-bmw-advance-detail", finance_expected
+    )
+    screenshot_path = screenshots / "p0-3-case-linked-finance-detail.png"
+    screenshot(serial, screenshot_path)
+    screenshot_names.append(str(screenshot_path.relative_to(ROOT)))
+
+    task_title = "Synthetic confirm BMW repair appointment"
+    swipe_ui(serial, out_dir, "finance-scroll-to-related-task", 0.5, 0.72, 0.5, 0.36)
+    swipe_ui(serial, out_dir, "finance-scroll-to-related-task-again", 0.5, 0.72, 0.5, 0.42)
+    wait_for_ui_texts(serial, out_dir, "finance-related-task", {task_title})
+    screenshot_path = screenshots / "p0-3-finance-related-task.png"
+    screenshot(serial, screenshot_path)
+    screenshot_names.append(str(screenshot_path.relative_to(ROOT)))
+
+    tap_ui_text(serial, out_dir, "finance-before-related-task", task_title)
+    task_expected = {task_title, "Açıq", "İlkin söhbət"}
+    wait_for_ui_texts(serial, out_dir, "exact-task-detail", task_expected)
+    screenshot_path = screenshots / "p0-3-task-detail.png"
+    screenshot(serial, screenshot_path)
+    screenshot_names.append(str(screenshot_path.relative_to(ROOT)))
+
+    tap_ui_text(serial, out_dir, "task-before-exact-source", "İlkin söhbət")
+    task_source_expected = {
+        bmw_user_message,
+        bmw_model_message,
+        "Yadda saxlanıldı",
+    }
+    wait_for_ui_texts(serial, out_dir, "task-exact-source", task_source_expected)
+    screenshot_path = screenshots / "p0-3-task-exact-source.png"
+    screenshot(serial, screenshot_path)
+    screenshot_names.append(str(screenshot_path.relative_to(ROOT)))
+
+    swipe_ui(serial, out_dir, "task-source-scroll-to-conversation", 0.5, 0.76, 0.5, 0.3)
+    wait_for_ui_texts(serial, out_dir, "task-source-open-conversation", {"Söhbəti katibədə aç"})
+    tap_ui_text(serial, out_dir, "task-source-open-exact-conversation", "Söhbəti katibədə aç")
+    wait_for_ui_texts(serial, out_dir, "task-source-exact-conversation", task_source_expected)
+    screenshot_path = screenshots / "p0-3-task-source-exact-conversation.png"
     screenshot(serial, screenshot_path)
     screenshot_names.append(str(screenshot_path.relative_to(ROOT)))
 
     adb(serial, "shell", "input", "keyevent", "4")
-    wait_for_ui_texts(serial, out_dir, "back-to-finance", finance_expected)
-    screenshot_path = screenshots / "p0-3-back-to-finance.png"
+    wait_for_ui_texts(serial, out_dir, "task-conversation-back-to-source", {"Söhbəti katibədə aç"})
+    screenshot_path = screenshots / "p0-3-task-conversation-back-to-source.png"
     screenshot(serial, screenshot_path)
     screenshot_names.append(str(screenshot_path.relative_to(ROOT)))
-
     adb(serial, "shell", "input", "keyevent", "4")
-    wait_for_ui_texts(serial, out_dir, "back-to-secretary", {conversation, "Bölməni aç Maliyyə"})
-    screenshot_path = screenshots / "p0-3-back-to-secretary.png"
+    wait_for_ui_texts(serial, out_dir, "task-source-back-to-task", task_expected)
+    adb(serial, "shell", "input", "keyevent", "4")
+    swipe_ui(serial, out_dir, "finance-return-scroll-to-top", 0.5, 0.34, 0.5, 0.76)
+    wait_for_ui_texts(serial, out_dir, "task-back-to-finance", finance_expected)
+    adb(serial, "shell", "input", "keyevent", "4")
+    wait_for_ui_texts(serial, out_dir, "finance-back-to-person-finance", person_finance_expected | {"Maliyyə"})
+    adb(serial, "shell", "input", "keyevent", "4")
+    wait_for_ui_texts(serial, out_dir, "person-back-to-case", case_expected)
+    screenshot_path = screenshots / "p0-3-back-to-case.png"
+    screenshot(serial, screenshot_path)
+    screenshot_names.append(str(screenshot_path.relative_to(ROOT)))
+    adb(serial, "shell", "input", "keyevent", "4")
+    scroll_to_top_and_wait_for_ui_texts(
+        serial, out_dir, "case-back-to-origin-finance", finance_expected
+    )
+    screenshot_path = screenshots / "p0-3-case-back-to-origin-finance.png"
+    screenshot(serial, screenshot_path)
+    screenshot_names.append(str(screenshot_path.relative_to(ROOT)))
+    adb(serial, "shell", "input", "keyevent", "4")
+    wait_for_ui_texts(serial, out_dir, "case-back-to-origin-secretary", {
+        bmw_user_message,
+        bmw_model_message,
+    })
+    screenshot_path = screenshots / "p0-3-case-back-to-origin-secretary.png"
     screenshot(serial, screenshot_path)
     screenshot_names.append(str(screenshot_path.relative_to(ROOT)))
     return screenshot_names
@@ -878,7 +1001,7 @@ def run_synthetic_volume_probe(serial: str, user_id: int, env: dict[str, str],
 def run_synthetic_finance_ui_journey_probe(serial: str, user_id: int,
                                            out_dir: Path,
                                            steps: list[dict[str, Any]]) -> None:
-    """Idempotently prepare one finance-action/source fixture in lineage user 10 only."""
+    """Idempotently prepare and exercise finance/case/person/source fixtures in lineage user 10 only."""
     if user_id <= 0:
         raise RuntimeError("synthetic user id must be greater than owner user 0")
     users = adb(serial, "shell", "pm", "list", "users").stdout
@@ -898,6 +1021,49 @@ def run_synthetic_finance_ui_journey_probe(serial: str, user_id: int,
     steps.append({"name": "synthetic_ui_journey_user_preflight", "status": "PASS",
                   "synthetic_user_id": user_id, "version_code": package_state["version_code"],
                   "version_name": package_state["version_name"]})
+
+    next_code = package_state["version_code"] + 1
+    next_name = f"acceptance-lab-v{next_code}"
+    build = run([
+        str(GRADLEW), ":app:assembleDebug", ":app:assembleDebugAndroidTest",
+        f"-PmemoraAcceptanceVersionCode={next_code}",
+        f"-PmemoraAcceptanceVersionName={next_name}",
+        "--no-daemon", "--console=plain", "--max-workers=1",
+    ], timeout=1200, env=test_environment(serial))
+    steps.append({"name": "assemble_current_debug_and_android_test_apks", **build})
+    if build["exit_code"] != 0:
+        return
+    metadata_path = APP / "build/outputs/apk/debug/output-metadata.json"
+    app_apk = APP / "build/outputs/apk/debug/app-debug.apk"
+    test_apk = APP / "build/outputs/apk/androidTest/debug/app-debug-androidTest.apk"
+    if not metadata_path.is_file() or not app_apk.is_file() or not test_apk.is_file():
+        steps.append({"name": "debug_apk_outputs", "status": "FAIL", "reason": "expected_apk_missing"})
+        return
+    metadata = json.loads(metadata_path.read_text(encoding="utf-8"))
+    element = metadata.get("elements", [{}])[0]
+    if metadata.get("applicationId") != PACKAGE or int(element.get("versionCode", -1)) != next_code or \
+            element.get("versionName") != next_name:
+        steps.append({"name": "debug_apk_metadata", "status": "FAIL", "reason": "unexpected_package_or_version"})
+        return
+    steps.append({"name": "debug_apk_metadata", "status": "PASS",
+                  "version_code": next_code, "version_name": next_name})
+    verify_emulator(serial)
+    for name, apk in (("install_current_app_for_synthetic_user", app_apk),
+                      ("install_current_android_test_for_synthetic_user", test_apk)):
+        install_started = time.monotonic()
+        install = adb(serial, "install", "--user", str(user_id), "-r", str(apk), timeout=300)
+        steps.append({"name": name, "status": "PASS",
+                      "duration_seconds": round(time.monotonic() - install_started, 3),
+                      "result": scrub(install.stdout.strip())})
+    after_state = package_install_state(adb(serial, "shell", "dumpsys", "package", PACKAGE).stdout, user_id)
+    update_passed = after_state["version_code"] == next_code and after_state["version_name"] == next_name and \
+        after_state["first_install_time"] == package_state["first_install_time"]
+    steps.append({"name": "package_update_lineage", "status": "PASS" if update_passed else "FAIL",
+                  "version_code_before": package_state["version_code"],
+                  "version_code_after": after_state["version_code"],
+                  "first_install_time_unchanged": after_state["first_install_time"] == package_state["first_install_time"]})
+    if not update_passed:
+        return
     started = time.monotonic()
     probe = adb(
         serial, "shell", "am", "instrument", "--user", str(user_id), "-w",
@@ -909,20 +1075,41 @@ def run_synthetic_finance_ui_journey_probe(serial: str, user_id: int,
     output = (probe.stdout or "") + (probe.stderr or "")
     fields = {match.group(1): match.group(2) for match in
               re.finditer(r"INSTRUMENTATION_RESULT: ([a-z0-9_]+)=([^\s]+)", output)}
-    passed = fields.get("status") == "synthetic_finance_ui_journey_fixture_passed"
+    passed, fixture_checks = validate_bmw_ui_fixture_readback(fields)
     steps.append({
         "name": "synthetic_finance_ui_journey_fixture",
         "status": "PASS" if passed else "FAIL",
         "duration_seconds": round(time.monotonic() - started, 3),
         "probe_status": fields.get("status"),
+        "expected_readback_checks": fixture_checks,
         "stage_error": fields.get("stage_error"),
         "finance_event_id": fields.get("finance_event_id"),
         "conversation_turn_id": fields.get("conversation_turn_id"),
         "source_turn_id": fields.get("source_turn_id"),
+        "case_id": fields.get("case_id"),
+        "person_id": fields.get("person_id"),
+        "task_id": fields.get("task_id"),
+        "obligation_event_id": fields.get("obligation_event_id"),
+        "advance_event_id": fields.get("advance_event_id"),
+        "advance_turn_id": fields.get("advance_turn_id"),
         "minor_units": int(fields["minor_units"]) if fields.get("minor_units", "").isdigit() else None,
+        "obligation_minor_units": int(fields["obligation_minor_units"])
+        if fields.get("obligation_minor_units", "").isdigit() else None,
+        "advance_minor_units": int(fields["advance_minor_units"])
+        if fields.get("advance_minor_units", "").isdigit() else None,
+        "outstanding_minor_units": int(fields["outstanding_minor_units"])
+        if fields.get("outstanding_minor_units", "").isdigit() else None,
+        "advance_applied_minor_units": int(fields["advance_applied_minor_units"])
+        if fields.get("advance_applied_minor_units", "").isdigit() else None,
         "finance_event_count": int(fields["finance_event_count"]) if fields.get("finance_event_count", "").isdigit() else None,
         "conversation_message_count": int(fields["conversation_message_count"]) if fields.get("conversation_message_count", "").isdigit() else None,
         "action_result_count": int(fields["action_result_count"]) if fields.get("action_result_count", "").isdigit() else None,
+        "task_event_count": int(fields["task_event_count"]) if fields.get("task_event_count", "").isdigit() else None,
+        "case_evidence_count": int(fields["case_evidence_count"]) if fields.get("case_evidence_count", "").isdigit() else None,
+        "bmw_conversation_message_count": int(fields["bmw_conversation_message_count"])
+        if fields.get("bmw_conversation_message_count", "").isdigit() else None,
+        "bmw_action_result_count": int(fields["bmw_action_result_count"])
+        if fields.get("bmw_action_result_count", "").isdigit() else None,
         "network_used": False,
         "model_used": "NOT APPLICABLE",
         "data_scope": "named synthetic Android user 10 only; app repository readback; idempotent additive fixture; no deletion",
@@ -931,9 +1118,10 @@ def run_synthetic_finance_ui_journey_probe(serial: str, user_id: int,
         try:
             screenshots = capture_finance_ui_journey(serial, out_dir)
             steps.append({
-                "name": "persistent_conversation_finance_source_back_ui_journey",
+                "name": "persistent_conversation_case_person_finance_task_source_back_ui_journey",
                 "status": "PASS",
-                "route": "Secretary action card → exact finance event → exact source turn → Back → finance → Back → same conversation",
+                "route": "Secretary conversation → BMW advance (300 AZN total, 100 AZN paid, 200 AZN remaining) → exact case → person → advance → linked Task → originating conversation; Android Back restores each prior screen",
+                "screenshot_count": len(screenshots),
                 "screenshots": screenshots,
                 "network_used": False,
                 "model_used": "NOT APPLICABLE",
@@ -941,13 +1129,30 @@ def run_synthetic_finance_ui_journey_probe(serial: str, user_id: int,
             })
         except (RuntimeError, subprocess.CalledProcessError, subprocess.TimeoutExpired) as error:
             steps.append({
-                "name": "persistent_conversation_finance_source_back_ui_journey",
+                "name": "persistent_conversation_case_person_finance_task_source_back_ui_journey",
                 "status": "FAIL",
                 "reason": scrub(f"{type(error).__name__}: {error}"),
                 "network_used": False,
                 "model_used": "NOT APPLICABLE",
                 "data_scope": "synthetic Android user 10 only; no UI write actions or data cleanup",
             })
+
+
+def validate_bmw_ui_fixture_readback(fields: dict[str, str]) -> tuple[bool, dict[str, bool]]:
+    """Fail closed unless the synthetic 300/100/200 BMW path and exact links read back."""
+    expected = {
+        "obligation_minor_units": 30_000,
+        "advance_minor_units": 10_000,
+        "outstanding_minor_units": 20_000,
+        "advance_applied_minor_units": 10_000,
+        "task_event_count": 1,
+        "case_evidence_count": 4,
+        "bmw_conversation_message_count": 2,
+        "bmw_action_result_count": 2,
+    }
+    checks = {key: fields.get(key) == str(value) for key, value in expected.items()}
+    checks["fixture_status"] = fields.get("status") == "synthetic_finance_ui_journey_fixture_passed"
+    return all(checks.values()), checks
 
 
 def main() -> int:

@@ -72,6 +72,7 @@ import kotlinx.coroutines.withContext
 @Composable
 internal fun AgentChatScreen(language: String = "az", showVoiceControl: Boolean = false, onOpenArea: (String) -> Unit = {},
     onOpenTarget: (AppRoute) -> Unit = {},
+    focusTurnId: String? = null,
     textTurnOverride: (suspend (String) -> VoiceFirstResult)? = null,
     textTurnProgressOverride: (suspend (String, (VoiceTurnProgress) -> Unit) -> VoiceFirstResult)? = null) {
     val context = LocalContext.current
@@ -110,6 +111,7 @@ internal fun AgentChatScreen(language: String = "az", showVoiceControl: Boolean 
     var savedHistoryIndex by rememberSaveable { mutableIntStateOf(0) }
     var savedHistoryOffset by rememberSaveable { mutableIntStateOf(0) }
     var restoreHistoryPosition by remember { mutableStateOf(historyLoaded) }
+    var pendingConversationFocus by rememberSaveable(focusTurnId) { mutableStateOf(focusTurnId != null) }
     val historyState = rememberLazyListState()
     val requestBusy = busy || (managedTurns && turnState.busy)
     val requestMessage = if (managedTurns) turnState.pendingMessage else activeRequestMessage
@@ -121,8 +123,11 @@ internal fun AgentChatScreen(language: String = "az", showVoiceControl: Boolean 
 
     suspend fun refreshMessages() {
         val recent = repository.recent(scopeId, 80)
-        messages = recent
-        actionResults = repository.actionResultsForTurns(scopeId, recent.map { it.turnId }.distinct())
+        val focused = focusTurnId?.let { repository.turn(scopeId, it) }.orEmpty()
+        val merged = (recent + focused).distinctBy { Triple(it.scopeId, it.turnId, it.role) }
+            .sortedBy { it.sequence }
+        messages = merged
+        actionResults = repository.actionResultsForTurns(scopeId, merged.map { it.turnId }.distinct())
         historyLoaded = true
     }
     LaunchedEffect(scopeId) { refreshMessages() }
@@ -141,8 +146,28 @@ internal fun AgentChatScreen(language: String = "az", showVoiceControl: Boolean 
             failureCode = turnState.failureCode
         }
     }
-    LaunchedEffect(messages, requestBusy, requestFailed, requestMessage, requestActions, requestTurnId) {
+    LaunchedEffect(messages, requestBusy, requestFailed, requestMessage, requestActions, requestTurnId,
+        focusTurnId, pendingConversationFocus, historyLoaded) {
         if (messages.isEmpty()) return@LaunchedEffect
+        if (focusTurnId != null && pendingConversationFocus) {
+            val targetIndex = messages.asReversed().indexOfFirst {
+                it.turnId == focusTurnId && it.role == "user"
+            }
+            if (targetIndex >= 0) {
+                val leadingItems = listOf(
+                    requestBusy,
+                    requestFailed,
+                    requestActions.isNotEmpty(),
+                    requestMessage.isNotBlank(),
+                ).count { it }
+                historyState.scrollToItem(leadingItems + targetIndex)
+                pendingConversationFocus = false
+                restoreHistoryPosition = false
+                return@LaunchedEffect
+            }
+            if (!historyLoaded) return@LaunchedEffect
+            pendingConversationFocus = false
+        }
         if (restoreHistoryPosition) {
             val messageItemCount = messages.size * 2
             historyState.scrollToItem(savedHistoryIndex.coerceAtMost((messageItemCount - 1).coerceAtLeast(0)), savedHistoryOffset)
