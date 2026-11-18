@@ -124,20 +124,26 @@ fun SettingsScreen(theme: String, changeTheme: (String) -> Unit, language: Strin
         Text(s(R.string.settings_subtitle), color = colors.muted, style = MaterialTheme.typography.bodyMedium)
         if (error) {
             Text(s(R.string.settings_storage_error), color = MaterialTheme.colorScheme.error, modifier = Modifier.testTag("settings_storage_error"))
-            OutlinedButton(onClick = retry, modifier = Modifier.testTag("settings_retry")) { Text(s(R.string.settings_retry)) }
+            OutlinedButton(onClick = retry, modifier = Modifier.heightIn(min = 48.dp).testTag("settings_retry")) { Text(s(R.string.settings_retry)) }
         }
-        GeminiAgentModelSettings()
-        SectionHeading(s(R.string.appearance))
-        Filters(listOf("system" to s(R.string.theme_system), "light" to s(R.string.theme_light), "dark" to s(R.string.theme_dark)), theme, changeTheme, enabled = ready)
-        SectionHeading(s(R.string.language))
-        Filters(listOf("ru" to "Русский", "az" to "Azərbaycan", "en" to "English"), language, changeLanguage, enabled = ready)
-        AttentionSettingsControls()
-        DevicePermissionSettings()
+        MemoraCard(contentPadding = 16.dp) { GeminiAgentModelSettings() }
+        MemoraCard(contentPadding = 16.dp) {
+            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                SectionHeading(s(R.string.appearance))
+                Filters(listOf("system" to s(R.string.theme_system), "light" to s(R.string.theme_light), "dark" to s(R.string.theme_dark)), theme, changeTheme, enabled = ready)
+                SectionHeading(s(R.string.language))
+                Filters(listOf("ru" to "Русский", "az" to "Azərbaycan", "en" to "English"), language, changeLanguage, enabled = ready)
+            }
+        }
+        MemoraCard(contentPadding = 16.dp) { AttentionSettingsControls() }
+        MemoraCard(contentPadding = 16.dp) { DevicePermissionSettings() }
         AppCheckDebugSettings()
         if (granted) OutlinedButton(onClick = {
             if (voiceConsent.edit().clear().commit()) granted = false
-        }, modifier = Modifier.testTag("voice_revoke_consent")) { Text(s(R.string.voice_revoke_consent)) }
-        MemoraCard { MenuRow(Glyph.Shield, s(R.string.privacy), s(R.string.privacy_hint), 1, onClick = about) }
-        MemoraCard { MenuRow(Glyph.Spark, s(R.string.about), s(R.string.version), onClick = about) }
+        }, modifier = Modifier.heightIn(min = 48.dp).testTag("voice_revoke_consent")) { Text(s(R.string.voice_revoke_consent)) }
+        MemoraCard {
+            MenuRow(Glyph.Shield, s(R.string.privacy), s(R.string.privacy_hint), 1, onClick = about)
+            MenuRow(Glyph.Spark, s(R.string.about), s(R.string.version), onClick = about)
+        }
     }
 }

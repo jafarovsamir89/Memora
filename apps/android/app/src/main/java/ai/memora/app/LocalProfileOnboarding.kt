@@ -1,11 +1,18 @@
 package ai.memora.app
 
 import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ColumnScope
+import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.safeDrawing
+import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
@@ -33,8 +40,20 @@ import ai.memora.app.ui.s
 import ai.memora.app.R
 
 @Composable
+private fun OnboardingSafeScreen(
+    modifier: Modifier = Modifier,
+    content: @Composable ColumnScope.() -> Unit,
+) {
+    // Onboarding and its loading/error states render outside Scaffold, so they
+    // must apply their own system-bar and display-cutout insets under edge-to-edge.
+    Box(Modifier.fillMaxSize().background(colors.background).windowInsetsPadding(WindowInsets.safeDrawing)) {
+        ScreenColumn(modifier = modifier, content = content)
+    }
+}
+
+@Composable
 internal fun LocalProfileLoadingScreen() {
-    ScreenColumn {
+    OnboardingSafeScreen {
         Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
             BrandMark()
             Column {
@@ -48,7 +67,7 @@ internal fun LocalProfileLoadingScreen() {
 
 @Composable
 internal fun LocalProfileErrorScreen(messageId: Int, retry: () -> Unit) {
-    ScreenColumn {
+    OnboardingSafeScreen {
         BrandMark()
         ScreenHeading(s(R.string.onboarding_load_error), s(messageId))
         Button(onClick = retry, modifier = Modifier.fillMaxWidth().testTag("profile_retry")) {
@@ -73,7 +92,7 @@ internal fun LocalProfileOnboardingScreen(
     var style by rememberSaveable(initialInput?.responseStyle) { mutableStateOf(initialInput?.responseStyle ?: "balanced") }
     var timeZone by rememberSaveable(initialInput?.timeZoneId) { mutableStateOf(initialInput?.timeZoneId ?: "Asia/Baku") }
 
-    ScreenColumn(Modifier.testTag("profile_onboarding_scroll")) {
+    OnboardingSafeScreen(Modifier.testTag("profile_onboarding_scroll")) {
         Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
             BrandMark()
             Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {

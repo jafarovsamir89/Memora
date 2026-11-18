@@ -1,5 +1,13 @@
 # Memora — дневник ведущего инженера
 
+## ACT-0256 · 2026-11-18 · Backup, Settings, onboarding and visual verification
+
+Продолжена разрешённая работа UI/UX на `ui/redesign-v1`. Settings сгруппирован в переиспользуемые карточки; Backup получил отдельную заметку о шифровании и более компактную transfer-карточку. Для export/import/restore, confirmation, retry, permission и attention actions установлен минимум 48dp. Onboarding/loading/error теперь самостоятельно применяют `safeDrawing` insets и фон активной темы; исправлено обрезание логотипа под системной строкой и несоответствие тёмному режиму. Добавлены WCAG-проверки палитры light/dark. Увеличено ожидание system-bar transition только в screenshot runner; 31 golden и thresholds не менялись. Schema, ledger, domain, consent, AI/provider, permission semantics, privacy и auth не менялись.
+
+Полный Gradle: **80 suites / 411 tests, 0 failures/errors, 1 opt-in live skipped**; debug/AndroidTest сборки и AndroidTest Kotlin compile PASS; lint **0/90/2**; component regression **31/31 PASS**. APK v105 `1.1.83-ui-accessibility-polish`, SHA-256 `3ebb322a2642994dc85eb98b98522ead400b09d50ca5aa6340efc3ee283efc81`. Синтетический Android 14 emulator: после очистки только disposable app profile onboarding открылся на AZ; экран завершён; после force-stop/relaunch AZ Today восстановился, onboarding не повторился. При fontScale 1.3 нижний onboarding вариант и Start доступны прокруткой. Redmi 2201117SG Android 13: v105 `adb install -r`, firstInstallTime остался `2026-11-18 02:05:36`; MainActivity открылась, видимые счётчики Today — 0 задач/0 дел/0 событий. На Redmi данные не очищались и private DB не читалась; нули относятся только к отображаемым категориям. Скриншоты и ограничения — [Phase 10 report](ui-ux-redesign-v1/phase-10/REPORT.md).
+
+M20-05 остаётся частичной: TalkBack, physical onboarding, physical fontScale 1.3, populated upgrade readback, SAF round-trip, consent persistence, device end-to-end journeys B–G, owner/native acceptance и release readiness не закрыты. Дальше: безопасно пройти независимые синтетические end-to-end/UI flows и устранить только подтверждённые UI-ошибки; затем пересмотреть оставшиеся device-acceptance gaps. `main` и owner-owned ADR-012 не трогать; APK/key/raw personal data не коммитить.
+
 ## ACT-0255 · 2026-11-16 · Inbox UI checkpoint
 
 Inbox переехал на компактный экран с source-ID-keyed `LazyColumn`, saveable search/filter state и оборачиваемыми AZ-действиями; существующие capture/archive/revision/history/delete/SAF callbacks и encrypted capture store сохранены. Schema/domain/retention/consent/provider/privacy/permissions не менялись.

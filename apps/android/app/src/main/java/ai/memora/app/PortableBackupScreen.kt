@@ -45,7 +45,6 @@ import ai.memora.app.data.protectedstore.PortableBackupCutoverException
 import ai.memora.app.ui.MemoraCard
 import ai.memora.app.ui.LocalStrings
 import ai.memora.app.ui.ScreenColumn
-import ai.memora.app.ui.ScreenHeading
 import ai.memora.app.ui.colors
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -156,9 +155,10 @@ internal fun PortableBackupScreen() {
     }
 
     ScreenColumn {
-        ScreenHeading(s(R.string.backup_title), s(R.string.backup_subtitle))
-        MemoraCard {
+        MemoraCard(tint = colors.softMint) {
             Text(s(R.string.backup_encrypted_note), style = MaterialTheme.typography.bodyMedium, color = colors.muted)
+        }
+        MemoraCard {
             OutlinedTextField(
                 value = password,
                 onValueChange = { password = it.take(1024) },
@@ -190,7 +190,7 @@ internal fun PortableBackupScreen() {
                     }
                 },
                 enabled = !busy,
-                modifier = Modifier.fillMaxWidth().testTag("portable_backup_export"),
+                modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp).testTag("portable_backup_export"),
             ) { Text(s(R.string.backup_export)) }
             OutlinedButton(
                 onClick = {
@@ -198,7 +198,7 @@ internal fun PortableBackupScreen() {
                     else importLauncher.launch(arrayOf("application/octet-stream", "application/*", "*/*"))
                 },
                 enabled = !busy,
-                modifier = Modifier.fillMaxWidth().testTag("portable_backup_import"),
+                modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp).testTag("portable_backup_import"),
             ) { Text(s(R.string.backup_import)) }
             if (busy) CircularProgressIndicator()
             issue?.let { Text(s(it), color = MaterialTheme.colorScheme.error, modifier = Modifier.testTag("portable_backup_error")) }
@@ -214,7 +214,7 @@ internal fun PortableBackupScreen() {
                     OutlinedButton(
                         onClick = { confirmReplacement = true },
                         enabled = !busy,
-                        modifier = Modifier.fillMaxWidth().testTag("portable_backup_replace"),
+                        modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp).testTag("portable_backup_replace"),
                     ) { Text(s(R.string.backup_restore)) }
                 }
             }
@@ -262,10 +262,13 @@ internal fun PortableBackupScreen() {
                         }
                     },
                     enabled = !busy,
-                    modifier = Modifier.testTag("portable_backup_confirm_replace"),
+                    modifier = Modifier.heightIn(min = 48.dp).testTag("portable_backup_confirm_replace"),
                 ) { Text(s(R.string.backup_restore)) }
             },
-            dismissButton = { TextButton(onClick = { confirmReplacement = false }) { Text(s(R.string.task_cancel)) } },
+            dismissButton = { TextButton(
+                onClick = { confirmReplacement = false },
+                modifier = Modifier.heightIn(min = 48.dp),
+            ) { Text(s(R.string.task_cancel)) } },
         )
     }
 }

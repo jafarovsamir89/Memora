@@ -210,10 +210,12 @@ def capture(serial: str, component: str, theme: str) -> bytes:
     run_adb(serial, "shell", "am", "force-stop", "ai.memora.app")
     run_adb(serial, "shell", "am", "start", "-W", "-n", ACTIVITY,
             "--es", "component", component, "--es", "theme", theme)
-    # The confirmation sheet has a modal enter animation; wait for it to finish
-    # before capture. Other gallery states include intentional looping animation
-    # (for example, loading and active voice), so frame equality is not suitable.
-    time.sleep(1.5 if component == "confirmation" else 0.85)
+    # Give Android 14 time to finish the immersive-system-bar transition before
+    # capture. Some light surfaces are briefly dimmed while that window update
+    # settles. The confirmation sheet also needs its modal enter animation.
+    # Other gallery states include intentional looping animation (for example,
+    # loading and active voice), so frame equality is not suitable.
+    time.sleep(3.0 if component == "confirmation" else 1.25)
     return run_adb(serial, "exec-out", "screencap", "-p")
 
 

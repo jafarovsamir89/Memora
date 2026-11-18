@@ -21,6 +21,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.material3.MaterialTheme
@@ -88,7 +89,7 @@ fun AppCheckDebugSettings() {
                         }
                 },
                 enabled = !busy,
-                modifier = Modifier.fillMaxWidth().testTag("app_check_debug_save"),
+                modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp).testTag("app_check_debug_save"),
             ) {
                 if (busy) CircularProgressIndicator(Modifier.size(18.dp), strokeWidth = 2.dp)
                 else Text(s(R.string.app_check_debug_save))
@@ -118,7 +119,7 @@ fun AppCheckDebugSettings() {
                         }
                     },
                     enabled = !busy,
-                    modifier = Modifier.fillMaxWidth().testTag("app_check_debug_clear"),
+                    modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp).testTag("app_check_debug_clear"),
                 ) { Text(s(R.string.app_check_debug_clear)) }
             }
             status?.let { message ->

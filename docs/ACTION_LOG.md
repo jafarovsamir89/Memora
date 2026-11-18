@@ -1,3 +1,13 @@
+## ACT-0256 · 2026-11-18 · Backup, Settings and onboarding UI verification
+
+**Changes:** reorganized Settings cards, separated Backup encryption disclosure from transfer actions, removed duplicate Backup heading, and raised relevant action/retry controls to at least 48dp. Onboarding/loading/error screens now apply safe drawing insets and themed backgrounds. Added light/dark palette contrast tests. Component screenshot settling delay now accounts for Android 14 system-bar transitions; committed goldens and limits are unchanged. No schema, ledger, domain, consent, AI/provider, privacy or permission semantics changed.
+
+**Checks:** full Gradle `BUILD SUCCESSFUL`; 80 JVM suites / 411 tests, 0 failures/errors, 1 opt-in live skipped; debug and AndroidTest APK builds and AndroidTest Kotlin compile passed; lint 0/90/2; 31/31 screenshot comparisons passed. Debug APK v105 / `1.1.83-ui-accessibility-polish`, SHA-256 `3ebb322a2642994dc85eb98b98522ead400b09d50ca5aa6340efc3ee283efc81`.
+
+**Device:** on synthetic Android 14, first-run onboarding in AZ completed and force-stop/relaunch returned to AZ Today, not onboarding. FontScale 1.3 onboarding controls remain reachable by scroll. On Redmi Android 13, v105 updated over the previous APK with unchanged firstInstallTime and MainActivity launched. The visible dashboard showed zero tasks/cases/events. No app database was read and no Redmi data was cleared. Backup SAF round-trip, physical onboarding, populated-profile readback, TalkBack, consent persistence and live voice were not tested.
+
+Evidence and remaining limitations: [Phase 10 report](ui-ux-redesign-v1/phase-10/REPORT.md). **TODO:** commit and push this verified package to `ui/redesign-v1`, then record the remote handoff SHA here.
+
 ## ACT-0255 · 2026-11-16 · Inbox UI checkpoint
 
 Replaced the Inbox's long `ScreenColumn` with a compact header/new-note action and a source-ID-keyed `LazyColumn`. Search/filter and list position use saveable Compose state; existing edit/revision history/delete, archive/restore, and SAF import/export callbacks stay connected to the current encrypted capture store. Added synthetic UI regression for stable source IDs under search and a 40-entry lazy-list scroll. No domain/storage/retention/consent/provider/privacy/permission changes.

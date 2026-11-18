@@ -183,19 +183,19 @@ fun AttentionSettingsControls() {
             val time = java.time.LocalTime.parse(settings.briefingTimeLocal)
             TimePickerDialog(context, { _, hour, minute -> save(time = formatMinute(java.time.LocalTime.of(hour, minute))) },
                 time.hour, time.minute, true).show()
-        }, enabled = ready && !busy, modifier = Modifier.fillMaxWidth().testTag("attention_briefing_time")) {
+        }, enabled = ready && !busy, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp).testTag("attention_briefing_time")) {
             Text(LocalStrings.current.getString(R.string.attention_settings_time, briefing))
         }
         OutlinedButton(onClick = {
             val time = minuteTime(settings.quietStartMinute)
             TimePickerDialog(context, { _, hour, minute -> save(quietStart = hour * 60 + minute) }, time.hour, time.minute, true).show()
-        }, enabled = ready && !busy, modifier = Modifier.fillMaxWidth().testTag("attention_quiet_start")) {
+        }, enabled = ready && !busy, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp).testTag("attention_quiet_start")) {
             Text(LocalStrings.current.getString(R.string.attention_settings_quiet_start, quietStart))
         }
         OutlinedButton(onClick = {
             val time = minuteTime(settings.quietEndMinute)
             TimePickerDialog(context, { _, hour, minute -> save(quietEnd = hour * 60 + minute) }, time.hour, time.minute, true).show()
-        }, enabled = ready && !busy, modifier = Modifier.fillMaxWidth().testTag("attention_quiet_end")) {
+        }, enabled = ready && !busy, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp).testTag("attention_quiet_end")) {
             Text(LocalStrings.current.getString(R.string.attention_settings_quiet_end, quietEnd))
         }
     }
@@ -205,7 +205,7 @@ fun AttentionSettingsControls() {
         Text(s(R.string.attention_settings_error), color = MaterialTheme.colorScheme.error,
             modifier = Modifier.testTag("attention_settings_error"))
         OutlinedButton(onClick = { load() }, enabled = !busy,
-            modifier = Modifier.fillMaxWidth().testTag("attention_settings_retry")) {
+            modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp).testTag("attention_settings_retry")) {
             Text(s(R.string.settings_retry))
         }
     }
@@ -227,13 +227,13 @@ fun DevicePermissionControls(state: DevicePermissionState?, openError: Boolean, 
     val allowed = s(R.string.permission_allowed)
     val unavailable = s(R.string.permission_unavailable)
     Text(s(R.string.permission_microphone) + ": " + (state?.let { if (it.microphone) allowed else unavailable } ?: unknown), modifier = Modifier.testTag("permission_microphone_status"))
-    OutlinedButton(onClick = openMicrophone, modifier = Modifier.fillMaxWidth().testTag("permission_microphone_settings")) { Text(s(R.string.permission_open_app)) }
+    OutlinedButton(onClick = openMicrophone, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp).testTag("permission_microphone_settings")) { Text(s(R.string.permission_open_app)) }
     Text(s(R.string.permission_notifications) + ": " + (state?.let { if (it.notifications) allowed else unavailable } ?: unknown), modifier = Modifier.testTag("permission_notifications_status"))
-    OutlinedButton(onClick = openNotifications, modifier = Modifier.fillMaxWidth().testTag("permission_notification_settings")) { Text(s(R.string.permission_open_notifications)) }
+    OutlinedButton(onClick = openNotifications, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp).testTag("permission_notification_settings")) { Text(s(R.string.permission_open_notifications)) }
     Text(s(R.string.permission_exact_alarms) + ": " + (state?.let { if (it.exactAlarms) allowed else unavailable } ?: unknown),
         modifier = Modifier.testTag("permission_exact_alarms_status"))
     if (state?.exactAlarms != true) {
-        OutlinedButton(onClick = openExactAlarms, modifier = Modifier.fillMaxWidth().testTag("permission_exact_alarms_settings")) {
+        OutlinedButton(onClick = openExactAlarms, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp).testTag("permission_exact_alarms_settings")) {
             Text(s(R.string.permission_open_exact_alarms))
         }
     }
