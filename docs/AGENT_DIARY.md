@@ -8,6 +8,10 @@
 
 M20-05, M20-08, TalkBack/device/owner acceptance и release readiness остаются частичными/открытыми. Следующий шаг — проверить точечные визуальные и навигационные дефекты оставшихся экранов на синтетическом профиле; не выводить полную пустоту хранилищ из пустых карточек. Сохранять `main` и owner ADR-012.
 
+### Git handoff ACT-0259
+
+ACT-0258 implementation, report and screenshots committed as `6ac8d61822fdd4c4d79dc6bcf0ad77c5e5540055` (`fix(ui): wrap case status filters on narrow screens`) and pushed to `origin/ui/redesign-v1`. `git fetch` and `git ls-remote` confirmed local HEAD, tracking ref and remote feature ref at that SHA. Remote `main` remains `ac621919aca09ece6e292eae708d55cc09de16d7`; no merge or history rewrite. Owner ADR-012 remains untouched and excluded. APK, keys and raw reports were not staged.
+
 ## ACT-0256 · 2026-11-18 · Backup, Settings, onboarding and visual verification
 
 Продолжена разрешённая работа UI/UX на `ui/redesign-v1`. Settings сгруппирован в переиспользуемые карточки; Backup получил отдельную заметку о шифровании и более компактную transfer-карточку. Для export/import/restore, confirmation, retry, permission и attention actions установлен минимум 48dp. Onboarding/loading/error теперь самостоятельно применяют `safeDrawing` insets и фон активной темы; исправлено обрезание логотипа под системной строкой и несоответствие тёмному режиму. Добавлены WCAG-проверки палитры light/dark. Увеличено ожидание system-bar transition только в screenshot runner; 31 golden и thresholds не менялись. Schema, ledger, domain, consent, AI/provider, permission semantics, privacy и auth не менялись.

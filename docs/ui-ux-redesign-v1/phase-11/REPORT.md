@@ -64,4 +64,4 @@ TalkBack, populated-profile update/readback, physical AZ locale, keyboard, backu
 
 ## Git handoff
 
-Implementation, regression test and this report are committed on `ui/redesign-v1`. The current checkpoint adds the continuation SHA after the commit is verified; `main` is not modified. Owner-owned `docs/adr/ADR-012-keystore-wrapping-key-rotation.md` is excluded.
+Implementation, regression test, report and screenshots are committed as `6ac8d61822fdd4c4d79dc6bcf0ad77c5e5540055` (`fix(ui): wrap case status filters on narrow screens`) and pushed to `origin/ui/redesign-v1`. Fetch, local HEAD, tracking ref and `git ls-remote` confirmed that feature SHA. Remote `main` remains `ac621919aca09ece6e292eae708d55cc09de16d7`; no merge or history rewrite. Owner-owned `docs/adr/ADR-012-keystore-wrapping-key-rotation.md` is excluded.

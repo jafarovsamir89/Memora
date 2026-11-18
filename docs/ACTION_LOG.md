@@ -8,6 +8,10 @@
 - Targeted `CasesAndPersonCardTest`: 9/9. Полный Gradle: 80 suites / 412 tests, 0 failures/errors, 1 opt-in live skipped; debug/AndroidTest build and AndroidTest Kotlin compile PASS; lint 0/90/2; component visual regression 31/31 PASS; no baselines/thresholds changed. APK v106 SHA-256 `ab7628e61b4c6b7981045d2c8181c1698228fd7a5717d9a63245e7fdc2f08fb2`.
 - Проверено: `git diff --check`. Далее точечно проверить финальные UI/navigation gaps, не менять main и не трогать owner-owned ADR-012.
 
+### Git handoff ACT-0259
+
+ACT-0258 was committed as `6ac8d61822fdd4c4d79dc6bcf0ad77c5e5540055` and pushed to `origin/ui/redesign-v1`. After fetch, local HEAD, `origin/ui/redesign-v1` and remote `refs/heads/ui/redesign-v1` matched. Remote `main` remained `ac621919aca09ece6e292eae708d55cc09de16d7`. No merge, force push or history rewrite. Owner ADR-012 remained untracked, untouched and excluded. Implementation verification is in ACT-0258 and [Phase 11 report](ui-ux-redesign-v1/phase-11/REPORT.md); no tests were rerun for this documentation-only handoff.
+
 ## ACT-0256 · 2026-11-18 · Backup, Settings and onboarding UI verification
 
 **Changes:** reorganized Settings cards, separated Backup encryption disclosure from transfer actions, removed duplicate Backup heading, and raised relevant action/retry controls to at least 48dp. Onboarding/loading/error screens now apply safe drawing insets and themed backgrounds. Added light/dark palette contrast tests. Component screenshot settling delay now accounts for Android 14 system-bar transitions; committed goldens and limits are unchanged. No schema, ledger, domain, consent, AI/provider, privacy or permission semantics changed.
