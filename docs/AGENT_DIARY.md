@@ -14,7 +14,7 @@ P0.2 принят как завершённый для воспроизводи�
 
 ### Git handoff ACT-0262
 
-Code/tests/docs package pending final commit/push. Stage only `TODO.md`, diary/action log, acceptance README, runner Python test list, and the new test-only acceptance fixture/tests. Never stage owner ADR-012, APK, ignored reports, or local secrets. Prior P0.1 commits `e032750` and `556aa0e` are already confirmed on `origin/ui/redesign-v1`.
+P0.2 code/tests/docs commit `118ea4427fec362062258aa6301f1f33f23ee621` (`test(android): add deterministic synthetic acceptance profile`) pushed to `origin/ui/redesign-v1`. Fetch, local HEAD and `git ls-remote origin refs/heads/ui/redesign-v1` matched. No production source, APK, generated reports or owner ADR-012 entered the commit. Next is LAB-03.
 
 ## ACT-0261 · 2026-11-18 · Reliability Lab: безопасный acceptance harness
 
