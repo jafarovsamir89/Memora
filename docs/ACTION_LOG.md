@@ -4,6 +4,7 @@
 - **PASS:** Secretary открылся; Back вернул на тот же Cases список с прежним активным фильтром «Все». Голосовая кнопка и consent controls не нажимались; текст/записи не создавались и не менялись.
 - Скриншоты `redmi-cases-empty-to-secretary-v106.png` и `redmi-secretary-back-restores-cases-v106.png` добавлены к Phase 11. Это ручной маршрут, а не полный native/owner acceptance.
 - Это docs/evidence-only дополнение после ACT-0258; код, APK и тесты не менялись и не перезапускались.
+- Documentation/screenshots commit `87d88b7d42db8fa7962d054c82f5c94d767feb7a` pushed to `origin/ui/redesign-v1`; local HEAD, fetched tracking ref and remote feature ref match. Remote `main` remains `ac621919aca09ece6e292eae708d55cc09de16d7`.
 
 ## ACT-0258 — 2026-11-18 — Исправление переноса фильтров «Дел» на Redmi
 

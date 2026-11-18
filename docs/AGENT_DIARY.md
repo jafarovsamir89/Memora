@@ -6,7 +6,7 @@
 
 ### Git handoff ACT-0260
 
-Only test evidence and documentation/screenshots were added after ACT-0258. They are committed and pushed as a docs-only follow-up; `ui/redesign-v1` stays isolated and `main` is unchanged. The final continuation SHA is recorded below after remote verification.
+Only test evidence and documentation/screenshots were added after ACT-0258. This docs-only follow-up is commit `87d88b7d42db8fa7962d054c82f5c94d767feb7a` and is pushed to `origin/ui/redesign-v1`; fetch and `git ls-remote` confirmed the same feature SHA. Remote `main` remains `ac621919aca09ece6e292eae708d55cc09de16d7`. No code, APK or test result changed.
 
 ## ACT-0258 · 2026-11-18 · Redmi large-text Cases filter repair
 
