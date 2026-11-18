@@ -13,6 +13,7 @@ import struct
 import subprocess
 import sys
 import time
+import xml.etree.ElementTree as ET
 import zlib
 from pathlib import Path
 
@@ -62,6 +63,8 @@ CASES: list[tuple[str, str]] = [
 PIXEL_TOLERANCE = 12
 MAX_CHANGED_RATIO = 0.003
 MAX_MEAN_CHANNEL_DELTA = 0.35
+GALLERY_HEADING = "Memora · komponentlər"
+UI_HIERARCHY_PATH = "/data/local/tmp/memora-ui-visual-regression.xml"
 
 
 def run_adb(serial: str, *args: str, capture: bool = True) -> bytes:
@@ -80,6 +83,40 @@ def get_setting(serial: str, namespace: str, key: str) -> str:
 
 def set_setting(serial: str, namespace: str, key: str, value: str) -> None:
     run_adb(serial, "shell", "settings", "put", namespace, key, value)
+
+
+def gallery_content_is_ready(hierarchy: str, expected_text: str = GALLERY_HEADING) -> bool:
+    """Return true only after Compose exposes visible gallery content."""
+    try:
+        root = ET.fromstring(hierarchy)
+    except ET.ParseError:
+        return False
+    return any(
+        node.attrib.get("text") == expected_text
+        and bool(node.attrib.get("bounds"))
+        and node.attrib.get("bounds") != "[0,0][0,0]"
+        for node in root.iter("node")
+    )
+
+
+def wait_for_gallery_ready(
+    serial: str,
+    expected_text: str = GALLERY_HEADING,
+    timeout_seconds: float = 8.0,
+) -> None:
+    """Wait for the active Compose content before pixel capture."""
+    deadline = time.monotonic() + timeout_seconds
+    while True:
+        try:
+            run_adb(serial, "shell", "uiautomator", "dump", "--compressed", UI_HIERARCHY_PATH)
+            hierarchy = run_adb(serial, "shell", "cat", UI_HIERARCHY_PATH).decode("utf-8", errors="replace")
+        finally:
+            run_adb(serial, "shell", "rm", "-f", UI_HIERARCHY_PATH)
+        if gallery_content_is_ready(hierarchy, expected_text):
+            return
+        if time.monotonic() >= deadline:
+            raise RuntimeError("Compose component gallery did not expose its heading before screenshot capture")
+        time.sleep(0.2)
 
 
 def resolve_emulator() -> str:
@@ -210,6 +247,8 @@ def capture(serial: str, component: str, theme: str) -> bytes:
     run_adb(serial, "shell", "am", "force-stop", "ai.memora.app")
     run_adb(serial, "shell", "am", "start", "-W", "-n", ACTIVITY,
             "--es", "component", component, "--es", "theme", theme)
+    expected_text = "Dəyişikliyi təsdiqlə" if component == "confirmation" else GALLERY_HEADING
+    wait_for_gallery_ready(serial, expected_text)
     # Give Android 14 time to finish the immersive-system-bar transition before
     # capture. Some light surfaces are briefly dimmed while that window update
     # settles. The confirmation sheet also needs its modal enter animation.
