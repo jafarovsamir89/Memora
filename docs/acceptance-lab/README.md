@@ -16,6 +16,7 @@ python3 tools/run_memora_acceptance.py full --serial emulator-5556
 python3 tools/run_memora_acceptance.py device-smoke --serial emulator-5556
 python3 tools/run_memora_acceptance.py device-lineage --serial emulator-5556 --synthetic-user-id 10 --seed-synthetic-profile
 python3 tools/run_memora_acceptance.py volume-probe --serial emulator-5556 --synthetic-user-id 11
+python3 tools/run_memora_acceptance.py startup-probe --serial emulator-5556 --synthetic-user-id 11 --startup-samples 20
 ```
 
 - `preflight` verifies the branch, host/emulator free disk, and the selected
@@ -102,6 +103,20 @@ represent UI-frame latency, cold-cache behavior, peak memory or ANR risk. The
 initial campaign uses both sizes; a later 1,000-row retest can use
 `--volume-count 1000` because fixtures are monotonic and stay in that isolated
 synthetic profile.
+
+`startup-probe` measures repeatable process-cold launches of `MainActivity` for
+the exact named synthetic users only (`MemoraReliabilityLab` or
+`MemoraCleanInstallLab`). The selected user must already be current and have
+Memora installed. Each sample force-stops that package for that user, runs
+`am start -W --user <id>`, records ActivityManager `TotalTime`/`WaitTime` and
+host ADB round-trip time, then allows two seconds for the local screen/profile
+read to settle. It reports nearest-rank p50/p95 over 5–50 samples (default 20),
+captures the final screen, and verifies the user and `firstInstallTime` stayed
+unchanged. The app or OS data/cache is never cleared. This measures process-cold
+launch with a warm emulator/OS cache; it is not a cold boot, a guarantee that all
+UI data finished loading, or a physical-device benchmark. The runner does not
+invoke the assistant or an AI/model API. The report is written under the run ID
+folder described above.
 
 ACT-0268 also changed the People/Projects/Notes `SavedObjectsScreen` from eager
 card composition to a stable-ID-keyed `LazyColumn`. A Compose test with 100

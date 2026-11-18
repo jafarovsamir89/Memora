@@ -11,6 +11,7 @@ from __future__ import annotations
 import argparse
 import datetime as dt
 import json
+import math
 import os
 import re
 import shutil
@@ -328,6 +329,107 @@ def run_device_smoke(serial: str, env: dict[str, str], out_dir: Path) -> list[di
         "first_install_time_unchanged": lineage_unchanged,
     })
     return steps
+
+
+def parse_activity_startup_ms(output: str) -> int:
+    status = re.search(r"^Status:\s*(\S+)", output, re.M)
+    total = re.search(r"^TotalTime:\s*(\d+)", output, re.M)
+    if status is None or status.group(1).lower() != "ok" or total is None:
+        raise RuntimeError("MainActivity start did not return Status: ok and TotalTime")
+    return int(total.group(1))
+
+
+def nearest_rank_percentile(values: list[int], percentile: int) -> int:
+    if not values or percentile < 1 or percentile > 100:
+        raise ValueError("percentile requires samples and a value in 1..100")
+    ordered = sorted(values)
+    return ordered[math.ceil(percentile * len(ordered) / 100) - 1]
+
+
+def run_startup_probe(serial: str, user_id: int, sample_count: int,
+                      out_dir: Path) -> dict[str, Any]:
+    if user_id <= 0:
+        raise RuntimeError("startup probe requires a non-owner synthetic Android user")
+    if sample_count < 5 or sample_count > 50:
+        raise RuntimeError("startup sample count must be between 5 and 50")
+    users = adb(serial, "shell", "pm", "list", "users").stdout
+    expected_users = (SYNTHETIC_USER_NAME, SYNTHETIC_VOLUME_USER_NAME)
+    if not any(re.search(rf"UserInfo\{{{user_id}:{re.escape(name)}:", users) for name in expected_users):
+        raise RuntimeError("startup probe accepts only a non-owner user with an exact synthetic test-user name")
+    current_user = adb(serial, "shell", "am", "get-current-user").stdout.strip()
+    if current_user != str(user_id):
+        raise RuntimeError("switch the verified emulator to the selected synthetic user before startup probe")
+    packages = adb(serial, "shell", "cmd", "package", "list", "packages", "--user", str(user_id)).stdout
+    if f"package:{PACKAGE}\n" not in packages:
+        raise RuntimeError("Memora must already be installed for the selected synthetic user")
+
+    before = package_install_state(adb(serial, "shell", "dumpsys", "package", PACKAGE).stdout, user_id)
+    if not before["installed_for_user"] or not before["first_install_time"]:
+        raise RuntimeError("selected synthetic user has no readable Memora install lineage")
+
+    samples: list[dict[str, int]] = []
+    failure: str | None = None
+    screenshot_path = out_dir / "screenshots" / "startup-probe-final.png"
+    for sample_index in range(sample_count):
+        adb(serial, "shell", "am", "force-stop", "--user", str(user_id), PACKAGE)
+        started = time.monotonic()
+        output = adb(serial, "shell", "am", "start", "-W", "--user", str(user_id),
+                     "-n", f"{PACKAGE}/.MainActivity", timeout=120).stdout
+        round_trip_ms = int(round((time.monotonic() - started) * 1000))
+        try:
+            activity_manager_ms = parse_activity_startup_ms(output)
+        except RuntimeError as error:
+            failure = str(error)
+            break
+        wait_time = re.search(r"^WaitTime:\s*(\d+)", output, re.M)
+        samples.append({
+            "sample": sample_index + 1,
+            "activity_manager_total_ms": activity_manager_ms,
+            "activity_manager_wait_ms": int(wait_time.group(1)) if wait_time else -1,
+            "adb_round_trip_ms": round_trip_ms,
+        })
+        # Let the first frame and local profile read settle before the next
+        # force-stop. This is not part of ActivityManager TotalTime.
+        time.sleep(2)
+    if samples:
+        screenshot(serial, screenshot_path)
+
+    after_user = adb(serial, "shell", "am", "get-current-user").stdout.strip()
+    after = package_install_state(adb(serial, "shell", "dumpsys", "package", PACKAGE).stdout, user_id)
+    install_lineage_unchanged = after["first_install_time"] == before["first_install_time"]
+    startup_values = [sample["activity_manager_total_ms"] for sample in samples]
+    passed = (failure is None and len(samples) == sample_count and after_user == str(user_id)
+              and install_lineage_unchanged and after["version_code"] == before["version_code"])
+    return {
+        "name": "synthetic_cold_process_startup_probe",
+        "status": "PASS" if passed else "FAIL",
+        "synthetic_user_id": user_id,
+        "sample_count_requested": sample_count,
+        "sample_count_completed": len(samples),
+        "activity_manager_total_p50_ms": nearest_rank_percentile(startup_values, 50) if startup_values else None,
+        "activity_manager_total_p95_ms": nearest_rank_percentile(startup_values, 95) if startup_values else None,
+        "activity_manager_wait_p50_ms": nearest_rank_percentile(
+            [sample["activity_manager_wait_ms"] for sample in samples if sample["activity_manager_wait_ms"] >= 0], 50
+        ) if any(sample["activity_manager_wait_ms"] >= 0 for sample in samples) else None,
+        "activity_manager_wait_p95_ms": nearest_rank_percentile(
+            [sample["activity_manager_wait_ms"] for sample in samples if sample["activity_manager_wait_ms"] >= 0], 95
+        ) if any(sample["activity_manager_wait_ms"] >= 0 for sample in samples) else None,
+        "adb_round_trip_p50_ms": nearest_rank_percentile([sample["adb_round_trip_ms"] for sample in samples], 50)
+            if samples else None,
+        "adb_round_trip_p95_ms": nearest_rank_percentile([sample["adb_round_trip_ms"] for sample in samples], 95)
+            if samples else None,
+        "samples": samples,
+        "version_code": before["version_code"],
+        "first_install_time_unchanged": install_lineage_unchanged,
+        "current_synthetic_user_unchanged": after_user == str(user_id),
+        "screenshot": str(screenshot_path) if samples else None,
+        "screenshot_visual_review": "REQUIRED" if samples else "NOT CAPTURED",
+        "measurement_scope": "MainActivity ActivityManager TotalTime after per-sample force-stop; process-cold, emulator storage/OS cache warm; no assistant request",
+        "network_used_by_harness": False,
+        "model_used": "NOT APPLICABLE",
+        "cache_condition": "force-stop before each launch; no app data or OS caches cleared",
+        "failure": failure,
+    }
 
 
 def package_install_state(package_info: str, user_id: int) -> dict[str, Any]:
@@ -658,11 +760,13 @@ def run_synthetic_volume_probe(serial: str, user_id: int, env: dict[str, str],
 
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("mode", choices=("preflight", "quick", "full", "device-smoke", "device-lineage", "volume-probe"))
+    parser.add_argument("mode", choices=("preflight", "quick", "full", "device-smoke", "device-lineage", "volume-probe", "startup-probe"))
     parser.add_argument("--serial", help="explicit connected emulator serial; physical serials are rejected")
     parser.add_argument("--synthetic-user-id", type=int, help="existing isolated emulator user id; mode checks its exact name")
     parser.add_argument("--volume-count", action="append", type=int, choices=(100, 1000),
                         help="volume fixture size; repeat to run several sizes (default: 100 and 1000)")
+    parser.add_argument("--startup-samples", type=int,
+                        help="process-cold MainActivity launches for startup-probe (default: 20; range: 5..50)")
     parser.add_argument("--seed-synthetic-profile", action="store_true",
                         help="one-time opt-in seed; probe refuses any non-empty profile or existing install marker")
     parser.add_argument("--min-host-free-gib", type=float, default=2.0)
@@ -695,10 +799,12 @@ def main() -> int:
         report["git"]["head"] = subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=ROOT, text=True).strip()
         if report["git"]["branch"] != "ui/redesign-v1":
             raise RuntimeError("acceptance is restricted to ui/redesign-v1")
-        if args.mode in {"device-lineage", "volume-probe"} and args.synthetic_user_id is None:
+        if args.mode in {"device-lineage", "volume-probe", "startup-probe"} and args.synthetic_user_id is None:
             raise RuntimeError(f"{args.mode} requires --synthetic-user-id for the named isolated test user")
         if args.seed_synthetic_profile and args.mode != "device-lineage":
             raise RuntimeError("--seed-synthetic-profile is accepted only by device-lineage")
+        if args.startup_samples is not None and args.mode != "startup-probe":
+            raise RuntimeError("--startup-samples is accepted only by startup-probe")
         if host_free < int(args.min_host_free_gib * 1024**3):
             raise RuntimeError("host free space is below configured safety threshold")
         identity, inventory = select_emulator(args.serial)
@@ -743,6 +849,10 @@ def main() -> int:
             run_synthetic_volume_probe(identity["serial"], args.synthetic_user_id,
                                        test_environment(identity["serial"]), args.volume_count or [100, 1_000],
                                        report["steps"])
+        elif args.mode == "startup-probe":
+            report["steps"].append(run_startup_probe(identity["serial"], args.synthetic_user_id,
+                                                     args.startup_samples if args.startup_samples is not None else 20,
+                                                     out_dir))
         statuses = [step.get("status") for step in report["steps"]]
         if any(step.get("status") == "FAIL" or step.get("exit_code", 0) != 0 for step in report["steps"]):
             report["status"] = "FAIL"

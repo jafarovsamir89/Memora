@@ -63,6 +63,39 @@ class EmulatorSelectionTests(unittest.TestCase):
         self.assertEqual(run.call_args.args[0][:3], ["adb", "-s", "emulator-5556"])
 
 
+class StartupProbeMetricTests(unittest.TestCase):
+    def test_parses_activity_manager_total_time_only_after_success(self) -> None:
+        output = "Status: ok\nLaunchState: COLD\nActivity: ai.memora.app/.MainActivity\nTotalTime: 1844\nWaitTime: 1901\n"
+        self.assertEqual(lab.parse_activity_startup_ms(output), 1844)
+
+    def test_rejects_missing_or_failed_activity_manager_start(self) -> None:
+        for output in ("Status: timeout\nTotalTime: 2000\n", "Status: ok\nWaitTime: 500\n"):
+            with self.subTest(output=output), self.assertRaisesRegex(RuntimeError, "Status: ok and TotalTime"):
+                lab.parse_activity_startup_ms(output)
+
+    def test_percentiles_use_nearest_rank_and_are_deterministic(self) -> None:
+        values = list(range(1, 21))
+        self.assertEqual(lab.nearest_rank_percentile(values, 50), 10)
+        self.assertEqual(lab.nearest_rank_percentile(values, 95), 19)
+
+    def test_percentile_rejects_empty_samples_and_out_of_range_rank(self) -> None:
+        for values, rank in (([], 95), ([4], 0), ([4], 101)):
+            with self.subTest(values=values, rank=rank), self.assertRaises(ValueError):
+                lab.nearest_rank_percentile(values, rank)
+
+    def test_startup_probe_rejects_owner_user_before_any_adb_call(self) -> None:
+        with patch.object(lab, "adb") as adb:
+            with self.assertRaisesRegex(RuntimeError, "non-owner synthetic"):
+                lab.run_startup_probe("emulator-5556", 0, 20, Path("/tmp"))
+        adb.assert_not_called()
+
+    def test_startup_probe_rejects_unbounded_sample_count_before_any_adb_call(self) -> None:
+        with patch.object(lab, "adb") as adb:
+            with self.assertRaisesRegex(RuntimeError, "between 5 and 50"):
+                lab.run_startup_probe("emulator-5556", 11, 51, Path("/tmp"))
+        adb.assert_not_called()
+
+
 class ReportSafetyTests(unittest.TestCase):
     def test_volume_report_preserves_conversation_count_paging_and_measurements(self) -> None:
         report = lab.volume_probe_measurements({
