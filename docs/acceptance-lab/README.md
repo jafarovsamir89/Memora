@@ -88,19 +88,34 @@ isolated; do not clear or uninstall the owner's app profile.
 
 The bounded `volume-probe` mode is restricted to the separately named
 `MemoraCleanInstallLab` Android user (the confirmed ID on this emulator is 11).
-It adds deterministic 100-row and then 1,000-row fixtures for Finance, Cases,
-Notes, an editable Table, and the existing encrypted local task store to that
-synthetic profile, refusing unexpected records or a fixture that would need to
-shrink. It verifies each row and Case / Note revision before and after
-insertion, and verifies stable IDs plus deterministic per-store digests on
-repeat runs. It records device-local Room/repository and encrypted file-store
-p50/p95 timings plus instantaneous process-memory snapshots. Fast paths report
-microseconds so sub-millisecond samples are not rounded to zero. These are
-warm local reads; they do not represent UI-frame latency, cold-cache behavior,
-peak memory or ANR risk. The initial campaign uses both sizes; a later 1,000-row
-retest can use `--volume-count 1000` because fixtures are monotonic and stay in
-that isolated synthetic profile. People, long conversations, startup, screen
-frame timing, cold reads, UI search and ANR remain unmeasured.
+It adds deterministic fixtures for 100 People and 1,000 rows/events in Finance,
+Cases, Notes, an editable Table, and the existing encrypted local task store to
+that synthetic profile, refusing unexpected records or a fixture that would
+need to shrink. It verifies each row and Case / Note / Person revision before
+and after insertion, and verifies stable IDs plus deterministic per-store
+digests on repeat runs. For People it measures the scoped 100-record list, a
+30-row page, and an in-memory exact filter. It records device-local
+Room/repository and encrypted file-store p50/p95 timings plus instantaneous
+process-memory snapshots. Fast paths report microseconds so sub-millisecond
+samples are not rounded to zero. These are warm local reads; they do not
+represent UI-frame latency, cold-cache behavior, peak memory or ANR risk. The
+initial campaign uses both sizes; a later 1,000-row retest can use
+`--volume-count 1000` because fixtures are monotonic and stay in that isolated
+synthetic profile.
+
+ACT-0268 also changed the People/Projects/Notes `SavedObjectsScreen` from eager
+card composition to a stable-ID-keyed `LazyColumn`. A Compose test with 100
+synthetic people proves the last record is not composed initially and is
+reachable by search. On the emulator, the exact 0099 result opened the matching
+person detail and Android Back restored the same filtered list. At AZ
+`fontScale=1.3`, visible cards and bottom navigation remained readable; the
+emulator setting was restored to 1.0. Three brief `dumpsys gfxinfo` screen-entry
+samples had only four frames each: p50 97–109 ms, p95 101–113 ms, and 2–4 janky
+frames per trial. The earlier eager-list samples were p50 350–600 ms / p95
+400–800 ms, but the tiny frame sample is insufficient for a performance PASS
+or a latency guarantee. Cold/startup timing, scroll-to-end, long conversations,
+peak memory and ANR remain open. Case search p95 at 1,000 rows also needs UI
+tracing; its repository latency alone does not prove main-thread jank.
 
 Each run writes `apps/android/app/build/acceptance-lab/<UTC run id>/report.json`.
 The report includes mode/status, branch/HEAD, emulator properties, disk space,
