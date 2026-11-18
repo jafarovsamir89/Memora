@@ -34,7 +34,13 @@ python3 tools/run_memora_acceptance.py device-smoke --serial emulator-5556
   memory and original Russian conversation source are read back by stable IDs.
   Unified memory search includes tasks through bounded owner-confirmed canonical
   person links or existing lexical/date matches; unconfirmed alias suggestions
-  never become identity links.
+  never become identity links. A synthetic failure matrix covers pre-write
+  timeout/503/offline, post-write 503, repeated semantic receipt calls with
+  different provider IDs, and journal recovery after a simulated interruption
+  following a ledger commit. These are fake-provider/local-store tests, not live
+  network or OS process-kill experiments. Duplicate suppression is keyed by the
+  prepared payload digest and scoped to one agent run; a fresh user turn may
+  intentionally repeat an action.
 - `full` runs the complete unit suite, debug and AndroidTest builds, test Kotlin
   compile, lint, and the existing 31-state component visual comparison. Gradle
   receives `ANDROID_SERIAL` for the already-verified emulator.

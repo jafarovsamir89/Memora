@@ -260,6 +260,7 @@ class AgentOrchestrator(
         journal.beginTurn(turn.turnId)
         val observations = ArrayList<AgentToolObservation>()
         val seenCallIds = hashSetOf<String>()
+        val appliedWriteResults = mutableMapOf<Pair<String, String>, AgentToolObservation>()
         var includesStoredMemory = turn.conversationHistory.isNotEmpty()
         var failedTools = false
         var uncertainEffect = false
@@ -492,6 +493,31 @@ class AgentOrchestrator(
                                         observations += rejected(call, commitPermission.code, turn.turnId)
                                         continue
                                     }
+                                    val effectKey = call.name to prepared.command.payloadDigest
+                                    val priorApplied = if (call.name in AGENT_PERSISTED_WRITE_TOOLS)
+                                        appliedWriteResults[effectKey] else null
+                                    if (priorApplied != null) {
+                                        // A provider may repeat an identical write with a new call ID.
+                                        // Reuse this turn's verified readback instead of committing twice.
+                                        val reused = priorApplied.copy(
+                                            callId = call.callId,
+                                            operationKey = writeOperationKey(call),
+                                        )
+                                        val boundedReuse = if (withinResultBudget(observations, reused)) reused else
+                                            reused.copy(code = "idempotent_replay", modelData = mapOf(
+                                                "result_reused" to true,
+                                                "original_call_id" to priorApplied.callId,
+                                            ))
+                                        if (!withinResultBudget(observations, boundedReuse)) {
+                                            failedTools = true
+                                            return@withTimeout finish(turn, AgentTurnStatus.PARTIAL,
+                                                answer = partialWriteFailure(turn.locale),
+                                                code = "tool_result_limit_exceeded", observations = observations)
+                                        }
+                                        logStage(turn.turnId, "tool_deduplication", "reused", "same_payload_already_applied")
+                                        observations += boundedReuse
+                                        continue
+                                    }
                                     val entry = AgentCommandJournalEntry(commandId, prepared.command.payloadDigest, "prepared",
                                         prepared.command.targetVersions)
                                     journal.recordCommand(entry)
@@ -550,6 +576,7 @@ class AgentOrchestrator(
                                     }
                                     observations += observation
                                     if (observation.status == ToolObservationStatus.APPLIED && call.name in AGENT_PERSISTED_WRITE_TOOLS) {
+                                        appliedWriteResults[effectKey] = observation
                                         publish(AgentTurnProgress.ConfirmedActionResults(observations.toList()))
                                     }
                                     if (committed.status != ToolObservationStatus.APPLIED && call.name !in AGENT_PERSISTED_WRITE_TOOLS)
