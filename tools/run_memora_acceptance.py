@@ -242,6 +242,123 @@ def screenshot(serial: str, path: Path) -> None:
     path.write_bytes(data)
 
 
+def ui_tree(serial: str, out_dir: Path, name: str) -> ET.Element:
+    """Capture the current Compose accessibility tree from the selected emulator."""
+    out_dir.mkdir(parents=True, exist_ok=True)
+    remote_path = "/sdcard/memora-acceptance-window.xml"
+    local_path = out_dir / f"{name}.xml"
+    adb(serial, "shell", "uiautomator", "dump", remote_path, timeout=60)
+    adb(serial, "pull", remote_path, str(local_path), timeout=60)
+    try:
+        return ET.parse(local_path).getroot()
+    except (OSError, ET.ParseError) as error:
+        raise RuntimeError("could not parse emulator UI hierarchy") from error
+
+
+def ui_texts(root: ET.Element) -> set[str]:
+    return {node.attrib.get("text", "") for node in root.iter("node") if node.attrib.get("text", "")}
+
+
+def ui_bounds(value: str) -> tuple[int, int, int, int]:
+    match = re.fullmatch(r"\[(\d+),(\d+)\]\[(\d+),(\d+)\]", value)
+    if not match:
+        raise RuntimeError("emulator UI node has invalid bounds")
+    return tuple(int(part) for part in match.groups())
+
+
+def tap_ui_text(serial: str, out_dir: Path, name: str, text: str,
+                minimum_center_y_fraction: float = 0.0) -> None:
+    root = ui_tree(serial, out_dir, name)
+    root_bounds_value = root.attrib.get("bounds", "")
+    if not root_bounds_value:
+        root_bounds_value = next((node.attrib.get("bounds", "") for node in root.iter("node")
+                                  if node.attrib.get("bounds")), "")
+    root_bounds = ui_bounds(root_bounds_value)
+    screen_height = root_bounds[3] - root_bounds[1]
+    candidates: list[tuple[int, int]] = []
+    for node in root.iter("node"):
+        if node.attrib.get("text") != text:
+            continue
+        left, top, right, bottom = ui_bounds(node.attrib.get("bounds", ""))
+        center_y = (top + bottom) // 2
+        if screen_height > 0 and center_y / screen_height >= minimum_center_y_fraction:
+            candidates.append(((left + right) // 2, center_y))
+    if len(candidates) != 1:
+        raise RuntimeError(f"expected one visible UI target for {text!r}; found {len(candidates)}")
+    x, y = candidates[0]
+    adb(serial, "shell", "input", "tap", str(x), str(y))
+
+
+def wait_for_ui_texts(serial: str, out_dir: Path, name: str, expected: set[str],
+                      timeout_seconds: float = 25.0) -> ET.Element:
+    deadline = time.monotonic() + timeout_seconds
+    last_texts: set[str] = set()
+    last_error: Exception | None = None
+    attempt = 0
+    while time.monotonic() < deadline:
+        attempt += 1
+        try:
+            root = ui_tree(serial, out_dir, f"{name}-{attempt}")
+            last_texts = ui_texts(root)
+            if expected.issubset(last_texts):
+                return root
+            last_error = None
+        except (RuntimeError, subprocess.CalledProcessError, subprocess.TimeoutExpired) as error:
+            last_error = error
+        time.sleep(0.35)
+    if last_error:
+        raise RuntimeError(f"emulator UI did not stabilize for {name}: {type(last_error).__name__}") from last_error
+    missing = sorted(expected - last_texts)
+    raise RuntimeError(f"expected emulator UI text not visible for {name}: {missing}")
+
+
+def capture_finance_ui_journey(serial: str, out_dir: Path) -> list[str]:
+    """Drive the persisted synthetic conversation → finance → source → Back route."""
+    screenshots = out_dir / "screenshots"
+    screenshot_names: list[str] = []
+    adb(serial, "shell", "am", "force-stop", "--user", "10", PACKAGE)
+    adb(serial, "shell", "am", "start", "--user", "10", "-n", f"{PACKAGE}/.MainActivity")
+    wait_for_ui_texts(serial, out_dir, "today-ready", {"Katibə"})
+    tap_ui_text(serial, out_dir, "today-before-secretary", "Katibə", minimum_center_y_fraction=0.8)
+    conversation = "Synthetic UI fixture: the exact receipt is linked below."
+    wait_for_ui_texts(serial, out_dir, "secretary-card", {conversation, "Bölməni aç Maliyyə"})
+    screenshot_path = screenshots / "p0-3-finance-conversation-card.png"
+    screenshot(serial, screenshot_path)
+    screenshot_names.append(str(screenshot_path.relative_to(ROOT)))
+
+    tap_ui_text(serial, out_dir, "secretary-before-finance", "Bölməni aç Maliyyə")
+    finance_expected = {"123,45 AZN", "Şəxs: Synthetic P0.3 Receipt Person", "İlkin söhbət"}
+    wait_for_ui_texts(serial, out_dir, "finance-detail", finance_expected)
+    screenshot_path = screenshots / "p0-3-finance-detail.png"
+    screenshot(serial, screenshot_path)
+    screenshot_names.append(str(screenshot_path.relative_to(ROOT)))
+
+    tap_ui_text(serial, out_dir, "finance-before-source", "İlkin söhbət")
+    source_expected = {
+        "Synthetic UI fixture: open the saved 123.45 AZN receipt.",
+        conversation,
+        "Yadda saxlanıldı",
+        "Söhbəti katibədə aç",
+    }
+    wait_for_ui_texts(serial, out_dir, "source-detail", source_expected)
+    screenshot_path = screenshots / "p0-3-finance-source.png"
+    screenshot(serial, screenshot_path)
+    screenshot_names.append(str(screenshot_path.relative_to(ROOT)))
+
+    adb(serial, "shell", "input", "keyevent", "4")
+    wait_for_ui_texts(serial, out_dir, "back-to-finance", finance_expected)
+    screenshot_path = screenshots / "p0-3-back-to-finance.png"
+    screenshot(serial, screenshot_path)
+    screenshot_names.append(str(screenshot_path.relative_to(ROOT)))
+
+    adb(serial, "shell", "input", "keyevent", "4")
+    wait_for_ui_texts(serial, out_dir, "back-to-secretary", {conversation, "Bölməni aç Maliyyə"})
+    screenshot_path = screenshots / "p0-3-back-to-secretary.png"
+    screenshot(serial, screenshot_path)
+    screenshot_names.append(str(screenshot_path.relative_to(ROOT)))
+    return screenshot_names
+
+
 def package_metadata(package_info: str) -> tuple[int, str]:
     version_code = re.search(r"^[ \t]*versionCode=(\d+)", package_info, re.M)
     version_name = re.search(r"^[ \t]*versionName=([^\s]+)", package_info, re.M)
@@ -758,9 +875,84 @@ def run_synthetic_volume_probe(serial: str, user_id: int, env: dict[str, str],
             break
 
 
+def run_synthetic_finance_ui_journey_probe(serial: str, user_id: int,
+                                           out_dir: Path,
+                                           steps: list[dict[str, Any]]) -> None:
+    """Idempotently prepare one finance-action/source fixture in lineage user 10 only."""
+    if user_id <= 0:
+        raise RuntimeError("synthetic user id must be greater than owner user 0")
+    users = adb(serial, "shell", "pm", "list", "users").stdout
+    if not re.search(rf"UserInfo\{{{user_id}:{re.escape(SYNTHETIC_USER_NAME)}:", users):
+        raise RuntimeError(f"user id {user_id} is not the explicitly named {SYNTHETIC_USER_NAME} test user")
+    if user_id != 10:
+        raise RuntimeError("persistent finance UI journey fixture is restricted to the lineage synthetic user 10")
+    current_user = adb(serial, "shell", "am", "get-current-user").stdout.strip()
+    if current_user != str(user_id):
+        raise RuntimeError("switch the verified emulator to synthetic user 10 before the UI journey fixture probe")
+    packages = adb(serial, "shell", "cmd", "package", "list", "packages", "--user", str(user_id)).stdout
+    if f"package:{PACKAGE}\n" not in packages or f"package:{TEST_PACKAGE}\n" not in packages:
+        raise RuntimeError("Memora and its AndroidTest package must already be installed for synthetic user 10")
+    package_state = package_install_state(adb(serial, "shell", "dumpsys", "package", PACKAGE).stdout, user_id)
+    if not package_state["installed_for_user"]:
+        raise RuntimeError("Memora is not installed for the selected synthetic user")
+    steps.append({"name": "synthetic_ui_journey_user_preflight", "status": "PASS",
+                  "synthetic_user_id": user_id, "version_code": package_state["version_code"],
+                  "version_name": package_state["version_name"]})
+    started = time.monotonic()
+    probe = adb(
+        serial, "shell", "am", "instrument", "--user", str(user_id), "-w",
+        "-e", "syntheticFinanceUiJourneyProbe", "true",
+        "-e", "allowSyntheticFinanceUiJourney", "true",
+        LINEAGE_RUNNER,
+        timeout=180,
+    )
+    output = (probe.stdout or "") + (probe.stderr or "")
+    fields = {match.group(1): match.group(2) for match in
+              re.finditer(r"INSTRUMENTATION_RESULT: ([a-z0-9_]+)=([^\s]+)", output)}
+    passed = fields.get("status") == "synthetic_finance_ui_journey_fixture_passed"
+    steps.append({
+        "name": "synthetic_finance_ui_journey_fixture",
+        "status": "PASS" if passed else "FAIL",
+        "duration_seconds": round(time.monotonic() - started, 3),
+        "probe_status": fields.get("status"),
+        "stage_error": fields.get("stage_error"),
+        "finance_event_id": fields.get("finance_event_id"),
+        "conversation_turn_id": fields.get("conversation_turn_id"),
+        "source_turn_id": fields.get("source_turn_id"),
+        "minor_units": int(fields["minor_units"]) if fields.get("minor_units", "").isdigit() else None,
+        "finance_event_count": int(fields["finance_event_count"]) if fields.get("finance_event_count", "").isdigit() else None,
+        "conversation_message_count": int(fields["conversation_message_count"]) if fields.get("conversation_message_count", "").isdigit() else None,
+        "action_result_count": int(fields["action_result_count"]) if fields.get("action_result_count", "").isdigit() else None,
+        "network_used": False,
+        "model_used": "NOT APPLICABLE",
+        "data_scope": "named synthetic Android user 10 only; app repository readback; idempotent additive fixture; no deletion",
+    })
+    if passed:
+        try:
+            screenshots = capture_finance_ui_journey(serial, out_dir)
+            steps.append({
+                "name": "persistent_conversation_finance_source_back_ui_journey",
+                "status": "PASS",
+                "route": "Secretary action card → exact finance event → exact source turn → Back → finance → Back → same conversation",
+                "screenshots": screenshots,
+                "network_used": False,
+                "model_used": "NOT APPLICABLE",
+                "data_scope": "synthetic Android user 10 only; no UI write actions or data cleanup",
+            })
+        except (RuntimeError, subprocess.CalledProcessError, subprocess.TimeoutExpired) as error:
+            steps.append({
+                "name": "persistent_conversation_finance_source_back_ui_journey",
+                "status": "FAIL",
+                "reason": scrub(f"{type(error).__name__}: {error}"),
+                "network_used": False,
+                "model_used": "NOT APPLICABLE",
+                "data_scope": "synthetic Android user 10 only; no UI write actions or data cleanup",
+            })
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("mode", choices=("preflight", "quick", "full", "device-smoke", "device-lineage", "volume-probe", "startup-probe"))
+    parser.add_argument("mode", choices=("preflight", "quick", "full", "device-smoke", "device-lineage", "volume-probe", "startup-probe", "finance-ui-journey"))
     parser.add_argument("--serial", help="explicit connected emulator serial; physical serials are rejected")
     parser.add_argument("--synthetic-user-id", type=int, help="existing isolated emulator user id; mode checks its exact name")
     parser.add_argument("--volume-count", action="append", type=int, choices=(100, 1000),
@@ -799,7 +991,7 @@ def main() -> int:
         report["git"]["head"] = subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=ROOT, text=True).strip()
         if report["git"]["branch"] != "ui/redesign-v1":
             raise RuntimeError("acceptance is restricted to ui/redesign-v1")
-        if args.mode in {"device-lineage", "volume-probe", "startup-probe"} and args.synthetic_user_id is None:
+        if args.mode in {"device-lineage", "volume-probe", "startup-probe", "finance-ui-journey"} and args.synthetic_user_id is None:
             raise RuntimeError(f"{args.mode} requires --synthetic-user-id for the named isolated test user")
         if args.seed_synthetic_profile and args.mode != "device-lineage":
             raise RuntimeError("--seed-synthetic-profile is accepted only by device-lineage")
@@ -853,6 +1045,9 @@ def main() -> int:
             report["steps"].append(run_startup_probe(identity["serial"], args.synthetic_user_id,
                                                      args.startup_samples if args.startup_samples is not None else 20,
                                                      out_dir))
+        elif args.mode == "finance-ui-journey":
+            run_synthetic_finance_ui_journey_probe(identity["serial"], args.synthetic_user_id,
+                                                   out_dir, report["steps"])
         statuses = [step.get("status") for step in report["steps"]]
         if any(step.get("status") == "FAIL" or step.get("exit_code", 0) != 0 for step in report["steps"]):
             report["status"] = "FAIL"

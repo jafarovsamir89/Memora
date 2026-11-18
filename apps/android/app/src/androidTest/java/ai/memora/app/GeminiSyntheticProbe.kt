@@ -67,6 +67,8 @@ class GeminiSyntheticProbe : Instrumentation() {
     private var localInstallLineagePhase: String? = null
     private var syntheticVolumeCount: Int? = null
     private var syntheticVolumePermitted = false
+    private var syntheticFinanceUiJourneyProbe = false
+    private var syntheticFinanceUiJourneyPermitted = false
     private var onlyCase: String? = null
     override fun onCreate(arguments: Bundle?) {
         super.onCreate(arguments)
@@ -103,11 +105,19 @@ class GeminiSyntheticProbe : Instrumentation() {
             ?.takeIf { it in setOf("prepare-notification-race", "seed", "verify", "verify-new-install") }
         syntheticVolumeCount = arguments?.getString("syntheticVolumeCount")?.toIntOrNull()
         syntheticVolumePermitted = arguments?.getString("allowSyntheticVolumeProbe") == "true"
+        syntheticFinanceUiJourneyProbe = arguments?.getString("syntheticFinanceUiJourneyProbe") == "true"
+        syntheticFinanceUiJourneyPermitted = arguments?.getString("allowSyntheticFinanceUiJourney") == "true"
         onlyCase = arguments?.getString("case")?.takeIf { it in setOf("az", "ru", "mixed") }
         start()
     }
 
     override fun onStart() {
+        if (syntheticFinanceUiJourneyProbe) {
+            val results = SyntheticFinanceUiJourneyProbe.run(targetContext, syntheticFinanceUiJourneyPermitted)
+            finish(if (results.getString("status") == "synthetic_finance_ui_journey_fixture_passed")
+                Activity.RESULT_OK else Activity.RESULT_CANCELED, results)
+            return
+        }
         if (localInstallLineagePhase != null) {
             val results = LocalInstallLineageProbe.run(
                 targetContext,

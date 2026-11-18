@@ -83,6 +83,31 @@ class StartupProbeMetricTests(unittest.TestCase):
             with self.subTest(values=values, rank=rank), self.assertRaises(ValueError):
                 lab.nearest_rank_percentile(values, rank)
 
+
+class UiHierarchyTests(unittest.TestCase):
+    def test_ui_bounds_parse_android_accessibility_bounds(self) -> None:
+        self.assertEqual(lab.ui_bounds("[276,2188][365,2230]"), (276, 2188, 365, 2230))
+
+    def test_tap_prefers_bottom_navigation_label_when_title_is_duplicate(self) -> None:
+        root = lab.ET.fromstring("""<hierarchy rotation="0"><node bounds="[0,0][1080,2400]">
+          <node text="Katibə" bounds="[210,178][368,246]" />
+          <node text="Katibə" bounds="[276,2188][365,2230]" />
+        </node>
+        </hierarchy>""")
+        with patch.object(lab, "ui_tree", return_value=root), patch.object(lab, "adb") as adb:
+            lab.tap_ui_text("emulator-5556", Path("/tmp"), "state", "Katibə", 0.8)
+        adb.assert_called_once_with("emulator-5556", "shell", "input", "tap", "320", "2209")
+
+    def test_tap_refuses_ambiguous_visible_targets(self) -> None:
+        root = lab.ET.fromstring("""<hierarchy bounds="[0,0][1080,2400]">
+          <node text="Open" bounds="[10,100][100,160]" />
+          <node text="Open" bounds="[10,300][100,360]" />
+        </hierarchy>""")
+        with patch.object(lab, "ui_tree", return_value=root), patch.object(lab, "adb") as adb:
+            with self.assertRaisesRegex(RuntimeError, "found 2"):
+                lab.tap_ui_text("emulator-5556", Path("/tmp"), "state", "Open")
+        adb.assert_not_called()
+
     def test_startup_probe_rejects_owner_user_before_any_adb_call(self) -> None:
         with patch.object(lab, "adb") as adb:
             with self.assertRaisesRegex(RuntimeError, "non-owner synthetic"):
@@ -182,6 +207,21 @@ versionName=acceptance-lab-v108
             with self.assertRaisesRegex(RuntimeError, "greater than owner user 0"):
                 lab.run_synthetic_volume_probe("emulator-5556", 0, {}, [], [])
         adb_call.assert_not_called()
+
+    def test_persistent_finance_ui_journey_refuses_owner_before_adb(self) -> None:
+        with patch.object(lab, "adb") as adb_call:
+            with self.assertRaisesRegex(RuntimeError, "greater than owner user 0"):
+                lab.run_synthetic_finance_ui_journey_probe("emulator-5556", 0, Path("/tmp"), [])
+        adb_call.assert_not_called()
+
+    def test_persistent_finance_ui_journey_requires_user10_to_be_current(self) -> None:
+        user_list = "Users:\n\tUserInfo{10:MemoraReliabilityLab:8410} running\n"
+        with patch.object(lab, "adb", side_effect=[
+            SimpleNamespace(stdout=user_list), SimpleNamespace(stdout="11\n"),
+        ]) as adb_call:
+            with self.assertRaisesRegex(RuntimeError, "switch the verified emulator to synthetic user 10"):
+                lab.run_synthetic_finance_ui_journey_probe("emulator-5556", 10, Path("/tmp"), [])
+        self.assertEqual(adb_call.call_count, 2)
 
     def test_clean_install_probe_requires_new_marker_and_empty_profile(self) -> None:
         output = """INSTRUMENTATION_RESULT: status=synthetic_lineage_new_install_passed
