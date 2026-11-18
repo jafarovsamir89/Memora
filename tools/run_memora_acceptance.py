@@ -620,20 +620,21 @@ def run_synthetic_volume_probe(serial: str, user_id: int, env: dict[str, str],
                   re.finditer(r"INSTRUMENTATION_RESULT: ([a-z0-9_]+)=([^\s]+)", output)}
         passed = fields.get("status") == "synthetic_volume_probe_passed"
         numeric = {key: int(value) for key, value in fields.items()
-                   if key.endswith(("_ms", "_kib", "_bytes", "_rows", "_count")) and value.isdigit()}
+                   if key.endswith(("_ms", "_us", "_kib", "_bytes", "_rows", "_count")) and value.isdigit()}
         steps.append({
-            "name": f"synthetic_finance_volume_{count}",
+            "name": f"synthetic_cross_domain_volume_{count}",
             "status": "PASS" if passed else "FAIL",
             "duration_seconds": round(time.monotonic() - started, 3),
             "probe_status": fields.get("status"),
             "probe_stage": fields.get("stage"),
             "stage_error": fields.get("stage_error"),
             "measurements": numeric,
-            "measurement_scope": "warm local Room/repository reads; 20 samples per path; no UI/network",
+            "measurement_scope": "warm local Room/repository reads; 20 samples per path; sub-ms paths in microseconds; no UI/network",
             "network_used": False,
             "model_used": "NOT APPLICABLE",
             "cache_condition": "one warmup read before timed samples",
             "fixture_digest_sha256": fields.get("fixture_digest_sha256"),
+            "cross_domain_fixture_digest_sha256": fields.get("cross_domain_fixture_digest_sha256"),
         })
         if not passed:
             break

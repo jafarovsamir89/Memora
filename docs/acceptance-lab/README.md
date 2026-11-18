@@ -88,12 +88,18 @@ isolated; do not clear or uninstall the owner's app profile.
 
 The bounded `volume-probe` mode is restricted to the separately named
 `MemoraCleanInstallLab` Android user (the confirmed ID on this emulator is 11).
-It adds deterministic 100-row and then 1,000-row expense fixtures to that
-synthetic profile, refusing unexpected people or finance rows. It records
-device-local Room/repository p50/p95 timings and process-memory snapshots; it
-does not represent full UI-frame latency or peak memory. The initial campaign
-uses both sizes; a later 1,000-row retest can use `--volume-count 1000` because
-the fixture is monotonic and stays in that isolated synthetic profile.
+It adds deterministic 100-row and then 1,000-row fixtures for Finance, Cases,
+Notes and an editable Table to that synthetic profile, refusing unexpected
+records or a fixture that would need to shrink. It verifies each row and Case /
+Note revision before and after insertion, and verifies stable IDs plus a
+deterministic digest on repeat runs. It records device-local Room/repository
+p50/p95 timings and instantaneous process-memory snapshots. Fast paths report
+microseconds so sub-millisecond samples are not rounded to zero. These are
+warm local reads; they do not represent UI-frame latency, cold-cache behavior,
+peak memory or ANR risk. The initial campaign uses both sizes; a later 1,000-row
+retest can use `--volume-count 1000` because fixtures are monotonic and stay in
+that isolated synthetic profile. Tasks, people, long conversations, startup,
+screen rendering, cold reads, UI search and ANR remain unmeasured.
 
 Each run writes `apps/android/app/build/acceptance-lab/<UTC run id>/report.json`.
 The report includes mode/status, branch/HEAD, emulator properties, disk space,

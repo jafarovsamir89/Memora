@@ -17,7 +17,7 @@ import java.time.Instant
 import java.time.YearMonth
 import kotlinx.coroutines.runBlocking
 
-/** Adds bounded finance-only load to the named synthetic emulator profile and measures real Room reads. */
+/** Adds bounded cross-domain fixtures to one named synthetic emulator profile and measures Room reads. */
 internal object SyntheticVolumeProbe {
     private const val MARKER = "synthetic-volume-finance-"
     private const val CLEAN_LAB_PROFILE = "SyntheticMemoraLab"
@@ -98,6 +98,9 @@ internal object SyntheticVolumeProbe {
                 runBlocking { repository.financeAnalytics(scope, YearMonth.of(2026, 11)) }
             }
 
+            stage = "synthetic_domain_volume_probe"
+            val domainMetrics = SyntheticDomainVolumeProbe.run(database, scope, targetCount)
+
             val memory = Debug.MemoryInfo()
             Debug.getMemoryInfo(memory)
             stage = "report_results"
@@ -116,6 +119,7 @@ internal object SyntheticVolumeProbe {
             result.putString("fixture_digest_sha256", digest(fixture))
             result.putString("measurement_scope", "warm_local_reads_20_samples_per_path_no_ui_network")
             result
+                .apply { putAll(domainMetrics) }
         }.getOrElse { error ->
             result.putString("status", "synthetic_volume_probe_failed")
             result.putString("stage", stage)
