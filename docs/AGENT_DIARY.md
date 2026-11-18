@@ -10,7 +10,7 @@ v125→v126 `adb install --user 11 -r` сохранил `firstInstallTime`. Си
 
 Проверки: volume-probe PASS на v126 и повтор PASS после update v127; `firstInstallTime` unchanged; v127 debug/AndroidTest APKs and `:app:compileDebugAndroidTestKotlin` PASS; Python acceptance tests 17/17; `py_compile` PASS. Полный Gradle снова не запускался. В рамках этой работы только synthetic user 11; физический Redmi, user 0, реальные записи, Gemini/network/mic и paid APIs не затрагивались. LAB-08 остаётся partial: 1,000 people, long conversations, UI render/scroll timings, startup, cold cache, peak memory и ANR не проверены. Следующий независимый шаг: безопасно добавить synthetic People volume (target 100) и измерить существующий scoped read/list; затем продолжить recovery/visual checks, не закрывая known issues.
 
-Test-only implementation и документы зафиксированы коммитом `fd4ddef` (`test(acceptance): measure encrypted task volumes`). Локальный APK и machine report остаются в ignored build, owner ADR-012 исключён; пуш и сверка remote refs ожидаются.
+Test-only implementation зафиксирован `fd4ddef` (`test(acceptance): measure encrypted task volumes`), handoff — `266b9bb`; оба коммита отправлены и проверены в `origin/ui/redesign-v1`. Remote branch SHA `266b9bb0b8e72f853469de90955ff8175c37d482`; remote `main` остаётся `ac621919aca09ece6e292eae708d55cc09de16d7`. Локальный APK и machine report остаются в ignored build, owner ADR-012 исключён.
 
 ## ACT-0266 · 2026-11-18 · Reliability Lab: 1,000-row cross-domain volume probe and golden diagnosis
 
