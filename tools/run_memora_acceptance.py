@@ -636,6 +636,7 @@ def run_synthetic_volume_probe(serial: str, user_id: int, env: dict[str, str],
             "fixture_digest_sha256": fields.get("fixture_digest_sha256"),
             "cross_domain_fixture_digest_sha256": fields.get("cross_domain_fixture_digest_sha256"),
             "task_fixture_digest_sha256": fields.get("task_fixture_digest_sha256"),
+            "person_fixture_digest_sha256": fields.get("person_fixture_digest_sha256"),
         })
         if not passed:
             break

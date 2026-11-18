@@ -1,6 +1,8 @@
 package ai.memora.app
 
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
@@ -9,6 +11,9 @@ import androidx.compose.foundation.ScrollState
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.OutlinedTextField
@@ -47,6 +52,7 @@ import ai.memora.app.data.protectedstore.TaskPersonLinkRow
 import ai.memora.app.domain.Task
 import ai.memora.app.ui.EmptyState
 import ai.memora.app.ui.MemoraCard
+import ai.memora.app.ui.MemoraSpacing
 import ai.memora.app.ui.PersonCard
 import ai.memora.app.ui.PersonCardContent
 import ai.memora.app.ui.ScreenColumn
@@ -87,6 +93,7 @@ internal fun SavedObjectsScreen(kind: DomainKind, onOpenTarget: ((AppRoute) -> U
     val repository = remember(database) { ProtectedDomainRepository(database) }
     val aliasRepository = remember(database) { PersonAliasRepository(database) }
     val coroutineScope = rememberCoroutineScope()
+    val listState = rememberLazyListState()
     var records by remember(kind) { mutableStateOf<List<DomainObjectRow>>(emptyList()) }
     var query by remember(kind) { mutableStateOf("") }
     var selected by remember { mutableStateOf<DomainObjectRow?>(null) }
@@ -118,40 +125,61 @@ internal fun SavedObjectsScreen(kind: DomainKind, onOpenTarget: ((AppRoute) -> U
         needle.isEmpty() || record.title.lowercase().contains(needle) || record.body.orEmpty().lowercase().contains(needle)
     }
 
-    ScreenColumn {
-        val titleId = when (kind) {
-            DomainKind.PERSON -> ai.memora.app.R.string.people
-            DomainKind.PROJECT -> ai.memora.app.R.string.projects
-            DomainKind.NOTE -> ai.memora.app.R.string.notes_title
+    val titleId = when (kind) {
+        DomainKind.PERSON -> ai.memora.app.R.string.people
+        DomainKind.PROJECT -> ai.memora.app.R.string.projects
+        DomainKind.NOTE -> ai.memora.app.R.string.notes_title
+    }
+    LazyColumn(
+        state = listState,
+        modifier = Modifier.fillMaxSize()
+            .padding(horizontal = MemoraSpacing.xl)
+            .padding(top = MemoraSpacing.screenTop, bottom = MemoraSpacing.screenBottom)
+            .testTag("saved_objects_list"),
+        verticalArrangement = Arrangement.spacedBy(MemoraSpacing.lg),
+    ) {
+        item(key = "saved_objects_heading") {
+            ScreenHeading(
+                s(titleId),
+                s(ai.memora.app.R.string.saved_objects_subtitle),
+            )
         }
-        ScreenHeading(s(titleId),
-            s(ai.memora.app.R.string.saved_objects_subtitle))
-        OutlinedTextField(
-            value = query,
-            onValueChange = { query = it },
-            modifier = Modifier.fillMaxWidth().testTag("saved_objects_search"),
-            label = { Text(s(ai.memora.app.R.string.saved_objects_search)) },
-            singleLine = true,
-        )
+        item(key = "saved_objects_search") {
+            OutlinedTextField(
+                value = query,
+                onValueChange = { query = it },
+                modifier = Modifier.fillMaxWidth().testTag("saved_objects_search"),
+                label = { Text(s(ai.memora.app.R.string.saved_objects_search)) },
+                singleLine = true,
+            )
+        }
         when {
-            loading -> Text(s(ai.memora.app.R.string.ai_loading), color = colors.muted)
-            failed -> EmptyState(s(ai.memora.app.R.string.working_no_data), s(ai.memora.app.R.string.saved_objects_load_error))
-            records.isEmpty() -> EmptyState(s(ai.memora.app.R.string.working_no_data), s(ai.memora.app.R.string.saved_objects_empty))
-            filtered.isEmpty() -> EmptyState(s(ai.memora.app.R.string.working_no_data), s(ai.memora.app.R.string.saved_objects_no_matches))
-            else -> filtered.forEach { record ->
+            loading -> item(key = "saved_objects_loading") {
+                Text(s(ai.memora.app.R.string.ai_loading), color = colors.muted)
+            }
+            failed -> item(key = "saved_objects_error") {
+                EmptyState(s(ai.memora.app.R.string.working_no_data), s(ai.memora.app.R.string.saved_objects_load_error))
+            }
+            records.isEmpty() -> item(key = "saved_objects_empty") {
+                EmptyState(s(ai.memora.app.R.string.working_no_data), s(ai.memora.app.R.string.saved_objects_empty))
+            }
+            filtered.isEmpty() -> item(key = "saved_objects_no_matches") {
+                EmptyState(s(ai.memora.app.R.string.working_no_data), s(ai.memora.app.R.string.saved_objects_no_matches))
+            }
+            else -> items(filtered, key = DomainObjectRow::objectId) { record ->
                 val openRecord = {
-                        val personRoute = if (record.kind == DomainKind.PERSON.name) {
-                            AppRoute.target(AppTargetKind.PERSON, record.objectId)
-                        } else null
-                        if (onOpenTarget != null && personRoute != null) onOpenTarget(personRoute)
-                        else {
-                            selected = record
-                            selectedCaseSource = null
-                            selectedCaseDetails = null
-                            selectedTask = null
-                            detailStack = emptyList()
-                        }
+                    val personRoute = if (record.kind == DomainKind.PERSON.name) {
+                        AppRoute.target(AppTargetKind.PERSON, record.objectId)
+                    } else null
+                    if (onOpenTarget != null && personRoute != null) onOpenTarget(personRoute)
+                    else {
+                        selected = record
+                        selectedCaseSource = null
+                        selectedCaseDetails = null
+                        selectedTask = null
+                        detailStack = emptyList()
                     }
+                }
                 val summary = record.body?.takeIf(String::isNotBlank)?.let { body ->
                     body.take(240) + if (body.length > 240) "…" else ""
                 }

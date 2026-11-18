@@ -244,6 +244,44 @@ class CasesAndPersonCardTest {
         assertEquals(2, runBlocking { databaseRule.database.protectedStoreDao().caseRevisions("synthetic-case-bmw").size })
     }
 
+    @Test fun peopleListLazilyComposesStableIdsAndSearchFindsLastOfOneHundredRows() = runBlocking<Unit> {
+        val context = ApplicationProvider.getApplicationContext<Context>()
+        val scope = AgentVoiceTurnProcessor(context).conversationScopeId()
+        val repository = ProtectedDomainRepository(databaseRule.database)
+        repeat(100) { index ->
+            val suffix = index.toString().padStart(4, '0')
+            repository.createObject(
+                scope = scope,
+                id = "synthetic-lazy-person-$suffix",
+                kind = DomainKind.PERSON,
+                title = "Synthetic volume person $suffix",
+                body = "Synthetic note $suffix",
+                sourceRevisionId = null,
+                now = "2026-11-18T10:00:00Z",
+            )
+        }
+
+        compose.setContent {
+            CompositionLocalProvider(LocalAgentDatabaseOverride provides databaseRule.database) {
+                CompositionLocalProvider(LocalStrings provides context.resources) {
+                    MemoraTheme("light") { SavedObjectsScreen(DomainKind.PERSON) }
+                }
+            }
+        }
+        compose.waitUntil(10_000) {
+            compose.onAllNodesWithTag("saved_object_synthetic-lazy-person-0000").fetchSemanticsNodes().isNotEmpty()
+        }
+        compose.onNodeWithTag("saved_objects_list").assertExists()
+        compose.onNodeWithTag("saved_object_synthetic-lazy-person-0099").assertDoesNotExist()
+
+        compose.onNodeWithTag("saved_objects_search").performTextInput("0099")
+        compose.waitUntil(10_000) {
+            compose.onAllNodesWithTag("saved_object_synthetic-lazy-person-0099").fetchSemanticsNodes().isNotEmpty()
+        }
+        compose.onNodeWithTag("saved_object_synthetic-lazy-person-0099").assertExists()
+        compose.onNodeWithTag("saved_object_synthetic-lazy-person-0000").assertDoesNotExist()
+    }
+
     @Test fun personCardRequiresVisibleOwnerConfirmationBeforeShowingFinanceHistory() = runBlocking<Unit> {
         val context = ApplicationProvider.getApplicationContext<Context>()
         val scope = AgentVoiceTurnProcessor(context).conversationScopeId()
