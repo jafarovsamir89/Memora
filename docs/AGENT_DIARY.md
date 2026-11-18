@@ -12,6 +12,10 @@
 
 Следующий пункт по порядку — LAB-04: матрица сбоев и идемпотентности на fake provider, затем оставить неустранённые/непроверенные UI journey явно открытыми. Git handoff записывается после проверенного commit/push; owner ADR-012 исключён.
 
+### Git handoff ACT-0263
+
+P0.3 runtime/test package committed as `4181260dbd0f1197d13ab26fe31792cf5957d9db` (`test(android): add synthetic secretary reliability journeys`) and pushed to `origin/ui/redesign-v1`. After `git fetch`, local HEAD, upstream feature ref and `git ls-remote` all matched that SHA. Remote `main` remains `ac621919aca09ece6e292eae708d55cc09de16d7`. Only the nine reviewed source/test/docs files were included; owner ADR-012 and ignored build reports/APKs were excluded. The full Gradle run installed the debug build with `install -r` for component screenshot capture only; this is not populated-profile retention evidence.
+
 ## ACT-0262 · 2026-11-18 · Reliability Lab: детерминированный синтетический профиль (P0.2)
 
 Ветка остаётся `ui/redesign-v1`; текущий контрольный HEAD перед пакетом — `556aa0ea446c6343ea8bb6fc47e45a3303e95aa1`, удалённая feature-ветка совпадала. Работа ограничена `app/src/test`: production-код, схема БД, финансовая логика, AI и согласия не менялись.
