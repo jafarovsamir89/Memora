@@ -629,12 +629,13 @@ def run_synthetic_volume_probe(serial: str, user_id: int, env: dict[str, str],
             "probe_stage": fields.get("stage"),
             "stage_error": fields.get("stage_error"),
             "measurements": numeric,
-            "measurement_scope": "warm local Room/repository reads; 20 samples per path; sub-ms paths in microseconds; no UI/network",
+            "measurement_scope": "warm local Room/repository and encrypted task-store reads; 20 samples per path; sub-ms paths in microseconds; no UI/network",
             "network_used": False,
             "model_used": "NOT APPLICABLE",
             "cache_condition": "one warmup read before timed samples",
             "fixture_digest_sha256": fields.get("fixture_digest_sha256"),
             "cross_domain_fixture_digest_sha256": fields.get("cross_domain_fixture_digest_sha256"),
+            "task_fixture_digest_sha256": fields.get("task_fixture_digest_sha256"),
         })
         if not passed:
             break

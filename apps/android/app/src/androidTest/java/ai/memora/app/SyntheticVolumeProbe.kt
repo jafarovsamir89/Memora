@@ -17,7 +17,7 @@ import java.time.Instant
 import java.time.YearMonth
 import kotlinx.coroutines.runBlocking
 
-/** Adds bounded cross-domain fixtures to one named synthetic emulator profile and measures Room reads. */
+/** Adds bounded cross-domain fixtures to a named emulator profile and measures local read paths. */
 internal object SyntheticVolumeProbe {
     private const val MARKER = "synthetic-volume-finance-"
     private const val CLEAN_LAB_PROFILE = "SyntheticMemoraLab"
@@ -100,6 +100,8 @@ internal object SyntheticVolumeProbe {
 
             stage = "synthetic_domain_volume_probe"
             val domainMetrics = SyntheticDomainVolumeProbe.run(database, scope, targetCount)
+            stage = "synthetic_task_volume_probe"
+            val taskMetrics = SyntheticTaskVolumeProbe.run(context, scope, targetCount)
 
             val memory = Debug.MemoryInfo()
             Debug.getMemoryInfo(memory)
@@ -117,9 +119,10 @@ internal object SyntheticVolumeProbe {
             result.putInt("process_pss_kib", memory.totalPss)
             result.putLong("java_heap_used_bytes", Runtime.getRuntime().let { it.totalMemory() - it.freeMemory() })
             result.putString("fixture_digest_sha256", digest(fixture))
-            result.putString("measurement_scope", "warm_local_reads_20_samples_per_path_no_ui_network")
+            result.putString("measurement_scope", "warm_local_room_repository_and_encrypted_task_store_reads_20_samples_no_ui_network")
             result
                 .apply { putAll(domainMetrics) }
+                .apply { putAll(taskMetrics) }
         }.getOrElse { error ->
             result.putString("status", "synthetic_volume_probe_failed")
             result.putString("stage", stage)

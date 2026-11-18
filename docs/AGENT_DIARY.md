@@ -1,5 +1,17 @@
 # Memora — дневник ведущего инженера
 
+## ACT-0267 · 2026-11-18 · Reliability Lab: 1,000 encrypted Tasks on emulator
+
+После ACT-0266 продолжил P1.2 на той же ветке `ui/redesign-v1`; Android 14/API34 Emulator `emulator-5556`, только synthetic Android user 11 `MemoraCleanInstallLab`. Device volume harness теперь дополняет 1,000 Finance/Cases/Notes/Table строк тестовыми задачами в существующем `tasks-prototype.bin` через реальный `EncryptedTaskStore`, `TaskRules`, Android Keystore key provider и атомарный append; используется stable deterministic ID/title/command. Перед записью probe проверяет, что store содержит только корректный contiguous test prefix без unexpected events/deletions. После записи сверяет event log и проекцию всех 1,000 Task. Это AndroidTest-only seeder; production screen/store/domain и schema не менялись.
+
+v125→v126 `adb install --user 11 -r` сохранил `firstInstallTime`. Синтетические 1,000 задач записаны 1,000 последовательными `append` за 15.367 s; encrypted file size 214,067 bytes; digest `dbd0d4640cc55cba2a8db2a04f7cfac16a276a18d60a6aa291e830dee91fb5f7`. v126→v127 повторная установка сохранила `firstInstallTime` и все 1,000 задач; вставлено 0 событий, digest тот же. Machine report `20261118T151428.677765Z` PASS; 20 warm load samples на v127 p50/p95 20/23 ms. Предыдущий v126 run был 10/12 ms, поэтому зафиксирована run-to-run вариация, а не единичная обещанная производительность. Это decrypt/JSON/replay local-store timing, не end-to-end screen timing.
+
+После v127 запущен Tasks экран на эмуляторе. Реальный скрин показывает `0` assistant tasks отдельно от `1000` device-stored tasks и первые synthetic rows; данные не смешаны с Room tasks. Screenshot: `apps/android/app/build/acceptance-lab/manual-volume/tasks-v127-1000.png` (ignored). По нему подтверждён экран и верх списка, но не все 1,000 rows, scroll-to-end, frame latency, peak memory, TalkBack или completion/update interaction. Store `load()` пока выдаёт весь набор, так что paging/large-list behavior не измерен.
+
+Проверки: volume-probe PASS на v126 и повтор PASS после update v127; `firstInstallTime` unchanged; v127 debug/AndroidTest APKs and `:app:compileDebugAndroidTestKotlin` PASS; Python acceptance tests 17/17; `py_compile` PASS. Полный Gradle снова не запускался. В рамках этой работы только synthetic user 11; физический Redmi, user 0, реальные записи, Gemini/network/mic и paid APIs не затрагивались. LAB-08 остаётся partial: 1,000 people, long conversations, UI render/scroll timings, startup, cold cache, peak memory и ANR не проверены. Следующий независимый шаг: безопасно добавить synthetic People volume (target 100) и измерить существующий scoped read/list; затем продолжить recovery/visual checks, не закрывая known issues.
+
+Этот test-only block ещё не закоммичен; локальный APK и machine report остаются в ignored build, owner ADR-012 исключён.
+
 ## ACT-0266 · 2026-11-18 · Reliability Lab: 1,000-row cross-domain volume probe and golden diagnosis
 
 Продолжение только в `ui/redesign-v1` с исходного HEAD `8020d46386c30da951a2daba3ab564a6fd308341`. Перед ADB повторно проверен инвентарь: единственный доступный target `emulator-5556`, свойства Android 14/API34 QEMU/ranchu; дальнейшие операции адресованы только `adb -s emulator-5556`. Использован существующий синтетический user 11 `MemoraCleanInstallLab`; user 0/личные данные, физический телефон, сеть, AI API, микрофон и платные сервисы не использовались.
