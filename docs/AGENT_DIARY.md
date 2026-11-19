@@ -12,6 +12,8 @@ P0.5 остаётся partial: lineage probe подтверждает тольк
 
 Следующий шаг: проверить persisted volume fixture user 11 на следующем APK update/readback, затем продолжить открытый P1.1 визуально-навигационный обход, не изменяя golden-пороги и не заявляя общий P0/P1 closeout.
 
+Код, регрессионный тест и синхронизированные документы ACT-0277 зафиксированы коммитом `4dd537c366b3c85b4429411e83f70853ada2ffd8` (`test(acceptance): wait for rotated UI before capture`) и отправлены в `origin/ui/redesign-v1`. После `git fetch` локальный HEAD, `origin/ui/redesign-v1` и `git ls-remote` совпали на этом SHA; удалённый `main` остался `ac621919aca09ece6e292eae708d55cc09de16d7`. Owner-owned ADR-012 оставлен untracked, нетронут и исключён.
+
 ## ACT-0276 · 2026-11-19 · Persistent finance correction UI/readback (LAB-03 partial)
 
 Продолжил Reliability Lab на ветке `ui/redesign-v1` только на Android 14/API34 эмуляторе `emulator-5556`, synthetic Android user 10 `MemoraReliabilityLab`. Обновление v170→v171 через `adb install --user 10 -r` прошло с неизменным `firstInstallTime`; профиль не очищался. AndroidTest fixture через существующий `ProtectedDomainRepository.correctFinanceEventAmount` подготовил отдельную синтетическую receipt 50,00→45,00 AZN и проверил ровно одну append-only adjustment `amount_correction` величиной -500 minor units, прежний exact finance ID, две source messages и один APPLIED action result с target на тот же ID. Это repository fixture/readback, не вызов Gemini и не изменение runtime/domain.

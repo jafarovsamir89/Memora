@@ -7,6 +7,7 @@
 - P0.5 remains partial: lineage verifies six sentinels, not every app store or all relationships/settings/consents/onboarding on one profile. Previous 1,000-row volume profile remains separate; next action is a post-update user 11 volume readback. No full Gradle suite run because only the Python acceptance harness changed.
 - Clarified retry semantics after rereading `docs/acceptance-lab/README.md`: a new user turn may intentionally repeat an action. Cross-turn same-text deduplication is not an invariant; current protections are same-agent-run payload dedupe and UI no-auto-resend after a confirmed action. Do not add semantic cross-turn blocking without a product decision. This supersedes ACT-0276's phrasing that framed fresh-turn resend as an open deduplication test.
 - `main` and owner-owned `docs/adr/ADR-012-keystore-wrapping-key-rotation.md` remain untouched and excluded. Reports/screenshots are ignored under `apps/android/app/build/acceptance-lab/`.
+- Git: `4dd537c366b3c85b4429411e83f70853ada2ffd8` (`test(acceptance): wait for rotated UI before capture`) pushed to `origin/ui/redesign-v1`; fetch, local HEAD and remote feature ref matched. Remote `main` remained `ac621919aca09ece6e292eae708d55cc09de16d7`. Owner ADR-012 stays untracked and excluded.
 
 ## ACT-0276 — 2026-11-19 — Finance correction UI/readback on synthetic Android (LAB-03 partial)
 
