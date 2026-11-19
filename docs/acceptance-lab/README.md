@@ -424,3 +424,29 @@ repository measurements, not UI/frame timings. Screenshots and report are
 ignored under `apps/android/app/build/acceptance-lab/ACT-0282-secretary-draft-process-death/`.
 Physical-device behavior, low-memory pre-save process death, TalkBack and real
 provider/network faults are still not tested.
+
+## ACT-0283 — Traverse the full synthetic conversation archive
+
+On the explicitly pinned Android 14/API34 emulator, use only synthetic user 11
+`MemoraCleanInstallLab` with the 1,000-turn fixture. Open Memory → conversation
+history, confirm newest turn `0999`, and use the real UI's “load more” control
+until the oldest turn `0000` is visible. This exercises pagination, lazy
+rendering and the long archive in the app; it does not mutate the fixture.
+
+The 2026-11-19 run on v195 reached `0000` in 34 pages. Starting/newest and
+oldest screenshots were captured from the emulator and visually reviewed. The
+oldest card retains its date and exact-open action while the long preview is
+ellipsized. ADB action-to-first-row p50/p95 was 4.656/4.746 seconds, but this
+includes input injection, accessibility hierarchy dumps and host polling; do
+not interpret it as a UI response latency.
+
+`gfxinfo` over the complete ADB-driven traversal reported 98.56% janky frames
+(p50/p90/p95/p99 46/89/97/113 ms). Six-swipe samples on the same emulator were
+also slow on Memory (93.94%), Today (98.95%) and More (100%). Because the
+reference screens show similar frame statistics, this method/environment does
+not isolate a Memory-specific regression or establish physical-device
+smoothness. Status: archive traversal PASS; application smoothness on a target
+device and Macrobenchmark/Perfetto profiling NOT TESTED. Do not use these
+emulator values as a release threshold. Screenshots and the detailed report
+remain ignored under
+`apps/android/app/build/acceptance-lab/ACT-0283-memory-ui-scroll/`.
