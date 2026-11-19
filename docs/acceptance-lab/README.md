@@ -132,6 +132,26 @@ and unambiguous UI labels are required; ambiguous labels fail closed. Screenshot
 and UI hierarchy captures are saved in the run's ignored output directory. The
 journey does not send or retry a command, call an AI API, or clean up/delete data.
 
+ACT-0276 on synthetic Android 14/API34 user 10 updated v170→v171 and preserved
+`firstInstallTime`. The persistent route passed: Secretary→BMW finance/case/person/
+task/exact source/conversation and Android Back; ambiguous Ruslan clarification
+with `NEEDS_CONFIRMATION` and no write; correction action→exact-ID unsent draft→
+45,00 AZN Finance detail→append-only correction history→Back to draft. The
+AndroidTest repository fixture created a separate synthetic 50→45 AZN receipt
+correction through the existing correction method, then read back one -500-minor-
+unit `amount_correction`, two source messages and one result targeting the same
+finance ID. This is not a Gemini action and the UI draft was not sent. Final run
+`20261119T135855.309066Z` PASS; its 20 real screenshots and XML are ignored under
+the run directory. Python tests 46/46; full Gradle BUILD SUCCESSFUL (84 suites /
+431 JVM tests, 0 failures/errors, 1 opt-in skip; `testDebugUnitTest` UP-TO-DATE),
+debug/AndroidTest builds and AndroidTest Kotlin compile PASS, lint 0/90/2.
+Vertical scroll now uses the screen center to avoid edge-Back interference; the
+Back assertion checks exact finance rows because Compose omits the selected-tab
+label from that accessibility snapshot. LAB-03 remains partial: same-intent
+manual retry across a new turn and live Gemini semantics remain NOT TESTED.
+Code commit `d60c1e0` contains the verified fixture/harness changes; the docs
+handoff and push are recorded in the ACT-0276 follow-up.
+
 ACT-0275 supersedes the old v148 device status: on Android 14/API34 synthetic
 user 10, the v166→v167 update preserved `firstInstallTime`, and the persistent
 UI route passed Secretary→BMW advance→Case→Person→Finance→Task→exact source→
