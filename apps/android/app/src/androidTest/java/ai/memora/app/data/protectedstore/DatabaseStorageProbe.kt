@@ -627,6 +627,39 @@ object DatabaseStorageProbe {
         return result
     }
 
+    /** Check only the explicitly named isolated process-death fixtures for the selected Android user. */
+    fun processDeathProbePreflight(context: Context, kind: String, permitted: Boolean): Bundle {
+        val result = Bundle()
+        if (!permitted || context.packageName != "ai.memora.app" ||
+            context.applicationInfo.flags and android.content.pm.ApplicationInfo.FLAG_DEBUGGABLE == 0 ||
+            kind !in setOf("transaction", "key_rotation")) {
+            result.putString("status", "explicit_debug_synthetic_opt_in_required")
+            return result
+        }
+        val name = if (kind == "transaction") "memora-agent-process-death-probe.db"
+            else "memora-agent-rotation-death-probe.db"
+        val alias = if (kind == "transaction") "ai.memora.app.test.process-death-probe.v1"
+            else "ai.memora.app.test.rotation-death-probe.v1"
+        val artifactsExist = processDeathProbeArtifacts(context, name, alias)
+        result.putBoolean("named_test_files_absent", !artifactsExist.first)
+        result.putBoolean("test_alias_absent", !artifactsExist.second)
+        result.putString("status", if (artifactsExist.first || artifactsExist.second)
+            "synthetic_process_death_fixture_exists" else "synthetic_process_death_fixture_absent")
+        return result
+    }
+
+    private fun processDeathProbeArtifacts(context: Context, name: String, alias: String): Pair<Boolean, Boolean> {
+        val database = context.getDatabasePath(name)
+        val envelope = File(context.noBackupFilesDir, "$name.envelope")
+        val files = listOf(
+            database, File(database.path + "-journal"), File(database.path + "-wal"), File(database.path + "-shm"),
+            envelope, File(envelope.path + ".new"), File(envelope.path + ".bak"),
+            File(envelope.path + ".rotation"), File(envelope.path + ".rotation.bak"),
+        )
+        val store = KeyStore.getInstance("AndroidKeyStore").apply { load(null) }
+        return files.any(File::exists) to store.containsAlias(alias)
+    }
+
     /** Host-driven synthetic process-death probe; leave DB open with an uncommitted transaction until force-stop. */
     fun prepareProcessDeathProbe(context: Context, permitted: Boolean): Bundle {
         val result = Bundle()
@@ -637,6 +670,10 @@ object DatabaseStorageProbe {
         }
         val name = "memora-agent-process-death-probe.db"
         val alias = "ai.memora.app.test.process-death-probe.v1"
+        if (processDeathProbeArtifacts(context, name, alias).let { it.first || it.second }) {
+            result.putString("status", "synthetic_process_death_fixture_exists")
+            return result
+        }
         val envelope = AtomicFile(File(context.noBackupFilesDir, "$name.envelope"))
         var database: ProtectedProbeDatabase? = null
         try {
@@ -657,7 +694,7 @@ object DatabaseStorageProbe {
             result.putString("status", "prepared")
             result.putBoolean("committed_synthetic_row_written", true)
             result.putBoolean("uncommitted_synthetic_row_open", true)
-            Log.i("MemoraStorageProbe", "P1_PROCESS_DEATH_PROBE_READY")
+            Log.i("MemoraStorageProbe", "P1_PROCESS_DEATH_PROBE_READY pid=${android.os.Process.myPid()}")
             while (true) Thread.sleep(1_000)
         } catch (error: Exception) {
             result.putString("status", "prepare_failed")
@@ -695,6 +732,7 @@ object DatabaseStorageProbe {
             bytes.fill(0)
             check(committedSurvived && uncommittedRolledBack && noPlaintextMarker)
             result.putString("status", "passed")
+            result.putLong("probe_process_id", android.os.Process.myPid().toLong())
             result.putBoolean("committed_transaction_survived_process_death", true)
             result.putBoolean("uncommitted_transaction_rolled_back", true)
             result.putBoolean("reopened_database_has_no_plaintext_marker", true)
@@ -706,7 +744,10 @@ object DatabaseStorageProbe {
             runCatching { database?.close() }
             context.deleteDatabase(name)
             envelope.baseFile.delete()
-            store.deleteEntry(alias)
+            val aliasRemoved = runCatching { store.deleteEntry(alias); !store.containsAlias(alias) }.getOrDefault(false)
+            val filesAbsent = !processDeathProbeArtifacts(context, name, alias).first
+            result.putBoolean("named_test_files_removed", filesAbsent)
+            result.putBoolean("test_alias_removed", aliasRemoved)
         }
         return result
     }
@@ -721,6 +762,10 @@ object DatabaseStorageProbe {
         }
         val name = "memora-agent-rotation-death-probe.db"
         val alias = "ai.memora.app.test.rotation-death-probe.v1"
+        if (processDeathProbeArtifacts(context, name, alias).let { it.first || it.second }) {
+            result.putString("status", "synthetic_process_death_fixture_exists")
+            return result
+        }
         val envelope = AtomicFile(File(context.noBackupFilesDir, "$name.envelope"))
         val databaseFile = context.getDatabasePath(name)
         val store = KeyStore.getInstance("AndroidKeyStore").apply { load(null) }
@@ -744,7 +789,7 @@ object DatabaseStorageProbe {
             nextKey!!.fill(0); nextKey = null
             result.putString("status", "prepared")
             result.putBoolean("synthetic_rekey_complete_envelope_promotion_pending", true)
-            Log.i("MemoraStorageProbe", "P1_KEY_ROTATION_FORCE_STOP_READY")
+            Log.i("MemoraStorageProbe", "P1_KEY_ROTATION_FORCE_STOP_READY pid=${android.os.Process.myPid()}")
             while (true) Thread.sleep(1_000)
         } catch (error: Exception) {
             result.putString("status", "prepare_failed")
@@ -783,6 +828,7 @@ object DatabaseStorageProbe {
             check(currentKey.size == 32)
             currentKey.fill(0)
             result.putString("status", "passed")
+            result.putLong("probe_process_id", android.os.Process.myPid().toLong())
             result.putBoolean("rekey_recovered_after_process_force_stop", true)
             result.putBoolean("synthetic_marker_survived", true)
             result.putBoolean("staged_envelope_promoted", true)
@@ -796,7 +842,10 @@ object DatabaseStorageProbe {
             listOf(envelope.baseFile, File(envelope.baseFile.path + ".bak"),
                 File(envelope.baseFile.path + ".rotation"), File(envelope.baseFile.path + ".rotation.bak"))
                 .forEach { it.delete() }
-            store.deleteEntry(alias)
+            val aliasRemoved = runCatching { store.deleteEntry(alias); !store.containsAlias(alias) }.getOrDefault(false)
+            val filesAbsent = !processDeathProbeArtifacts(context, name, alias).first
+            result.putBoolean("named_test_files_removed", filesAbsent)
+            result.putBoolean("test_alias_removed", aliasRemoved)
         }
         return result
     }

@@ -103,6 +103,69 @@ class VolumeProbeResultTests(unittest.TestCase):
         self.assertEqual(lab.acceptance_report_status([{"status": "PASS"}]), "PASS")
 
 
+class ProcessDeathProbeTests(unittest.TestCase):
+    def test_transaction_process_death_requires_every_recovery_invariant_and_cleanup(self) -> None:
+        fields = {
+            "status": "passed",
+            "probe_process_id": "124",
+            "committed_transaction_survived_process_death": "true",
+            "uncommitted_transaction_rolled_back": "true",
+            "reopened_database_has_no_plaintext_marker": "true",
+            "named_test_files_removed": "true",
+            "test_alias_removed": "true",
+        }
+        checks = lab.process_death_probe_checks("transaction", fields, cleanup_absent=True,
+                                                prepared_pid=123, prepare_process_exited=True)
+        self.assertTrue(all(checks.values()))
+        self.assertFalse(lab.process_death_probe_checks(
+            "transaction", fields, cleanup_absent=False, prepared_pid=123, prepare_process_exited=True,
+        )["named_test_files_removed"])
+
+    def test_key_rotation_process_death_requires_reconciliation_invariants(self) -> None:
+        fields = {
+            "status": "passed",
+            "probe_process_id": "456",
+            "rekey_recovered_after_process_force_stop": "true",
+            "synthetic_marker_survived": "true",
+            "staged_envelope_promoted": "true",
+            "named_test_files_removed": "true",
+            "test_alias_removed": "true",
+        }
+        self.assertTrue(all(lab.process_death_probe_checks(
+            "key_rotation", fields, cleanup_absent=True, prepared_pid=123, prepare_process_exited=True,
+        ).values()))
+        fields["staged_envelope_promoted"] = "false"
+        self.assertFalse(all(lab.process_death_probe_checks(
+            "key_rotation", fields, cleanup_absent=True, prepared_pid=123, prepare_process_exited=True,
+        ).values()))
+
+    def test_prepare_process_must_be_gone_and_recovery_pid_must_change(self) -> None:
+        fields = {"status": "passed", "probe_process_id": "123"}
+        checks = lab.process_death_probe_checks("transaction", fields, cleanup_absent=True,
+                                                prepared_pid=123, prepare_process_exited=False)
+        self.assertFalse(checks["prepare_process_exited"])
+        self.assertFalse(checks["recovery_ran_in_new_process"])
+
+    def test_fixture_preflight_uses_target_android_user_in_instrumentation(self) -> None:
+        output = "INSTRUMENTATION_RESULT: status=synthetic_process_death_fixture_absent\n" \
+            "INSTRUMENTATION_RESULT: named_test_files_absent=true\n" \
+            "INSTRUMENTATION_RESULT: test_alias_absent=true\n"
+        with patch.object(lab, "adb", return_value=SimpleNamespace(stdout=output, stderr="")) as adb:
+            fields = lab.run_process_death_preflight("emulator-5556", 11, "transaction")
+        self.assertEqual(fields["status"], "synthetic_process_death_fixture_absent")
+        command = adb.call_args.args
+        self.assertEqual(command[:4], ("emulator-5556", "shell", "am", "instrument"))
+        self.assertEqual(command[4:7], ("--user", "11", "-w"))
+        self.assertIn("transaction-preflight", command)
+
+    def test_process_exit_check_is_scoped_to_expected_android_user(self) -> None:
+        output = "USER PID\nu10_a198 123\nu11_a198 456\n"
+        with patch.object(lab, "adb", return_value=SimpleNamespace(stdout=output)) as adb:
+            self.assertFalse(lab.process_id_running_for_user("emulator-5556", 11, 123))
+            self.assertTrue(lab.process_id_running_for_user("emulator-5556", 11, 456))
+        self.assertEqual(adb.call_args_list[-1].args[:4], ("emulator-5556", "shell", "ps", "-A"))
+
+
 class UiHierarchyTests(unittest.TestCase):
     def test_synthetic_home_restart_stops_instrumentation_before_main_activity(self) -> None:
         out_dir = Path("/tmp/memora-home")

@@ -1,3 +1,12 @@
+## ACT-0281 — 2026-11-19 — Emulator process-death transaction and key-rotation probes
+
+- Added `process-death-probe` to the pinned-emulator acceptance runner and test-only Android instrumentation. The mode requires an explicitly named, current non-owner synthetic user and installed app/test package. Target-context preflight refuses any existing named fixture file or Keystore alias. A prior `run-as` guard was safely blocked before writes because Android does not scope it to the requested user; it was removed. No DB contents or user records were read.
+- Build/install v192→v193 passed on Android 14/API34 `emulator-5554`, synthetic user 11; `firstInstallTime` unchanged. Transaction process-death PASS: committed row survived, open transaction rolled back, no plaintext marker, fixture DB/envelope/Keystore alias removed. PID 14948 exited; verify ran as PID 15016.
+- Key-rotation process-death PASS: SQLCipher rekey recovered after force-stop, marker survived, staged envelope promoted, named fixture and alias removed. PID 15133 exited; verify ran as PID 15209. MainActivity launched after both.
+- Follow-up v193→v194 read-only volume probe PASS at 1,000 rows: all five prior fixture digests stable, 0 inserts, `firstInstallTime` unchanged. Report `20261119T174441.736942Z`; warm local p50/p95 case search 256.386/319.891 ms, oldest conversation 1,105/1,296 ms, finance analytics 159/220 ms. Repository timings only.
+- Evidence reports `20261119T174402.829833Z` / `20261119T174441.736942Z` are ignored. Python tools 73/73, `py_compile`, debug/AndroidTest APK builds, AndroidTest Kotlin compile and `git diff --check` PASS. LAB-09 remains partial; actual provider faults, Secretary draft after OS process death, TalkBack, physical device and broad failure matrix are NOT TESTED.
+- No user-0 records, personal data, physical device, AI/network/microphone or paid API. No production runtime/domain/ledger/schema/provider/consent changes. APK v194 stays local/ignored. Preserve owner ADR-012 and `main`.
+
 ## ACT-0280 — 2026-11-19 — Fix landscape Today viewport; recheck lineage and volume matrix
 
 - On branch `ui/redesign-v1`, compacted only the Today landscape header and moved its conversation card into a side-by-side layout. Portrait layout is preserved; shared `ScreenColumn` spacing/top padding are configurable with unchanged defaults. Added Compose coverage for AZ + landscape + `fontScale=1.3`.

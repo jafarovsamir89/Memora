@@ -18,6 +18,7 @@ python3 tools/run_memora_acceptance.py device-lineage --serial emulator-5556 --s
 python3 tools/run_memora_acceptance.py volume-probe --serial emulator-5556 --synthetic-user-id 11
 python3 tools/run_memora_acceptance.py startup-probe --serial emulator-5556 --synthetic-user-id 11 --startup-samples 20
 python3 tools/run_memora_acceptance.py finance-ui-journey --serial emulator-5556 --synthetic-user-id 10 --min-host-free-gib 1.0
+python3 tools/run_memora_acceptance.py process-death-probe --serial emulator-5556 --synthetic-user-id 11
 ```
 
 - `preflight` verifies the branch, host/emulator free disk, and the selected
@@ -380,3 +381,21 @@ The component gallery remains 30/31 because `confirmation-light` still differs;
 no golden or comparison threshold was changed. Code/test commit
 `804eb46be66563058f5538268e3ee9e45300bb41` contains the landscape fix. No real
 profile, physical phone, AI/network, microphone or paid API was used.
+
+
+## ACT-0281 — Synthetic process-death and key-rotation recovery
+
+`process-death-probe` builds and installs matching debug/AndroidTest APKs over
+one explicitly named synthetic Android user. Instrumentation in that target
+user checks that its two named disposable DB/envelope fixtures and aliases do
+not already exist. It prepares either an open transaction or completed SQLCipher
+rekey, emits the prepare PID, then the runner force-stops only the selected
+user's app/test packages. The runner requires that PID to disappear and
+instrumentation recovery to run under a different PID. It verifies committed
+transaction durability/uncommitted rollback or staged-key promotion, checks the
+named artifacts/aliases were removed, and launches MainActivity. It does not
+read or mutate the user's actual app database. Reports remain ignored in build
+output. The 2026-11-19 Android 14 run passed both cases for synthetic user 11;
+see ACT-0281 in the diary/action log. These test-only probes do not validate
+real network faults, Secretary UI draft survival after OS process death, or
+physical-device behavior.

@@ -95,7 +95,7 @@ class GeminiSyntheticProbe : Instrumentation() {
             it.matches(Regex("[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}"))
         }
         processDeathProbe = arguments?.getString("processDeathProbe")?.takeIf {
-            it in setOf("prepare", "verify", "rotation-prepare", "rotation-verify")
+            it in setOf("prepare", "verify", "rotation-prepare", "rotation-verify", "transaction-preflight", "rotation-preflight")
         }
         processDeathPermitted = arguments?.getString("allowSyntheticProcessDeathProbe") == "true"
         speechOnly = arguments?.getString("speechOnly") == "true"
@@ -177,12 +177,20 @@ class GeminiSyntheticProbe : Instrumentation() {
                 return
             }
             val crashResults = when (processDeathProbe) {
+                "transaction-preflight" -> DatabaseStorageProbe.processDeathProbePreflight(
+                    targetContext, "transaction", permitted = true,
+                )
+                "rotation-preflight" -> DatabaseStorageProbe.processDeathProbePreflight(
+                    targetContext, "key_rotation", permitted = true,
+                )
                 "prepare" -> DatabaseStorageProbe.prepareProcessDeathProbe(targetContext, permitted = true)
                 "verify" -> DatabaseStorageProbe.verifyProcessDeathProbe(targetContext, permitted = true)
                 "rotation-prepare" -> DatabaseStorageProbe.prepareKeyRotationProcessDeathProbe(targetContext, permitted = true)
                 else -> DatabaseStorageProbe.verifyKeyRotationProcessDeathProbe(targetContext, permitted = true)
             }
-            finish(if (crashResults.getString("status") == "passed" || crashResults.getString("status") == "prepared") Activity.RESULT_OK else Activity.RESULT_CANCELED, crashResults)
+            finish(if (crashResults.getString("status") in setOf(
+                    "passed", "prepared", "synthetic_process_death_fixture_absent",
+                )) Activity.RESULT_OK else Activity.RESULT_CANCELED, crashResults)
             return
         }
         if (!permitted) { finish(Activity.RESULT_CANCELED, Bundle().apply { putString("status", "explicit_opt_in_required") }); return }

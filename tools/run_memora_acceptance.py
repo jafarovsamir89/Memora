@@ -960,6 +960,268 @@ def run_lineage_probe(serial: str, user_id: int, phase: str) -> dict[str, Any]:
     }
 
 
+PROCESS_DEATH_CASES = {
+    "transaction": {
+        "database": "memora-agent-process-death-probe.db",
+        "ready_marker": "P1_PROCESS_DEATH_PROBE_READY",
+        "prepare_phase": "prepare",
+        "verify_phase": "verify",
+        "expected": (
+            "committed_transaction_survived_process_death",
+            "uncommitted_transaction_rolled_back",
+            "reopened_database_has_no_plaintext_marker",
+            "named_test_files_removed",
+            "test_alias_removed",
+        ),
+    },
+    "key_rotation": {
+        "database": "memora-agent-rotation-death-probe.db",
+        "ready_marker": "P1_KEY_ROTATION_FORCE_STOP_READY",
+        "prepare_phase": "rotation-prepare",
+        "verify_phase": "rotation-verify",
+        "expected": (
+            "rekey_recovered_after_process_force_stop",
+            "synthetic_marker_survived",
+            "staged_envelope_promoted",
+            "named_test_files_removed",
+            "test_alias_removed",
+        ),
+    },
+}
+
+
+def process_death_probe_checks(case: str, fields: dict[str, str], cleanup_absent: bool,
+                               prepared_pid: int | None, prepare_process_exited: bool) -> dict[str, bool]:
+    if case not in PROCESS_DEATH_CASES:
+        raise ValueError("unknown synthetic process-death probe case")
+    expected = PROCESS_DEATH_CASES[case]["expected"]
+    checks = {"probe_status_passed": fields.get("status") == "passed"}
+    checks.update({name: fields.get(name) == "true" for name in expected})
+    checks["named_test_files_removed"] = cleanup_absent
+    checks["prepare_process_exited"] = prepare_process_exited
+    checks["recovery_ran_in_new_process"] = prepared_pid is not None and \
+        fields.get("probe_process_id", "").isdigit() and int(fields["probe_process_id"]) != prepared_pid
+    return checks
+
+
+def instrumentation_result_fields(output: str) -> dict[str, str]:
+    return {
+        match.group(1): match.group(2)
+        for match in re.finditer(r"INSTRUMENTATION_RESULT: ([a-z0-9_]+)=([^\s]+)", output)
+    }
+
+
+def process_id_running_for_user(serial: str, user_id: int, pid: int) -> bool:
+    output = adb(serial, "shell", "ps", "-A", "-o", "USER,PID").stdout
+    expected_user_prefix = f"u{user_id}_"
+    for line in output.splitlines():
+        fields = line.split()
+        if len(fields) >= 2 and fields[0].startswith(expected_user_prefix) and fields[1].isdigit():
+            if int(fields[1]) == pid:
+                return True
+    return False
+
+
+def run_process_death_preflight(serial: str, user_id: int, case: str) -> dict[str, str]:
+    phase = "transaction-preflight" if case == "transaction" else "rotation-preflight"
+    result = adb(
+        serial, "shell", "am", "instrument", "--user", str(user_id), "-w",
+        "-e", "processDeathProbe", phase,
+        "-e", "allowSyntheticProcessDeathProbe", "true", LINEAGE_RUNNER,
+        timeout=180,
+    )
+    return instrumentation_result_fields((result.stdout or "") + (result.stderr or ""))
+
+
+def run_process_death_case(serial: str, user_id: int, case: str) -> dict[str, Any]:
+    spec = PROCESS_DEATH_CASES[case]
+    fixture_preflight = run_process_death_preflight(serial, user_id, case)
+    if fixture_preflight.get("status") != "synthetic_process_death_fixture_absent" or \
+        fixture_preflight.get("named_test_files_absent") != "true" or \
+        fixture_preflight.get("test_alias_absent") != "true":
+        return {"name": f"synthetic_process_death_{case}", "status": "BLOCKED",
+                "reason": "named_test_database_or_recovery_file_already_exists"}
+
+    log_args = ("logcat", "-d", "-s", "MemoraStorageProbe:I", "*:S")
+    before_log = adb(serial, *log_args).stdout
+    prior_ready_count = before_log.count(str(spec["ready_marker"]))
+    command = [
+        "adb", "-s", serial, "shell", "am", "instrument", "--user", str(user_id), "-w",
+        "-e", "processDeathProbe", str(spec["prepare_phase"]),
+        "-e", "allowSyntheticProcessDeathProbe", "true", LINEAGE_RUNNER,
+    ]
+    started = time.monotonic()
+    process = subprocess.Popen(command, cwd=ROOT, stdout=subprocess.PIPE,
+                               stderr=subprocess.STDOUT, text=True)
+    ready = False
+    prepared_pid: int | None = None
+    output = ""
+    try:
+        deadline = time.monotonic() + 60
+        while time.monotonic() < deadline:
+            if process.poll() is not None:
+                output = process.communicate(timeout=5)[0] or ""
+                break
+            current_log = adb(serial, *log_args).stdout
+            if current_log.count(str(spec["ready_marker"])) > prior_ready_count:
+                pid_matches = re.findall(rf"{re.escape(str(spec['ready_marker']))} pid=(\d+)", current_log)
+                prepared_pid = int(pid_matches[-1]) if pid_matches else None
+                ready = prepared_pid is not None
+                break
+            time.sleep(0.5)
+
+        if not ready:
+            for package in (PACKAGE, TEST_PACKAGE):
+                subprocess.run(["adb", "-s", serial, "shell", "am", "force-stop",
+                                "--user", str(user_id), package], cwd=ROOT,
+                               stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True,
+                               timeout=30, check=False)
+            if process.poll() is None:
+                try:
+                    output = process.communicate(timeout=20)[0] or ""
+                except subprocess.TimeoutExpired:
+                    process.terminate()
+                    output = process.communicate(timeout=5)[0] or ""
+            return {"name": f"synthetic_process_death_{case}", "status": "FAIL",
+                    "reason": "prepare_probe_did_not_reach_pid_bearing_force_stop_marker",
+                    "duration_seconds": round(time.monotonic() - started, 3),
+                    "instrumentation_status": instrumentation_result_fields(output).get("status")}
+
+        stopped: list[str] = []
+        for package in (PACKAGE, TEST_PACKAGE):
+            adb(serial, "shell", "am", "force-stop", "--user", str(user_id), package)
+            stopped.append(package)
+        try:
+            output = process.communicate(timeout=30)[0] or ""
+        except subprocess.TimeoutExpired as error:
+            raise RuntimeError("instrumentation process remained alive after scoped force-stop") from error
+
+        process_exited = False
+        deadline = time.monotonic() + 15
+        while time.monotonic() < deadline:
+            if prepared_pid is not None and not process_id_running_for_user(serial, user_id, prepared_pid):
+                process_exited = True
+                break
+            time.sleep(0.5)
+        if not process_exited:
+            return {"name": f"synthetic_process_death_{case}", "status": "FAIL",
+                    "reason": "force_stop_did_not_terminate_prepare_process",
+                    "prepare_process_pid": prepared_pid,
+                    "duration_seconds": round(time.monotonic() - started, 3)}
+
+        verify_result = adb(
+            serial, "shell", "am", "instrument", "--user", str(user_id), "-w",
+            "-e", "processDeathProbe", str(spec["verify_phase"]),
+            "-e", "allowSyntheticProcessDeathProbe", "true", LINEAGE_RUNNER,
+            timeout=180,
+        )
+        verify_output = (verify_result.stdout or "") + (verify_result.stderr or "")
+        fields = instrumentation_result_fields(verify_output)
+        checks = process_death_probe_checks(
+            case, fields,
+            cleanup_absent=fields.get("named_test_files_removed") == "true",
+            prepared_pid=prepared_pid,
+            prepare_process_exited=process_exited,
+        )
+        return {
+            "name": f"synthetic_process_death_{case}",
+            "status": "PASS" if all(checks.values()) else "FAIL",
+            "duration_seconds": round(time.monotonic() - started, 3),
+            "probe_status": fields.get("status"),
+            "prepare_process_pid": prepared_pid,
+            "verification_process_pid": int(fields["probe_process_id"])
+                if fields.get("probe_process_id", "").isdigit() else None,
+            "expected_recovery_checks": checks,
+            "named_database_cleanup": "PASS" if checks["named_test_files_removed"] else "FAIL",
+            "force_stopped_packages": stopped,
+            "process_force_stop_verified_by_pid": process_exited,
+        }
+    finally:
+        if process.poll() is None:
+            for package in (PACKAGE, TEST_PACKAGE):
+                subprocess.run(["adb", "-s", serial, "shell", "am", "force-stop",
+                                "--user", str(user_id), package], cwd=ROOT,
+                               stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True,
+                               timeout=30, check=False)
+            try:
+                process.communicate(timeout=5)
+            except subprocess.TimeoutExpired:
+                process.terminate()
+                process.communicate(timeout=5)
+
+
+def run_synthetic_process_death_probe(serial: str, user_id: int, env: dict[str, str],
+                                      steps: list[dict[str, Any]]) -> None:
+    if user_id <= 0:
+        raise RuntimeError("process-death probe requires a non-owner synthetic Android user")
+    users = adb(serial, "shell", "pm", "list", "users").stdout
+    expected_users = (SYNTHETIC_USER_NAME, SYNTHETIC_VOLUME_USER_NAME)
+    if not any(re.search(rf"UserInfo\{{{user_id}:{re.escape(name)}:", users) for name in expected_users):
+        raise RuntimeError("process-death probe accepts only the named synthetic Android users")
+    current_user = adb(serial, "shell", "am", "get-current-user").stdout.strip()
+    if current_user != str(user_id):
+        raise RuntimeError("switch the verified emulator to the named synthetic user before process-death probe")
+    packages = adb(serial, "shell", "cmd", "package", "list", "packages", "--user", str(user_id)).stdout
+    if f"package:{PACKAGE}\n" not in packages or f"package:{TEST_PACKAGE}\n" not in packages:
+        raise RuntimeError("both Memora and its AndroidTest package must be installed for the synthetic user")
+    before = package_install_state(adb(serial, "shell", "dumpsys", "package", PACKAGE).stdout, user_id)
+    if not before["installed_for_user"]:
+        raise RuntimeError("Memora is not installed for the selected synthetic user")
+    steps.append({"name": "synthetic_user_preflight", "status": "PASS", "synthetic_user_id": user_id})
+
+    next_code = before["version_code"] + 1
+    next_name = f"acceptance-lab-v{next_code}"
+    build = run([
+        str(GRADLEW), ":app:assembleDebug", ":app:assembleDebugAndroidTest",
+        f"-PmemoraAcceptanceVersionCode={next_code}",
+        f"-PmemoraAcceptanceVersionName={next_name}",
+        "--no-daemon", "--console=plain", "--max-workers=1",
+    ], timeout=1200, env=env)
+    steps.append({"name": "assemble_debug_and_test_apks", **build})
+    if build["exit_code"] != 0:
+        return
+    app_apk = APP / "build/outputs/apk/debug/app-debug.apk"
+    test_apk = APP / "build/outputs/apk/androidTest/debug/app-debug-androidTest.apk"
+    if not app_apk.is_file() or not test_apk.is_file():
+        steps.append({"name": "debug_apk_outputs", "status": "FAIL", "reason": "expected_apk_missing"})
+        return
+    for name, apk in (("install_app_for_synthetic_user", app_apk),
+                      ("install_android_test_for_synthetic_user", test_apk)):
+        install = adb(serial, "install", "--user", str(user_id), "-r", str(apk), timeout=300)
+        steps.append({"name": name, "status": "PASS", "result": scrub(install.stdout.strip())})
+    after = package_install_state(adb(serial, "shell", "dumpsys", "package", PACKAGE).stdout, user_id)
+    lineage_ok = after["version_code"] == next_code and after["version_name"] == next_name and \
+        after["first_install_time"] == before["first_install_time"]
+    steps.append({"name": "package_update_lineage", "status": "PASS" if lineage_ok else "FAIL",
+                  "version_code_before": before["version_code"], "version_code_after": after["version_code"],
+                  "first_install_time_unchanged": after["first_install_time"] == before["first_install_time"]})
+    if not lineage_ok:
+        return
+
+    fixture_preflights = {
+        case: run_process_death_preflight(serial, user_id, case)
+        for case in PROCESS_DEATH_CASES
+    }
+    preflight_ok = all(
+        fields.get("status") == "synthetic_process_death_fixture_absent" and
+        fields.get("named_test_files_absent") == "true" and fields.get("test_alias_absent") == "true"
+        for fields in fixture_preflights.values()
+    )
+    steps.append({"name": "synthetic_process_death_fixture_preflight",
+                  "status": "PASS" if preflight_ok else "BLOCKED",
+                  "named_test_fixtures_absent": preflight_ok})
+    if not preflight_ok:
+        return
+
+    for case in PROCESS_DEATH_CASES:
+        result = run_process_death_case(serial, user_id, case)
+        steps.append(result)
+    launch = adb(serial, "shell", "am", "start", "-W", "--user", str(user_id),
+                 "-n", f"{PACKAGE}/.MainActivity", timeout=120)
+    launch_ok = "Status: ok" in launch.stdout
+    steps.append({"name": "main_activity_after_recovery", "status": "PASS" if launch_ok else "FAIL"})
+
+
 def run_user_launch(serial: str, user_id: int, out_dir: Path, screenshot_name: str) -> dict[str, Any]:
     started = time.monotonic()
     launch = adb(
@@ -1505,7 +1767,7 @@ def validate_finance_correction_fixture_readback(fields: dict[str, str]) -> tupl
 
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("mode", choices=("preflight", "quick", "full", "device-smoke", "device-lineage", "volume-probe", "startup-probe", "finance-ui-journey"))
+    parser.add_argument("mode", choices=("preflight", "quick", "full", "device-smoke", "device-lineage", "volume-probe", "startup-probe", "finance-ui-journey", "process-death-probe"))
     parser.add_argument("--serial", help="explicit connected emulator serial; physical serials are rejected")
     parser.add_argument("--synthetic-user-id", type=int, help="existing isolated emulator user id; mode checks its exact name")
     parser.add_argument("--volume-count", action="append", type=int, choices=(100, 1000),
@@ -1544,7 +1806,7 @@ def main() -> int:
         report["git"]["head"] = subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=ROOT, text=True).strip()
         if report["git"]["branch"] != "ui/redesign-v1":
             raise RuntimeError("acceptance is restricted to ui/redesign-v1")
-        if args.mode in {"device-lineage", "volume-probe", "startup-probe", "finance-ui-journey"} and args.synthetic_user_id is None:
+        if args.mode in {"device-lineage", "volume-probe", "startup-probe", "finance-ui-journey", "process-death-probe"} and args.synthetic_user_id is None:
             raise RuntimeError(f"{args.mode} requires --synthetic-user-id for the named isolated test user")
         if args.seed_synthetic_profile and args.mode != "device-lineage":
             raise RuntimeError("--seed-synthetic-profile is accepted only by device-lineage")
@@ -1601,6 +1863,9 @@ def main() -> int:
         elif args.mode == "finance-ui-journey":
             run_synthetic_finance_ui_journey_probe(identity["serial"], args.synthetic_user_id,
                                                    out_dir, report["steps"])
+        elif args.mode == "process-death-probe":
+            run_synthetic_process_death_probe(identity["serial"], args.synthetic_user_id,
+                                              test_environment(identity["serial"]), report["steps"])
         report["status"] = acceptance_report_status(report["steps"])
     except Exception as error:
         report["status"] = "BLOCKED"

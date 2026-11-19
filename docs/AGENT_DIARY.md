@@ -1,5 +1,22 @@
 # Memora — дневник ведущего инженера
 
+## ACT-0281 · 2026-11-19 · Реальный process-death и key-rotation recovery на Emulator (LAB-09 partial)
+
+Продолжил на `ui/redesign-v1`, Android 14/API34 `emulator-5554`, именованный synthetic user 11 (`MemoraCleanInstallLab`). Физические устройства недоступны и не выбирались; user 0 не использовался для чтения данных.
+
+Добавил в `tools/run_memora_acceptance.py` режим `process-death-probe`. Он проверяет фактическую ветку, serial/эмулятор/свободное место, точное имя тестового пользователя, foreground user и app/test packages. В AndroidTest добавлена target-context preflight: она проверяет отсутствие только двух именованных probe DB, файлов оболочки и Keystore aliases. Любой остаток блокирует запись. Prepare logs содержат PID; runner адресно force-stops app + test package выбранного user, дожидается исчезновения именно этого user-specific PID из `ps`, запускает verify новым instrumentation процессом и проверяет его PID отличается. Verify обязан подтвердить cleanup DB/envelope artifacts и test aliases.
+
+Первая версия guard проверяла файлы через host `run-as`; выяснилось, что команда не адресует выбранный Android user и работала в owner scope. Runner безопасно остановился до сборки/записи (`BLOCKED`). В краткой ручной диагностике читались только UID процесса приложения и existence конкретного synthetic probe filename; содержимое баз данных, записи, файлы или настройки пользователя не читались и ничего не записывалось. Путь `run-as` удалён. Теперь preflight исполняется в `GeminiSyntheticProbe.targetContext` для явно заданного synthetic user, что подтверждено реальным run. Эта поправка сохранена в коде и тестах.
+
+v192→v193 APK и AndroidTest обновлены через `adb install --user 11 -r`, `firstInstallTime` не изменился. Запуск `20261119T174402.829833Z` PASS. Transaction crash: committed row сохранился, незавершённая строка откатилась, зашифрованная БД не содержит plaintext markers; prepared PID 14948 завершился, verify PID 15016 другой; test DB/envelope/Keystore alias удалены. Key rotation crash: SQLCipher rekey перед force-stop восстановлен, synthetic marker сохранился, staged envelope promoted; PID 15133 завершился, PID 15209 проверил новое состояние; test DB/envelope artifacts/alias удалены. MainActivity после восстановления запустилась. Это отдельные disposable DB, не пользовательские базы.
+
+После этого v193→v194 read-only synthetic volume probe (`20261119T174441.736942Z`) прочитал все 1,000 rows из Finance, Cases, Notes, Table, Tasks и Conversations и 100 People; все пять предыдущих digests совпали, 0 новых строк, `firstInstallTime` сохранён. Размер 100 не запускался; значит статус только для target=1,000 — PASS, не полного volume matrix. Warm local p50/p95 case search 256.386/319.891ms, oldest conversation 1,105/1,296ms, finance analytics 159/220ms; это не UI latency.
+
+`python3 -m unittest discover -s tools/tests -v`: 73/73 PASS; `py_compile`, `git diff --check`, `:app:assembleDebug :app:assembleDebugAndroidTest`, AndroidTest Kotlin compile PASS. В этой части изменены только AndroidTest probe и локальный acceptance harness; production domain, ledger, schema, provider, consent, permissions не менялись. Gemini/network/mic/paid API не вызывались. LAB-09 улучшен, но остаётся partial: настоящие network/provider faults, Secretary draft после OS process death, physical device, TalkBack и большая failure matrix не тестировались.
+
+Следующий приоритет — проверить UI-дraft/recovery после процесса при синтетическом scope без влияния на модель, либо перейти к независимому P1.2 UI latency/scroll acceptance; если у сценария нет безопасного устойчивого контракта, оставить его NOT TESTED. Тестовый APK сейчас `acceptance-lab-v194`, пользователь 11 активен; ветку и Git зафиксировать перед следующим кодовым пакетом.
+
+
 ## ACT-0280 · 2026-11-19 · Today landscape viewport and volume/persistence recheck (LAB-07 improved; LAB-05/LAB-08 partial)
 
 После освобождения места проверил фактический HEAD `9c1aa935b24d5830fe385a66deb7290eadf6f0ac`, ветка `ui/redesign-v1`. Синтетический Android 14/API34 эмулятор — `emulator-5554`, работал только с Android users 10 и 11. Владельческие данные user 0 не читались.
