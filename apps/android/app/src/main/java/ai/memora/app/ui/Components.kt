@@ -36,6 +36,7 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.sp
 import ai.memora.app.R
 import ai.memora.app.AppDestination
@@ -44,12 +45,17 @@ val LocalStrings = staticCompositionLocalOf<Resources> { error("Missing localize
 @Composable fun s(id: Int): String = LocalStrings.current.getString(id)
 
 @Composable
-fun ScreenColumn(modifier: Modifier = Modifier, content: @Composable ColumnScope.() -> Unit) {
+fun ScreenColumn(
+    modifier: Modifier = Modifier,
+    verticalSpacing: Dp = MemoraSpacing.lg,
+    topPadding: Dp = MemoraSpacing.screenTop,
+    content: @Composable ColumnScope.() -> Unit,
+) {
     Column(
         Modifier.fillMaxSize().verticalScroll(rememberScrollState())
             .then(modifier).padding(horizontal = MemoraSpacing.xl)
-            .padding(top = MemoraSpacing.screenTop, bottom = MemoraSpacing.screenBottom),
-        verticalArrangement = Arrangement.spacedBy(MemoraSpacing.lg), content = content,
+            .padding(top = topPadding, bottom = MemoraSpacing.screenBottom),
+        verticalArrangement = Arrangement.spacedBy(verticalSpacing), content = content,
     )
 }
 

@@ -1,5 +1,6 @@
 package ai.memora.app
 
+import android.content.res.Configuration
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.rememberScrollState
@@ -12,6 +13,7 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.style.TextOverflow
@@ -127,26 +129,41 @@ internal fun WorkingHomeScreen(language: String, state: CaptureSessionState, nav
             overviewLoading = false
         }
     }
-    ScreenColumn {
-        Text(LocalDate.now(dateZone).format(DateTimeFormatter.ofPattern("EEEE, d MMMM", Locale.forLanguageTag(language))),
-            style = MaterialTheme.typography.labelSmall, color = colors.muted)
-        ScreenHeading(s(R.string.home_title), s(R.string.working_home_hint))
-        MemoraCard(tint = colors.hero, contentPadding = 14.dp, modifier = Modifier.testTag("today_conversation_entry")) {
-            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp),
-                verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
-                Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                    Text(s(R.string.home_hero_title), style = MaterialTheme.typography.titleMedium, color = colors.ink)
-                    Text(s(R.string.secretary_voice_hint), style = MaterialTheme.typography.bodySmall, color = colors.muted)
+    val landscape = LocalConfiguration.current.orientation == Configuration.ORIENTATION_LANDSCAPE
+    val dateLabel = LocalDate.now(dateZone).format(DateTimeFormatter.ofPattern("EEEE, d MMMM", Locale.forLanguageTag(language)))
+    ScreenColumn(
+        verticalSpacing = if (landscape) 4.dp else MemoraSpacing.lg,
+        topPadding = if (landscape) 8.dp else MemoraSpacing.screenTop,
+    ) {
+        if (landscape) {
+            Row(
+                Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(16.dp),
+                verticalAlignment = androidx.compose.ui.Alignment.Top,
+            ) {
+                Column(Modifier.weight(0.9f), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text(s(R.string.home_title), style = MaterialTheme.typography.headlineSmall,
+                        color = colors.ink, modifier = Modifier.testTag("today_landscape_heading"))
+                    Text(dateLabel, style = MaterialTheme.typography.labelSmall, color = colors.muted)
                 }
-                VoiceFirstScreen(
-                    compact = true,
-                    processorOverride = processor,
-                    onOpenSettings = { navigate("settings") },
-                    onShortTap = { navigate("chat") },
+                TodayConversationCard(
+                    processor = processor,
+                    navigate = navigate,
                     onTurnSettled = { overviewVersion++ },
-                    modifier = Modifier.testTag("today_shared_voice_control"),
+                    landscape = true,
+                    modifier = Modifier.weight(1.1f),
                 )
             }
+        } else {
+            Text(dateLabel, style = MaterialTheme.typography.labelSmall, color = colors.muted)
+            ScreenHeading(s(R.string.home_title), s(R.string.working_home_hint))
+            TodayConversationCard(
+                processor = processor,
+                navigate = navigate,
+                onTurnSettled = { overviewVersion++ },
+                landscape = false,
+                modifier = Modifier,
+            )
         }
         SectionHeading(s(R.string.today_priorities))
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -203,6 +220,43 @@ internal fun WorkingHomeScreen(language: String, state: CaptureSessionState, nav
         MemoryLoadState(state)
         if (state.ready && state.captures.none { !it.archived }) EmptyState(s(R.string.working_memory_empty), s(R.string.working_capture_hint))
         state.captures.asReversed().filter { !it.archived }.take(3).forEach { StoredMemoryCard(it) { detail(it.source.id) } }
+    }
+}
+
+@Composable
+private fun TodayConversationCard(
+    processor: AgentVoiceTurnProcessor,
+    navigate: (String) -> Unit,
+    onTurnSettled: () -> Unit,
+    landscape: Boolean,
+    modifier: Modifier,
+) {
+    MemoraCard(
+        tint = colors.hero,
+        contentPadding = if (landscape) 10.dp else 14.dp,
+        modifier = modifier.testTag("today_conversation_entry"),
+    ) {
+        Row(
+            Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(if (landscape) 8.dp else 12.dp),
+            verticalAlignment = androidx.compose.ui.Alignment.CenterVertically,
+        ) {
+            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(if (landscape) 2.dp else 4.dp)) {
+                Text(s(R.string.home_hero_title),
+                    style = if (landscape) MaterialTheme.typography.titleSmall else MaterialTheme.typography.titleMedium,
+                    color = colors.ink)
+                if (!landscape) Text(s(R.string.secretary_voice_hint),
+                    style = MaterialTheme.typography.bodySmall, color = colors.muted)
+            }
+            VoiceFirstScreen(
+                compact = true,
+                processorOverride = processor,
+                onOpenSettings = { navigate("settings") },
+                onShortTap = { navigate("chat") },
+                onTurnSettled = onTurnSettled,
+                modifier = Modifier.testTag("today_shared_voice_control"),
+            )
+        }
     }
 }
 

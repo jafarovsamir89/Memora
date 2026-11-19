@@ -424,6 +424,50 @@ class UiShellTest {
         Unit
     }
 
+    @Test
+    @Config(qualifiers = "w915dp-h412dp-xhdpi")
+    fun todayLandscapeAtLargeFontShowsConversationAndPriorityHeadingAboveNavigation() {
+        val context = ApplicationProvider.getApplicationContext<Context>()
+        appearanceStore = AtomicAppearanceStore(
+            File(context.cacheDir, "ui-today-landscape-${UUID.randomUUID()}"),
+            AppearanceSettings("az", "light"),
+        )
+        compose.setContent {
+            val baseDensity = LocalDensity.current
+            CompositionLocalProvider(
+                LocalAgentDatabaseOverride provides agentDatabase.database,
+                LocalDensity provides Density(baseDensity.density, 1.3f),
+            ) {
+                TestMemoraApp(initialRoute = "home", initialLanguage = "az",
+                    capturePersistenceOverride = captureStore, appearanceStoreOverride = appearanceStore,
+                    taskStoreOverride = taskStore)
+            }
+        }
+        compose.waitUntil(10_000) {
+            compose.onAllNodesWithTag("today_conversation_entry").fetchSemanticsNodes().isNotEmpty() &&
+                compose.onAllNodesWithTag("nav_home").fetchSemanticsNodes().isNotEmpty()
+        }
+        val root = compose.onRoot().fetchSemanticsNode().boundsInRoot
+        val bottomNavigation = compose.onNodeWithTag("nav_home").fetchSemanticsNode().boundsInRoot
+        Assert.assertTrue("Regression must run at landscape dimensions: $root", root.width > root.height)
+        val voiceButton = compose.onNodeWithTag("voice_first_button", useUnmergedTree = true)
+            .fetchSemanticsNode().boundsInRoot
+        val priorities = compose.onNodeWithText("Bu gün diqqət yetirək").fetchSemanticsNode().boundsInRoot
+        Assert.assertTrue(
+            "Landscape Today must show the entire voice control above bottom navigation; " +
+                "voiceBottom=${voiceButton.bottom}, navigationTop=${bottomNavigation.top}",
+            voiceButton.bottom <= bottomNavigation.top,
+        )
+        val minimumTarget = 96f // The xhdpi test configuration renders at 2 px per dp.
+        Assert.assertTrue("Voice control touch target must remain at least 48dp: $voiceButton",
+            voiceButton.width >= minimumTarget && voiceButton.height >= minimumTarget)
+        Assert.assertTrue(
+            "Azerbaijani priorities heading at 1.3x must not be hidden by bottom navigation; " +
+                "headingBottom=${priorities.bottom}, navigationTop=${bottomNavigation.top}",
+            priorities.bottom < bottomNavigation.top,
+        )
+    }
+
     @Test fun dailyAttentionIsVisibleButStartsOptedOut() {
         compose.setContent {
             CompositionLocalProvider(LocalAgentDatabaseOverride provides agentDatabase.database) {
