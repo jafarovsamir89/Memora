@@ -49,9 +49,8 @@ internal object SyntheticVolumeProbe {
             check(people.all { it.personId == VOLUME_PERSON_ID && it.displayName == VOLUME_PERSON_NAME }) {
                 "unexpected_people_in_volume_profile"
             }
-            val person = people.singleOrNull() ?: PersonRow(VOLUME_PERSON_ID, VOLUME_PERSON_NAME, scope).also {
-                runBlocking { dao.insertPerson(it) }
-            }
+            val existingPerson = people.singleOrNull()
+            val personId = existingPerson?.personId ?: VOLUME_PERSON_ID
             val repository = ProtectedDomainRepository(database)
 
             stage = "read_existing_fixture"
@@ -60,9 +59,20 @@ internal object SyntheticVolumeProbe {
                 "unexpected_finance_rows_in_volume_profile"
             }
             val rowsBefore = allEventsBefore.filter { it.eventId.startsWith(MARKER) }
-            check(rowsBefore.size <= targetCount) { "volume_fixture_cannot_shrink" }
+            if (rowsBefore.isNotEmpty()) check(existingPerson != null) { "volume_fixture_person_missing" }
             rowsBefore.forEachIndexed { index, row ->
-                check(row == rowAt(index, scope, person.personId)) { "volume_fixture_not_contiguous_or_changed" }
+                check(row == rowAt(index, scope, personId)) { "volume_fixture_not_contiguous_or_changed" }
+            }
+            if (rowsBefore.size > targetCount) {
+                result.putString("status", "synthetic_volume_not_applicable")
+                result.putString("reason", "persisted_fixture_larger_than_requested")
+                result.putInt("requested_synthetic_finance_rows", targetCount)
+                result.putInt("existing_synthetic_finance_rows", rowsBefore.size)
+                result.putString("fixture_digest_sha256", digest(rowsBefore))
+                return@runCatching result
+            }
+            val person = existingPerson ?: PersonRow(VOLUME_PERSON_ID, VOLUME_PERSON_NAME, scope).also {
+                runBlocking { dao.insertPerson(it) }
             }
 
             var inserted = 0

@@ -107,6 +107,22 @@ def volume_probe_measurements(fields: dict[str, str]) -> dict[str, Any]:
     return measurements
 
 
+def volume_probe_step_status(probe_status: str | None) -> str:
+    if probe_status == "synthetic_volume_probe_passed":
+        return "PASS"
+    if probe_status == "synthetic_volume_not_applicable":
+        return "NOT APPLICABLE"
+    return "FAIL"
+
+
+def acceptance_report_status(steps: list[dict[str, Any]]) -> str:
+    if any(step.get("status") == "FAIL" or step.get("exit_code", 0) != 0 for step in steps):
+        return "FAIL"
+    if any(step.get("status") in {"BLOCKED", "NOT TESTED", "NOT APPLICABLE"} for step in steps):
+        return "PARTIAL"
+    return "PASS"
+
+
 def run(command: list[str], *, timeout: int = 1800, env: dict[str, str] | None = None) -> dict[str, Any]:
     started = time.monotonic()
     proc = subprocess.run(
@@ -1192,15 +1208,21 @@ def run_synthetic_volume_probe(serial: str, user_id: int, env: dict[str, str],
         output = (probe.stdout or "") + (probe.stderr or "")
         fields = {match.group(1): match.group(2) for match in
                   re.finditer(r"INSTRUMENTATION_RESULT: ([a-z0-9_]+)=([^\s]+)", output)}
-        passed = fields.get("status") == "synthetic_volume_probe_passed"
+        probe_status = fields.get("status")
+        step_status = volume_probe_step_status(probe_status)
         numeric = volume_probe_measurements(fields)
         steps.append({
             "name": f"synthetic_cross_domain_volume_{count}",
-            "status": "PASS" if passed else "FAIL",
+            "status": step_status,
             "duration_seconds": round(time.monotonic() - started, 3),
-            "probe_status": fields.get("status"),
+            "probe_status": probe_status,
             "probe_stage": fields.get("stage"),
             "stage_error": fields.get("stage_error"),
+            "not_applicable_reason": fields.get("reason"),
+            "requested_synthetic_finance_rows": int(fields["requested_synthetic_finance_rows"])
+                if fields.get("requested_synthetic_finance_rows", "").isdigit() else None,
+            "existing_synthetic_finance_rows": int(fields["existing_synthetic_finance_rows"])
+                if fields.get("existing_synthetic_finance_rows", "").isdigit() else None,
             "measurements": numeric,
             "measurement_scope": "warm local Room/repository and encrypted task-store reads; 20 samples per path; sub-ms paths in microseconds; no UI/network",
             "network_used": False,
@@ -1215,7 +1237,9 @@ def run_synthetic_volume_probe(serial: str, user_id: int, env: dict[str, str],
             "conversation_oldest_search_expected_turn": fields.get("conversation_oldest_search_expected_turn"),
             "conversation_measurement_scope": fields.get("conversation_measurement_scope"),
         })
-        if not passed:
+        if step_status == "NOT APPLICABLE":
+            continue
+        if step_status != "PASS":
             break
 
 
@@ -1577,13 +1601,7 @@ def main() -> int:
         elif args.mode == "finance-ui-journey":
             run_synthetic_finance_ui_journey_probe(identity["serial"], args.synthetic_user_id,
                                                    out_dir, report["steps"])
-        statuses = [step.get("status") for step in report["steps"]]
-        if any(step.get("status") == "FAIL" or step.get("exit_code", 0) != 0 for step in report["steps"]):
-            report["status"] = "FAIL"
-        elif any(status in {"BLOCKED", "NOT TESTED"} for status in statuses):
-            report["status"] = "PARTIAL"
-        else:
-            report["status"] = "PASS"
+        report["status"] = acceptance_report_status(report["steps"])
     except Exception as error:
         report["status"] = "BLOCKED"
         report["blocker"] = scrub(f"{type(error).__name__}: {error}")

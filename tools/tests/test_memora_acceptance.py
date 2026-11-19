@@ -84,6 +84,25 @@ class StartupProbeMetricTests(unittest.TestCase):
                 lab.nearest_rank_percentile(values, rank)
 
 
+class VolumeProbeResultTests(unittest.TestCase):
+    def test_persisted_larger_fixture_is_explicitly_not_applicable(self) -> None:
+        self.assertEqual(lab.volume_probe_step_status("synthetic_volume_not_applicable"), "NOT APPLICABLE")
+
+    def test_volume_probe_success_and_unknown_statuses_are_not_conflated(self) -> None:
+        self.assertEqual(lab.volume_probe_step_status("synthetic_volume_probe_passed"), "PASS")
+        self.assertEqual(lab.volume_probe_step_status("synthetic_volume_probe_failed"), "FAIL")
+        self.assertEqual(lab.volume_probe_step_status(None), "FAIL")
+
+    def test_not_applicable_is_not_a_successful_overall_run(self) -> None:
+        self.assertEqual(lab.acceptance_report_status([{"status": "PASS"}, {"status": "NOT APPLICABLE"}]), "PARTIAL")
+
+    def test_failed_step_takes_precedence_over_partial_and_success(self) -> None:
+        self.assertEqual(lab.acceptance_report_status([
+            {"status": "PASS"}, {"status": "NOT APPLICABLE"}, {"status": "FAIL"},
+        ]), "FAIL")
+        self.assertEqual(lab.acceptance_report_status([{"status": "PASS"}]), "PASS")
+
+
 class UiHierarchyTests(unittest.TestCase):
     def test_synthetic_home_restart_stops_instrumentation_before_main_activity(self) -> None:
         out_dir = Path("/tmp/memora-home")

@@ -167,6 +167,51 @@ SHA-256 `b71e2321ab3a338d5f20a5f29c1deb870037cfd011c2289b2198724a23aef7d2`) was
 built but not installed. The golden task was intentionally not part of this Gradle
 block; its separate full visual comparison remains 30/31.
 
+After that cold boot, ACT-0279 ran `device-lineage` on synthetic user 10 without
+seeding or clearing data. APK v181 updated over v180 with `adb install --user 10
+-r`; all six lineage sentinels remained at count 1 before and after installation,
+launch, force-stop/restart, and Activity recreation/rotation. `firstInstallTime`
+remained `2026-11-18 04:54:50`. The run is overall PASS; real screenshots were
+reviewed under ignored `apps/android/app/build/acceptance-lab/20261119T162401.137073Z/`.
+The portrait Today screen is clear. At the initial landscape scroll position, the
+voice card is partly below the bottom-navigation boundary; investigate this as a
+landscape UX issue. P0.5 remains partial because only six sentinels, not every
+store/link/history/setting/consent/onboarding path, are covered together.
+
+The same continued session ran `startup-probe --startup-samples 20` on synthetic
+user 11 / v181: PASS, process-cold MainActivity ActivityManager TotalTime p50/p95
+1,218/2,806 ms, WaitTime 1,263/2,829 ms, ADB round-trip 1,339/2,915 ms. The
+first launch was 4,371 ms. OS/storage caches remained warm, and `am start -W`
+does not establish first-frame or content-ready latency. Real final screenshot
+was reviewed; no data was seeded or cleared. Report is ignored at
+`apps/android/app/build/acceptance-lab/20261119T162922.803137Z/report.json`.
+
+The 1,000-row profile was subsequently checked through v182→v183 and v183→v184
+updates. v182→v183 preserved all five fixture digests with zero inserted rows.
+A target=100 invocation against the persisted 1,000-row set initially returned
+FAIL before any fixture write because the probe correctly refused to shrink it;
+that report is `20261119T163144.557747Z`. The test-only probe/runner was hardened
+to validate the larger fixture and emit `NOT APPLICABLE` for the smaller size,
+then continue to the 1,000 target. The repeated combined run `20261119T163613.536481Z`
+reported 100 `NOT APPLICABLE`, 1,000 `PASS`, five stable digests, zero inserts
+and preserved package lineage. This does not count the lower-size skip as a pass.
+The first combined report incorrectly showed overall PASS while including a
+`NOT APPLICABLE` size. The runner now aggregates any such matrix skip as PARTIAL.
+Corrected combined run `20261119T164435.213264Z` updated v184→v185 and reported
+overall PARTIAL (100 NOT APPLICABLE; 1,000 PASS), with five stable digests,
+zero inserted rows and unchanged package lineage. Subsequent verification updated synthetic user10 v185→v186 with six exact
+sentinels and unchanged `firstInstallTime`, then user11 v186→v187 with all five
+volume digests stable and zero inserts. The target100 skip remained NOT APPLICABLE
+and target1000 PASS, overall PARTIAL. A read-only user10 sentinel verify after
+the shared v187 update also passed. Both synthetic profiles are read back on v187;
+user0 was never inspected. The reviewed landscape capture still shows the voice
+card partly behind the bottom-navigation boundary at the initial scroll position.
+
+Python tools 68/68 and the full Gradle block passed (84 suites / 431 JVM tests,
+0 failures/errors, one opt-in live test skipped; debug/AndroidTest build and
+Kotlin compile; lint 0/90/2). APK v185 was built but not installed; SHA-256
+`99d4f1752a01496da42e736c6dd793ac8910adb21da6360d3672de75f0160bd5`.
+
 ACT-0276 on synthetic Android 14/API34 user 10 updated v170→v171 and preserved
 `firstInstallTime`. The persistent route passed: Secretary→BMW finance/case/person/
 task/exact source/conversation and Android Back; ambiguous Ruslan clarification

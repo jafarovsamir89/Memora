@@ -139,7 +139,10 @@ class GeminiSyntheticProbe : Instrumentation() {
                 permitted = syntheticVolumePermitted,
                 targetCount = syntheticVolumeCount!!,
             )
-            finish(if (results.getString("status") == "synthetic_volume_probe_passed")
+            finish(if (results.getString("status") in setOf(
+                    "synthetic_volume_probe_passed",
+                    "synthetic_volume_not_applicable",
+                ))
                 Activity.RESULT_OK else Activity.RESULT_CANCELED, results)
             return
         }
