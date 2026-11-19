@@ -132,6 +132,26 @@ and unambiguous UI labels are required; ambiguous labels fail closed. Screenshot
 and UI hierarchy captures are saved in the run's ignored output directory. The
 journey does not send or retry a command, call an AI API, or clean up/delete data.
 
+ACT-0275 supersedes the old v148 device status: on Android 14/API34 synthetic
+user 10, the v166→v167 update preserved `firstInstallTime`, and the persistent
+UI route passed Secretary→BMW advance→Case→Person→Finance→Task→exact source→
+exact conversation plus Android Back. The AndroidTest fixture read back the
+300/100/200 AZN amounts and verified an ambiguous Ruslan action had no target and
+left finance count unchanged (104→104). Fifteen real screenshots cover the
+route; an additional capture shows the clarification and no-write state. The
+v166 integrated attempt failed because one harness swipe moved the source-open
+button off-screen; the bounded eight-swipe helper corrected this harness issue,
+and v167 passed. The persistent fixture and screenshots are synthetic and the
+run uses no provider/network. A confirmed action is preserved after a failed
+final reply and a localized warning tells the user to inspect its result before
+resending; this checks UI behavior, not cross-turn semantic de-duplication.
+Correction UI/readback and a deliberate same-intent resend across fresh turns
+remain open; LAB-03 is partial. Full JVM tests are 84 suites / 431 tests, 0
+failures/errors, 1 opt-in skip; lint 0/85/1; Python harness 49/49.
+Implementation/test commit `4d384ad65f5ced7bf52405159ad3a99a7c36e82d` is
+pushed to `origin/ui/redesign-v1`; local/tracking/remote feature refs match,
+and remote `main` remains `ac621919aca09ece6e292eae708d55cc09de16d7`.
+
 ACT-0273 updated the detail check to scroll to the top before asserting its amount
 and direction: navigating back to the same Finance detail can restore the prior
 scroll offset, leaving header fields above the viewport. The v148 AndroidTest
