@@ -717,37 +717,53 @@ class UiShellTest {
     @Test fun secretaryDraftAndHistoryScrollSurviveUiRecreation() {
         kotlinx.coroutines.runBlocking {
             val context = ApplicationProvider.getApplicationContext<Context>()
-            val processor = ai.memora.app.voice.AgentVoiceTurnProcessor(context, agentDatabase.database)
-            val scopeId = processor.conversationScopeId()
-            val repository = ai.memora.app.data.protectedstore.ProtectedConversationRepository(agentDatabase.database)
-            val turnIds = (0..6).map { UUID.randomUUID().toString() }
-            turnIds.forEachIndexed { index, turnId ->
-                val actions = if (index == 0) listOf(ai.memora.app.data.protectedstore.AgentActionResultRow(
-                    UUID.randomUUID().toString(), scopeId, turnId, "create_task", "APPLIED", "task_created",
-                    "task", UUID.randomUUID().toString(), 1_800_000_000_000L,
-                )) else emptyList()
-                repository.appendTurn(scopeId, turnId, "Synthetic history request $index", "Synthetic history answer $index",
-                    1_800_000_000_000L + index * 1_000L, actions)
-            }
-            val restoration = StateRestorationTester(compose)
-            restoration.setContent {
-                CompositionLocalProvider(LocalAgentDatabaseOverride provides agentDatabase.database) {
-                    TestMemoraApp(initialRoute = "chat", initialLanguage = "az", capturePersistenceOverride = captureStore,
-                        appearanceStoreOverride = appearanceStore)
+            val consentPreferences = context.getSharedPreferences("voice-first-consent", Context.MODE_PRIVATE)
+            val previousTextConsent = consentPreferences.getBoolean(ai.memora.app.agent.AgentCloudConsentKeys.TEXT, false)
+            consentPreferences.edit().putBoolean(ai.memora.app.agent.AgentCloudConsentKeys.TEXT, true).commit()
+            try {
+                val processor = ai.memora.app.voice.AgentVoiceTurnProcessor(context, agentDatabase.database)
+                val scopeId = processor.conversationScopeId()
+                val repository = ai.memora.app.data.protectedstore.ProtectedConversationRepository(agentDatabase.database)
+                val turnIds = (0..6).map { UUID.randomUUID().toString() }
+                turnIds.forEachIndexed { index, turnId ->
+                    val actions = if (index == 0) listOf(ai.memora.app.data.protectedstore.AgentActionResultRow(
+                        UUID.randomUUID().toString(), scopeId, turnId, "create_task", "APPLIED", "task_created",
+                        "task", UUID.randomUUID().toString(), 1_800_000_000_000L,
+                    )) else emptyList()
+                    repository.appendTurn(scopeId, turnId, "Synthetic history request $index", "Synthetic history answer $index",
+                        1_800_000_000_000L + index * 1_000L, actions)
                 }
-            }
-            val oldestTurn = turnIds.first()
-            compose.waitUntil(10_000) {
-                compose.onAllNodesWithTag("chat_turn_${turnIds.last()}_user").fetchSemanticsNodes().isNotEmpty()
-            }
-            compose.onNodeWithTag("chat_history").performScrollToNode(hasTestTag("action_result_${oldestTurn}_0"))
-            compose.onNodeWithTag("action_result_${oldestTurn}_0").assertIsDisplayed()
-            compose.onNodeWithTag("chat_input").performTextInput("Synthetic secretary draft")
+                val originalMessageKeys = repository.recent(scopeId, 80).map { it.turnId to it.role }
+                var providerCalls = 0
+                val restoration = StateRestorationTester(compose)
+                restoration.setContent {
+                    CompositionLocalProvider(LocalAgentDatabaseOverride provides agentDatabase.database) {
+                        TestMemoraApp(initialRoute = "chat", initialLanguage = "az", capturePersistenceOverride = captureStore,
+                            appearanceStoreOverride = appearanceStore,
+                            textTurnOverride = {
+                                providerCalls++
+                                ai.memora.app.voice.VoiceFirstResult.Ready("Synthetic response", false)
+                            })
+                    }
+                }
+                val oldestTurn = turnIds.first()
+                compose.waitUntil(10_000) {
+                    compose.onAllNodesWithTag("chat_turn_${turnIds.last()}_user").fetchSemanticsNodes().isNotEmpty()
+                }
+                compose.onNodeWithTag("chat_history").performScrollToNode(hasTestTag("action_result_${oldestTurn}_0"))
+                compose.onNodeWithTag("action_result_${oldestTurn}_0").assertIsDisplayed()
+                compose.onNodeWithTag("chat_input").performTextInput("Synthetic secretary draft")
 
-            restoration.emulateSavedInstanceStateRestore()
+                restoration.emulateSavedInstanceStateRestore()
 
-            compose.onNodeWithTag("chat_input").assertTextContains("Synthetic secretary draft")
-            compose.onNodeWithTag("action_result_${oldestTurn}_0").assertIsDisplayed()
+                compose.onNodeWithTag("chat_input").assertTextContains("Synthetic secretary draft")
+                compose.onNodeWithTag("action_result_${oldestTurn}_0").assertIsDisplayed()
+                Assert.assertEquals("Restoring an unsent draft must not dispatch a text turn", 0, providerCalls)
+                Assert.assertEquals("Restoring an unsent draft must not append conversation messages",
+                    originalMessageKeys, repository.recent(scopeId, 80).map { it.turnId to it.role })
+            } finally {
+                consentPreferences.edit().putBoolean(ai.memora.app.agent.AgentCloudConsentKeys.TEXT, previousTextConsent).commit()
+            }
         }
     }
 

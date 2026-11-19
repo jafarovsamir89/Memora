@@ -1,3 +1,13 @@
+## ACT-0282 · 2026-11-19 · Secretary unsent draft after real Android process death (LAB-09 partial)
+
+После ACT-0281 продолжил на `ui/redesign-v1`; Android 14/API34 `emulator-5554`, текущий синтетический user 11 `MemoraCleanInstallLab`, v194. Перед вводом проверил диск: 23 GiB на host и 3.4 GiB в AVD. На экране Secretary оставил уникальный контрольный текст только в поле ввода. Кнопку отправки не нажимал; показанное текстовое согласие не предоставлял. Уход в launcher с последующим `am kill --user 11 ai.memora.app` завершил PID 15671. После запуска MainActivity новый PID 15943 восстановил контрольный текст в поле. Скриншоты до/после сохранены в ignored `apps/android/app/build/acceptance-lab/ACT-0282-secretary-draft-process-death/screenshots/`; JSON-отчёт рядом. После фиксации результата очистил черновик из поля.
+
+Это реальная Android-проверка сохранения состояния уже остановленной Activity при завершении процесса. Она не доказывает восстановление, если процесс убит до того, как Android сохранил Activity state (например, любым ранним low-memory kill); этот сценарий остаётся NOT TESTED. В `UiShellTest.secretaryDraftAndHistoryScrollSurviveUiRecreation` добавлены проверки: `textTurnOverride` не вызван при восстановлении несданного черновика, а список ключей conversation messages остался неизменен. Focused Gradle тест прошёл (1 test, 6.397 s). Согласие в тесте временно выставляется и восстанавливается в `finally`, чтобы тест не оставлял глобальное состояние.
+
+Затем выполнен существующий read-only `volume-probe --synthetic-user-id 11 --volume-count 1000`: v194→v195, `firstInstallTime` неизменен, 1,000 разговорных turn, 0 вставок; все пять контрольных SHA-256 digests совпали с базовым ACT-0281 отчётом. Последний warm repository p50/p95: case search 253.021/325.412 ms; oldest conversation search 1,097/1,168 ms; finance analytics 155/216 ms. Это локальные repository timings, не Compose rendering/frame latency. Report `20261119T175400.046748Z` игнорируется.
+
+Изменён только Compose regression test; production UI/domain, ledger, schema, AI provider, consent/permission implementation не менялись. Вызовов AI/network/microphone/paid API не было; owner user 0 и реальные записи не использовались. Physical Redmi, TalkBack, UI jank/frame timing и low-memory pre-save death остаются NOT TESTED. LAB-09 улучшен, но частичный. Следующий шаг — независимая P1.2 acceptance: измерить реальное UI scrolling/rendering на 1,000-turn archive, отдельно от repository timings и без API.
+
 # Memora — дневник ведущего инженера
 
 ## ACT-0281 · 2026-11-19 · Реальный process-death и key-rotation recovery на Emulator (LAB-09 partial)

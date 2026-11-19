@@ -399,3 +399,28 @@ output. The 2026-11-19 Android 14 run passed both cases for synthetic user 11;
 see ACT-0281 in the diary/action log. These test-only probes do not validate
 real network faults, Secretary UI draft survival after OS process death, or
 physical-device behavior.
+
+## ACT-0282 — Secretary unsent draft after OS process death
+
+A real Android 14/API34 emulator check complements the Compose
+`StateRestorationTester` regression. Use only the named synthetic user 11
+`MemoraCleanInstallLab`, never owner user 0. With the app v194 open to Secretary,
+enter one unique synthetic string in the composer and do not tap Send or grant
+text consent. Move to the Android Home activity, wait for the app to stop, and
+run `am kill --user 11 ai.memora.app`. Confirm the old app PID disappears, then
+launch `ai.memora.app/.MainActivity` for user 11 and verify that the unsent text
+returns to the composer. Clear the draft without sending it. This manual
+sequence does not prove restoration if Android kills the process before saving
+Activity state.
+
+On 2026-11-19 the old PID 15671 was replaced by 15943 and the unique draft was
+visible after relaunch. The Compose regression additionally verifies that
+restoring a draft neither calls its fake text-turn provider nor appends a
+conversation message. A subsequent read-only v194→v195 1,000-turn probe retained
+all five fixture digests, inserted 0 rows, and preserved `firstInstallTime`.
+Case search p50/p95 was 253.021/325.412 ms, oldest conversation search
+1,097/1,168 ms, and finance analytics 155/216 ms; these are warm local
+repository measurements, not UI/frame timings. Screenshots and report are
+ignored under `apps/android/app/build/acceptance-lab/ACT-0282-secretary-draft-process-death/`.
+Physical-device behavior, low-memory pre-save process death, TalkBack and real
+provider/network faults are still not tested.

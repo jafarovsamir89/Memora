@@ -1,3 +1,10 @@
+## ACT-0282 — 2026-11-19 — Secretary draft recovered after Android process death
+
+- On Android 14/API34 `emulator-5554`, synthetic user 11 and app v194, entered a unique synthetic draft in Secretary without tapping Send or granting the displayed text consent. Navigated explicitly to Home, then `am kill --user 11 ai.memora.app`; PID 15671 disappeared. Relaunched MainActivity under PID 15943 and verified the same text remained in the composer. The test draft was then cleared. Real before/after screenshots and a compact report are ignored in `apps/android/app/build/acceptance-lab/ACT-0282-secretary-draft-process-death/`.
+- `UiShellTest.secretaryDraftAndHistoryScrollSurviveUiRecreation` now uses a fake text-turn override and asserts that saved-state restoration causes zero dispatch calls and appends no conversation keys. Focused test passed (1 test, 6.397 s); the consent preference is restored in `finally`.
+- Existing read-only volume probe on synthetic user 11 updated v194→v195 with `firstInstallTime` unchanged. All five 1,000-row digests, including conversation, matched ACT-0281; 0 rows inserted. Warm repository p50/p95: case search 253.021/325.412 ms; oldest conversation search 1,097/1,168 ms; finance analytics 155/216 ms. These are not UI latency. Report `20261119T175400.046748Z`.
+- No AI/network/mic/paid API, owner user-0 data, physical phone, production/domain/ledger/schema/provider/consent/permission change. Low-memory kill before Android saves Activity state remains NOT TESTED; LAB-09 remains partial.
+
 ## ACT-0281 — 2026-11-19 — Emulator process-death transaction and key-rotation probes
 
 - Added `process-death-probe` to the pinned-emulator acceptance runner and test-only Android instrumentation. The mode requires an explicitly named, current non-owner synthetic user and installed app/test package. Target-context preflight refuses any existing named fixture file or Keystore alias. A prior `run-as` guard was safely blocked before writes because Android does not scope it to the requested user; it was removed. No DB contents or user records were read.
