@@ -342,7 +342,10 @@ def scroll_until_ui_texts(serial: str, out_dir: Path, name: str, expected: set[s
         if expected.issubset(ui_texts(root)):
             return root
         if attempt < max_swipes:
-            swipe_ui(serial, out_dir, f"{name}-swipe-{attempt + 1}", 0.92, start_y, 0.92, end_y)
+            # Keep vertical list gestures away from Android's right-edge Back gesture.
+            # A near-edge x coordinate can leave lazy lists stationary even though the
+            # automation records a swipe, which makes off-screen rows look absent.
+            swipe_ui(serial, out_dir, f"{name}-swipe-{attempt + 1}", 0.50, start_y, 0.50, end_y)
     raise RuntimeError(f"expected emulator UI text not found after {max_swipes} bounded {direction} swipes: {sorted(expected)}")
 
 
@@ -429,6 +432,42 @@ def wait_for_ui_texts(serial: str, out_dir: Path, name: str, expected: set[str],
     raise RuntimeError(f"expected emulator UI text not visible for {name}: {missing}")
 
 
+def wait_for_ui_fragments(serial: str, out_dir: Path, name: str, fragments: set[str],
+                          timeout_seconds: float = 25.0,
+                          stable_samples: int = 1) -> ET.Element:
+    """Wait for text-field contents that include long exact-ID/source fragments."""
+    if not fragments or stable_samples < 1:
+        raise ValueError("UI fragment wait requires fragments and at least one stable sample")
+    deadline = time.monotonic() + timeout_seconds
+    last_texts: set[str] = set()
+    last_signature: frozenset[str] | None = None
+    matching_samples = 0
+    attempt = 0
+    while time.monotonic() < deadline:
+        attempt += 1
+        try:
+            root = ui_tree(serial, out_dir, f"{name}-{attempt}")
+            last_texts = ui_texts(root)
+            matched = {fragment for fragment in fragments
+                       if any(fragment in text for text in last_texts)}
+            if matched == fragments:
+                signature = frozenset(last_texts)
+                matching_samples = matching_samples + 1 if signature == last_signature else 1
+                last_signature = signature
+                if matching_samples >= stable_samples:
+                    return root
+            else:
+                matching_samples = 0
+                last_signature = None
+        except (RuntimeError, subprocess.CalledProcessError, subprocess.TimeoutExpired):
+            matching_samples = 0
+            last_signature = None
+        time.sleep(0.35)
+    missing = sorted(fragment for fragment in fragments
+                     if not any(fragment in text for text in last_texts))
+    raise RuntimeError(f"expected emulator UI text fragments not visible for {name}: {missing}")
+
+
 def capture_finance_ui_journey(serial: str, out_dir: Path) -> list[str]:
     """Drive exact Finance and linked Case → Person → Finance → Task → source routes."""
     screenshots = out_dir / "screenshots"
@@ -475,6 +514,8 @@ def capture_finance_ui_journey(serial: str, out_dir: Path) -> list[str]:
         "100 AZN",
         "Synthetic BMW repair advance received.",
     }
+    scroll_until_ui_texts(serial, out_dir, "person-finance-find-exact-advance", person_finance_expected,
+                          direction="up", max_swipes=8)
     wait_for_ui_texts(serial, out_dir, "person-finance", person_finance_expected)
     screenshot_path = screenshots / "p0-3-person-finance.png"
     screenshot(serial, screenshot_path)
@@ -541,7 +582,12 @@ def capture_finance_ui_journey(serial: str, out_dir: Path) -> list[str]:
     swipe_ui(serial, out_dir, "finance-return-scroll-to-top", 0.5, 0.34, 0.5, 0.76)
     wait_for_ui_texts(serial, out_dir, "task-back-to-finance", finance_expected)
     adb(serial, "shell", "input", "keyevent", "4")
-    wait_for_ui_texts(serial, out_dir, "finance-back-to-person-finance", person_finance_expected | {"Maliyyə"})
+    scroll_until_ui_texts(serial, out_dir, "finance-back-person-find-exact-advance",
+                          person_finance_expected, direction="up", max_swipes=8)
+    # The exact rows prove that Back restored the person's Finance section. The section
+    # tab label is intentionally not required: Compose may omit the selected tab label
+    # from the accessibility tree after nested back-stack restoration.
+    wait_for_ui_texts(serial, out_dir, "finance-back-to-person-finance", person_finance_expected)
     adb(serial, "shell", "input", "keyevent", "4")
     wait_for_ui_texts(serial, out_dir, "person-back-to-case", case_expected)
     screenshot_path = screenshots / "p0-3-back-to-case.png"
@@ -574,6 +620,9 @@ def capture_ambiguous_ui(serial: str, out_dir: Path) -> str:
         "Sintetik yoxlama: Ruslan mənə 150 manat qaytardı; hansı Ruslan olduğunu dəqiqləşdirin.",
         "Hansı Ruslanı nəzərdə tutursunuz? Qeydi dəqiqləşdirmədən heç nə saxlamadım.",
     }
+    scroll_until_ui_texts_either_direction(
+        serial, out_dir, "secretary-find-ambiguous-turn", messages, max_swipes=8
+    )
     wait_for_ui_texts(serial, out_dir, "secretary-ambiguous-messages", messages, stable_samples=2)
     card = {
         "Təsdiq gözlənilir",
@@ -586,6 +635,62 @@ def capture_ambiguous_ui(serial: str, out_dir: Path) -> str:
     screenshot_path = out_dir / "screenshots" / "p0-3-ambiguous-no-write.png"
     screenshot(serial, screenshot_path)
     return str(screenshot_path.relative_to(ROOT))
+
+
+def capture_finance_correction_ui(serial: str, out_dir: Path) -> list[str]:
+    """Inspect the persisted synthetic correction, prepare its exact-ID draft, and open its readback."""
+    screenshots = out_dir / "screenshots"
+    screenshots.mkdir(parents=True, exist_ok=True)
+    screenshot_names: list[str] = []
+    user_message = "Sintetik yoxlama: nümunə qəbzin məbləği 50 AZN idi, sonra 45 AZN-ə düzəldildi."
+    model_message = "Sintetik nəticə: məbləğ 45 AZN olaraq düzəldildi və tarixçədə saxlanıldı."
+    event_id = "00000000-0000-4000-8000-000000000296"
+    launch_synthetic_today(serial, out_dir)
+    tap_ui_text(serial, out_dir, "today-before-correction-secretary", "Katibə",
+                minimum_center_y_fraction=0.8)
+    scroll_until_ui_texts_either_direction(
+        serial, out_dir, "secretary-find-correction-turn", {user_message, model_message}, max_swipes=8
+    )
+    wait_for_ui_texts(serial, out_dir, "secretary-correction-messages", {user_message, model_message},
+                      stable_samples=2)
+    card = {"Bölməni aç Maliyyə", "Synthetic correction fixture"}
+    scroll_until_ui_texts_either_direction(serial, out_dir, "secretary-correction-action-card", card, max_swipes=8)
+    wait_for_ui_texts(serial, out_dir, "secretary-correction-action-card", card, stable_samples=2)
+    path = screenshots / "p0-3-correction-action-card.png"
+    screenshot(serial, path)
+    screenshot_names.append(str(path.relative_to(ROOT)))
+
+    # The result card may extend below the pinned composer. Move the card into view
+    # before searching for its third action; the card header alone is not sufficient.
+    scroll_until_ui_texts(serial, out_dir, "correction-find-prepare-action",
+                          {"Düzəliş və ya geri qaytarma hazırla"}, direction="up", max_swipes=8)
+    tap_ui_text(serial, out_dir, "correction-card-before-prepare", "Düzəliş və ya geri qaytarma hazırla",
+                minimum_center_y_fraction=0.45, maximum_center_y_fraction=0.88)
+    wait_for_ui_texts(serial, out_dir, "correction-draft-note",
+                      {"Mətn yalnız layihə kimi hazırlanıb. Göndərilməyənədək heç bir əməliyyat aparılmır."})
+    wait_for_ui_fragments(serial, out_dir, "correction-exact-draft",
+                          {event_id, "nümunə qəbzin məbləği 50 AZN idi"}, stable_samples=2)
+    path = screenshots / "p0-3-correction-exact-id-draft.png"
+    screenshot(serial, path)
+    screenshot_names.append(str(path.relative_to(ROOT)))
+
+    tap_ui_text(serial, out_dir, "correction-draft-before-exact-finance", "Bölməni aç Maliyyə",
+                minimum_center_y_fraction=0.45, maximum_center_y_fraction=0.88)
+    finance_header = {"45,00 AZN", "Daxil olan pul", "Synthetic correction fixture"}
+    scroll_to_top_and_wait_for_ui_texts(serial, out_dir, "correction-exact-finance-readback", finance_header)
+    path = screenshots / "p0-3-correction-finance-readback.png"
+    screenshot(serial, path)
+    screenshot_names.append(str(path.relative_to(ROOT)))
+    history = {"Məbləğ düzəlişi", "Synthetic correction UI readback"}
+    scroll_until_ui_texts(serial, out_dir, "correction-readback-history", history, direction="up", max_swipes=8)
+    wait_for_ui_texts(serial, out_dir, "correction-readback-history", history, stable_samples=2)
+    path = screenshots / "p0-3-correction-readback-history.png"
+    screenshot(serial, path)
+    screenshot_names.append(str(path.relative_to(ROOT)))
+    adb(serial, "shell", "input", "keyevent", "4")
+    wait_for_ui_fragments(serial, out_dir, "correction-back-restores-exact-draft",
+                          {event_id, "nümunə qəbzin məbləği 50 AZN idi"}, stable_samples=2)
+    return screenshot_names
 
 
 def package_metadata(package_info: str) -> tuple[int, str]:
@@ -1182,6 +1287,7 @@ def run_synthetic_finance_ui_journey_probe(serial: str, user_id: int,
     fields = {match.group(1): match.group(2) for match in
               re.finditer(r"INSTRUMENTATION_RESULT: ([a-z0-9_]+)=([^\s]+)", output)}
     passed, fixture_checks = validate_bmw_ui_fixture_readback(fields)
+    correction_passed, correction_checks = validate_finance_correction_fixture_readback(fields)
     steps.append({
         "name": "synthetic_finance_ui_journey_fixture",
         "status": "PASS" if passed else "FAIL",
@@ -1233,6 +1339,26 @@ def run_synthetic_finance_ui_journey_probe(serial: str, user_id: int,
         "model_used": "NOT APPLICABLE",
         "data_scope": "named synthetic Android user 10 only; app repository readback; idempotent additive fixture; no deletion",
     })
+    steps.append({
+        "name": "synthetic_finance_correction_fixture_readback",
+        "status": "PASS" if correction_passed else "FAIL",
+        "expected_readback_checks": correction_checks,
+        "correction_event_id": fields.get("correction_event_id"),
+        "correction_turn_id": fields.get("correction_turn_id"),
+        "corrected_minor_units": int(fields["correction_effective_minor_units"])
+        if fields.get("correction_effective_minor_units", "").lstrip("-").isdigit() else None,
+        "adjustment_minor_units": int(fields["correction_adjustment_minor_units"])
+        if fields.get("correction_adjustment_minor_units", "").lstrip("-").isdigit() else None,
+        "adjustment_count": int(fields["correction_adjustment_count"])
+        if fields.get("correction_adjustment_count", "").isdigit() else None,
+        "conversation_message_count": int(fields["correction_message_count"])
+        if fields.get("correction_message_count", "").isdigit() else None,
+        "action_result_count": int(fields["correction_action_result_count"])
+        if fields.get("correction_action_result_count", "").isdigit() else None,
+        "network_used": False,
+        "model_used": "NOT APPLICABLE; repository correction fixture, not an assistant invocation",
+        "data_scope": "named synthetic Android user 10 only; one isolated receipt and one append-only correction",
+    })
     if passed:
         try:
             screenshots = capture_finance_ui_journey(serial, out_dir)
@@ -1278,6 +1404,28 @@ def run_synthetic_finance_ui_journey_probe(serial: str, user_id: int,
                 "model_used": "NOT APPLICABLE; persistent synthetic UI fixture",
                 "data_scope": "synthetic Android user 10 only; no UI write actions or data cleanup",
             })
+    if correction_passed:
+        try:
+            screenshots = capture_finance_correction_ui(serial, out_dir)
+            steps.append({
+                "name": "persistent_finance_correction_draft_and_readback_ui_journey",
+                "status": "PASS",
+                "route": "Secretary correction result → exact-ID draft (not sent) → exact Finance detail → append-only correction history → Android Back restores draft",
+                "screenshot_count": len(screenshots),
+                "screenshots": screenshots,
+                "network_used": False,
+                "model_used": "NOT APPLICABLE; no assistant send or provider call",
+                "data_scope": "named synthetic Android user 10 only; UI prepares a draft and reads the pre-seeded correction",
+            })
+        except (RuntimeError, subprocess.CalledProcessError, subprocess.TimeoutExpired) as error:
+            steps.append({
+                "name": "persistent_finance_correction_draft_and_readback_ui_journey",
+                "status": "FAIL",
+                "reason": scrub(f"{type(error).__name__}: {error}"),
+                "network_used": False,
+                "model_used": "NOT APPLICABLE; no assistant send or provider call",
+                "data_scope": "named synthetic Android user 10 only",
+            })
 
 
 def validate_bmw_ui_fixture_readback(fields: dict[str, str]) -> tuple[bool, dict[str, bool]]:
@@ -1302,6 +1450,22 @@ def validate_bmw_ui_fixture_readback(fields: dict[str, str]) -> tuple[bool, dict
     checks["ambiguous_code"] = fields.get("ambiguous_code") == "person_name_ambiguous"
     checks["ambiguous_has_no_target"] = fields.get("ambiguous_target_present") == "false"
     checks["fixture_status"] = fields.get("status") == "synthetic_finance_ui_journey_fixture_passed"
+    return all(checks.values()), checks
+
+
+def validate_finance_correction_fixture_readback(fields: dict[str, str]) -> tuple[bool, dict[str, bool]]:
+    """Require one exact effective amount and its one preserved append-only adjustment."""
+    checks = {
+        "fixture_status": fields.get("status") == "synthetic_finance_ui_journey_fixture_passed",
+        "exact_correction_event_id": fields.get("correction_event_id") == "00000000-0000-4000-8000-000000000296",
+        "exact_correction_turn_id": fields.get("correction_turn_id") == "00000000-0000-4000-8000-000000000297",
+        "corrected_amount_4500_minor_units": fields.get("correction_effective_minor_units") == "4500",
+        "append_only_delta_minus_500_minor_units": fields.get("correction_adjustment_minor_units") == "-500",
+        "one_correction_adjustment": fields.get("correction_adjustment_count") == "1",
+        "two_source_conversation_messages": fields.get("correction_message_count") == "2",
+        "one_exact_action_result": fields.get("correction_action_result_count") == "1",
+        "action_target_is_same_exact_finance_id": fields.get("correction_target_matches") == "true",
+    }
     return all(checks.values()), checks
 
 

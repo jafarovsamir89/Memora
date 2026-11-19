@@ -110,7 +110,7 @@ class UiHierarchyTests(unittest.TestCase):
 
         self.assertIs(result, target)
         self.assertEqual(tree.call_count, 2)
-        swipe.assert_called_once_with("emulator-5556", Path("/tmp"), "find-bmw-swipe-1", 0.92, 0.72, 0.92, 0.34)
+        swipe.assert_called_once_with("emulator-5556", Path("/tmp"), "find-bmw-swipe-1", 0.50, 0.72, 0.50, 0.34)
 
     def test_scroll_search_tries_the_other_direction_after_saved_state_boundary(self) -> None:
         target = lab.ET.fromstring('<hierarchy><node text="Exact BMW task"/></hierarchy>')
@@ -177,10 +177,20 @@ class UiHierarchyTests(unittest.TestCase):
             "Sintetik ssenari: Synthetic Elçin BMW təmiri üçün 100 AZN avans verdi; servis görüşünü təsdiqlə.",
             "Sintetik ssenari: 300 AZN razılaşdırılıb, 100 AZN avans alınıb və 200 AZN qalıb; görüş tapşırığı yaradılıb.",
         })
-        source_scroll.assert_called_once_with(
-            "emulator-5556", out_dir, "task-source-open-conversation", {"Söhbəti katibədə aç"},
-            direction="up", max_swipes=8,
-        )
+        self.assertEqual(source_scroll.call_args_list, [
+            call("emulator-5556", out_dir, "person-finance-find-exact-advance",
+                 {"100 AZN", "Synthetic BMW repair advance received."}, direction="up", max_swipes=8),
+            call("emulator-5556", out_dir, "task-source-open-conversation", {"Söhbəti katibədə aç"},
+                 direction="up", max_swipes=8),
+            call("emulator-5556", out_dir, "finance-back-person-find-exact-advance",
+                 {"100 AZN", "Synthetic BMW repair advance received."}, direction="up", max_swipes=8),
+        ])
+        restored_person_finance = next(call.args[3] for call in wait.call_args_list
+                                       if call.args[2] == "finance-back-to-person-finance")
+        self.assertEqual(restored_person_finance, {
+            "100 AZN",
+            "Synthetic BMW repair advance received.",
+        })
         source_detail = next(call.args[3] for call in wait.call_args_list
                              if call.args[2] == "task-exact-source")
         self.assertIn("Yadda saxlanıldı", source_detail)
@@ -222,11 +232,51 @@ class UiHierarchyTests(unittest.TestCase):
             "Təsdiq gözlənilir",
             "Təsdiq verilməyənədək heç bir dəyişiklik edilməyib.",
         }, stable_samples=2))
-        scroll.assert_called_once_with("emulator-5556", out_dir, "secretary-ambiguous-no-write", {
-            "Təsdiq gözlənilir",
-            "Təsdiq verilməyənədək heç bir dəyişiklik edilməyib.",
-        }, max_swipes=4)
+        self.assertEqual(scroll.call_args_list, [
+            call("emulator-5556", out_dir, "secretary-find-ambiguous-turn", {
+                "Sintetik yoxlama: Ruslan mənə 150 manat qaytardı; hansı Ruslan olduğunu dəqiqləşdirin.",
+                "Hansı Ruslanı nəzərdə tutursunuz? Qeydi dəqiqləşdirmədən heç nə saxlamadım.",
+            }, max_swipes=8),
+            call("emulator-5556", out_dir, "secretary-ambiguous-no-write", {
+                "Təsdiq gözlənilir",
+                "Təsdiq verilməyənədək heç bir dəyişiklik edilməyib.",
+            }, max_swipes=4),
+        ])
         capture.assert_called_once()
+
+    def test_correction_ui_capture_prepares_exact_id_and_reads_append_only_history(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            out_dir = Path(directory)
+            with patch.object(lab, "launch_synthetic_today"), \
+                 patch.object(lab, "tap_ui_text") as tap, \
+                 patch.object(lab, "wait_for_ui_texts") as wait, \
+                 patch.object(lab, "wait_for_ui_fragments") as fragments, \
+                 patch.object(lab, "scroll_until_ui_texts_either_direction") as scroll_card, \
+                 patch.object(lab, "scroll_to_top_and_wait_for_ui_texts") as scroll_top, \
+                 patch.object(lab, "scroll_until_ui_texts") as scroll_history, \
+                 patch.object(lab, "screenshot") as capture, \
+                 patch.object(lab, "adb") as adb, \
+                 patch.object(lab, "ROOT", out_dir):
+                paths = lab.capture_finance_correction_ui("emulator-5556", out_dir)
+
+        self.assertEqual(len(paths), 4)
+        self.assertTrue(paths[0].endswith("p0-3-correction-action-card.png"))
+        self.assertTrue(paths[1].endswith("p0-3-correction-exact-id-draft.png"))
+        self.assertTrue(paths[2].endswith("p0-3-correction-finance-readback.png"))
+        self.assertTrue(paths[3].endswith("p0-3-correction-readback-history.png"))
+        self.assertEqual(capture.call_count, 4)
+        self.assertEqual(fragments.call_args_list[0].args[3], {
+            "00000000-0000-4000-8000-000000000296", "nümunə qəbzin məbləği 50 AZN idi",
+        })
+        self.assertEqual(fragments.call_args_list[1].args[3], {
+            "00000000-0000-4000-8000-000000000296", "nümunə qəbzin məbləği 50 AZN idi",
+        })
+        self.assertEqual(scroll_history.call_args.args[3],
+                         {"Məbləğ düzəlişi", "Synthetic correction UI readback"})
+        self.assertIn(call("emulator-5556", "shell", "input", "keyevent", "4"), adb.call_args_list)
+        self.assertEqual(tap.call_count, 3)
+        self.assertEqual(scroll_top.call_count, 1)
+
 
     def test_wait_for_ui_texts_ignores_stale_navigation_during_activity_start(self) -> None:
         roots = [
@@ -382,6 +432,39 @@ class ReportSafetyTests(unittest.TestCase):
         self.assertFalse(checks["case_evidence_count"])
         self.assertFalse(checks["bmw_action_result_count"])
         self.assertFalse(checks["ambiguous_finance_events_unchanged"])
+
+    def test_finance_correction_fixture_requires_exact_amount_delta_and_target(self) -> None:
+        fields = {
+            "status": "synthetic_finance_ui_journey_fixture_passed",
+            "correction_event_id": "00000000-0000-4000-8000-000000000296",
+            "correction_turn_id": "00000000-0000-4000-8000-000000000297",
+            "correction_effective_minor_units": "4500",
+            "correction_adjustment_minor_units": "-500",
+            "correction_adjustment_count": "1",
+            "correction_message_count": "2",
+            "correction_action_result_count": "1",
+            "correction_target_matches": "true",
+        }
+        passed, checks = lab.validate_finance_correction_fixture_readback(fields)
+        self.assertTrue(passed)
+        self.assertTrue(all(checks.values()))
+
+    def test_finance_correction_fixture_rejects_duplicate_or_wrong_target_readback(self) -> None:
+        fields = {
+            "status": "synthetic_finance_ui_journey_fixture_passed",
+            "correction_event_id": "00000000-0000-4000-8000-000000000296",
+            "correction_turn_id": "00000000-0000-4000-8000-000000000297",
+            "correction_effective_minor_units": "4500",
+            "correction_adjustment_minor_units": "-500",
+            "correction_adjustment_count": "2",
+            "correction_message_count": "2",
+            "correction_action_result_count": "1",
+            "correction_target_matches": "false",
+        }
+        passed, checks = lab.validate_finance_correction_fixture_readback(fields)
+        self.assertFalse(passed)
+        self.assertFalse(checks["one_correction_adjustment"])
+        self.assertFalse(checks["action_target_is_same_exact_finance_id"])
 
     def test_volume_report_preserves_conversation_count_paging_and_measurements(self) -> None:
         report = lab.volume_probe_measurements({

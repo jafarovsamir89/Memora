@@ -53,10 +53,22 @@ internal object SyntheticFinanceUiJourneyProbe {
     private const val TASK_RESULT_ID = "00000000-0000-4000-8000-000000000292"
     private const val AMBIGUOUS_TURN_ID = "00000000-0000-4000-8000-000000000294"
     private const val AMBIGUOUS_RESULT_ID = "00000000-0000-4000-8000-000000000295"
+    private const val CORRECTION_EVENT_ID = "00000000-0000-4000-8000-000000000296"
+    private const val CORRECTION_TURN_ID = "00000000-0000-4000-8000-000000000297"
+    private const val CORRECTION_RESULT_ID = "00000000-0000-4000-8000-000000000298"
+    private const val CORRECTION_EVENT_COMMAND_ID = "synthetic-p0-3-correction-event-command"
+    private const val CORRECTION_COMMAND_ID = "synthetic-p0-3-correction-command"
     private const val AMBIGUOUS_USER_MESSAGE =
         "Sintetik yoxlama: Ruslan mənə 150 manat qaytardı; hansı Ruslan olduğunu dəqiqləşdirin."
     private const val AMBIGUOUS_MODEL_MESSAGE =
         "Hansı Ruslanı nəzərdə tutursunuz? Qeydi dəqiqləşdirmədən heç nə saxlamadım."
+    private const val CORRECTION_USER_MESSAGE =
+        "Sintetik yoxlama: nümunə qəbzin məbləği 50 AZN idi, sonra 45 AZN-ə düzəldildi."
+    private const val CORRECTION_MODEL_MESSAGE =
+        "Sintetik nəticə: məbləğ 45 AZN olaraq düzəldildi və tarixçədə saxlanıldı."
+    private const val CORRECTION_SOURCE = "synthetic-correction-ui"
+    private const val CORRECTION_REASON = "Synthetic correction UI readback"
+    private const val CORRECTION_TIME = "2026-11-19T12:03:00Z"
     private const val TASK_COMMAND_ID = "synthetic-p0-3-task-create"
     private const val TASK_TITLE = "Synthetic confirm BMW repair appointment"
     private const val TIME = "2026-11-18T12:00:00Z"
@@ -353,6 +365,67 @@ internal object SyntheticFinanceUiJourneyProbe {
             check(AppRoute.source(sourceTurn) != null) { "synthetic_journey_source_route_rejected" }
             check(AppRoute.source(advanceSourceTurn) != null) { "synthetic_journey_bmw_source_route_rejected" }
 
+            // This separate receipt is a monotonic synthetic fixture. The production correction
+            // repository appends one amount_correction row; the existing finance UI must read it
+            // back by the same exact ID. No assistant/model/network request is involved here.
+            val expectedCorrectionEvent = MoneyEventRow(
+                eventId = CORRECTION_EVENT_ID,
+                commandId = CORRECTION_EVENT_COMMAND_ID,
+                personId = PERSON_ID,
+                kind = "receipt",
+                minorUnits = 5_000L,
+                currency = "AZN",
+                source = CORRECTION_SOURCE,
+                recordedAt = CORRECTION_TIME,
+                occurredAt = CORRECTION_TIME,
+                comment = "Synthetic correction fixture",
+                scopeId = scope,
+            )
+            val correctionBase = runBlocking {
+                domain.recordFinanceEvent(scope, PERSON_NAME, "receipt", 5_000L, "AZN", CORRECTION_SOURCE,
+                    "Synthetic correction fixture", PERSON_ID, CORRECTION_EVENT_ID,
+                    CORRECTION_EVENT_COMMAND_ID, CORRECTION_TIME, CORRECTION_TIME)
+            }
+            check(correctionBase == expectedCorrectionEvent) { "synthetic_correction_base_readback_mismatch" }
+            val correction = runBlocking {
+                domain.correctFinanceEventAmount(scope, CORRECTION_EVENT_ID, 4_500L, CORRECTION_COMMAND_ID,
+                    CORRECTION_REASON, CORRECTION_TIME)
+            }
+            check(correction.event.eventId == CORRECTION_EVENT_ID && correction.event.minorUnits == 4_500L) {
+                "synthetic_correction_effective_amount_mismatch"
+            }
+            val correctionAdjustments = runBlocking { dao.adjustments(scope, CORRECTION_EVENT_ID) }
+            check(correctionAdjustments.size == 1 && correctionAdjustments.single().let {
+                it.commandId == CORRECTION_COMMAND_ID && it.kind == "amount_correction" &&
+                    it.minorUnits == -500L && it.currency == "AZN" &&
+                    it.reversesEventId == CORRECTION_EVENT_ID && it.reason == CORRECTION_REASON
+            }) { "synthetic_correction_append_only_readback_mismatch" }
+            val correctionResult = AgentActionResultRow(
+                resultId = CORRECTION_RESULT_ID,
+                scopeId = scope,
+                turnId = CORRECTION_TURN_ID,
+                toolName = "correct_money_event",
+                status = "APPLIED",
+                code = "money_event_corrected",
+                targetKind = "finance",
+                targetId = CORRECTION_EVENT_ID,
+                createdAtMillis = java.time.Instant.parse(CORRECTION_TIME).toEpochMilli(),
+            )
+            val correctionConversation = ProtectedConversationRepository(database)
+            runBlocking {
+                correctionConversation.appendTurn(scope, CORRECTION_TURN_ID, CORRECTION_USER_MESSAGE,
+                    CORRECTION_MODEL_MESSAGE, correctionResult.createdAtMillis, listOf(correctionResult))
+            }
+            val correctionMessages = runBlocking { dao.conversationMessagesForTurn(scope, CORRECTION_TURN_ID) }
+            val correctionResults = runBlocking { correctionConversation.actionResults(scope, CORRECTION_TURN_ID) }
+            check(correctionMessages.size == 2 && correctionMessages.map { it.role to it.message }.toSet() == setOf(
+                "user" to CORRECTION_USER_MESSAGE, "model" to CORRECTION_MODEL_MESSAGE,
+            )) { "synthetic_correction_conversation_readback_mismatch" }
+            check(correctionResults == listOf(correctionResult)) { "synthetic_correction_action_card_readback_mismatch" }
+            check(runBlocking { domain.moneyEvent(scope, CORRECTION_EVENT_ID)?.minorUnits } == 4_500L) {
+                "synthetic_correction_final_readback_mismatch"
+            }
+
             val ambiguousFinanceEventsBefore = runBlocking { dao.moneyEvents(scope).size }
             val expectedAmbiguousResult = AgentActionResultRow(
                 resultId = AMBIGUOUS_RESULT_ID,
@@ -427,6 +500,14 @@ internal object SyntheticFinanceUiJourneyProbe {
             result.putString("ambiguous_status", ambiguousResults.single().status)
             result.putString("ambiguous_code", ambiguousResults.single().code)
             result.putString("ambiguous_target_present", (ambiguousResults.single().targetId != null).toString())
+            result.putString("correction_event_id", CORRECTION_EVENT_ID)
+            result.putString("correction_turn_id", CORRECTION_TURN_ID)
+            result.putInt("correction_effective_minor_units", correction.event.minorUnits.toInt())
+            result.putInt("correction_adjustment_minor_units", correctionAdjustments.single().minorUnits.toInt())
+            result.putInt("correction_adjustment_count", correctionAdjustments.size)
+            result.putInt("correction_message_count", correctionMessages.size)
+            result.putInt("correction_action_result_count", correctionResults.size)
+            result.putString("correction_target_matches", (correctionResults.single().targetId == CORRECTION_EVENT_ID).toString())
             result
         }.getOrElse { error ->
             result.putString("status", "synthetic_finance_ui_journey_fixture_failed")
