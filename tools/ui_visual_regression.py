@@ -65,24 +65,69 @@ MAX_CHANGED_RATIO = 0.003
 MAX_MEAN_CHANNEL_DELTA = 0.35
 GALLERY_HEADING = "Memora · komponentlər"
 UI_HIERARCHY_PATH = "/data/local/tmp/memora-ui-visual-regression.xml"
+ADB_CAPTURE_TIMEOUT_SECONDS = 10.0
+ADB_CLEANUP_TIMEOUT_SECONDS = 5.0
 
 
-def run_adb(serial: str, *args: str, capture: bool = True) -> bytes:
+def run_adb(
+    serial: str,
+    *args: str,
+    capture: bool = True,
+    timeout_seconds: float | None = 30.0,
+) -> bytes:
     result = subprocess.run(
         ["adb", "-s", serial, *args],
         check=True,
         stdout=subprocess.PIPE if capture else None,
         stderr=subprocess.PIPE,
+        timeout=timeout_seconds,
     )
     return result.stdout if capture else b""
 
 
-def get_setting(serial: str, namespace: str, key: str) -> str:
-    return run_adb(serial, "shell", "settings", "get", namespace, key).decode().strip()
+def get_setting(
+    serial: str, namespace: str, key: str, timeout_seconds: float = ADB_CAPTURE_TIMEOUT_SECONDS
+) -> str:
+    return run_adb(
+        serial, "shell", "settings", "get", namespace, key, timeout_seconds=timeout_seconds
+    ).decode().strip()
 
 
-def set_setting(serial: str, namespace: str, key: str, value: str) -> None:
-    run_adb(serial, "shell", "settings", "put", namespace, key, value)
+def get_optional_setting(serial: str, namespace: str, key: str) -> str | None:
+    value = get_setting(serial, namespace, key)
+    return None if not value or value.lower() == "null" else value
+
+
+def set_setting(
+    serial: str,
+    namespace: str,
+    key: str,
+    value: str,
+    timeout_seconds: float = ADB_CAPTURE_TIMEOUT_SECONDS,
+) -> None:
+    run_adb(
+        serial, "shell", "settings", "put", namespace, key, value,
+        timeout_seconds=timeout_seconds,
+    )
+
+
+def restore_setting(serial: str, namespace: str, key: str, value: str | None) -> None:
+    if value is None:
+        run_adb(
+            serial, "shell", "settings", "delete", namespace, key,
+            timeout_seconds=ADB_CLEANUP_TIMEOUT_SECONDS,
+        )
+    else:
+        set_setting(
+            serial, namespace, key, value, timeout_seconds=ADB_CLEANUP_TIMEOUT_SECONDS
+        )
+
+
+def restore_failure_message(errors: list[str], primary_error: BaseException | None) -> str:
+    message = f"could not restore emulator state: {', '.join(errors)}"
+    if primary_error is not None:
+        message += f"; preceding operation failed: {type(primary_error).__name__}: {primary_error}"
+    return message
 
 
 def gallery_content_is_ready(hierarchy: str, expected_text: str = GALLERY_HEADING) -> bool:
@@ -99,6 +144,18 @@ def gallery_content_is_ready(hierarchy: str, expected_text: str = GALLERY_HEADIN
     )
 
 
+def android_system_anr_is_visible(hierarchy: str) -> bool:
+    try:
+        root = ET.fromstring(hierarchy)
+    except ET.ParseError:
+        return False
+    return any(
+        marker in node.attrib.get("text", "")
+        for node in root.iter("node")
+        for marker in ("Process system isn't responding", "System UI isn't responding")
+    )
+
+
 def wait_for_gallery_ready(
     serial: str,
     expected_text: str = GALLERY_HEADING,
@@ -106,17 +163,33 @@ def wait_for_gallery_ready(
 ) -> None:
     """Wait for the active Compose content before pixel capture."""
     deadline = time.monotonic() + timeout_seconds
+    last_error: subprocess.CalledProcessError | None = None
     while True:
         try:
-            run_adb(serial, "shell", "uiautomator", "dump", "--compressed", UI_HIERARCHY_PATH)
-            hierarchy = run_adb(serial, "shell", "cat", UI_HIERARCHY_PATH).decode("utf-8", errors="replace")
+            command_timeout = max(1.0, min(10.0, deadline - time.monotonic()))
+            run_adb(serial, "shell", "uiautomator", "dump", "--compressed", UI_HIERARCHY_PATH,
+                    timeout_seconds=command_timeout)
+            hierarchy = run_adb(serial, "shell", "cat", UI_HIERARCHY_PATH,
+                                timeout_seconds=command_timeout).decode("utf-8", errors="replace")
+            last_error = None
+            if android_system_anr_is_visible(hierarchy):
+                raise RuntimeError("Android system ANR blocks component screenshot capture")
+            if gallery_content_is_ready(hierarchy, expected_text):
+                return
+        except subprocess.TimeoutExpired as error:
+            raise RuntimeError("Android UI hierarchy capture timed out; visual acceptance is blocked") from error
+        except subprocess.CalledProcessError as error:
+            last_error = error
         finally:
-            run_adb(serial, "shell", "rm", "-f", UI_HIERARCHY_PATH)
-        if gallery_content_is_ready(hierarchy, expected_text):
-            return
+            try:
+                run_adb(serial, "shell", "rm", "-f", UI_HIERARCHY_PATH, timeout_seconds=3.0)
+            except (subprocess.CalledProcessError, subprocess.TimeoutExpired):
+                pass
         if time.monotonic() >= deadline:
+            if last_error:
+                raise RuntimeError("Android UI hierarchy was unavailable during component screenshot readiness check") from last_error
             raise RuntimeError("Compose component gallery did not expose its heading before screenshot capture")
-        time.sleep(0.2)
+        time.sleep(0.5)
 
 
 def resolve_emulator() -> str:
@@ -244,9 +317,13 @@ def compare_pixels(expected: bytes, actual: bytes) -> tuple[float, float]:
 
 
 def capture(serial: str, component: str, theme: str) -> bytes:
-    run_adb(serial, "shell", "am", "force-stop", "ai.memora.app")
+    run_adb(
+        serial, "shell", "am", "force-stop", "ai.memora.app",
+        timeout_seconds=ADB_CAPTURE_TIMEOUT_SECONDS,
+    )
     run_adb(serial, "shell", "am", "start", "-W", "-n", ACTIVITY,
-            "--es", "component", component, "--es", "theme", theme)
+            "--es", "component", component, "--es", "theme", theme,
+            timeout_seconds=ADB_CAPTURE_TIMEOUT_SECONDS)
     expected_text = "Dəyişikliyi təsdiqlə" if component == "confirmation" else GALLERY_HEADING
     wait_for_gallery_ready(serial, expected_text)
     # Give Android 14 time to finish the immersive-system-bar transition before
@@ -255,7 +332,10 @@ def capture(serial: str, component: str, theme: str) -> bytes:
     # Other gallery states include intentional looping animation (for example,
     # loading and active voice), so frame equality is not suitable.
     time.sleep(3.0 if component == "confirmation" else 1.25)
-    return run_adb(serial, "exec-out", "screencap", "-p")
+    return run_adb(
+        serial, "exec-out", "screencap", "-p",
+        timeout_seconds=ADB_CAPTURE_TIMEOUT_SECONDS,
+    )
 
 
 def main() -> int:
@@ -269,9 +349,9 @@ def main() -> int:
     cases = [case for case in CASES if args.component is None or case[0] == args.component]
     if not cases:
         raise RuntimeError(f"Unknown component key: {args.component}")
-    old_font = get_setting(serial, "system", "font_scale") or "1.0"
-    old_rotation = get_setting(serial, "system", "user_rotation") or "0"
-    old_auto_rotation = get_setting(serial, "system", "accelerometer_rotation") or "1"
+    saved_font = get_optional_setting(serial, "system", "font_scale")
+    saved_rotation = get_optional_setting(serial, "system", "user_rotation")
+    saved_auto_rotation = get_optional_setting(serial, "system", "accelerometer_rotation")
     args.golden_dir.mkdir(parents=True, exist_ok=True)
     OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
     failures = 0
@@ -306,10 +386,28 @@ def main() -> int:
             else:
                 print(f"PASS {name}: changed={changed_ratio:.3%}, mean RGB delta={mean_delta:.3f}")
     finally:
-        set_setting(serial, "system", "font_scale", old_font)
-        set_setting(serial, "system", "accelerometer_rotation", old_auto_rotation)
-        set_setting(serial, "system", "user_rotation", old_rotation)
-        run_adb(serial, "shell", "am", "force-stop", "ai.memora.app")
+        primary_error = sys.exc_info()[1]
+        restore_errors: list[str] = []
+        for key, value in (
+            ("font_scale", saved_font),
+            ("accelerometer_rotation", saved_auto_rotation),
+            ("user_rotation", saved_rotation),
+        ):
+            try:
+                restore_setting(serial, "system", key, value)
+            except (subprocess.CalledProcessError, subprocess.TimeoutExpired):
+                restore_errors.append(key)
+        try:
+            run_adb(
+                serial, "shell", "am", "force-stop", "ai.memora.app",
+                timeout_seconds=ADB_CLEANUP_TIMEOUT_SECONDS,
+            )
+        except (subprocess.CalledProcessError, subprocess.TimeoutExpired):
+            restore_errors.append("app_process")
+        if restore_errors:
+            raise RuntimeError(
+                restore_failure_message(restore_errors, primary_error)
+            ) from primary_error
     if failures:
         print(f"Visual regression failed: {failures}/{len(cases)} case(s)", file=sys.stderr)
         return 1
@@ -321,6 +419,6 @@ def main() -> int:
 if __name__ == "__main__":
     try:
         raise SystemExit(main())
-    except (RuntimeError, subprocess.CalledProcessError, ValueError) as error:
+    except (RuntimeError, subprocess.CalledProcessError, subprocess.TimeoutExpired, ValueError) as error:
         print(f"ERROR: {error}", file=sys.stderr)
         raise SystemExit(2)

@@ -136,6 +136,37 @@ and unambiguous UI labels are required; ambiguous labels fail closed. Screenshot
 and UI hierarchy captures are saved in the run's ignored output directory. The
 journey does not send or retry a command, call an AI API, or clean up/delete data.
 
+ACT-0278 resumed after host disk space was freed. A no-wipe cold launch of the
+same AVD returned under serial `emulator-5554`; named synthetic users 10/11
+were present. The initial post-boot user was 0, but no user-0 app records were
+read. Subsequent checks explicitly selected the synthetic user.
+
+The current 31-state component run on v178 is 30/31: only `confirmation-light`
+fails at 9.020% changed pixels / 9.942 mean RGB delta. Two targeted captures
+reproduce it. The real ignored screenshot
+`apps/android/app/build/ui-visual-regression/confirmation-light.png` shows the
+sheet starting at y=1574 instead of baseline y=1637 (63 px / 24 dp at 420 dpi).
+All 30 other states pass. No baseline or threshold changed; cause remains
+unresolved and no golden replacement is proposed as accepted.
+
+The earlier slow user-11 repository measurements did not reproduce after the
+cold AVD relaunch. On the same persisted fixture, v178→v179 measured case search
+269/339 ms and oldest-conversation search 1,133/1,398 ms p50/p95; v179→v180
+measured 263/345 ms and 1,089/1,238 ms. Baseline v138 was 258/322 ms and
+1,094/1,284 ms. All five fixture digests matched, updates inserted zero rows,
+and `firstInstallTime` stayed unchanged. Reports are `20261119T160641.929441Z`
+and `20261119T160907.809428Z`. The prior v175/v176 slowdown appears transient,
+but the exact contention cause is not proven. Finance analytics p95 is variable;
+no broad performance PASS is claimed. These are warm local repository reads, not
+UI/network/model latency or peak-memory results.
+
+The full Gradle block after ACT-0278 passed: 84 suites / 431 JVM tests, 0
+failures/errors, one opt-in live test skipped; debug and AndroidTest APK builds,
+AndroidTest Kotlin compilation, and lint 0/90/2. APK v181 (`acceptance-lab-v181`,
+SHA-256 `b71e2321ab3a338d5f20a5f29c1deb870037cfd011c2289b2198724a23aef7d2`) was
+built but not installed. The golden task was intentionally not part of this Gradle
+block; its separate full visual comparison remains 30/31.
+
 ACT-0276 on synthetic Android 14/API34 user 10 updated v170→v171 and preserved
 `firstInstallTime`. The persistent route passed: Secretary→BMW finance/case/person/
 task/exact source/conversation and Android Back; ambiguous Ruslan clarification

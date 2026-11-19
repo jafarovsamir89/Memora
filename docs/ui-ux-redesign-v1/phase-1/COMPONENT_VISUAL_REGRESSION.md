@@ -36,3 +36,15 @@ records.
 If NumPy is installed, RGBA comparison uses its vectorized path. The pure-Python
 implementation remains the fallback on clean machines; both paths preserve the
 same per-pixel tolerance and mean-delta thresholds.
+
+## Latest evidence — ACT-0278
+
+The full current 31-state emulator comparison on v178 is 30/31. Only
+`confirmation-light` fails (9.020% changed pixels, mean RGB delta 9.942). Two
+fresh targeted captures match. The real capture starts the sheet at y=1574 while
+the checked-in golden starts at y=1637, a 63 px / 24 dp shift at 420 dpi. The
+other 30 states pass. Removing the manual `navigationBarsPadding()` did not
+change the comparison and that production edit was reverted. The cause is
+unresolved. Current screenshot is ignored at
+`apps/android/app/build/ui-visual-regression/confirmation-light.png`; preserve
+committed goldens and thresholds until the difference is understood and reviewed.
