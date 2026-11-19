@@ -360,3 +360,23 @@ fixtures. They are not evidence of live Gemini quality, audio transcription,
 TalkBack acceptance, or whole-app backup completeness. Existing Room-only
 portable backup has a documented Inbox/task/voice-memory coverage gap; this
 runner does not change backup production code or call that gap a pass.
+
+
+## ACT-0280 — Landscape Today and v190 persistence/volume recheck
+
+On Android 14/API34 emulator `emulator-5554`, Today landscape was compacted so
+its heading/date and conversation card share the initial viewport. Synthetic
+user 10 v188→v189 lineage passed with six sentinels and markerless profile
+preserved through update/restart/rotation; `firstInstallTime` stayed
+`2026-11-18 04:54:50`. User 10's read-only check after shared v190 also passed.
+True portrait, landscape and AZ `fontScale=1.3` screenshots are in ignored run
+`20261119T171452.892518Z/`; the larger-font landscape screenshot confirms the
+whole voice target and priority heading sit above bottom navigation. Synthetic
+user 11 v189→v190 retained five 1,000-row fixture digests with no inserts.
+Requested size 100 is `NOT APPLICABLE` against its existing 1,000-row fixture,
+so the combined volume matrix is `PARTIAL`, while size 1,000 itself passes.
+Warm repository measurements are recorded in the report and are not UI latency.
+The component gallery remains 30/31 because `confirmation-light` still differs;
+no golden or comparison threshold was changed. Code/test commit
+`804eb46be66563058f5538268e3ee9e45300bb41` contains the landscape fix. No real
+profile, physical phone, AI/network, microphone or paid API was used.

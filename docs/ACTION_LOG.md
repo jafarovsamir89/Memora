@@ -1,3 +1,13 @@
+## ACT-0280 — 2026-11-19 — Fix landscape Today viewport; recheck lineage and volume matrix
+
+- On branch `ui/redesign-v1`, compacted only the Today landscape header and moved its conversation card into a side-by-side layout. Portrait layout is preserved; shared `ScreenColumn` spacing/top padding are configurable with unchanged defaults. Added Compose coverage for AZ + landscape + `fontScale=1.3`.
+- Full Gradle: 84 suites / 432 tests, 0 failures/errors, 1 opt-in live skip; debug/AndroidTest APKs and AndroidTest Kotlin compilation passed; lint 0 errors / 90 warnings / 2 hints. Focused landscape test passed. True emulator screenshots show the full voice target and priorities heading above bottom navigation at fontScale 1.3; rotation/font settings restored.
+- Synthetic user 10 v188→v189 update lineage PASS: six sentinel counts remained 1 through install, launch, process restart and rotation; markerless profile retained; `firstInstallTime` unchanged (`2026-11-18 04:54:50`). Post-v190 read-only lineage verify also PASS. Report `20261119T171452.892518Z`.
+- Synthetic user 11 v189→v190 volume readback: five 1,000-row fixture digests unchanged, zero inserts. Size 100 is NOT APPLICABLE against persisted size 1,000; size 1,000 PASS; aggregate PARTIAL. Report `20261119T172451.882410Z`. Warm local p50/p95: case search 260.657/364.118 ms, oldest conversation 1,108/1,236 ms, finance analytics 157/217 ms; no UI or network latency claim.
+- APK v190 `acceptance-lab-v190`, SHA-256 `2c9c545b0f010c29716796015c492f8d0e9627df4ab074ead4f8a841c05ccb1d`. No personal data, user 0, physical device, AI/network, mic or paid API used; no domain/ledger/schema/provider/consent changes.
+- Component visual run remains 30/31: known `confirmation-light` mismatch only (9.020% changed / 9.942 mean RGB delta); no baseline/threshold changed. The Gradle visual task could not install its stale v106 gallery APK over v189 (`INSTALL_FAILED_VERSION_DOWNGRADE`); the direct runner on the existing debug install completed the comparisons. LAB-05/LAB-08 partial; broader TalkBack/accessibility acceptance remains open.
+- Code/test commit `804eb46be66563058f5538268e3ee9e45300bb41` (`fix(ui): keep Today voice card visible in landscape`) created. Documentation handoff and branch push are pending verification; preserve owner ADR-012 and keep `main` unchanged.
+
 ## ACT-0279 — 2026-11-19 — Post-cold-boot lineage on populated synthetic user 10
 
 - Branch `ui/redesign-v1`; starting HEAD `e682502e2fab08bd5def7492e0c1d0115849d9e9`. Android 14/API34 emulator `emulator-5554`, explicitly named synthetic user 10. No user 0 or personal data inspected.
