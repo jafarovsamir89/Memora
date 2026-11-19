@@ -51,6 +51,12 @@ internal object SyntheticFinanceUiJourneyProbe {
     private const val ADVANCE_TURN_ID = "00000000-0000-4000-8000-000000000290"
     private const val ADVANCE_RESULT_ID = "00000000-0000-4000-8000-000000000291"
     private const val TASK_RESULT_ID = "00000000-0000-4000-8000-000000000292"
+    private const val AMBIGUOUS_TURN_ID = "00000000-0000-4000-8000-000000000294"
+    private const val AMBIGUOUS_RESULT_ID = "00000000-0000-4000-8000-000000000295"
+    private const val AMBIGUOUS_USER_MESSAGE =
+        "Sintetik yoxlama: Ruslan mənə 150 manat qaytardı; hansı Ruslan olduğunu dəqiqləşdirin."
+    private const val AMBIGUOUS_MODEL_MESSAGE =
+        "Hansı Ruslanı nəzərdə tutursunuz? Qeydi dəqiqləşdirmədən heç nə saxlamadım."
     private const val TASK_COMMAND_ID = "synthetic-p0-3-task-create"
     private const val TASK_TITLE = "Synthetic confirm BMW repair appointment"
     private const val TIME = "2026-11-18T12:00:00Z"
@@ -347,6 +353,49 @@ internal object SyntheticFinanceUiJourneyProbe {
             check(AppRoute.source(sourceTurn) != null) { "synthetic_journey_source_route_rejected" }
             check(AppRoute.source(advanceSourceTurn) != null) { "synthetic_journey_bmw_source_route_rejected" }
 
+            val ambiguousFinanceEventsBefore = runBlocking { dao.moneyEvents(scope).size }
+            val expectedAmbiguousResult = AgentActionResultRow(
+                resultId = AMBIGUOUS_RESULT_ID,
+                scopeId = scope,
+                turnId = AMBIGUOUS_TURN_ID,
+                toolName = "record_money_event",
+                status = "NEEDS_CONFIRMATION",
+                code = "person_name_ambiguous",
+                targetKind = null,
+                targetId = null,
+                createdAtMillis = TURN_TIME + 2,
+            )
+            val ambiguousConversation = ProtectedConversationRepository(database)
+            val existingAmbiguousMessages = runBlocking {
+                dao.conversationMessagesForTurn(scope, AMBIGUOUS_TURN_ID)
+            }
+            val existingAmbiguousResults = runBlocking {
+                ambiguousConversation.actionResults(scope, AMBIGUOUS_TURN_ID)
+            }
+            if (existingAmbiguousMessages.isEmpty() && existingAmbiguousResults.isEmpty()) {
+                runBlocking {
+                    ambiguousConversation.appendTurn(scope, AMBIGUOUS_TURN_ID,
+                        AMBIGUOUS_USER_MESSAGE, AMBIGUOUS_MODEL_MESSAGE, TURN_TIME + 2,
+                        listOf(expectedAmbiguousResult))
+                }
+            }
+            val ambiguousMessages = runBlocking {
+                dao.conversationMessagesForTurn(scope, AMBIGUOUS_TURN_ID)
+            }
+            val ambiguousResults = runBlocking {
+                ambiguousConversation.actionResults(scope, AMBIGUOUS_TURN_ID)
+            }
+            check(ambiguousMessages.size == 2 && ambiguousMessages.map { it.role to it.message }.toSet() == setOf(
+                "user" to AMBIGUOUS_USER_MESSAGE, "model" to AMBIGUOUS_MODEL_MESSAGE,
+            )) { "synthetic_journey_ambiguous_conversation_readback_mismatch" }
+            check(ambiguousResults == listOf(expectedAmbiguousResult)) {
+                "synthetic_journey_ambiguous_result_readback_mismatch"
+            }
+            val ambiguousFinanceEventsAfter = runBlocking { dao.moneyEvents(scope).size }
+            check(ambiguousFinanceEventsAfter == ambiguousFinanceEventsBefore) {
+                "synthetic_journey_ambiguity_created_finance_event"
+            }
+
             result.putString("status", "synthetic_finance_ui_journey_fixture_passed")
             result.putString("finance_event_id", EVENT_ID)
             result.putString("conversation_turn_id", TURN_ID)
@@ -369,6 +418,15 @@ internal object SyntheticFinanceUiJourneyProbe {
             result.putInt("bmw_action_result_count", bmwActions.size)
             result.putInt("task_event_count", runBlocking { dao.taskEvents(TASK_ID, scope).size })
             result.putInt("case_evidence_count", caseSnapshot.evidence.size)
+            result.putString("ambiguous_turn_id", AMBIGUOUS_TURN_ID)
+            result.putString("ambiguous_result_id", AMBIGUOUS_RESULT_ID)
+            result.putInt("ambiguous_message_count", ambiguousMessages.size)
+            result.putInt("ambiguous_action_result_count", ambiguousResults.size)
+            result.putInt("ambiguous_finance_events_before", ambiguousFinanceEventsBefore)
+            result.putInt("ambiguous_finance_events_after", ambiguousFinanceEventsAfter)
+            result.putString("ambiguous_status", ambiguousResults.single().status)
+            result.putString("ambiguous_code", ambiguousResults.single().code)
+            result.putString("ambiguous_target_present", (ambiguousResults.single().targetId != null).toString())
             result
         }.getOrElse { error ->
             result.putString("status", "synthetic_finance_ui_journey_fixture_failed")

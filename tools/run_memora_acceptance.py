@@ -318,15 +318,86 @@ def swipe_ui(serial: str, out_dir: Path, name: str,
 
 def scroll_to_top_and_wait_for_ui_texts(serial: str, out_dir: Path, name: str,
                                         expected: set[str]) -> ET.Element:
-    """Restore the top of a saved detail scroll position before checking header fields."""
-    swipe_ui(serial, out_dir, f"{name}-scroll-to-top", 0.5, 0.34, 0.5, 0.76)
+    """Boundedly restore a detail header if Android Back retained a lower scroll offset."""
+    scroll_until_ui_texts(serial, out_dir, f"{name}-scroll-to-top", expected,
+                          direction="down", max_swipes=8)
     return wait_for_ui_texts(serial, out_dir, name, expected)
 
 
+def launch_synthetic_today(serial: str, out_dir: Path) -> ET.Element:
+    """Restart both instrumented and app processes, then wait for a stable home screen."""
+    adb(serial, "shell", "am", "force-stop", "--user", "10", TEST_PACKAGE)
+    adb(serial, "shell", "am", "force-stop", "--user", "10", PACKAGE)
+    adb(serial, "shell", "am", "start", "--user", "10", "-n", f"{PACKAGE}/.MainActivity")
+    return wait_for_ui_texts(serial, out_dir, "today-ready", {"Bu gün", "Katibə"}, stable_samples=3)
+
+
+def scroll_until_ui_texts(serial: str, out_dir: Path, name: str, expected: set[str],
+                         direction: str, max_swipes: int = 8) -> ET.Element:
+    if direction not in {"up", "down"} or max_swipes < 0:
+        raise ValueError("scroll search requires a bounded up/down direction")
+    start_y, end_y = (0.72, 0.34) if direction == "up" else (0.34, 0.72)
+    for attempt in range(max_swipes + 1):
+        root = ui_tree(serial, out_dir, f"{name}-{attempt + 1}")
+        if expected.issubset(ui_texts(root)):
+            return root
+        if attempt < max_swipes:
+            swipe_ui(serial, out_dir, f"{name}-swipe-{attempt + 1}", 0.92, start_y, 0.92, end_y)
+    raise RuntimeError(f"expected emulator UI text not found after {max_swipes} bounded {direction} swipes: {sorted(expected)}")
+
+
+def scroll_until_ui_texts_either_direction(serial: str, out_dir: Path, name: str,
+                                            expected: set[str], max_swipes: int = 8) -> ET.Element:
+    """Find exact content from a restored list position without assuming its end."""
+    failures: list[str] = []
+    for direction in ("up", "down"):
+        try:
+            return scroll_until_ui_texts(serial, out_dir, name, expected, direction, max_swipes)
+        except RuntimeError as error:
+            failures.append(f"{direction}: {error}")
+    raise RuntimeError(
+        f"expected emulator UI text not found after bounded searches in both directions: "
+        f"{sorted(expected)}; {'; '.join(failures)}"
+    )
+
+
+def capture_bmw_conversation_action_screenshots(serial: str, out_dir: Path) -> list[str]:
+    """Verify each persisted result card in its visible viewport, then restore the finance card."""
+    screenshots = out_dir / "screenshots"
+    task_action = "Bölməni aç Tapşırıqlar"
+    task_title = "Synthetic confirm BMW repair appointment"
+
+    # Saved state may reopen either end of history, and action labels repeat.
+    # Search in both directions, bounded, for the unique BMW task card.
+    scroll_until_ui_texts_either_direction(
+        serial, out_dir, "secretary-focus-latest-bmw-turn", {task_action, task_title}
+    )
+    wait_for_ui_texts(serial, out_dir, "secretary-bmw-task-action", {task_action, task_title}, stable_samples=2)
+    task_path = screenshots / "p0-3-bmw-conversation-task-action.png"
+    screenshot(serial, task_path)
+
+    finance_action = "Bölməni aç Maliyyə"
+    finance_description = "Synthetic BMW repair advance received."
+    scroll_until_ui_texts(
+        serial, out_dir, "secretary-focus-bmw-finance-action",
+        {finance_action, finance_description}, direction="up", max_swipes=8,
+    )
+    wait_for_ui_texts(serial, out_dir, "secretary-bmw-finance-action",
+                      {finance_action, finance_description}, stable_samples=2)
+    finance_path = screenshots / "p0-3-bmw-conversation-finance-action.png"
+    screenshot(serial, finance_path)
+    return [str(path.relative_to(ROOT)) for path in (task_path, finance_path)]
+
+
 def wait_for_ui_texts(serial: str, out_dir: Path, name: str, expected: set[str],
-                      timeout_seconds: float = 25.0) -> ET.Element:
+                      timeout_seconds: float = 25.0,
+                      stable_samples: int = 1) -> ET.Element:
+    if stable_samples < 1:
+        raise ValueError("stable UI sample count must be at least one")
     deadline = time.monotonic() + timeout_seconds
     last_texts: set[str] = set()
+    last_matching_texts: frozenset[str] | None = None
+    matching_samples = 0
     last_error: Exception | None = None
     attempt = 0
     while time.monotonic() < deadline:
@@ -335,10 +406,22 @@ def wait_for_ui_texts(serial: str, out_dir: Path, name: str, expected: set[str],
             root = ui_tree(serial, out_dir, f"{name}-{attempt}")
             last_texts = ui_texts(root)
             if expected.issubset(last_texts):
-                return root
+                signature = frozenset(last_texts)
+                if signature == last_matching_texts:
+                    matching_samples += 1
+                else:
+                    last_matching_texts = signature
+                    matching_samples = 1
+                if matching_samples >= stable_samples:
+                    return root
+            else:
+                last_matching_texts = None
+                matching_samples = 0
             last_error = None
         except (RuntimeError, subprocess.CalledProcessError, subprocess.TimeoutExpired) as error:
             last_error = error
+            last_matching_texts = None
+            matching_samples = 0
         time.sleep(0.35)
     if last_error:
         raise RuntimeError(f"emulator UI did not stabilize for {name}: {type(last_error).__name__}") from last_error
@@ -350,19 +433,11 @@ def capture_finance_ui_journey(serial: str, out_dir: Path) -> list[str]:
     """Drive exact Finance and linked Case → Person → Finance → Task → source routes."""
     screenshots = out_dir / "screenshots"
     screenshot_names: list[str] = []
-    adb(serial, "shell", "am", "force-stop", "--user", "10", PACKAGE)
-    adb(serial, "shell", "am", "start", "--user", "10", "-n", f"{PACKAGE}/.MainActivity")
-    wait_for_ui_texts(serial, out_dir, "today-ready", {"Katibə"})
+    launch_synthetic_today(serial, out_dir)
     tap_ui_text(serial, out_dir, "today-before-secretary", "Katibə", minimum_center_y_fraction=0.8)
     bmw_user_message = "Sintetik ssenari: Synthetic Elçin BMW təmiri üçün 100 AZN avans verdi; servis görüşünü təsdiqlə."
     bmw_model_message = "Sintetik ssenari: 300 AZN razılaşdırılıb, 100 AZN avans alınıb və 200 AZN qalıb; görüş tapşırığı yaradılıb."
-    wait_for_ui_texts(serial, out_dir, "secretary-bmw-advance-turn", {
-        "Bölməni aç Maliyyə",
-        "Bölməni aç Tapşırıqlar",
-    })
-    screenshot_path = screenshots / "p0-3-bmw-conversation-actions.png"
-    screenshot(serial, screenshot_path)
-    screenshot_names.append(str(screenshot_path.relative_to(ROOT)))
+    screenshot_names.extend(capture_bmw_conversation_action_screenshots(serial, out_dir))
 
     tap_ui_text(serial, out_dir, "secretary-before-bmw-advance", "Bölməni aç Maliyyə")
     finance_expected = {
@@ -440,10 +515,17 @@ def capture_finance_ui_journey(serial: str, out_dir: Path) -> list[str]:
     screenshot(serial, screenshot_path)
     screenshot_names.append(str(screenshot_path.relative_to(ROOT)))
 
-    swipe_ui(serial, out_dir, "task-source-scroll-to-conversation", 0.5, 0.76, 0.5, 0.3)
+    scroll_until_ui_texts(
+        serial, out_dir, "task-source-open-conversation", {"Söhbəti katibədə aç"},
+        direction="up", max_swipes=8,
+    )
     wait_for_ui_texts(serial, out_dir, "task-source-open-conversation", {"Söhbəti katibədə aç"})
     tap_ui_text(serial, out_dir, "task-source-open-exact-conversation", "Söhbəti katibədə aç")
-    wait_for_ui_texts(serial, out_dir, "task-source-exact-conversation", task_source_expected)
+    # The focused Secretary route shows the two exact messages. Action-result status is
+    # verified by the preceding task/source screens and repository readback; it may be
+    # outside the message viewport while both focused messages are visible.
+    exact_conversation_expected = {bmw_user_message, bmw_model_message}
+    wait_for_ui_texts(serial, out_dir, "task-source-exact-conversation", exact_conversation_expected)
     screenshot_path = screenshots / "p0-3-task-source-exact-conversation.png"
     screenshot(serial, screenshot_path)
     screenshot_names.append(str(screenshot_path.relative_to(ROOT)))
@@ -474,13 +556,36 @@ def capture_finance_ui_journey(serial: str, out_dir: Path) -> list[str]:
     screenshot_names.append(str(screenshot_path.relative_to(ROOT)))
     adb(serial, "shell", "input", "keyevent", "4")
     wait_for_ui_texts(serial, out_dir, "case-back-to-origin-secretary", {
-        bmw_user_message,
-        bmw_model_message,
+        "Synthetic BMW repair advance received.",
+        "Məbləğ: 100,00 AZN",
+        "Bölməni aç Maliyyə",
     })
     screenshot_path = screenshots / "p0-3-case-back-to-origin-secretary.png"
     screenshot(serial, screenshot_path)
     screenshot_names.append(str(screenshot_path.relative_to(ROOT)))
     return screenshot_names
+
+
+def capture_ambiguous_ui(serial: str, out_dir: Path) -> str:
+    """Show the persistent synthetic clarification card and its no-write explanation."""
+    launch_synthetic_today(serial, out_dir)
+    tap_ui_text(serial, out_dir, "today-before-ambiguous-secretary", "Katibə", minimum_center_y_fraction=0.8)
+    messages = {
+        "Sintetik yoxlama: Ruslan mənə 150 manat qaytardı; hansı Ruslan olduğunu dəqiqləşdirin.",
+        "Hansı Ruslanı nəzərdə tutursunuz? Qeydi dəqiqləşdirmədən heç nə saxlamadım.",
+    }
+    wait_for_ui_texts(serial, out_dir, "secretary-ambiguous-messages", messages, stable_samples=2)
+    card = {
+        "Təsdiq gözlənilir",
+        "Təsdiq verilməyənədək heç bir dəyişiklik edilməyib.",
+    }
+    scroll_until_ui_texts_either_direction(
+        serial, out_dir, "secretary-ambiguous-no-write", card, max_swipes=4
+    )
+    wait_for_ui_texts(serial, out_dir, "secretary-ambiguous-no-write", messages | card, stable_samples=2)
+    screenshot_path = out_dir / "screenshots" / "p0-3-ambiguous-no-write.png"
+    screenshot(serial, screenshot_path)
+    return str(screenshot_path.relative_to(ROOT))
 
 
 def package_metadata(package_info: str) -> tuple[int, str]:
@@ -1111,6 +1216,19 @@ def run_synthetic_finance_ui_journey_probe(serial: str, user_id: int,
         if fields.get("bmw_conversation_message_count", "").isdigit() else None,
         "bmw_action_result_count": int(fields["bmw_action_result_count"])
         if fields.get("bmw_action_result_count", "").isdigit() else None,
+        "ambiguous_turn_id": fields.get("ambiguous_turn_id"),
+        "ambiguous_result_id": fields.get("ambiguous_result_id"),
+        "ambiguous_message_count": int(fields["ambiguous_message_count"])
+        if fields.get("ambiguous_message_count", "").isdigit() else None,
+        "ambiguous_action_result_count": int(fields["ambiguous_action_result_count"])
+        if fields.get("ambiguous_action_result_count", "").isdigit() else None,
+        "ambiguous_finance_events_before": int(fields["ambiguous_finance_events_before"])
+        if fields.get("ambiguous_finance_events_before", "").isdigit() else None,
+        "ambiguous_finance_events_after": int(fields["ambiguous_finance_events_after"])
+        if fields.get("ambiguous_finance_events_after", "").isdigit() else None,
+        "ambiguous_status": fields.get("ambiguous_status"),
+        "ambiguous_code": fields.get("ambiguous_code"),
+        "ambiguous_target_present": fields.get("ambiguous_target_present"),
         "network_used": False,
         "model_used": "NOT APPLICABLE",
         "data_scope": "named synthetic Android user 10 only; app repository readback; idempotent additive fixture; no deletion",
@@ -1137,10 +1255,33 @@ def run_synthetic_finance_ui_journey_probe(serial: str, user_id: int,
                 "model_used": "NOT APPLICABLE",
                 "data_scope": "synthetic Android user 10 only; no UI write actions or data cleanup",
             })
+        try:
+            ambiguous_screenshot = capture_ambiguous_ui(serial, out_dir)
+            steps.append({
+                "name": "persistent_ambiguous_finance_clarification_ui",
+                "status": "PASS",
+                "screenshot": ambiguous_screenshot,
+                "assertions": [
+                    "exact synthetic request and clarification are visible",
+                    "localized NEEDS_CONFIRMATION status and no-write explanation are visible",
+                ],
+                "network_used": False,
+                "model_used": "NOT APPLICABLE; persistent synthetic UI fixture",
+                "data_scope": "synthetic Android user 10 only; no UI write actions or data cleanup",
+            })
+        except (RuntimeError, subprocess.CalledProcessError, subprocess.TimeoutExpired) as error:
+            steps.append({
+                "name": "persistent_ambiguous_finance_clarification_ui",
+                "status": "FAIL",
+                "reason": scrub(f"{type(error).__name__}: {error}"),
+                "network_used": False,
+                "model_used": "NOT APPLICABLE; persistent synthetic UI fixture",
+                "data_scope": "synthetic Android user 10 only; no UI write actions or data cleanup",
+            })
 
 
 def validate_bmw_ui_fixture_readback(fields: dict[str, str]) -> tuple[bool, dict[str, bool]]:
-    """Fail closed unless the synthetic 300/100/200 BMW path and exact links read back."""
+    """Fail closed unless the BMW links and persistent ambiguous no-write fixture read back."""
     expected = {
         "obligation_minor_units": 30_000,
         "advance_minor_units": 10_000,
@@ -1150,8 +1291,16 @@ def validate_bmw_ui_fixture_readback(fields: dict[str, str]) -> tuple[bool, dict
         "case_evidence_count": 4,
         "bmw_conversation_message_count": 2,
         "bmw_action_result_count": 2,
+        "ambiguous_message_count": 2,
+        "ambiguous_action_result_count": 1,
     }
     checks = {key: fields.get(key) == str(value) for key, value in expected.items()}
+    before = fields.get("ambiguous_finance_events_before")
+    after = fields.get("ambiguous_finance_events_after")
+    checks["ambiguous_finance_events_unchanged"] = before is not None and before == after
+    checks["ambiguous_status"] = fields.get("ambiguous_status") == "NEEDS_CONFIRMATION"
+    checks["ambiguous_code"] = fields.get("ambiguous_code") == "person_name_ambiguous"
+    checks["ambiguous_has_no_target"] = fields.get("ambiguous_target_present") == "false"
     checks["fixture_status"] = fields.get("status") == "synthetic_finance_ui_journey_fixture_passed"
     return all(checks.values()), checks
 

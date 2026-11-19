@@ -5,7 +5,7 @@ import tempfile
 import unittest
 from pathlib import Path
 from types import SimpleNamespace
-from unittest.mock import patch
+from unittest.mock import call, patch
 
 
 SCRIPT = Path(__file__).resolve().parents[1] / "run_memora_acceptance.py"
@@ -85,17 +85,180 @@ class StartupProbeMetricTests(unittest.TestCase):
 
 
 class UiHierarchyTests(unittest.TestCase):
+    def test_synthetic_home_restart_stops_instrumentation_before_main_activity(self) -> None:
+        out_dir = Path("/tmp/memora-home")
+        home = lab.ET.fromstring('<hierarchy><node text="Bu gün"/><node text="Katibə"/></hierarchy>')
+        with patch.object(lab, "adb") as adb, \
+             patch.object(lab, "wait_for_ui_texts", return_value=home) as wait:
+            result = lab.launch_synthetic_today("emulator-5556", out_dir)
+
+        self.assertIs(result, home)
+        self.assertEqual(adb.call_args_list, [
+            call("emulator-5556", "shell", "am", "force-stop", "--user", "10", lab.TEST_PACKAGE),
+            call("emulator-5556", "shell", "am", "force-stop", "--user", "10", lab.PACKAGE),
+            call("emulator-5556", "shell", "am", "start", "--user", "10", "-n", "ai.memora.app/.MainActivity"),
+        ])
+        wait.assert_called_once_with("emulator-5556", out_dir, "today-ready", {"Bu gün", "Katibə"}, stable_samples=3)
+
+    def test_scroll_until_texts_uses_bounded_directional_search(self) -> None:
+        old = lab.ET.fromstring('<hierarchy><node text="Older turn"/></hierarchy>')
+        target = lab.ET.fromstring('<hierarchy><node text="Exact BMW task"/></hierarchy>')
+        with patch.object(lab, "ui_tree", side_effect=[old, target]) as tree, \
+             patch.object(lab, "swipe_ui") as swipe:
+            result = lab.scroll_until_ui_texts("emulator-5556", Path("/tmp"), "find-bmw",
+                                               {"Exact BMW task"}, "up", max_swipes=4)
+
+        self.assertIs(result, target)
+        self.assertEqual(tree.call_count, 2)
+        swipe.assert_called_once_with("emulator-5556", Path("/tmp"), "find-bmw-swipe-1", 0.92, 0.72, 0.92, 0.34)
+
+    def test_scroll_search_tries_the_other_direction_after_saved_state_boundary(self) -> None:
+        target = lab.ET.fromstring('<hierarchy><node text="Exact BMW task"/></hierarchy>')
+        with patch.object(lab, "scroll_until_ui_texts", side_effect=[RuntimeError("up boundary"), target]) as search:
+            result = lab.scroll_until_ui_texts_either_direction(
+                "emulator-5556", Path("/tmp"), "find-bmw", {"Exact BMW task"}, max_swipes=2
+            )
+
+        self.assertIs(result, target)
+        self.assertEqual(search.call_args_list, [
+            call("emulator-5556", Path("/tmp"), "find-bmw", {"Exact BMW task"}, "up", 2),
+            call("emulator-5556", Path("/tmp"), "find-bmw", {"Exact BMW task"}, "down", 2),
+        ])
+
+    def test_conversation_action_screenshots_visit_both_cards_and_restore_finance(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            out_dir = Path(directory)
+            with patch.object(lab, "wait_for_ui_texts") as wait, \
+                 patch.object(lab, "scroll_until_ui_texts_either_direction") as scroll, \
+                 patch.object(lab, "scroll_until_ui_texts") as directional_scroll, \
+                 patch.object(lab, "swipe_ui") as swipe, \
+                 patch.object(lab, "screenshot") as capture, \
+                 patch.object(lab, "ROOT", out_dir):
+                paths = lab.capture_bmw_conversation_action_screenshots("emulator-5556", out_dir)
+
+        self.assertEqual(len(paths), 2)
+        self.assertTrue(paths[0].endswith("p0-3-bmw-conversation-task-action.png"))
+        self.assertTrue(paths[1].endswith("p0-3-bmw-conversation-finance-action.png"))
+        scroll.assert_called_once_with("emulator-5556", out_dir, "secretary-focus-latest-bmw-turn",
+                                       {"Bölməni aç Tapşırıqlar", "Synthetic confirm BMW repair appointment"})
+        directional_scroll.assert_called_once_with("emulator-5556", out_dir,
+            "secretary-focus-bmw-finance-action",
+            {"Bölməni aç Maliyyə", "Synthetic BMW repair advance received."},
+            direction="up", max_swipes=8)
+        self.assertEqual(wait.call_args_list, [
+            call("emulator-5556", out_dir, "secretary-bmw-task-action", {
+                "Bölməni aç Tapşırıqlar", "Synthetic confirm BMW repair appointment",
+            }, stable_samples=2),
+            call("emulator-5556", out_dir, "secretary-bmw-finance-action", {
+                "Bölməni aç Maliyyə", "Synthetic BMW repair advance received.",
+            }, stable_samples=2),
+        ])
+        swipe.assert_not_called()
+        self.assertEqual(capture.call_count, 2)
+
+    def test_exact_conversation_route_requires_both_messages_not_offscreen_action_status(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            out_dir = Path(directory)
+            with patch.object(lab, "launch_synthetic_today"), \
+                 patch.object(lab, "tap_ui_text"), \
+                 patch.object(lab, "capture_bmw_conversation_action_screenshots", return_value=[]), \
+                 patch.object(lab, "wait_for_ui_texts") as wait, \
+                 patch.object(lab, "scroll_to_top_and_wait_for_ui_texts"), \
+                 patch.object(lab, "scroll_until_ui_texts") as source_scroll, \
+                 patch.object(lab, "swipe_ui"), \
+                 patch.object(lab, "screenshot"), \
+                 patch.object(lab, "adb"), \
+                 patch.object(lab, "ROOT", out_dir):
+                lab.capture_finance_ui_journey("emulator-5556", out_dir)
+
+        exact_conversation = next(call.args[3] for call in wait.call_args_list
+                                  if call.args[2] == "task-source-exact-conversation")
+        self.assertEqual(exact_conversation, {
+            "Sintetik ssenari: Synthetic Elçin BMW təmiri üçün 100 AZN avans verdi; servis görüşünü təsdiqlə.",
+            "Sintetik ssenari: 300 AZN razılaşdırılıb, 100 AZN avans alınıb və 200 AZN qalıb; görüş tapşırığı yaradılıb.",
+        })
+        source_scroll.assert_called_once_with(
+            "emulator-5556", out_dir, "task-source-open-conversation", {"Söhbəti katibədə aç"},
+            direction="up", max_swipes=8,
+        )
+        source_detail = next(call.args[3] for call in wait.call_args_list
+                             if call.args[2] == "task-exact-source")
+        self.assertIn("Yadda saxlanıldı", source_detail)
+        restored_secretary = next(call.args[3] for call in wait.call_args_list
+                                  if call.args[2] == "case-back-to-origin-secretary")
+        self.assertEqual(restored_secretary, {
+            "Synthetic BMW repair advance received.",
+            "Məbləğ: 100,00 AZN",
+            "Bölməni aç Maliyyə",
+        })
+
+    def test_ambiguous_ui_capture_waits_for_clarification_and_no_write_status(self) -> None:
+        root = lab.ET.fromstring("""<hierarchy>
+          <node text="Sintetik yoxlama: Ruslan mənə 150 manat qaytardı; hansı Ruslan olduğunu dəqiqləşdirin." />
+          <node text="Hansı Ruslanı nəzərdə tutursunuz? Qeydi dəqiqləşdirmədən heç nə saxlamadım." />
+          <node text="Təsdiq gözlənilir" />
+          <node text="Təsdiq verilməyənədək heç bir dəyişiklik edilməyib." />
+        </hierarchy>""")
+        with tempfile.TemporaryDirectory() as directory:
+            out_dir = Path(directory)
+            with patch.object(lab, "launch_synthetic_today"), \
+                 patch.object(lab, "tap_ui_text") as tap, \
+                 patch.object(lab, "wait_for_ui_texts") as wait, \
+                 patch.object(lab, "scroll_until_ui_texts_either_direction") as scroll, \
+                 patch.object(lab, "screenshot") as capture, \
+                 patch.object(lab, "ROOT", out_dir):
+                path = lab.capture_ambiguous_ui("emulator-5556", out_dir)
+
+        self.assertTrue(path.endswith("p0-3-ambiguous-no-write.png"))
+        tap.assert_called_once_with("emulator-5556", out_dir, "today-before-ambiguous-secretary", "Katibə",
+                                    minimum_center_y_fraction=0.8)
+        self.assertEqual(wait.call_args_list[0], call("emulator-5556", out_dir, "secretary-ambiguous-messages", {
+            "Sintetik yoxlama: Ruslan mənə 150 manat qaytardı; hansı Ruslan olduğunu dəqiqləşdirin.",
+            "Hansı Ruslanı nəzərdə tutursunuz? Qeydi dəqiqləşdirmədən heç nə saxlamadım.",
+        }, stable_samples=2))
+        self.assertEqual(wait.call_args_list[1], call("emulator-5556", out_dir, "secretary-ambiguous-no-write", {
+            "Sintetik yoxlama: Ruslan mənə 150 manat qaytardı; hansı Ruslan olduğunu dəqiqləşdirin.",
+            "Hansı Ruslanı nəzərdə tutursunuz? Qeydi dəqiqləşdirmədən heç nə saxlamadım.",
+            "Təsdiq gözlənilir",
+            "Təsdiq verilməyənədək heç bir dəyişiklik edilməyib.",
+        }, stable_samples=2))
+        scroll.assert_called_once_with("emulator-5556", out_dir, "secretary-ambiguous-no-write", {
+            "Təsdiq gözlənilir",
+            "Təsdiq verilməyənədək heç bir dəyişiklik edilməyib.",
+        }, max_swipes=4)
+        capture.assert_called_once()
+
+    def test_wait_for_ui_texts_ignores_stale_navigation_during_activity_start(self) -> None:
+        roots = [
+            lab.ET.fromstring('<hierarchy><node text="Katibə"/><node text="Old conversation"/></hierarchy>'),
+            lab.ET.fromstring('<hierarchy><node text="Memora"/><node text="Loading"/></hierarchy>'),
+            lab.ET.fromstring('<hierarchy><node text="Katibə"/><node text="Today"/></hierarchy>'),
+            lab.ET.fromstring('<hierarchy><node text="Katibə"/><node text="Today"/></hierarchy>'),
+        ]
+        with patch.object(lab, "ui_tree", side_effect=roots) as tree, \
+             patch.object(lab.time, "sleep"):
+            result = lab.wait_for_ui_texts(
+                "emulator-5556", Path("/tmp"), "home", {"Katibə"},
+                timeout_seconds=2.0, stable_samples=2,
+            )
+
+        self.assertEqual(lab.ui_texts(result), {"Katibə", "Today"})
+        self.assertEqual(tree.call_count, 4)
+
     def test_finance_detail_header_is_checked_after_restoring_saved_scroll_position(self) -> None:
         events: list[tuple[str, tuple[object, ...]]] = []
         expected = {"100,00 AZN", "Daxil olan pul"}
-        with patch.object(lab, "swipe_ui", side_effect=lambda *args: events.append(("swipe", args))), \
+        with patch.object(lab, "scroll_until_ui_texts", side_effect=lambda *args, **kwargs: events.append(("scroll", args + (kwargs,)))), \
              patch.object(lab, "wait_for_ui_texts", side_effect=lambda *args: events.append(("wait", args))):
             lab.scroll_to_top_and_wait_for_ui_texts(
                 "emulator-5556", Path("/tmp"), "finance-detail", expected
             )
 
-        self.assertEqual([event[0] for event in events], ["swipe", "wait"])
-        self.assertEqual(events[0][1][2:], ("finance-detail-scroll-to-top", 0.5, 0.34, 0.5, 0.76))
+        self.assertEqual([event[0] for event in events], ["scroll", "wait"])
+        self.assertEqual(events[0][1], (
+            "emulator-5556", Path("/tmp"), "finance-detail-scroll-to-top", expected,
+            {"direction": "down", "max_swipes": 8},
+        ))
         self.assertEqual(events[1][1][2:], ("finance-detail", expected))
 
     def test_ui_bounds_parse_android_accessibility_bounds(self) -> None:
@@ -182,6 +345,13 @@ class ReportSafetyTests(unittest.TestCase):
             "case_evidence_count": "4",
             "bmw_conversation_message_count": "2",
             "bmw_action_result_count": "2",
+            "ambiguous_message_count": "2",
+            "ambiguous_action_result_count": "1",
+            "ambiguous_finance_events_before": "3",
+            "ambiguous_finance_events_after": "3",
+            "ambiguous_status": "NEEDS_CONFIRMATION",
+            "ambiguous_code": "person_name_ambiguous",
+            "ambiguous_target_present": "false",
         }
         passed, checks = lab.validate_bmw_ui_fixture_readback(fields)
         self.assertTrue(passed)
@@ -198,12 +368,20 @@ class ReportSafetyTests(unittest.TestCase):
             "case_evidence_count": "3",
             "bmw_conversation_message_count": "2",
             "bmw_action_result_count": "1",
+            "ambiguous_message_count": "2",
+            "ambiguous_action_result_count": "1",
+            "ambiguous_finance_events_before": "3",
+            "ambiguous_finance_events_after": "4",
+            "ambiguous_status": "NEEDS_CONFIRMATION",
+            "ambiguous_code": "person_name_ambiguous",
+            "ambiguous_target_present": "false",
         }
         passed, checks = lab.validate_bmw_ui_fixture_readback(fields)
         self.assertFalse(passed)
         self.assertFalse(checks["outstanding_minor_units"])
         self.assertFalse(checks["case_evidence_count"])
         self.assertFalse(checks["bmw_action_result_count"])
+        self.assertFalse(checks["ambiguous_finance_events_unchanged"])
 
     def test_volume_report_preserves_conversation_count_paging_and_measurements(self) -> None:
         report = lab.volume_probe_measurements({

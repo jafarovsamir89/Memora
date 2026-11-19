@@ -475,7 +475,9 @@ class UiShellTest {
                     ))
             }
         }
-        compose.waitUntil(10_000) { compose.onAllNodesWithTag("chat_turn_${turnId}_model").fetchSemanticsNodes().isNotEmpty() }
+        compose.waitUntil(10_000) { compose.onAllNodesWithTag("action_result_${turnId}_0").fetchSemanticsNodes().isNotEmpty() }
+        compose.onNodeWithTag("chat_history").performScrollToNode(hasTestTag("chat_turn_${turnId}_model"))
+        compose.onNodeWithTag("chat_turn_${turnId}_model").assertIsDisplayed()
         compose.onNodeWithTag("action_result_${turnId}_0").performScrollTo().assertIsDisplayed()
         compose.waitUntil(10_000) {
             compose.onAllNodesWithText("Mənbə: Synthetic action fixture", substring = true)
@@ -504,6 +506,48 @@ class UiShellTest {
         compose.onNodeWithTag("action_target_$targetId").assertExists()
         compose.onNodeWithText("Synthetic receipt detail").assertExists()
         Unit
+    }
+
+    @Test fun secretaryAmbiguityCardShowsNoWriteAndOffersNoTargetOrCorrection() = kotlinx.coroutines.runBlocking<Unit> {
+        val context = ApplicationProvider.getApplicationContext<Context>()
+        val processor = ai.memora.app.voice.AgentVoiceTurnProcessor(context, agentDatabase.database)
+        val scopeId = processor.conversationScopeId()
+        val turnId = UUID.randomUUID().toString()
+        val before = agentDatabase.database.protectedStoreDao().moneyEvents(scopeId).size
+        ai.memora.app.data.protectedstore.ProtectedConversationRepository(agentDatabase.database).appendTurn(
+            scopeId,
+            turnId,
+            "Sintetik yoxlama: Ruslan mənə 150 manat qaytardı; hansı Ruslan olduğunu dəqiqləşdirin.",
+            "Hansı Ruslanı nəzərdə tutursunuz? Qeydi dəqiqləşdirmədən heç nə saxlamadım.",
+            1_800_000_000_100L,
+            listOf(ai.memora.app.data.protectedstore.AgentActionResultRow(
+                UUID.randomUUID().toString(), scopeId, turnId, "record_money_event", "NEEDS_CONFIRMATION",
+                "person_name_ambiguous", null, null, 1_800_000_000_100L,
+            )),
+        )
+        val after = agentDatabase.database.protectedStoreDao().moneyEvents(scopeId).size
+        Assert.assertEquals(before, after)
+
+        compose.setContent {
+            CompositionLocalProvider(LocalAgentDatabaseOverride provides agentDatabase.database) {
+                TestMemoraApp(initialRoute = "chat", initialLanguage = "az", capturePersistenceOverride = captureStore,
+                    appearanceStoreOverride = AtomicAppearanceStore(
+                        File(context.cacheDir, "ui-ambiguity-${UUID.randomUUID()}"), AppearanceSettings("az", "light"),
+                    ))
+            }
+        }
+        compose.waitUntil(10_000) {
+            compose.onAllNodesWithTag("action_result_${turnId}_0").fetchSemanticsNodes().isNotEmpty()
+        }
+        compose.onNodeWithTag("action_result_${turnId}_0").performScrollTo()
+        compose.onNodeWithTag("chat_turn_${turnId}_user").assertExists()
+        compose.onNodeWithTag("chat_turn_${turnId}_model").assertExists()
+        compose.onNodeWithTag("action_status_label").performScrollTo().assertIsDisplayed()
+        compose.onNodeWithText("Təsdiq gözlənilir").assertExists()
+        compose.onNodeWithText("Təsdiq verilməyənədək heç bir dəyişiklik edilməyib.").assertExists()
+        compose.onNodeWithText("Yadda saxlanıldı").assertDoesNotExist()
+        compose.onAllNodesWithTag("action_open_related").assertCountEquals(0)
+        compose.onAllNodesWithTag("action_prepare_correction").assertCountEquals(0)
     }
 
     @Test fun failedTextTurnKeepsTheOriginalDraftAndDoesNotRetryAutomatically() {
@@ -588,11 +632,13 @@ class UiShellTest {
         val callbackSeen = kotlinx.coroutines.CompletableDeferred<Unit>()
         val finishTurn = kotlinx.coroutines.CompletableDeferred<ai.memora.app.voice.VoiceFirstResult>()
         val request = "Synthetic pending request"
+        var providerCalls = 0
         compose.setContent {
             CompositionLocalProvider(LocalAgentDatabaseOverride provides agentDatabase.database) {
                 TestMemoraApp(initialRoute = "chat", initialLanguage = "az",
                     capturePersistenceOverride = captureStore, appearanceStoreOverride = appearanceStore,
                     textTurnProgressOverride = { _, onProgress ->
+                        providerCalls++
                         onProgress(ai.memora.app.voice.VoiceTurnProgress.ConfirmedActions(turnId, listOf(
                             ai.memora.app.voice.VoiceTurnActionResult(
                                 UUID.randomUUID().toString(), turnId, "record_money_event", "APPLIED",
@@ -614,6 +660,14 @@ class UiShellTest {
         compose.onNodeWithTag("action_source_user_message").assertTextContains(request)
         compose.onNodeWithTag("action_source_close").performClick()
         finishTurn.complete(ai.memora.app.voice.VoiceFirstResult.Failed("synthetic_final_reply_stopped"))
+        compose.waitUntil(5_000) {
+            compose.onAllNodesWithTag("agent_confirmed_action_failure_notice").fetchSemanticsNodes().isNotEmpty()
+        }
+        compose.onNodeWithTag("action_result_${turnId}_0").assertExists()
+        compose.onNodeWithTag("agent_confirmed_action_failure_notice").assertIsDisplayed()
+        Assert.assertEquals("A confirmed action must not be automatically sent again", 1, providerCalls)
+        Assert.assertEquals("The completed request must not be restored as a resend draft", "",
+            compose.onNodeWithTag("chat_input").fetchSemanticsNode().config[SemanticsProperties.EditableText].text)
     }
 
     @Test fun secretaryDraftAndHistoryScrollSurviveUiRecreation() {
@@ -624,8 +678,12 @@ class UiShellTest {
             val repository = ai.memora.app.data.protectedstore.ProtectedConversationRepository(agentDatabase.database)
             val turnIds = (0..6).map { UUID.randomUUID().toString() }
             turnIds.forEachIndexed { index, turnId ->
+                val actions = if (index == 0) listOf(ai.memora.app.data.protectedstore.AgentActionResultRow(
+                    UUID.randomUUID().toString(), scopeId, turnId, "create_task", "APPLIED", "task_created",
+                    "task", UUID.randomUUID().toString(), 1_800_000_000_000L,
+                )) else emptyList()
                 repository.appendTurn(scopeId, turnId, "Synthetic history request $index", "Synthetic history answer $index",
-                    1_800_000_000_000L + index * 1_000L)
+                    1_800_000_000_000L + index * 1_000L, actions)
             }
             val restoration = StateRestorationTester(compose)
             restoration.setContent {
@@ -638,14 +696,14 @@ class UiShellTest {
             compose.waitUntil(10_000) {
                 compose.onAllNodesWithTag("chat_turn_${turnIds.last()}_user").fetchSemanticsNodes().isNotEmpty()
             }
-            compose.onNodeWithTag("chat_history").performScrollToNode(hasTestTag("chat_turn_${oldestTurn}_user"))
-            compose.onNodeWithTag("chat_turn_${oldestTurn}_user").assertIsDisplayed()
+            compose.onNodeWithTag("chat_history").performScrollToNode(hasTestTag("action_result_${oldestTurn}_0"))
+            compose.onNodeWithTag("action_result_${oldestTurn}_0").assertIsDisplayed()
             compose.onNodeWithTag("chat_input").performTextInput("Synthetic secretary draft")
 
             restoration.emulateSavedInstanceStateRestore()
 
             compose.onNodeWithTag("chat_input").assertTextContains("Synthetic secretary draft")
-            compose.onNodeWithTag("chat_turn_${oldestTurn}_user").assertIsDisplayed()
+            compose.onNodeWithTag("action_result_${oldestTurn}_0").assertIsDisplayed()
         }
     }
 
@@ -654,8 +712,24 @@ class UiShellTest {
         val processor = ai.memora.app.voice.AgentVoiceTurnProcessor(context, agentDatabase.database)
         val scopeId = processor.conversationScopeId()
         val repository = ai.memora.app.data.protectedstore.ProtectedConversationRepository(agentDatabase.database)
+        val olderTurn = UUID.randomUUID().toString()
+        repository.appendTurn(scopeId, olderTurn, "Synthetic older request", "Synthetic older reply", 1_799_999_999_999L,
+            listOf(ai.memora.app.data.protectedstore.AgentActionResultRow(
+                UUID.randomUUID().toString(), scopeId, olderTurn, "create_task", "APPLIED", "task_created",
+                "task", UUID.randomUUID().toString(), 1_799_999_999_999L,
+            )))
         val focusedTurn = UUID.randomUUID().toString()
-        repository.appendTurn(scopeId, focusedTurn, "Synthetic focused request", "Synthetic focused assistant reply", 1_800_000_000_001L)
+        repository.appendTurn(scopeId, focusedTurn, "Synthetic focused request", "Synthetic focused assistant reply", 1_800_000_000_001L,
+            (0..2).map { index -> ai.memora.app.data.protectedstore.AgentActionResultRow(
+                UUID.randomUUID().toString(), scopeId, focusedTurn, "create_task", "APPLIED", "task_created",
+                "task", UUID.randomUUID().toString(), 1_800_000_000_001L + index,
+            ) })
+        val newerTurn = UUID.randomUUID().toString()
+        repository.appendTurn(scopeId, newerTurn, "Synthetic newer request", "Synthetic newer reply", 1_800_000_000_002L,
+            (0..1).map { index -> ai.memora.app.data.protectedstore.AgentActionResultRow(
+                UUID.randomUUID().toString(), scopeId, newerTurn, "create_task", "APPLIED", "task_created",
+                "task", UUID.randomUUID().toString(), 1_800_000_000_002L + index,
+            ) })
 
         compose.setContent {
             CompositionLocalProvider(LocalAgentDatabaseOverride provides agentDatabase.database) {
@@ -670,6 +744,8 @@ class UiShellTest {
         compose.onNodeWithTag("chat_turn_${focusedTurn}_user").assertIsDisplayed()
         compose.onNodeWithTag("chat_turn_${focusedTurn}_model").assertIsDisplayed()
         compose.onNodeWithText("Synthetic focused assistant reply").assertIsDisplayed()
+        compose.onNodeWithTag("chat_history").performScrollToNode(hasTestTag("action_result_${focusedTurn}_0"))
+        compose.onNodeWithTag("action_result_${focusedTurn}_0").assertIsDisplayed()
     }
 
     @Test fun textDraftGoesToInboxWithoutAi() {
@@ -782,6 +858,9 @@ class UiShellTest {
             CompositionLocalProvider(LocalAgentDatabaseOverride provides agentDatabase.database) {
                 TestMemoraApp(initialRoute = "finance", initialTheme = "light", capturePersistenceOverride = captureStore, appearanceStoreOverride = appearanceStore)
             }
+        }
+        compose.waitUntil(10_000) {
+            compose.onAllNodesWithTag("finance_empty_title").fetchSemanticsNodes().isNotEmpty()
         }
         compose.onNodeWithTag("finance_empty_title").assertExists()
         compose.onNodeWithText("230 ₼").assertDoesNotExist()

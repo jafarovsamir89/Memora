@@ -160,7 +160,7 @@ class EntityDetailScreensTest {
         compose.onNodeWithTag("entity_chain_back").performClick()
         compose.waitUntil(10_000) { compose.onAllNodesWithTag("source_detail_screen_$turnId").fetchSemanticsNodes().isNotEmpty() }
         compose.onNodeWithTag("source_detail_open_conversation").performScrollTo().performClick()
-        compose.onNodeWithTag("entity_chain_current_route").assertTextEquals("screen:chat")
+        compose.onNodeWithTag("entity_chain_current_route").assertTextEquals("conversation:$turnId")
         compose.onNodeWithTag("entity_chain_back").performClick()
         compose.waitUntil(10_000) { compose.onAllNodesWithTag("source_detail_screen_$turnId").fetchSemanticsNodes().isNotEmpty() }
 

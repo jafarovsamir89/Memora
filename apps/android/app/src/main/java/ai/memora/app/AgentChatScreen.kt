@@ -10,7 +10,6 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -111,6 +110,7 @@ internal fun AgentChatScreen(language: String = "az", showVoiceControl: Boolean 
     var savedHistoryIndex by rememberSaveable { mutableIntStateOf(0) }
     var savedHistoryOffset by rememberSaveable { mutableIntStateOf(0) }
     var restoreHistoryPosition by remember { mutableStateOf(historyLoaded) }
+    var suppressFollowAfterHistoryRestore by remember { mutableStateOf(false) }
     var pendingConversationFocus by rememberSaveable(focusTurnId) { mutableStateOf(focusTurnId != null) }
     val historyState = rememberLazyListState()
     val requestBusy = busy || (managedTurns && turnState.busy)
@@ -151,12 +151,13 @@ internal fun AgentChatScreen(language: String = "az", showVoiceControl: Boolean 
         if (messages.isEmpty()) return@LaunchedEffect
         if (focusTurnId != null && pendingConversationFocus) {
             val newestFirst = messages.asReversed()
-            // The reverse-layout list places the model reply at the turn's leading edge.
-            // Focusing the user row alone can leave the assistant response below the viewport.
-            val responseIndex = newestFirst.indexOfFirst {
+            // In reverseLayout the model row is the start of the focused turn. Focus it so
+            // the user row remains immediately above it in the viewport. Result cards are
+            // separate lazy items, so their height cannot bury either message inside one item.
+            val focusedMessageIndex = newestFirst.indexOfFirst {
                 it.turnId == focusTurnId && it.role == "model"
             }
-            val targetIndex = responseIndex.takeIf { it >= 0 } ?: newestFirst.indexOfFirst {
+            val targetIndex = focusedMessageIndex.takeIf { it >= 0 } ?: newestFirst.indexOfFirst {
                 it.turnId == focusTurnId && it.role == "user"
             }
             if (targetIndex >= 0) {
@@ -166,7 +167,14 @@ internal fun AgentChatScreen(language: String = "az", showVoiceControl: Boolean 
                     requestActions.isNotEmpty(),
                     requestMessage.isNotBlank(),
                 ).count { it }
-                historyState.scrollToItem(leadingItems + targetIndex)
+                val priorTimelineItems = newestFirst.take(targetIndex).sumOf { message ->
+                    1 + if (message.role == "model") actionResults[message.turnId].orEmpty().size else 0
+                }
+                val targetMessage = newestFirst[targetIndex]
+                val targetActionItems = if (targetMessage.role == "model") {
+                    actionResults[targetMessage.turnId].orEmpty().size
+                } else 0
+                historyState.scrollToItem(leadingItems + priorTimelineItems + targetActionItems)
                 pendingConversationFocus = false
                 restoreHistoryPosition = false
                 return@LaunchedEffect
@@ -175,9 +183,24 @@ internal fun AgentChatScreen(language: String = "az", showVoiceControl: Boolean 
             pendingConversationFocus = false
         }
         if (restoreHistoryPosition) {
-            val messageItemCount = messages.size * 2
+            val leadingItemCount = listOf(
+                requestBusy,
+                requestFailed,
+                requestActions.isNotEmpty(),
+                requestMessage.isNotBlank(),
+            ).count { it }
+            val timelineItemCount = messages.sumOf { message ->
+                1 + if (message.role == "model") actionResults[message.turnId].orEmpty().size else 0
+            }
+            val messageItemCount = leadingItemCount + timelineItemCount
             historyState.scrollToItem(savedHistoryIndex.coerceAtMost((messageItemCount - 1).coerceAtLeast(0)), savedHistoryOffset)
             restoreHistoryPosition = false
+            suppressFollowAfterHistoryRestore = true
+        } else if (suppressFollowAfterHistoryRestore) {
+            // The restored index may still report the pre-restore first item until the lazy
+            // layout applies scrollToItem. Do not let this same effect immediately jump to
+            // the newest turn and overwrite the position the user came back from.
+            suppressFollowAfterHistoryRestore = false
         } else if (historyState.firstVisibleItemIndex == 0 || requestBusy || requestMessage.isNotBlank() || requestActions.isNotEmpty()) {
             // In reverse layout, item zero is the newest turn. Follow it only when already at
             // the latest turn or while this conversation is actively adding a new one.
@@ -231,6 +254,7 @@ internal fun AgentChatScreen(language: String = "az", showVoiceControl: Boolean 
         progressState = "thinking"
         busy = true
         coroutineScope.launch {
+            var preserveConfirmedActionContext = false
             try {
                 val result = withTimeout(65_000) {
                     textTurnProgressOverride?.invoke(trimmed, ::onTurnProgress)
@@ -240,29 +264,40 @@ internal fun AgentChatScreen(language: String = "az", showVoiceControl: Boolean 
                 when (result) {
                     is VoiceFirstResult.Ready -> refreshMessages()
                     is VoiceFirstResult.Failed -> {
-                        input = trimmed
-                        draftRestoredAfterFailure = true
                         failed = true
                         failureCode = result.code
+                        preserveConfirmedActionContext = pendingActionCards.any { it.status == "APPLIED" }
+                        if (!preserveConfirmedActionContext) {
+                            input = trimmed
+                            draftRestoredAfterFailure = true
+                        }
                     }
                     VoiceFirstResult.Unavailable -> {
-                        input = trimmed
-                        draftRestoredAfterFailure = true
                         failed = true
                         failureCode = "request_failed"
+                        preserveConfirmedActionContext = pendingActionCards.any { it.status == "APPLIED" }
+                        if (!preserveConfirmedActionContext) {
+                            input = trimmed
+                            draftRestoredAfterFailure = true
+                        }
                     }
                 }
             } catch (cancelled: CancellationException) {
                 throw cancelled
             } catch (_: Exception) {
-                input = trimmed
-                draftRestoredAfterFailure = true
                 failed = true
                 failureCode = "request_failed"
+                preserveConfirmedActionContext = pendingActionCards.any { it.status == "APPLIED" }
+                if (!preserveConfirmedActionContext) {
+                    input = trimmed
+                    draftRestoredAfterFailure = true
+                }
             } finally {
-                activeRequestMessage = ""
-                activeTurnId = null
-                pendingActionCards = emptyList()
+                if (!preserveConfirmedActionContext) {
+                    activeRequestMessage = ""
+                    activeTurnId = null
+                    pendingActionCards = emptyList()
+                }
                 busy = false
             }
         }
@@ -402,6 +437,11 @@ internal fun AgentChatScreen(language: String = "az", showVoiceControl: Boolean 
                 if (draftRestoredAfterFailure || (managedTurns && turnState.failedDraft != null)) Text(s(ai.memora.app.R.string.agent_failed_draft_kept),
                     color = colors.muted, style = androidx.compose.material3.MaterialTheme.typography.bodySmall,
                     modifier = Modifier.testTag("agent_failed_draft_note"))
+                if (requestActions.any { it.status == "APPLIED" }) Text(
+                    s(ai.memora.app.R.string.agent_confirmed_action_failure_notice),
+                    color = colors.muted, style = androidx.compose.material3.MaterialTheme.typography.bodySmall,
+                    modifier = Modifier.testTag("agent_confirmed_action_failure_notice"),
+                )
             } }
             if (requestActions.isNotEmpty()) item(key = "pending-actions-${requestTurnId.orEmpty()}") {
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -437,16 +477,9 @@ internal fun AgentChatScreen(language: String = "az", showVoiceControl: Boolean 
                         color = colors.muted, textAlign = TextAlign.Center)
                 }
             }
-            items(messages.asReversed(), key = { "${it.turnId}:${it.role}" }) { message ->
-                Column(Modifier.fillMaxWidth(), horizontalAlignment = if (message.role == "user") Alignment.End else Alignment.Start,
-                    verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    MemoraCard(tint = if (message.role == "user") colors.softAccent else colors.card, contentPadding = 14.dp,
-                        modifier = Modifier.fillMaxWidth(.88f).testTag("chat_turn_${message.turnId}_${message.role}")) {
-                        Text(s(if (message.role == "user") ai.memora.app.R.string.chat_speaker_user else ai.memora.app.R.string.chat_speaker_secretary),
-                            style = androidx.compose.material3.MaterialTheme.typography.labelSmall, color = colors.accent)
-                        Text(message.message, color = colors.ink, style = androidx.compose.material3.MaterialTheme.typography.bodyLarge)
-                    }
-                    if (message.role == "model") actionResults[message.turnId].orEmpty().forEachIndexed { index, result ->
+            messages.asReversed().forEach { message ->
+                if (message.role == "model") actionResults[message.turnId].orEmpty().forEachIndexed { index, result ->
+                    item(key = "action_result_${message.turnId}_$index") {
                         ActionResultCard(
                             database = database,
                             result = AgentActionCardData.from(result),
@@ -459,6 +492,17 @@ internal fun AgentChatScreen(language: String = "az", showVoiceControl: Boolean 
                             onPrepareCorrection = { prompt -> input = prompt.take(20_000); correctionDraftPrepared = true },
                             modifier = Modifier.testTag("action_result_${message.turnId}_$index"),
                         )
+                    }
+                }
+                item(key = "${message.turnId}:${message.role}") {
+                    Row(Modifier.fillMaxWidth(), horizontalArrangement =
+                        if (message.role == "user") Arrangement.End else Arrangement.Start) {
+                        MemoraCard(tint = if (message.role == "user") colors.softAccent else colors.card, contentPadding = 14.dp,
+                            modifier = Modifier.fillMaxWidth(.88f).testTag("chat_turn_${message.turnId}_${message.role}")) {
+                            Text(s(if (message.role == "user") ai.memora.app.R.string.chat_speaker_user else ai.memora.app.R.string.chat_speaker_secretary),
+                                style = androidx.compose.material3.MaterialTheme.typography.labelSmall, color = colors.accent)
+                            Text(message.message, color = colors.ink, style = androidx.compose.material3.MaterialTheme.typography.bodyLarge)
+                        }
                     }
                 }
             }
