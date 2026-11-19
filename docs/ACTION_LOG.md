@@ -6,6 +6,7 @@
 - Follow-up v193→v194 read-only volume probe PASS at 1,000 rows: all five prior fixture digests stable, 0 inserts, `firstInstallTime` unchanged. Report `20261119T174441.736942Z`; warm local p50/p95 case search 256.386/319.891 ms, oldest conversation 1,105/1,296 ms, finance analytics 159/220 ms. Repository timings only.
 - Evidence reports `20261119T174402.829833Z` / `20261119T174441.736942Z` are ignored. Python tools 73/73, `py_compile`, debug/AndroidTest APK builds, AndroidTest Kotlin compile and `git diff --check` PASS. LAB-09 remains partial; actual provider faults, Secretary draft after OS process death, TalkBack, physical device and broad failure matrix are NOT TESTED.
 - No user-0 records, personal data, physical device, AI/network/microphone or paid API. No production runtime/domain/ledger/schema/provider/consent changes. APK v194 stays local/ignored. Preserve owner ADR-012 and `main`.
+- Commit `fdc433cde2c4d4ef33d4968aff971d3a5af1d13d` was pushed and remote-verified on `origin/ui/redesign-v1`; remote `main` remains `ac621919aca09ece6e292eae708d55cc09de16d7`. Owner ADR-012 remains untracked and excluded.
 
 ## ACT-0280 — 2026-11-19 — Fix landscape Today viewport; recheck lineage and volume matrix
 
