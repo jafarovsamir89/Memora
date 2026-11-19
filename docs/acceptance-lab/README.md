@@ -83,7 +83,11 @@ other Gradle tasks and do not change the checked-in version. It installs only
 for the named synthetic user via `adb -s SERIAL install --user <id> -r`,
 launches, verifies exact sentinel readback, force-stops/restarts, and performs a
 rotation/recreation check while restoring the user's original rotation
-settings. Reports and real screenshots stay under ignored `app/build` output.
+settings. Before saving the landscape screenshot it waits for three stable UI
+hierarchy samples containing `Katibə` and `Bu gün`, then allows two seconds for
+the frame to settle. This guards against capturing a transient black surface
+during Compose recreation; it is still necessary to review screenshots
+manually. Reports and real screenshots stay under ignored `app/build` output.
 Review screenshots manually for onboarding/UI state; the runner does not
 claim visual acceptance from screenshot capture alone. Keep the seeded user
 isolated; do not clear or uninstall the owner's app profile.

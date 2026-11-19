@@ -370,6 +370,43 @@ class UiHierarchyTests(unittest.TestCase):
                 lab.swipe_ui("emulator-5556", Path("/tmp"), "conversation", .5, -.1, .5, .76)
         adb.assert_not_called()
 
+    def test_rotation_capture_waits_for_stable_home_content_before_screenshot(self) -> None:
+        events: list[tuple[str, object]] = []
+
+        def fake_adb(_serial: str, *args: str, **_kwargs: object) -> SimpleNamespace:
+            if args[:2] == ("shell", "settings") and "get" in args:
+                return SimpleNamespace(stdout={
+                    "accelerometer_rotation": "1",
+                    "user_rotation": "0",
+                }[args[-1]])
+            if args[:3] == ("shell", "am", "start"):
+                return SimpleNamespace(stdout="Status: ok\n")
+            return SimpleNamespace(stdout="")
+
+        def ready_wait(*args: object, **kwargs: object) -> None:
+            events.append(("wait", (args, kwargs)))
+
+        def capture(_serial: str, path: Path) -> None:
+            events.append(("screenshot", path.name))
+
+        with tempfile.TemporaryDirectory() as directory, \
+             patch.object(lab, "adb", side_effect=fake_adb), \
+             patch.object(lab.time, "sleep"), \
+             patch.object(lab, "wait_for_ui_texts", side_effect=ready_wait), \
+             patch.object(lab, "screenshot", side_effect=capture), \
+             patch.object(lab, "screenshot_dimensions", return_value=(2400, 1080)), \
+             patch.object(lab, "run_lineage_probe", return_value={"status": "PASS"}):
+            steps = lab.run_rotation_recreation("emulator-5556", 10, Path(directory))
+
+        wait_index = next(index for index, event in enumerate(events) if event[0] == "wait")
+        screenshot_index = next(index for index, event in enumerate(events) if event[0] == "screenshot")
+        self.assertLess(wait_index, screenshot_index)
+        wait_args, wait_kwargs = events[wait_index][1]
+        self.assertEqual(wait_args[2:4], ("rotation-landscape-ready", {"Katibə", "Bu gün"}))
+        self.assertEqual(wait_kwargs, {"timeout_seconds": 30, "stable_samples": 3})
+        self.assertEqual(steps[0]["status"], "PASS")
+        self.assertEqual(steps[-1]["status"], "PASS")
+
     def test_startup_probe_rejects_owner_user_before_any_adb_call(self) -> None:
         with patch.object(lab, "adb") as adb:
             with self.assertRaisesRegex(RuntimeError, "non-owner synthetic"):

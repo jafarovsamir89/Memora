@@ -986,7 +986,17 @@ def run_rotation_recreation(serial: str, user_id: int, out_dir: Path) -> list[di
         time.sleep(5)
         adb(serial, "shell", "settings", "--user", str(user_id), "put", "system", "accelerometer_rotation", "0")
         adb(serial, "shell", "settings", "--user", str(user_id), "put", "system", "user_rotation", str(landscape_rotation))
-        time.sleep(3)
+        # Rotation can briefly expose a black surface while Compose is recreating.
+        # Wait for the actual home UI to stabilize before capturing evidence.
+        wait_for_ui_texts(
+            serial,
+            out_dir,
+            "rotation-landscape-ready",
+            {"Katibə", "Bu gün"},
+            timeout_seconds=30,
+            stable_samples=3,
+        )
+        time.sleep(2)
         shot = out_dir / "screenshots" / "rotation-landscape.png"
         screenshot(serial, shot)
         width, height = screenshot_dimensions(shot)
