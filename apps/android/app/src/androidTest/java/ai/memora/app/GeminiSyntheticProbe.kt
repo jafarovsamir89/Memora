@@ -102,7 +102,9 @@ class GeminiSyntheticProbe : Instrumentation() {
         playbackOnly = arguments?.getString("playbackOnly") == "true"
         allowSyntheticLocalInstallLineage = arguments?.getString("allowSyntheticLocalInstallLineage") == "true"
         localInstallLineagePhase = arguments?.getString("localInstallLineagePhase")
-            ?.takeIf { it in setOf("prepare-notification-race", "seed", "verify", "verify-new-install") }
+            ?.takeIf { it in setOf(
+                "prepare-notification-race", "seed", "verify", "verify-new-install", "prepare-settings", "restore-settings",
+            ) }
         syntheticVolumeCount = arguments?.getString("syntheticVolumeCount")?.toIntOrNull()
         syntheticVolumePermitted = arguments?.getString("allowSyntheticVolumeProbe") == "true"
         syntheticFinanceUiJourneyProbe = arguments?.getString("syntheticFinanceUiJourneyProbe") == "true"
@@ -129,6 +131,8 @@ class GeminiSyntheticProbe : Instrumentation() {
                     "synthetic_lineage_seed_passed",
                     "synthetic_lineage_verify_passed",
                     "synthetic_lineage_new_install_passed",
+                    "synthetic_lineage_settings_fixture_passed",
+                    "synthetic_lineage_settings_fixture_restored",
                 ))
                 Activity.RESULT_OK else Activity.RESULT_CANCELED, results)
             return

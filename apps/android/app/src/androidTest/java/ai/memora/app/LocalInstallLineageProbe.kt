@@ -7,6 +7,7 @@ import android.os.Bundle
 import android.os.SystemClock
 import ai.memora.app.ai.GeminiAgentModel
 import ai.memora.app.data.AtomicAppearanceStore
+import ai.memora.app.data.AppearanceSettings
 import ai.memora.app.data.GeminiAgentModelSelectionStore
 import ai.memora.app.data.LocalProfileInput
 import ai.memora.app.data.ProtectedLocalProfileStore
@@ -34,10 +35,24 @@ internal object LocalInstallLineageProbe {
     private const val MONEY_EVENT_ID = "synthetic-p0-money-event"
     private const val TASK_ID = "synthetic-p0-task"
     private const val MARKER = "memora-local-install-state-v1"
+    private const val MODEL_PREFERENCES = "assistant-model-selection-v1"
+    private const val MODEL_KEY = "gemini-agent-model-id"
+    private const val TEST_THEME = "dark"
+    private const val TEST_MODEL = "gemini-3.6-flash"
+    private val TEST_CONSENT_KEYS = listOf(
+        "gemini-agent-text-and-answer-v2",
+        "google-agent-audio-and-answer-v2",
+        "gemini-persisted-memory-v1",
+        "google-note-v1",
+        "google-live-v1",
+        "google-audio-and-answer-v1",
+    )
 
     fun run(context: Context, phase: String, permitted: Boolean): Bundle {
         val result = Bundle()
-        if (!permitted || phase !in setOf("prepare-notification-race", "seed", "verify", "verify-new-install") ||
+        if (!permitted || phase !in setOf(
+                "prepare-notification-race", "seed", "verify", "verify-new-install", "prepare-settings", "restore-settings",
+            ) ||
             context.packageName != "ai.memora.app" ||
             context.applicationInfo.flags and ApplicationInfo.FLAG_DEBUGGABLE == 0 ||
             !(Build.FINGERPRINT.contains("generic", ignoreCase = true) ||
@@ -49,6 +64,25 @@ internal object LocalInstallLineageProbe {
 
         return runCatching {
             val marker = File(context.noBackupFilesDir, MARKER)
+            if (phase in setOf("prepare-settings", "restore-settings")) {
+                check(marker.isFile && marker.readText(Charsets.UTF_8) == "complete") {
+                    "synthetic_profile_onboarding_not_complete"
+                }
+                val profile = runBlocking { AgentDatabase.open(context).protectedStoreDao().localProfile() }
+                check(profile?.displayName == "Synthetic Upgrade Sentinel") {
+                    "named_synthetic_profile_required_for_settings_fixture"
+                }
+                if (phase == "prepare-settings") {
+                    prepareSettingsFixture(context)
+                    addSettingsReadback(context, result)
+                    result.putString("status", "synthetic_lineage_settings_fixture_passed")
+                } else {
+                    restoreSettingsFixture(context)
+                    addSettingsReadback(context, result)
+                    result.putString("status", "synthetic_lineage_settings_fixture_restored")
+                }
+                return@runCatching result
+            }
             if (phase == "prepare-notification-race") {
                 check(!marker.exists()) { "install_marker_already_present" }
                 val databaseFile = context.getDatabasePath(DatabaseKeyProvider.DATABASE_NAME)
@@ -171,22 +205,92 @@ internal object LocalInstallLineageProbe {
 
         val selectedModel = GeminiAgentModelSelectionStore(context).selectedModel()
         check(selectedModel in GeminiAgentModel.entries) { "unknown_selected_gemini_model" }
-        val modelPreferences = context.getSharedPreferences("assistant-model-selection-v1", Context.MODE_PRIVATE)
-        result.putBoolean("model_selection_present", modelPreferences.contains("gemini-agent-model-id"))
+        val modelPreferences = context.getSharedPreferences(MODEL_PREFERENCES, Context.MODE_PRIVATE)
+        result.putBoolean("model_selection_present", modelPreferences.contains(MODEL_KEY))
         result.putString("selected_gemini_model", selectedModel.modelId)
 
         val preferences = context.getSharedPreferences("voice-first-consent", Context.MODE_PRIVATE)
         val consentKeys = linkedMapOf(
-            "text" to "gemini-agent-text-and-answer-v2",
-            "voice" to "google-agent-audio-and-answer-v2",
-            "memory" to "gemini-persisted-memory-v1",
-            "audio_note" to "google-note-v1",
-            "live_voice" to "google-live-v1",
-            "legacy_audio" to "google-audio-and-answer-v1",
+            "text" to TEST_CONSENT_KEYS[0],
+            "voice" to TEST_CONSENT_KEYS[1],
+            "memory" to TEST_CONSENT_KEYS[2],
+            "audio_note" to TEST_CONSENT_KEYS[3],
+            "live_voice" to TEST_CONSENT_KEYS[4],
+            "legacy_audio" to TEST_CONSENT_KEYS[5],
         )
         consentKeys.forEach { (name, key) ->
             result.putBoolean("consent_${name}_present", preferences.contains(key))
             result.putBoolean("consent_${name}_granted", preferences.getBoolean(key, false))
+        }
+    }
+
+    private fun prepareSettingsFixture(context: Context) {
+        val appearanceFile = File(context.filesDir, "appearance-settings-v1")
+        val appearancePending = File(appearanceFile.path + ".new")
+        val appearanceBackup = File(appearanceFile.path + ".bak")
+        val appearance = AtomicAppearanceStore(appearanceFile)
+        val modelPreferences = context.getSharedPreferences(MODEL_PREFERENCES, Context.MODE_PRIVATE)
+        val consentPreferences = context.getSharedPreferences("voice-first-consent", Context.MODE_PRIVATE)
+        val isAlreadyPrepared = appearanceFile.isFile && !appearancePending.exists() && !appearanceBackup.exists() &&
+            appearance.read() == AppearanceSettings("az", TEST_THEME) &&
+            modelPreferences.getString(MODEL_KEY, null) == TEST_MODEL &&
+            TEST_CONSENT_KEYS.all { consentPreferences.contains(it) && !consentPreferences.getBoolean(it, true) }
+        if (isAlreadyPrepared) return
+
+        check(!appearanceFile.exists() && !appearancePending.exists() && !appearanceBackup.exists() &&
+            !modelPreferences.contains(MODEL_KEY) && TEST_CONSENT_KEYS.none(consentPreferences::contains)) {
+            "settings_fixture_refuses_to_overwrite_existing_values"
+        }
+        appearance.write(AppearanceSettings(language = "az", theme = TEST_THEME))
+        check(modelPreferences.edit().putString(MODEL_KEY, TEST_MODEL).commit()) {
+            "settings_fixture_model_write_failed"
+        }
+        val consentEditor = consentPreferences.edit()
+        TEST_CONSENT_KEYS.forEach { consentEditor.putBoolean(it, false) }
+        check(consentEditor.commit()) { "settings_fixture_consent_write_failed" }
+        check(appearance.read() == AppearanceSettings("az", TEST_THEME)) { "settings_fixture_appearance_readback_failed" }
+        check(modelPreferences.getString(MODEL_KEY, null) == TEST_MODEL) { "settings_fixture_model_readback_failed" }
+        check(TEST_CONSENT_KEYS.all { consentPreferences.contains(it) && !consentPreferences.getBoolean(it, true) }) {
+            "settings_fixture_consent_readback_failed"
+        }
+    }
+
+    private fun restoreSettingsFixture(context: Context) {
+        val appearanceFile = File(context.filesDir, "appearance-settings-v1")
+        val appearancePending = File(appearanceFile.path + ".new")
+        val appearanceBackup = File(appearanceFile.path + ".bak")
+        if (appearanceFile.exists()) {
+            check(!appearancePending.exists() && !appearanceBackup.exists()) {
+                "settings_fixture_appearance_sidecar_unexpected"
+            }
+            check(AtomicAppearanceStore(appearanceFile).read() == AppearanceSettings("az", TEST_THEME)) {
+                "settings_fixture_appearance_changed_refusing_restore"
+            }
+            check(appearanceFile.delete() && !appearanceFile.exists()) {
+                "settings_fixture_appearance_restore_failed"
+            }
+        }
+        val modelPreferences = context.getSharedPreferences(MODEL_PREFERENCES, Context.MODE_PRIVATE)
+        if (modelPreferences.contains(MODEL_KEY)) {
+            check(modelPreferences.getString(MODEL_KEY, null) == TEST_MODEL) {
+                "settings_fixture_model_changed_refusing_restore"
+            }
+            check(modelPreferences.edit().remove(MODEL_KEY).commit() && !modelPreferences.contains(MODEL_KEY)) {
+                "settings_fixture_model_restore_failed"
+            }
+        }
+        val consentPreferences = context.getSharedPreferences("voice-first-consent", Context.MODE_PRIVATE)
+        TEST_CONSENT_KEYS.forEach { key ->
+            if (consentPreferences.contains(key)) {
+                check(!consentPreferences.getBoolean(key, true)) { "settings_fixture_consent_changed_refusing_restore" }
+                check(consentPreferences.edit().remove(key).commit() && !consentPreferences.contains(key)) {
+                    "settings_fixture_consent_restore_failed"
+                }
+            }
+        }
+        check(!appearanceFile.exists() && !appearancePending.exists() && !appearanceBackup.exists() &&
+            !modelPreferences.contains(MODEL_KEY) && TEST_CONSENT_KEYS.none(consentPreferences::contains)) {
+            "settings_fixture_restore_readback_failed"
         }
     }
 

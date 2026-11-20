@@ -961,6 +961,8 @@ def run_lineage_probe(serial: str, user_id: int, phase: str) -> dict[str, Any]:
         "seed": "synthetic_lineage_seed_passed",
         "verify": "synthetic_lineage_verify_passed",
         "verify-new-install": "synthetic_lineage_new_install_passed",
+        "prepare-settings": "synthetic_lineage_settings_fixture_passed",
+        "restore-settings": "synthetic_lineage_settings_fixture_restored",
     }[phase]
     fields = {
         match.group(1): match.group(2)
@@ -973,7 +975,7 @@ def run_lineage_probe(serial: str, user_id: int, phase: str) -> dict[str, Any]:
     }
     settings_snapshot = {key: fields[key] for key in LINEAGE_SETTINGS_KEYS if key in fields}
     return {
-        "name": f"synthetic_lineage_{phase}",
+        "name": f"synthetic_lineage_{phase.replace('-', '_')}",
         "status": "PASS" if found and found.group(1) == expected else "FAIL",
         "probe_status": found.group(1) if found else None,
         "sentinel_counts": sentinel_counts,
@@ -1000,6 +1002,74 @@ def compare_lineage_settings(reference: dict[str, Any], actual: dict[str, Any], 
         "selected_gemini_model_id": observed.get("selected_gemini_model") if complete else None,
         "only_allowlisted_consent_flags_captured": complete,
     }
+
+
+def synthetic_settings_fixture_snapshot() -> dict[str, str]:
+    snapshot = {
+        "appearance_file_present": "true",
+        "appearance_language": "az",
+        "appearance_theme": "dark",
+        "model_selection_present": "true",
+        "selected_gemini_model": "gemini-3.6-flash",
+    }
+    for consent in ("text", "voice", "memory", "audio_note", "live_voice", "legacy_audio"):
+        snapshot[f"consent_{consent}_present"] = "true"
+        snapshot[f"consent_{consent}_granted"] = "false"
+    if set(snapshot) != set(LINEAGE_SETTINGS_KEYS):
+        raise AssertionError("synthetic settings fixture must populate the complete safe readback allowlist")
+    return snapshot
+
+
+def synthetic_default_settings_snapshot() -> dict[str, str]:
+    snapshot = {
+        "appearance_file_present": "false",
+        "appearance_language": "az",
+        "appearance_theme": "system",
+        "model_selection_present": "false",
+        "selected_gemini_model": "gemini-3.5-flash-lite",
+    }
+    for consent in ("text", "voice", "memory", "audio_note", "live_voice", "legacy_audio"):
+        snapshot[f"consent_{consent}_present"] = "false"
+        snapshot[f"consent_{consent}_granted"] = "false"
+    if set(snapshot) != set(LINEAGE_SETTINGS_KEYS):
+        raise AssertionError("synthetic default settings must populate the complete safe readback allowlist")
+    return snapshot
+
+
+def restore_lineage_settings_fixture(serial: str, user_id: int, out_dir: Path,
+                                     steps: list[dict[str, Any]]) -> None:
+    """Restore only the known synthetic settings fixture, even after an early return."""
+    if not any(step.get("name") == "synthetic_lineage_prepare_settings" for step in steps):
+        return
+    try:
+        restored = run_lineage_probe(serial, user_id, "restore-settings")
+        steps.append(restored)
+        if restored["status"] != "PASS":
+            return
+
+        current_user = adb(serial, "shell", "am", "get-current-user").stdout.strip()
+        if current_user != str(user_id):
+            steps.append({"name": "settings_restore_app_restart", "status": "NOT TESTED",
+                          "reason": "synthetic_profile_not_current_after_restore"})
+            return
+        adb(serial, "shell", "am", "force-stop", "--user", str(user_id), PACKAGE)
+        launch = run_user_launch(serial, user_id, out_dir, "main-after-settings-restore.png")
+        steps.append({**launch, "name": "settings_restore_app_restart"})
+        if launch["status"] != "PASS":
+            return
+
+        original = next((step for step in steps if step.get("name") == "synthetic_lineage_verify" and
+                         isinstance(step.get("settings_snapshot"), dict)), None)
+        after = run_lineage_probe(serial, user_id, "verify")
+        steps.append(after)
+        if original is None or after["status"] != "PASS":
+            steps.append({"name": "settings_restore_readback", "status": "FAIL",
+                          "reason": "missing_original_or_restored_settings_snapshot"})
+            return
+        steps.append(compare_lineage_settings(original, after, "after_fixture_restore"))
+    except Exception as error:
+        steps.append({"name": "settings_fixture_cleanup", "status": "FAIL",
+                      "reason": scrub(f"{type(error).__name__}: {error}")})
 
 
 PROCESS_DEATH_CASES = {
@@ -1404,6 +1474,44 @@ def run_device_lineage(serial: str, user_id: int, seed_profile: bool,
     steps.append(settings_check)
     if settings_check["status"] != "PASS":
         return
+
+    default_settings_check = compare_lineage_settings(
+        {"settings_snapshot": synthetic_default_settings_snapshot()}, readback, "fixture_precondition",
+    )
+    default_settings_check["name"] = "synthetic_settings_fixture_precondition"
+    steps.append(default_settings_check)
+    if default_settings_check["status"] != "PASS":
+        return
+
+    # Record the intent before invoking instrumentation so the outer finally
+    # can restore an exact, known synthetic fixture if setup partially fails.
+    steps.append({"name": "synthetic_lineage_prepare_settings", "status": "STARTED"})
+    prepared = run_lineage_probe(serial, user_id, "prepare-settings")
+    steps[-1] = prepared
+    if prepared["status"] != "PASS":
+        return
+    fixture_expected = {"settings_snapshot": synthetic_settings_fixture_snapshot()}
+    fixture_check = compare_lineage_settings(fixture_expected, prepared, "fixture_seeded")
+    fixture_check["name"] = "synthetic_settings_fixture_readback"
+    steps.append(fixture_check)
+    if fixture_check["status"] != "PASS":
+        return
+
+    adb(serial, "shell", "am", "force-stop", "--user", str(user_id), PACKAGE)
+    launch = run_user_launch(serial, user_id, out_dir, "main-after-settings-fixture.png")
+    steps.append({**launch, "name": "launch_with_explicit_synthetic_settings"})
+    if launch["status"] != "PASS":
+        return
+    fixture_readback = run_lineage_probe(serial, user_id, "verify")
+    steps.append(fixture_readback)
+    if fixture_readback["status"] != "PASS":
+        return
+    fixture_restart_check = compare_lineage_settings(fixture_expected, fixture_readback, "fixture_restart")
+    fixture_restart_check["name"] = "synthetic_settings_fixture_survives_restart"
+    steps.append(fixture_restart_check)
+    if fixture_restart_check["status"] != "PASS":
+        return
+    settings_baseline = fixture_expected
 
     initial_info = adb(serial, "shell", "dumpsys", "package", PACKAGE).stdout
     initial_state = package_install_state(initial_info, user_id)
@@ -1931,9 +2039,13 @@ def main() -> int:
         elif args.mode == "device-smoke":
             report["steps"].extend(run_device_smoke(identity["serial"], test_environment(identity["serial"]), out_dir))
         elif args.mode == "device-lineage":
-            run_device_lineage(identity["serial"], args.synthetic_user_id,
-                               args.seed_synthetic_profile, test_environment(identity["serial"]),
-                               out_dir, report["steps"])
+            try:
+                run_device_lineage(identity["serial"], args.synthetic_user_id,
+                                   args.seed_synthetic_profile, test_environment(identity["serial"]),
+                                   out_dir, report["steps"])
+            finally:
+                restore_lineage_settings_fixture(identity["serial"], args.synthetic_user_id,
+                                                 out_dir, report["steps"])
         elif args.mode == "volume-probe":
             run_synthetic_volume_probe(identity["serial"], args.synthetic_user_id,
                                        test_environment(identity["serial"]), args.volume_count or [100, 1_000],

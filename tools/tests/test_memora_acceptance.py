@@ -148,6 +148,58 @@ class ProcessDeathProbeTests(unittest.TestCase):
 
 
 class LineageSettingsReadbackTests(unittest.TestCase):
+    def test_synthetic_settings_fixture_is_complete_and_never_grants_consent(self) -> None:
+        fixture = lab.synthetic_settings_fixture_snapshot()
+        defaults = lab.synthetic_default_settings_snapshot()
+        self.assertEqual(set(fixture), set(lab.LINEAGE_SETTINGS_KEYS))
+        self.assertEqual(set(defaults), set(lab.LINEAGE_SETTINGS_KEYS))
+        self.assertEqual(fixture["appearance_theme"], "dark")
+        self.assertEqual(fixture["selected_gemini_model"], "gemini-3.6-flash")
+        self.assertEqual(defaults["selected_gemini_model"], "gemini-3.5-flash-lite")
+        for name in ("text", "voice", "memory", "audio_note", "live_voice", "legacy_audio"):
+            self.assertEqual(fixture[f"consent_{name}_present"], "true")
+            self.assertEqual(fixture[f"consent_{name}_granted"], "false")
+
+    def test_lineage_probe_parses_fixture_phase_and_all_allowlisted_values(self) -> None:
+        fixture = lab.synthetic_settings_fixture_snapshot()
+        output = "INSTRUMENTATION_RESULT: status=synthetic_lineage_settings_fixture_passed\n" + "".join(
+            f"INSTRUMENTATION_RESULT: {key}={value}\n" for key, value in fixture.items()
+        )
+        with patch.object(lab, "adb", return_value=SimpleNamespace(stdout=output, stderr="")):
+            result = lab.run_lineage_probe("emulator-5556", 10, "prepare-settings")
+
+        self.assertEqual(result["name"], "synthetic_lineage_prepare_settings")
+        self.assertEqual(result["status"], "PASS")
+        self.assertEqual(result["settings_snapshot"], fixture)
+
+    def test_fixture_restore_runs_after_partial_setup_and_checks_original_snapshot(self) -> None:
+        original = {"settings_snapshot": lab.synthetic_default_settings_snapshot()}
+        steps = [
+            {"name": "synthetic_lineage_verify", **original},
+            {"name": "synthetic_lineage_prepare_settings", "status": "FAIL"},
+        ]
+        restore = {"name": "synthetic_lineage_restore_settings", "status": "PASS"}
+        verify = {"name": "synthetic_lineage_verify", "status": "PASS",
+                  "settings_snapshot": dict(original["settings_snapshot"])}
+        with tempfile.TemporaryDirectory() as directory, \
+             patch.object(lab, "run_lineage_probe", side_effect=[restore, verify]) as probe, \
+             patch.object(lab, "adb", return_value=SimpleNamespace(stdout="10", stderr="")), \
+             patch.object(lab, "run_user_launch", return_value={"status": "PASS", "screenshot": "ignored.png"}):
+            lab.restore_lineage_settings_fixture("emulator-5556", 10, Path(directory), steps)
+
+        self.assertEqual(probe.call_args_list, [
+            call("emulator-5556", 10, "restore-settings"),
+            call("emulator-5556", 10, "verify"),
+        ])
+        self.assertEqual(steps[-1]["name"], "settings_and_consents_after_fixture_restore")
+        self.assertEqual(steps[-1]["status"], "PASS")
+
+    def test_fixture_restore_is_not_attempted_without_fixture_setup(self) -> None:
+        steps = [{"name": "synthetic_lineage_verify", "status": "PASS"}]
+        with tempfile.TemporaryDirectory() as directory, patch.object(lab, "run_lineage_probe") as probe:
+            lab.restore_lineage_settings_fixture("emulator-5556", 10, Path(directory), steps)
+        probe.assert_not_called()
+
     def test_settings_and_effective_consent_state_must_match_across_update(self) -> None:
         snapshot = {
             "appearance_file_present": "true",
