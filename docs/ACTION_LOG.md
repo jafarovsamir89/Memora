@@ -1,3 +1,14 @@
+## ACT-0293 · 2026-11-20 · 1,000-row table repository timing
+
+- Existing isolated `volume-probe --volume-count 1000`; Android 14/API34 emulator, named synthetic user 11 only.
+- Build and data-preserving update v201→v202 PASS; `firstInstallTime` unchanged.
+- Instrumentation PASS: 1,000 Finance/Cases/Notes/Table/Tasks/conversation rows plus 100 People; all fixture inserts and seed duration were zero. Fixture digests matched prior successful run `20261119T175400.046748Z`.
+- Full table-snapshot repository read: 20 warm samples after one warm-up, p50 2,615 µs / p95 2,995 µs. This is not Compose render, scroll/frame, cold-read or peak-memory timing.
+- One probe-end memory sample: process PSS 189,385 KiB; Java heap used 17,990,232 bytes. Snapshot only, not peak and not attributable to the table query.
+- No network/model call, user 0, physical device or profile mutation; all row insert counts zero.
+- Machine-readable runner report stays ignored at `apps/android/app/build/acceptance-lab/20261120T103624.663755Z/report.json`; compact summary is ignored at `apps/android/app/build/acceptance-lab/ACT-0293-table-volume-measurement/`.
+- Full JVM suite, lint, component visual suite, UI perf, dark theme, TalkBack, physical Redmi and owner acceptance NOT TESTED; LAB-08 remains partial.
+
 ## ACT-0292 · 2026-11-20 · Tables AZ large-text visual slice
 
 - Android 14/API34 `emulator-5554`, synthetic user 11, app v201, AZ, light theme, `fontScale=1.3`.

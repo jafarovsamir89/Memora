@@ -97,6 +97,8 @@
 
 **ACT-0292 LAB-07/LAB-08 note:** Tables directory and a synthetic 1,000-row detail view were inspected in AZ at `fontScale=1.3`; visible controls/cards stayed readable and row edit/delete targets measured 48 dp. Manual traversal reached row 0088 only. Repository code eagerly reads each active table's rows before Compose lazy composition, but latency/memory were NOT TESTED; treat as measurement follow-up, not proven failure. No data changed. Evidence: ACT-0292 diary/action log and ignored acceptance screenshots/report.
 
+**ACT-0293 LAB-08 table timing:** Existing AndroidTest volume probe on v202 read back the same synthetic 1,000-row stores with zero inserted rows and unchanged fixture digests. Twenty warm full-table repository snapshots measured p50 2,615 µs / p95 2,995 µs; a single probe-end PSS sample was 189,385 KiB and is neither a peak nor table-attributed. UI composition/scroll/frame, cold reads, peak memory and ANR remain NOT TESTED, so LAB-08 stays partial. See ignored report run `20261120T103624.663755Z` and ACT-0293 diary/log.
+
 Current startup evidence is limited to 20 force-stop process launches with warm emulator/storage cache (p50 1.270 s / p95 1.745 s); ActivityManager TotalTime does not prove all content has rendered. Cold OS boot and frame-ready latency remain NOT TESTED. Conversation archive search in ACT-0269 is ~1.1 s p50/~1.3 s p95 at repository level; do not infer UI jank without frame tracing. Visual readiness gating reduced the standalone golden run to the known confirmation-only mismatch; its 24 dp geometry difference has a plausible but unproven inset explanation.
 
 ## 00. Идея, границы и личные сценарии — E0

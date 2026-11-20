@@ -611,4 +611,12 @@ On Android 14/API34 emulator `emulator-5554`, synthetic Android user 11, app v20
 
 Five real emulator screenshots and a compact JSON report are stored under ignored `apps/android/app/build/acceptance-lab/ACT-0292-tables-large-text/`. System font scale was restored to 1.0 and Today tab. LAB-07 and LAB-08 remain partial; no UI, data, fixture, golden or threshold change is implied.
 
+## ACT-0293 — 1,000-row table repository timing
+
+Existing `volume-probe --volume-count 1000` ran on Android 14/API34 emulator `emulator-5554`, named synthetic user 11. The build installed v202 over v201; `firstInstallTime` remained unchanged. Instrumentation PASS: 1,000 rows remained in Finance, Cases, Notes, editable Table, Tasks and conversations, plus 100 People. Every store reported zero rows inserted and all fixture digests matched prior successful run `20261119T175400.046748Z`.
+
+The complete table snapshot repository path was sampled 20 times after one warm-up: p50 2,615 µs / p95 2,995 µs. This warm local repository measurement does not measure Compose rendering, scrolling, cold-cache behavior, frame timing or ANR. One process-memory snapshot at probe end was PSS 189,385 KiB and Java heap used 17,990,232 bytes; it is not peak memory and cannot be attributed to the table call. No network/model call occurred.
+
+The raw runner report is ignored at `apps/android/app/build/acceptance-lab/20261120T103624.663755Z/report.json`; app update, fontScale 1.0 and Today state were verified. Full JVM suite, lint, visual golden suite, UI performance, dark theme, TalkBack, physical Redmi and owner acceptance remain NOT TESTED. LAB-08 remains partial.
+
 ## ACT-0291 — People title duplication and Finance large-text slice
