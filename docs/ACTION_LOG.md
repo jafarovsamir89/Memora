@@ -1,3 +1,14 @@
+## ACT-0294 · 2026-11-20 · Inbox/Backup large-text review and backup-scope disclosure
+
+- Android 14/API34 `emulator-5554`, synthetic user 11, AZ/light, `fontScale=1.3`; Inbox and Portable Backup reviewed read-only. No password entry, file picker, backup creation/import, data write, AI/network, microphone, physical device or user-0 data access.
+- Added an explicit AZ/RU/EN/default-locale warning that portable backup contains only the protected DB and currently omits Inbox captures, device tasks and Voice Memory. No export/restore behavior or storage changed.
+- Added `UiShellTest.portableBackupExplainsWhichLocalStoresAreNotIncluded`; focused test PASS.
+- Full JVM PASS: 84 suites / 434 tests / 0 failures / 0 errors / 1 opt-in skipped. Debug/AndroidTest APK builds, AndroidTest Kotlin compile and lint PASS (0 errors / 90 warnings / 2 hints).
+- Full visual suite is FAIL as a whole: 30/31 component states pass; existing `confirmation-light` still fails at 9.020% changed pixels / mean RGB delta 9.942. Do not replace its golden or relax thresholds. Initial full-run-only secretary recreation failure did not reproduce in isolated or second full run.
+- APK v203 `acceptance-backup-scope-note` installed as update; synthetic user11 MainActivity showed Today and existing 1,000-case profile. `firstInstallTime` remained present; no data clear/uninstall. Restored fontScale 1.0 and Today.
+- Real screenshots (warning at initial and scrolled positions plus earlier Inbox/IME captures) and compact report are ignored under `apps/android/app/build/acceptance-lab/ACT-0294-inbox-backup-large-text/`.
+- LAB-06/LAB-07 remain partial. Whole-app backup, TalkBack, full dark-theme/device acceptance and owner approval are NOT TESTED.
+
 ## ACT-0293 · 2026-11-20 · 1,000-row table repository timing
 
 - Existing isolated `volume-probe --volume-count 1000`; Android 14/API34 emulator, named synthetic user 11 only.

@@ -84,6 +84,24 @@ class UiShellTest {
         Assert.assertNotEquals(shortPasswordError, mismatchError)
     }
 
+    @Test fun portableBackupExplainsWhichLocalStoresAreNotIncluded() {
+        val context = ApplicationProvider.getApplicationContext<Context>()
+        appearanceStore = AtomicAppearanceStore(
+            File(context.cacheDir, "ui-backup-scope-${UUID.randomUUID()}"),
+            AppearanceSettings("az", "light"),
+        )
+        compose.setContent {
+            TestMemoraApp(initialRoute = "portable_backup", initialLanguage = "az",
+                capturePersistenceOverride = captureStore, appearanceStoreOverride = appearanceStore)
+        }
+        compose.onNodeWithTag("portable_backup_scope_warning")
+            .assertIsDisplayed()
+            .assertTextContains("Gələnlər qeydləri", substring = true)
+            .assertTextContains("cihaz tapşırıqları", substring = true)
+            .assertTextContains("Səs yaddaşı", substring = true)
+        compose.onNodeWithTag("portable_backup_password").assertIsDisplayed()
+    }
+
     @Test fun portableBackupCandidateReplacementDisposesOnlyThePreviousCandidate() {
         val context = ApplicationProvider.getApplicationContext<Context>()
         fun candidate(): PortableBackupFileCandidate {

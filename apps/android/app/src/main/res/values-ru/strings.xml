@@ -726,6 +726,7 @@
     <string name="backup_passphrase_short">Используйте не менее 12 символов.</string>
     <string name="backup_password_requirements">Задайте пароль длиной не менее 12 символов. Memora не сможет восстановить забытый пароль.</string>
     <string name="backup_encrypted_note">Копия содержит локальную базу данных и шифруется вашим паролем. Храните файл и пароль в безопасном месте.</string>
+    <string name="backup_scope_warning">Важно: эта копия сейчас содержит только защищённую базу данных. Записи из «Входящих», задачи устройства и «Голосовая память» пока не включены.</string>
     <string name="backup_export_success">Зашифрованная копия создана.</string>
     <string name="backup_export_failed">Не удалось создать копию. Если остался неполный файл, удалите его в файловом приложении.</string>
     <string name="backup_import_size">Файл слишком велик или его размер не удалось проверить.</string>

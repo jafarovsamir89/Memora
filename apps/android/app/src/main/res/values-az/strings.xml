@@ -726,6 +726,7 @@
     <string name="backup_passphrase_short">Ən azı 12 simvol istifadə edin.</string>
     <string name="backup_password_requirements">Ən azı 12 simvolluq parol seçin. Unutsanız, Memora onu bərpa edə bilməz.</string>
     <string name="backup_encrypted_note">Nüsxədə yerli verilənlər bazanız var və o, seçdiyiniz parolla şifrələnir. Faylı və parolu təhlükəsiz saxlayın.</string>
+    <string name="backup_scope_warning">Vacib: bu nüsxəyə hazırda yalnız qorunan verilənlər bazası daxildir. Gələnlər qeydləri, cihaz tapşırıqları və Səs yaddaşı hələ nüsxəyə daxil deyil.</string>
     <string name="backup_export_success">Şifrələnmiş nüsxə yaradıldı.</string>
     <string name="backup_export_failed">Nüsxə yaradıla bilmədi. Qismən fayl qalıbsa, fayl tətbiqində silin.</string>
     <string name="backup_import_size">Fayl çox böyükdür və ya ölçüsünü yoxlamaq mümkün olmadı.</string>

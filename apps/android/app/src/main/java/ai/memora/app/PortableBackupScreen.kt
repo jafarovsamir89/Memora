@@ -158,6 +158,14 @@ internal fun PortableBackupScreen() {
         MemoraCard(tint = colors.softMint) {
             Text(s(R.string.backup_encrypted_note), style = MaterialTheme.typography.bodyMedium, color = colors.muted)
         }
+        MemoraCard(tint = colors.softAccent, modifier = Modifier.testTag("backup_scope_warning_card")) {
+            Text(
+                s(R.string.backup_scope_warning),
+                style = MaterialTheme.typography.bodyMedium,
+                color = colors.onSoftAccent,
+                modifier = Modifier.testTag("portable_backup_scope_warning"),
+            )
+        }
         MemoraCard {
             OutlinedTextField(
                 value = password,

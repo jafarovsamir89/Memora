@@ -585,6 +585,38 @@ Font scale returned to 1.0 and Today was restored. Dark theme, TalkBack and full
 Gradle are NOT TESTED. No records or production code changed.
 
 
+## ACT-0294 — Inbox and Portable Backup at AZ fontScale=1.3
+
+On Android 14/API34 emulator `emulator-5554`, inspected Inbox and Portable
+Backup using synthetic Android user 11, AZ locale, light theme and
+`fontScale=1.3`. The Inbox list, search and filters remained readable in the
+reviewed viewport. The backup page showed its title, encryption guidance,
+warning, password fields and actions. With the keyboard open, lower actions can
+move below the viewport; dismissing the keyboard and scrolling exposes both
+actions. No password was entered and create/import/file-picker actions were
+not invoked.
+
+Added an AZ/RU/EN/default-locale notice that portable backup contains only the
+protected database and currently excludes Inbox captures, device tasks and
+Voice Memory. This is a disclosure of the existing gap, not a backup/restore
+implementation change. `UiShellTest.portableBackupExplainsWhichLocalStoresAreNotIncluded`
+passes. Full JVM suite: 84 suites / 434 tests, 0 failures/errors, 1 opt-in skip.
+Debug/AndroidTest builds, AndroidTest Kotlin compile and lint passed (0 errors,
+90 warnings, 2 hints). Full component visual comparison was 30/31: only the
+pre-existing `confirmation-light` mismatch remains (9.020% changed pixels,
+mean RGB delta 9.942); no golden or threshold was changed. An initial full-run
+failure in the secretary restoration test passed in isolation and in the
+subsequent full suite.
+
+The component-regression task installed APK v203 `acceptance-backup-scope-note`
+as an update. Synthetic user 11 launched to Today and continued to show its
+existing 1,000-case fixture; no data was cleared. System font scale was restored
+to 1.0 and Today was left selected. Real screenshots and compact report remain
+ignored under
+`apps/android/app/build/acceptance-lab/ACT-0294-inbox-backup-large-text/`.
+Whole-app backup, TalkBack, dark-theme sweep, physical Redmi and owner
+acceptance remain open; LAB-06 and LAB-07 are partial.
+
 ## ACT-0291 — People title duplication and Finance large-text slice
 
 At Android 14/API34, synthetic user 11, AZ `fontScale=1.3`, the v200 People
