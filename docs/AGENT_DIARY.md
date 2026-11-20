@@ -1,3 +1,7 @@
+## ACT-0308 · 2026-11-20 · Git handoff for ACT-0307
+
+ACT-0307 implementation and evidence commit `cd0172a80826d01fa12ed226a103b366121149fd` (`test(android): stabilize finance result UI journey`) was pushed to `origin/ui/redesign-v1`. After fetch, local HEAD, tracking ref and remote `git ls-remote` all matched this SHA. Remote `main` remains `ac621919aca09ece6e292eae708d55cc09de16d7`. The only untracked path is the owner-owned `docs/adr/ADR-012-keystore-wrapping-key-rotation.md`; it remains untouched and excluded. Continue open LAB-05/07/08/09 work; the synthetic relationship-route slice does not establish live Gemini, physical-device/accessibility, complete persistence, performance or release acceptance.
+
 ## ACT-0307 · 2026-11-20 · Complete synthetic cross-domain Secretary UI journey
 
 The acceptance runner's Finance-card search used a full-height swipe and could place the action button behind the pinned composer; changing only the gesture direction to a short swipe also moved away from the target. The saved UI trees showed the exact 100 AZN advance description and its button become simultaneously visible after a bounded upward swipe of 0.68→0.42 screen height. Updated `scroll_until_ui_texts` with optional paired, validated swipe fractions and added unit coverage. One diagnostic run ended when I manually invoked UIAutomator during the runner; the isolated rerun exposed the wrong gesture. No app/domain/ledger/schema code changed.

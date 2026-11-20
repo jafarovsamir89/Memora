@@ -1,3 +1,11 @@
+## ACT-0308 · 2026-11-20 · Git handoff for ACT-0307
+
+- Implementation and synchronized docs committed as `cd0172a80826d01fa12ed226a103b366121149fd` (`test(android): stabilize finance result UI journey`).
+- `git push origin ui/redesign-v1` succeeded. Post-push fetch, local HEAD, tracking ref and remote `git ls-remote` all match the commit.
+- Remote `main` remains `ac621919aca09ece6e292eae708d55cc09de16d7`; no merge or history rewrite.
+- Owner-owned `docs/adr/ADR-012-keystore-wrapping-key-rotation.md` remains untracked, untouched and excluded.
+- The runner report/screenshots are ignored under `apps/android/app/build/acceptance-lab/20261120T123759.683269Z/`; no secret, APK or user data was committed.
+
 ## ACT-0307 · 2026-11-20 · Synthetic Secretary cross-domain UI journey
 
 - Fixed only acceptance-runner scrolling: the 100 AZN result card's exact description and Finance action require a bounded upward 0.68→0.42 swipe to avoid the pinned composer. Added paired-fraction validation and unit cases; no production app/domain code changed.
