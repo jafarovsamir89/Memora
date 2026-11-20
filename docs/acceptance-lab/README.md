@@ -536,3 +536,16 @@ system font scale 1.0, app theme light, locale AZ and Today tab. No data writes,
 AI/network/microphone, owner user 0 or production changes. TalkBack, app-wide
 contrast, physical-device checks and full Gradle are NOT TESTED. This targeted
 slice does not close LAB-07: `confirmation-light` remains unresolved.
+
+## ACT-0288 — Settings at AZ fontScale 1.3
+
+On Android 14/API34 `emulator-5554`, synthetic user 11, inspected Settings in
+AZ at `fontScale=1.3`. Gemini descriptions and appearance choices wrapped and
+remained readable; permission status and long exact-alarm guidance remained
+reachable through scrolling. Gemini 3.5 Flash Lite remained selected. The
+Firebase App Check section was reached, but its token field was not focused,
+read or changed. A transient bottom screenshot was deleted due possible
+sensitive input; only a nonsensitive top capture and restored-state capture
+remain. Font scale returned to 1.0; light theme and AZ locale were preserved.
+No provider, consent, permission, data or profile changes. TalkBack, app-wide
+contrast, physical device and full Gradle are NOT TESTED.

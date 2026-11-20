@@ -1,3 +1,10 @@
+## ACT-0288 — 2026-11-20 — Settings AZ large-text review
+
+- Android 14/API34 `emulator-5554`, synthetic user 11, v198, AZ `fontScale=1.3`. Gemini descriptions and appearance controls wrap/read; Gemini 3.5 Flash Lite remained selected. Permission status and exact-alarm guidance remain readable/reachable by scroll.
+- Reached Firebase App Check settings but did not focus/read/edit token field. Deleted transient bottom screenshot due potential sensitive input; retained only nonsensitive settings-top and restored-state captures.
+- Restored fontScale 1.0; light theme, AZ locale and Today route retained. No settings/data/provider/consent/permission changes, AI/network/mic, user 0 or physical device.
+- Targeted Settings review PASS. App-wide contrast, TalkBack, physical-device acceptance and full Gradle NOT TESTED. LAB-07 still partial/fail. No code or tests changed.
+
 ## ACT-0287 — 2026-11-20 — Today/More AZ large-text visual acceptance
 
 - Android 14/API34 `emulator-5554`, synthetic user 11, app v198. Read-only UI review at AZ `fontScale=1.3` in light and dark. Today title/date, voice card and metric labels readable; priority cards remain available by scroll. Voice target 52.2×52.2dp.
