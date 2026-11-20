@@ -1,3 +1,11 @@
+## ACT-0297 · 2026-11-20 · Secretary dark-theme and IME at AZ fontScale=1.3
+
+On Android 14/API34 emulator `emulator-5554`, synthetic user 11, APK v203, inspected the core Secretary screen in Azerbaijani/dark at `fontScale=1.3`. The displayed 1,000-turn transcript is synthetic fixture content. With the empty composer focused and keyboard visible, the composer stayed above the IME; the microphone, text field and disabled empty Send remained visible. UIAutomator clickable bounds: microphone `[56,1352][193,1489]` = 52.2dp square at 420 dpi; Send parent `[913,1376][1039,1502]` = 48dp square. This was manual visual/bounds inspection, not a contrast calculation or TalkBack run.
+
+No text was entered or sent, microphone/permission was not activated, and cloud consent/provider selection was not changed. No network/model, personal data or physical Redmi was used. Restored light appearance, system fontScale 1.0 and Today on synthetic user11. Real screenshots and compact JSON are ignored under `apps/android/app/build/acceptance-lab/ACT-0297-secretary-dark-large-text/`.
+
+Status: this targeted dark-theme/IME Composer slice PASS. It does not close app-wide keyboard, voice, accessibility or physical-device acceptance. LAB-07 remains partial. Next: continue the remaining high-value UI/reliability matrix while preserving synthetic-only boundaries.
+
 ## ACT-0296 · 2026-11-20 · Backup keyboard visibility in AZ/dark
 
 On Android 14/API34 emulator `emulator-5554`, synthetic user 11, APK v203, inspected Portable Backup in Azerbaijani, dark appearance and `fontScale=1.3`. Tapped each empty password field without typing. The IME opened; the backup-scope warning and first password field stayed visible. The second field accepted focus from its visible upper area even while most of the control was behind the keyboard. The IME covers the lower guidance/actions; the form's actions require dismissing the keyboard before use. No action was invoked and no password, API token or other text was entered. This is a visual/interaction observation, not a keyboard automation or TalkBack test.

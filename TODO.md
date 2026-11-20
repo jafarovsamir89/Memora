@@ -105,6 +105,8 @@
 
 **ACT-0296 LAB-07 dark keyboard slice:** Focused both empty backup-password fields in AZ/dark at `fontScale=1.3`; IME opened, first field/warning remained visible and second field accepted focus from its visible upper portion. IME covers lower actions until dismissed; no text/action/data was submitted. Restored light/fontScale 1.0/Today. Screenshots/report under ignored `apps/android/app/build/acceptance-lab/ACT-0296-backup-ime-dark-large-text/`. No code/tests; TalkBack and owner acceptance remain NOT TESTED.
 
+**ACT-0297 LAB-07 Secretary dark/IME slice:** Reviewed synthetic 1,000-turn history and empty composer in AZ/dark at `fontScale=1.3`. Composer stayed above IME; mic 52.2dp and Send 48dp. No input/send/mic/consent action; restored light/fontScale 1.0/Today. Screenshots/report are ignored under `apps/android/app/build/acceptance-lab/ACT-0297-secretary-dark-large-text/`. No code/tests; TalkBack and owner acceptance remain NOT TESTED.
+
 Current startup evidence is limited to 20 force-stop process launches with warm emulator/storage cache (p50 1.270 s / p95 1.745 s); ActivityManager TotalTime does not prove all content has rendered. Cold OS boot and frame-ready latency remain NOT TESTED. Conversation archive search in ACT-0269 is ~1.1 s p50/~1.3 s p95 at repository level; do not infer UI jank without frame tracing. Visual readiness gating reduced the standalone golden run to the known confirmation-only mismatch; its 24 dp geometry difference has a plausible but unproven inset explanation.
 
 ## 00. Идея, границы и личные сценарии — E0

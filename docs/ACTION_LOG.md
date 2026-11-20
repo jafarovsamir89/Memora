@@ -1,3 +1,11 @@
+## ACT-0297 · 2026-11-20 · Secretary dark-theme and IME at AZ fontScale=1.3
+
+- Android 14/API34 `emulator-5554`, synthetic user11, APK v203, AZ/dark, `fontScale=1.3`; reviewed Secretary with synthetic history and empty composer.
+- PASS: IME opens while composer stays visible above it. Microphone clickable target 52.2×52.2dp; Send parent 48×48dp.
+- No message, microphone capture, consent/provider/permission change, network/AI, physical Redmi or user-0 record access.
+- Restored light appearance, fontScale 1.0, Today. Real screenshots/report ignored under `apps/android/app/build/acceptance-lab/ACT-0297-secretary-dark-large-text/`.
+- No source change or automated test. Contrast calculation, TalkBack and physical/owner acceptance are NOT TESTED; LAB-07 remains partial.
+
 ## ACT-0296 · 2026-11-20 · Backup keyboard visibility in AZ/dark
 
 - Android 14/API34 `emulator-5554`, synthetic user11, v203, AZ/dark, `fontScale=1.3`; focused both empty password fields, entered no text.

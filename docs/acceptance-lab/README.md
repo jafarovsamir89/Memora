@@ -651,6 +651,21 @@ This was a manual visual/focus check only: TalkBack, form submission, keyboard
 button behavior, physical Redmi and owner acceptance are NOT TESTED. LAB-07
 remains partial.
 
+## ACT-0297 — Secretary dark theme and keyboard at AZ fontScale=1.3
+
+On Android 14/API34 emulator `emulator-5554`, synthetic user 11, v203, the
+Secretary screen was reviewed in Azerbaijani/dark at `fontScale=1.3` using only
+synthetic archived conversation content. With the empty composer focused, the
+IME opened and the microphone, input and disabled empty Send stayed above it.
+UIAutomator measured the clickable microphone as 52.2dp square and Send as
+48dp square. No text was entered/sent, microphone activated or consent changed.
+Restored light appearance, fontScale 1.0 and Today.
+
+Screenshots/report remain ignored under
+`apps/android/app/build/acceptance-lab/ACT-0297-secretary-dark-large-text/`.
+This is not a TalkBack, contrast, voice-provider, physical-device or owner
+acceptance pass; LAB-07 remains partial.
+
 ## ACT-0291 — People title duplication and Finance large-text slice
 
 At Android 14/API34, synthetic user 11, AZ `fontScale=1.3`, the v200 People
