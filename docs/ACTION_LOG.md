@@ -2440,4 +2440,11 @@ ACT-0243 зафиксирован коммитом `1ae5a4c2eee4e8e3c55e995ead5b
 - Reports/screenshots are ignored under `apps/android/app/build/acceptance-lab/20261120T130223.737750Z/` and `20261120T130445.154180Z/`.
 - Verification: Python tooling tests 78/78; `py_compile`; `git diff --check`; AndroidTest assemble/Kotlin compile; both device probes PASS. Full JVM suite/lint, physical Redmi, TalkBack, AI/network/audio and production readiness NOT TESTED. LAB-05 remains partial.
 
+## ACT-0311 · 2026-11-20 · Explicit settings fixture across update
+
+- Added opt-in fixture phases restricted to synthetic user10's exact completed `Synthetic Upgrade Sentinel` profile. They set appearance AZ/dark, model `gemini-3.6-flash`, and six consent keys explicitly false; preconditions refuse existing settings and never grant consent. Cleanup runs from the runner's `finally`, removes only the exact fixture values, relaunches the app and compares the original default/unset 17-field snapshot.
+- Android 14 user10 v215→v216: exact settings fixture survived process restart, `adb install -r`, process restart and Activity rotation/recreation; six sentinels remained count 1 and `firstInstallTime` unchanged. Fixture cleanup plus launch/readback restored original values. No app production/domain/DB/ledger/provider/consent logic changed.
+- Shared-package user11 v216→v217 volume probe PASS: 1,000 Finance/Case/Note/Table/Task/conversation, 100 People; all five prior fixture digests stable, 0 inserts, exact pagination and unchanged `firstInstallTime`. Returned to Today/AZ/fontScale 1.0 and visually reviewed the settled screenshot. Update/rotation/cleanup screenshots reviewed; report/screenshot directories ignored under `apps/android/app/build/acceptance-lab/20261120T131819.793576Z/` and `20261120T132113.039865Z/`.
+- Python tools 82/82 PASS; `py_compile`, `git diff --check`, AndroidTest assemble/Kotlin compile PASS. Full JVM/lint, physical Redmi, TalkBack, positive-consent persistence and live AI/network/audio NOT TESTED. LAB-05 remains partial. Code commit `7425463`; docs handoff follows.
+
 ## ACT-0308 · 2026-11-20 · Git handoff for ACT-0307

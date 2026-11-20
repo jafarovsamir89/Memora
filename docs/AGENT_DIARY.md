@@ -1,3 +1,43 @@
+## ACT-0311 · 2026-11-20 · Explicit settings fixture survives APK update
+
+Closed the gap in ACT-0309 without touching production runtime: an opt-in
+AndroidTest phase can write a strictly allowlisted synthetic settings fixture
+only after the exact `Synthetic Upgrade Sentinel` profile and completed
+onboarding marker are read back. Before writing, it requires all appearance,
+model-selection and six consent keys to be absent and the effective model/theme
+to equal defaults. It saves AZ/dark appearance, explicit Gemini 3.6 model
+selection, and all six consent keys as false. It refuses unexpected preexisting
+values. A runner `finally` invokes fixture cleanup even if the device test exits
+early; cleanup removes only values that still exactly match the fixture, then
+relaunches and verifies the original full 17-field default/unset snapshot.
+No consent is enabled and no network/model call occurs.
+
+On Android 14 synthetic user10, v215→v216 passed. The fixture snapshot matched
+after a process restart before update, after `adb install -r`, after process
+restart and after Activity rotation/recreation. Six existing profile/case/person/
+money/task/action sentinels stayed exactly one, and `firstInstallTime` was
+unchanged. Cleanup restored the original absent appearance/model/consent keys,
+effective AZ/system/default-model values and false consent state; a fresh launch
+and readback passed. Real light/dark, landscape and restored Today screenshots
+were visually reviewed in the ignored run directory.
+
+Because Android shares package code across users, synthetic user11 was then
+updated v216→v217 and the 1,000-volume readback passed: 1,000 Finance/Case/Note/
+Table/Task/conversation fixtures plus 100 People, all five prior digests
+unchanged, zero inserted rows, exact conversation pagination and unchanged
+`firstInstallTime`. Returned user11 to Today/AZ/fontScale 1.0 and reviewed the
+real settled screenshot. Reports/screenshots are ignored under
+`apps/android/app/build/acceptance-lab/20261120T131819.793576Z/` and
+`20261120T132113.039865Z/`.
+
+Checks: Python tools 82/82; runner/test `py_compile`; `git diff --check`;
+AndroidTest assemble and Kotlin compilation; user10 lineage and user11 volume
+probes PASS. Full JVM suite/lint, positive consent retention, all stores/links/
+history/onboarding in one run, physical Redmi, TalkBack, live AI/audio/network
+and release readiness remain NOT TESTED. LAB-05 stays partial. Code/tests are
+committed as `7425463` (`test(acceptance): retain explicit settings through
+update`); docs handoff is pending.
+
 ## ACT-0308 · 2026-11-20 · Git handoff for ACT-0307
 
 ACT-0307 implementation and evidence commit `cd0172a80826d01fa12ed226a103b366121149fd` (`test(android): stabilize finance result UI journey`) was pushed to `origin/ui/redesign-v1`. After fetch, local HEAD, tracking ref and remote `git ls-remote` all matched this SHA. Remote `main` remains `ac621919aca09ece6e292eae708d55cc09de16d7`. The only untracked path is the owner-owned `docs/adr/ADR-012-keystore-wrapping-key-rotation.md`; it remains untouched and excluded. Continue open LAB-05/07/08/09 work; the synthetic relationship-route slice does not establish live Gemini, physical-device/accessibility, complete persistence, performance or release acceptance.

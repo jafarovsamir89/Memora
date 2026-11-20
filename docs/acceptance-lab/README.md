@@ -857,3 +857,27 @@ Reports and genuine emulator screenshots are ignored under the two
 `20261120T130445.154180Z/` run directories. Python tooling 78/78 and
 AndroidTest assemble/Kotlin compile passed. Full JVM/lint, physical device,
 TalkBack and live AI/audio are NOT TESTED. LAB-05 remains partial.
+
+## ACT-0311 — Explicit settings fixture and cleanup
+
+The lineage runner now checks that synthetic user10 starts from the default /
+unset 17-field settings state, then prepares a test-only saved fixture: AZ/dark
+appearance, explicit `gemini-3.6-flash`, and six consent-key values set to
+`false`. The AndroidTest requires the exact completed synthetic profile and
+onboarding marker, rejects preexisting settings, and never enables consent.
+The runner attempts fixture cleanup from `finally`, removes only exact fixture
+values, relaunches the app and verifies the original absent/default state.
+
+Android 14 user10 v215→v216 retained the explicit fixture across process
+restart, `adb install -r`, another process restart and Activity rotation; all six
+domain sentinels and `firstInstallTime` remained unchanged. Cleanup/readback
+passed. User11 v216→v217 volume probe also passed with 1,000 Finance/Case/Note/
+Table/Task/conversation fixtures plus 100 People, stable five prior digests,
+zero inserts and exact pagination. The settled user11 Today screenshot was
+reviewed after returning to AZ/fontScale 1.0. See ignored runs
+`20261120T131819.793576Z/` and `20261120T132113.039865Z/`.
+
+Python tooling: 82/82; Python compilation, `git diff --check`, AndroidTest APK
+assembly and AndroidTest Kotlin compilation PASS. Full JVM/lint, positive
+consent persistence, physical device, TalkBack and live AI/network/audio are
+NOT TESTED. LAB-05 remains partial.
