@@ -119,6 +119,8 @@
 
 **ACT-0303 LAB-07/LAB-08 Tasks list-end slice:** At AZ/dark `fontScale=1.3`, repeated swipes on synthetic user11 reached tasks 0996–0999 and bottom export/delete-all controls; no action/data change. This proves list-end reachability, not full per-row review or performance. Restored Today/light/fontScale 1.0. Screenshots/report ignored; no source/tests. Intermediate rows, frame time, TalkBack, contrast, target sizes, Redmi and owner acceptance NOT TESTED. LAB-07/LAB-08 remain partial.
 
+**ACT-0304 LAB-05 populated update/recovery slice:** Synthetic user10 v205→debug v206 via `adb install --user 10 -r`; six sentinels (fact/case/person/money/task/action card) remained count 1 through launch, process restart and Activity rotation; `firstInstallTime` unchanged; rotation settings restored. Markerless existing profile precheck passed. Screenshots manually reviewed; landscape lower content not scrolled. Only debug assembly, no full Gradle/lint. This is six-sentinel coverage, not complete database retention; LAB-05 stays partial. Evidence: ACT-0304 diary/action log and ignored runner report.
+
 Current startup evidence is limited to 20 force-stop process launches with warm emulator/storage cache (p50 1.270 s / p95 1.745 s); ActivityManager TotalTime does not prove all content has rendered. Cold OS boot and frame-ready latency remain NOT TESTED. Conversation archive search in ACT-0269 is ~1.1 s p50/~1.3 s p95 at repository level; do not infer UI jank without frame tracing. Visual readiness gating reduced the standalone golden run to the known confirmation-only mismatch; its 24 dp geometry difference has a plausible but unproven inset explanation.
 
 ## 00. Идея, границы и личные сценарии — E0
