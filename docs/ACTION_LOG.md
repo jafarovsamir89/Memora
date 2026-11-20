@@ -2425,6 +2425,12 @@ APK v96 / `1.1.74-entity-today-polish`, SHA-256 `b445f8ce7919af58befe49c3b967cdd
 ### Git handoff ACT-0244
 
 ACT-0243 зафиксирован коммитом `1ae5a4c2eee4e8e3c55e995ead5b1684ecb47e40` (`feat(ui): add entity details and dashboard`) и запушен в `origin/ui/redesign-v1`. После fetch local `HEAD`, `origin/ui/redesign-v1` и `git ls-remote origin refs/heads/ui/redesign-v1` совпали на указанном SHA. `main` не менялась: local `main`=`e627ab3dde4ae27ef866fad4c437ba59ebb94f5b`, remote `main`=`ac621919aca09ece6e292eae708d55cc09de16d7`. История не переписывалась. Owner-owned untracked `docs/adr/ADR-012-keystore-wrapping-key-rotation.md` оставлен нетронутым и не staged. APK, локальный API key и raw reports не отправлялись. Следующий пакет: Memory UI, затем More/дополнительные экраны в пределах владельческого разрешения.
+## ACT-0310 · 2026-11-20 · Git handoff for ACT-0309
+
+- Implementation, tests and synchronized docs committed as `c85be228c23f92edcff4c8989f2ec37dbfd6e103` (`test(acceptance): verify settings across install lineage`) and pushed to `origin/ui/redesign-v1`.
+- After fetch, local `HEAD`, `origin/ui/redesign-v1` and remote `git ls-remote` agree at `c85be228c23f92edcff4c8989f2ec37dbfd6e103`; remote `main` remains `ac621919aca09ece6e292eae708d55cc09de16d7`.
+- Only the owner-owned untracked ADR-012 remains outside the commit, unchanged. No APK, secret, raw report or user data was committed.
+
 ## ACT-0309 · 2026-11-20 · Settings/consent readback through update and restart
 
 - The synthetic user10 lineage instrumentation now exposes only a 17-field allowlist: appearance file/effective values, Gemini model ID and selection presence, and six consent-key presence/effective booleans (including the legacy audio-note key). It never returns raw preference XML, App Check tokens or identity IDs.
