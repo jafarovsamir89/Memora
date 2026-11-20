@@ -781,3 +781,7 @@ The complete table snapshot repository path was sampled 20 times after one warm-
 The raw runner report is ignored at `apps/android/app/build/acceptance-lab/20261120T103624.663755Z/report.json`; app update, fontScale 1.0 and Today state were verified. Full JVM suite, lint, visual golden suite, UI performance, dark theme, TalkBack, physical Redmi and owner acceptance remain NOT TESTED. LAB-08 remains partial.
 
 ## ACT-0291 — People title duplication and Finance large-text slice
+
+## ACT-0302 — Tasks dark AZ large-text/IME slice
+
+Read-only visual review on Android 14/API 34 `emulator-5554`, synthetic Android user 11, app v205. At AZ `fontScale=1.3` with dark appearance, the Tasks view distinguished 0 assistant tasks from 1,000 device-local synthetic tasks. With the empty name field focused, the field, disabled Add button and status filters remained above the keyboard; the IME reduced the list viewport and covered part of the first row. No task was created or changed. System scale and app appearance were restored to 1.0/light and Today. Four direct emulator captures and machine-readable evidence are in ignored `apps/android/app/build/acceptance-lab/ACT-0302-tasks-dark-large-text/`. No code/tests/Gradle. TalkBack, computed contrast, touch-target audit, complete list traversal, physical device and owner acceptance remain NOT TESTED.

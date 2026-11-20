@@ -1,3 +1,9 @@
+## ACT-0302 · 2026-11-20 · Tasks dark theme, AZ large text and keyboard
+
+On Android 14/API34 `emulator-5554`, synthetic user11/v205, reviewed Tasks in Azerbaijani/dark at `fontScale=1.3`. The screen clearly separated 0 assistant tasks from 1,000 device-local synthetic tasks; visible labels and rows remained readable. Focused the empty task-name field: the IME left the field, disabled Add task button and All/Open/Completed filters visible, while reducing the task-list viewport and covering part of the first row. Dismissed the keyboard; no text was entered and no task was created, edited, completed or deleted. Restored light appearance, AZ, system `fontScale=1.0` and Today. Four genuine screenshots and a compact JSON report are ignored under `apps/android/app/build/acceptance-lab/ACT-0302-tasks-dark-large-text/`.
+
+Status: targeted Tasks/IME visual slice PASS. No source change, automated test or Gradle run. Touch-target measurements, full 1,000-row traversal, TalkBack, calculated contrast, physical Redmi and owner acceptance remain NOT TESTED; LAB-07/LAB-08 remain partial.
+
 ## ACT-0301 · 2026-11-20 · Tables dark theme, large AZ text and keyboard
 
 - Android 14/API34 emulator `emulator-5554`, synthetic user11, v205, AZ/dark, `fontScale=1.3`.
