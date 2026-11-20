@@ -257,6 +257,23 @@ class UiShellTest {
         compose.onNodeWithText("Yaddaşda saxlanmış qeydlər.").assertDoesNotExist()
     }
 
+    @Test fun projectsRouteUsesProjectContextRatherThanPeopleSubtitle() {
+        appearanceStore = AtomicAppearanceStore(File(ApplicationProvider.getApplicationContext<Context>().cacheDir,
+            "ui-projects-settings-${UUID.randomUUID()}"), AppearanceSettings("az", "light"))
+        compose.setContent {
+            CompositionLocalProvider(LocalAgentDatabaseOverride provides agentDatabase.database) {
+                TestMemoraApp(initialTheme = "light", initialLanguage = "az", initialRoute = "projects",
+                    capturePersistenceOverride = captureStore, appearanceStoreOverride = appearanceStore)
+            }
+        }
+        compose.waitUntil(10_000) {
+            compose.onAllNodesWithTag("project_notes_subtitle").fetchSemanticsNodes().isNotEmpty()
+        }
+        compose.onAllNodesWithText("Layihələr").assertCountEquals(1)
+        compose.onNodeWithText("Əlaqəli hər şey bir yerdə").assertExists()
+        compose.onNodeWithText("Əlaqələrinizin konteksti").assertDoesNotExist()
+    }
+
     @Test fun moreCatalogPrecedesReportsAndKeepsAllFivePrimaryTabs() {
         compose.setContent {
             CompositionLocalProvider(LocalAgentDatabaseOverride provides agentDatabase.database) {

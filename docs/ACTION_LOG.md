@@ -1,3 +1,13 @@
+## ACT-0300 · 2026-11-20 · Projects subtitle regression guard
+
+- Verified route map: People alone uses `SavedObjectsScreen`; Projects and Notes use `ProjectNotesScreen`, which selects `projects_hint` vs `notes_hint`. No runtime change needed; the earlier suspected project regression does not exist.
+- Added `UiShellTest.projectsRouteUsesProjectContextRatherThanPeopleSubtitle`; focused test PASS.
+- Full Gradle PASS: 84 suites / 435 tests, 0 failures/errors, 1 opt-in live skip; debug/AndroidTest APK builds, AndroidTest Kotlin compile; lint 0/90/2; `git diff --check` PASS.
+- APK v205 installed over synthetic user11 via `adb install --user 11 -r`; `firstInstallTime` unchanged at `2026-11-18 05:13:46`.
+- Projects AZ/dark `fontScale=1.3` review: correct title/subtitle, search/refresh controls and empty state readable. No project data changed.
+- Restored AZ/light/fontScale 1.0/Today; screenshots/report ignored under `apps/android/app/build/acceptance-lab/ACT-0300-projects-subtitle-dark-large-text/`.
+- TalkBack, computed contrast, physical Redmi and owner acceptance remain NOT TESTED; LAB-07 partial.
+
 ## ACT-0299 · 2026-11-20 · Cases search and keyboard in dark AZ large text
 
 - Android 14/API34 emulator `emulator-5554`, synthetic user11, v204, AZ/dark, `fontScale=1.3`.

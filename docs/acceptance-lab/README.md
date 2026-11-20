@@ -651,6 +651,29 @@ This was a manual visual/focus check only: TalkBack, form submission, keyboard
 button behavior, physical Redmi and owner acceptance are NOT TESTED. LAB-07
 remains partial.
 
+## ACT-0300 — Projects subtitle regression guard
+
+Verified the current route map: People uses `SavedObjectsScreen`, while
+Projects and Notes use `ProjectNotesScreen`. That screen already selects
+`projects_hint` for Projects and `notes_hint` for Notes, so the suspected
+cross-route subtitle defect was not present. Added
+`UiShellTest.projectsRouteUsesProjectContextRatherThanPeopleSubtitle` to guard
+the distinct Project title/subtitle and reject People copy on that screen.
+
+- PASS: focused Project-route Compose regression.
+- PASS: full JVM 84 suites / 435 tests / 0 failures / 0 errors / 1 opt-in live
+  test skipped; debug/AndroidTest builds, AndroidTest Kotlin compile, lint
+  (0 errors / 90 warnings / 2 hints), and `git diff --check`.
+- PASS: APK v205 update on synthetic user11 preserved `firstInstallTime`
+  `2026-11-18 05:13:46`.
+- PASS: AZ/dark `fontScale=1.3` view showed the Projects title, correct subtitle,
+  search/refresh controls and empty state without clipping. No data was changed.
+- Restored light/AZ/fontScale 1.0/Today. No runtime source change.
+- NOT TESTED: TalkBack, computed contrast, physical Redmi and owner acceptance.
+
+Real screenshots and JSON report are ignored under
+`apps/android/app/build/acceptance-lab/ACT-0300-projects-subtitle-dark-large-text/`.
+
 ## ACT-0299 — Cases search and keyboard in dark AZ large text
 
 On Android 14/API34 emulator `emulator-5554`, synthetic user11, v204, opened
