@@ -1,3 +1,13 @@
+## ACT-0299 · 2026-11-20 · Cases search and keyboard in dark AZ large text
+
+- Android 14/API34 emulator `emulator-5554`, synthetic user11, v204, AZ/dark, `fontScale=1.3`.
+- Focused Cases search and entered synthetic query `0999`; search, results guidance and five status filters remained readable/reachable with keyboard open.
+- UIAutomator: status-filter clickable parents 126 px = 48 dp at 420 dpi; search target 954 x 192 px.
+- OBSERVED: IME reduces visible list height and partially covers the first result card; full card was not evaluated until keyboard dismissal. No scroll gesture with the IME open was tested.
+- Cleared query, invoked no case action, changed no data. Restored light/AZ/fontScale 1.0/Today.
+- Real screenshots/report ignored under `apps/android/app/build/acceptance-lab/ACT-0299-cases-ime-dark-large-text/`. No source change, automated test or Gradle run.
+- TalkBack, computed contrast, physical Redmi and owner acceptance remain NOT TESTED; LAB-07 remains partial.
+
 ## ACT-0298 · 2026-11-20 · People subtitle correction and dark AZ large-text review
 
 - Found and corrected the People screen's wrong “saved notes” subtitle by reusing the existing localized `people_hint`; removed obsolete duplicate resources in default/AZ/RU/EN.

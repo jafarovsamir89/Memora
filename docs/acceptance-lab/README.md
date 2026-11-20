@@ -651,6 +651,27 @@ This was a manual visual/focus check only: TalkBack, form submission, keyboard
 button behavior, physical Redmi and owner acceptance are NOT TESTED. LAB-07
 remains partial.
 
+## ACT-0299 — Cases search and keyboard in dark AZ large text
+
+On Android 14/API34 emulator `emulator-5554`, synthetic user11, v204, opened
+Cases in AZ/dark at `fontScale=1.3`, focused search, and entered only synthetic
+query `0999`.
+
+- PASS: search, result-count guidance and all five status filters remained
+  readable and visible with the Android keyboard open.
+- PASS: UIAutomator measured filter clickable parents at 126 px / 48 dp at
+  420 dpi; search target remained 954 x 192 px.
+- OBSERVED: the keyboard reduces the list viewport and partially covers the
+  first case card. Full card content was not evaluated until the keyboard was
+  dismissed; no swipe/scroll with IME open was performed.
+- No case action or data write. Query cleared. Restored light/AZ/fontScale 1.0/
+  Today. No source change or Gradle run.
+- NOT TESTED: TalkBack, computed contrast, physical Redmi, live AI/network/audio
+  and owner acceptance. LAB-07 remains partial.
+
+Real screenshots and JSON report are ignored under
+`apps/android/app/build/acceptance-lab/ACT-0299-cases-ime-dark-large-text/`.
+
 ## ACT-0298 — People subtitle and related dark-theme large-text review
 
 On Android 14/API34 emulator `emulator-5554`, named synthetic user 11, APK v204, checked People, Cases and Finance in AZ/dark at `fontScale=1.3`. The People route had reused the localized saved-notes subtitle. It now reuses the existing `people_hint` resources; an integrated Compose regression requires that People text and rejects the old notes text. The existing finance exact-ID test uses UUIDs; this volume fixture's marker IDs are intentionally not UUIDs, so finance-item routing was not established by this visual check.
