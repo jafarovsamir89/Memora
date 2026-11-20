@@ -549,3 +549,22 @@ sensitive input; only a nonsensitive top capture and restored-state capture
 remain. Font scale returned to 1.0; light theme and AZ locale were preserved.
 No provider, consent, permission, data or profile changes. TalkBack, app-wide
 contrast, physical device and full Gradle are NOT TESTED.
+
+## ACT-0289 — Bounded confirmation-sheet window/insets diagnosis
+
+On Android 14/API34 `emulator-5554`, synthetic user 11, the debug gallery
+Activity hides system bars, while the separate Material3 `ModalBottomSheet`
+dialog becomes the active inset controller and reports a visible 48dp
+navigation-bar frame. The emulator is in fully gestural mode. This is relevant
+new evidence but does not establish why the reviewed screenshot is shifted.
+
+A temporary debug-only variant set `contentWindowInsets` to zero and removed
+the inner manual `navigationBarsPadding()`. Debug build v199 succeeded; the
+targeted `confirmation-light` comparison remained exactly 9.020% changed pixels
+and mean RGB delta 9.942. The experiment was reverted. The original-source
+debug v200 was then assembled and installed with `adb install --user 11 -r`;
+MainActivity was relaunched and the original comparison failed identically.
+No golden/threshold/source change remains; the ignored screenshot is diagnostic
+evidence only. Full Gradle is NOT TESTED. Preserve the baseline and continue a
+different independent test; do not repeat this insets variant without new
+evidence.

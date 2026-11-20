@@ -1,3 +1,10 @@
+## ACT-0289 — 2026-11-20 — Bounded confirmation-sheet window/insets diagnosis
+
+- `ComponentGalleryActivity` hides `systemBars()`; live `dumpsys window` while confirmation is open shows a separate ModalBottomSheet dialog window controlling visible navigation bars at `[0,2274][1080,2400]` (48dp at 420dpi). Emulator mode is `navigation_mode=2` with gestural overlay. New evidence only; root cause remains unproven.
+- Temporary debug-only Material3 `contentWindowInsets = WindowInsets(0.dp,0.dp,0.dp,0.dp)` plus removal of manual nav-bars padding built successfully at acceptance v199. Targeted comparison remained unchanged: 9.020% changed / mean RGB delta 9.942. The temporary code was restored.
+- Original-source debug v200 `acceptance-confirmation-baseline` assembled and installed with `adb install --user 11 -r`; MainActivity relaunched. Targeted comparison reproduced the same FAIL. No golden, threshold, production code or profile content changed; no APK staged. Full Gradle NOT TESTED.
+- Status: LAB-07 remains partial/fail. Stop repeating this inset path absent new evidence and continue another independent acceptance task.
+
 ## ACT-0288 — 2026-11-20 — Settings AZ large-text review
 
 - Android 14/API34 `emulator-5554`, synthetic user 11, v198, AZ `fontScale=1.3`. Gemini descriptions and appearance controls wrap/read; Gemini 3.5 Flash Lite remained selected. Permission status and exact-alarm guidance remain readable/reachable by scroll.
