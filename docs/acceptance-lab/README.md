@@ -598,3 +598,17 @@ JSON report are under the ignored
 `apps/android/app/build/acceptance-lab/ACT-0291-people-title-finance-large-text/`.
 Font scale returned to 1.0 and Today was restored. Full Gradle, dark theme and
 TalkBack are NOT TESTED.
+## ACT-0292 — Tables at AZ fontScale=1.3
+
+On Android 14/API34 emulator `emulator-5554`, synthetic Android user 11, app v201, light theme, inspected the Tables directory and the synthetic 1,000-row / 1-column table at Azerbaijani `fontScale=1.3`.
+
+- PASS: list title, explanatory text, create/search controls, fixture table name and count remained readable.
+- PASS: detail title/count, export/add/schema/history controls and visible row cards remained readable. UI hierarchy reported row edit/delete action bounds of 126 px at 420 dpi, i.e. 48 dp.
+- PARTIAL: manual scroll reached row 0088; the last of 1,000 rows was not reached. This confirms scrolling of the sampled region only.
+- PASS: no row was edited or deleted; import/export was not invoked and no profile data changed.
+- Code observation: `TablesScreen` calls `repository.tables(scopeId)`; `ProtectedDomainRepository.tables()` attaches `dao.rows(table.tableId, scope)` for every active table before Compose lazy composition. This means UI virtualization does not bound that repository query/materialization. It is a code-path finding, not measured latency or memory regression.
+- NOT TESTED: full 1,000-row traversal, search/import/export behavior, cold/warm latency, peak memory, frame time, ANR, dark theme, TalkBack, physical Redmi and full Gradle.
+
+Five real emulator screenshots and a compact JSON report are stored under ignored `apps/android/app/build/acceptance-lab/ACT-0292-tables-large-text/`. System font scale was restored to 1.0 and Today tab. LAB-07 and LAB-08 remain partial; no UI, data, fixture, golden or threshold change is implied.
+
+## ACT-0291 — People title duplication and Finance large-text slice

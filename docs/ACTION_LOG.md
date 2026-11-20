@@ -1,3 +1,14 @@
+## ACT-0292 · 2026-11-20 · Tables AZ large-text visual slice
+
+- Android 14/API34 `emulator-5554`, synthetic user 11, app v201, AZ, light theme, `fontScale=1.3`.
+- PASS: Tables directory and 1,000-row/1-column table detail remained readable in the inspected layout. The list showed create/search and exact synthetic table count. The detail kept table actions and visible row cards readable; UI hierarchy measured edit/delete action bounds at 126 px = 48 dp (420 dpi).
+- PASS: read-only inspection; no row edited/deleted, import/export, API, permission, database, or consent action.
+- PARTIAL: manual scroll reached row 0088 of 1,000; the last of 1,000 rows was not reached. This confirms scrolling of the sampled region only.
+- Code-path observation: `TablesScreen` calls `repository.tables(scopeId)` and `ProtectedDomainRepository.tables()` loads `dao.rows(table.tableId, scope)` for every active table before Compose virtualizes visible cards. No performance measurement was taken; record as P1.2 follow-up, not a demonstrated defect.
+- NOT TESTED: latency/memory/frame/ANR, table search/import/export workflows, dark theme, TalkBack, physical Redmi, full Gradle.
+- Five genuine screenshots and report are ignored under `apps/android/app/build/acceptance-lab/ACT-0292-tables-large-text/`. Restored fontScale 1.0 and Today; user 11 and package v201 remain. `firstInstallTime=2026-11-15 16:15:34`.
+- No code/tests/fixture/data/golden/threshold changed. LAB-07 and LAB-08 remain partial. Do not infer full app accessibility/performance acceptance.
+
 ## ACT-0291 · 2026-11-20 · People title duplication and Finance large-text slice
 
 На Android 14/API34 emulator, synthetic Android user 11, v200, AZ `fontScale=1.3`, light theme, реальный People screenshot показал два одинаковых заголовка: `MemoraTopBar` уже показывает route title, а `SavedObjectsScreen` повторял его через `ScreenHeading`. Это визуально перегружало страницу при увеличенном шрифте. Заменил повторный in-page title на существующий описательный subtitle. Добавил integrated regression: название `İnsanlar` должно присутствовать ровно один раз. Сценарий был воспроизведён визуально до изменения и подтверждён после: один заголовок, subtitle, поиск и синтетические карточки читаемы.
