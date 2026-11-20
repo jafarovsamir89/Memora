@@ -2468,3 +2468,12 @@ edit, delete or export action was used; no data changed. Returned to Today and
 verified user11, `acceptance-lab-v219`, AZ/light and fontScale 1.0. This proves
 list-end reachability only, not intermediate-row audit or performance/accessibility
 acceptance. No code/tests/build changes. LAB-07/08 remain partial.
+
+
+## ACT-0313 Git handoff
+
+ACT-0313 evidence/docs were committed as `4152b2805f3acd7d8a3e36c287ec4a6f4ca7b675` (`docs: record synthetic table
+scroll acceptance`) and pushed to `origin/ui/redesign-v1`. Fetch and remote refs
+confirmed local HEAD and feature remote match; remote `main` remains
+`ac621919aca09ece6e292eae708d55cc09de16d7`. Owner-owned untracked ADR-012 was
+left untouched and excluded. No app/runtime code was changed.

@@ -19,6 +19,10 @@ test, database, domain or production setting changed; no build or test was run.
 LAB-07/08 remain partial, and the known `confirmation-light` golden failure,
 physical-device acceptance, TalkBack and performance attribution remain open.
 
+Documentation commit `4152b2805f3acd7d8a3e36c287ec4a6f4ca7b675` (`docs: record synthetic table scroll acceptance`)
+was pushed to `origin/ui/redesign-v1`; local HEAD and remote feature branch
+match, `main` is unchanged, and owner-owned ADR-012 remains untracked/untouched.
+
 ## ACT-0312 · 2026-11-20 · Full Gradle regression and post-build volume readback
 
 Ran the full emulator acceptance block on synthetic Android 14/API34 user11.
