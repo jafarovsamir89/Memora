@@ -1,3 +1,17 @@
+## ACT-0284 · 2026-11-20 · Memory AZ font scale, themes, exact detail and touch targets (LAB-07 partial)
+
+Продолжил с feature HEAD `b0b2ca7fba91da7c2f42a36cb4922ec415b90b08` после подтверждённого ACT-0283 push в `origin/ui/redesign-v1`; `main` не менялась. Подключён только Android 14/API34 `emulator-5554`, `ro.hardware=ranchu`, synthetic Android user 11. В списке ADB был только этот emulator. Profile UI setting — AZ, theme до теста light; системный fontScale был 1.0.
+
+В Settings переключил приложение light→dark и проверил Memory при `fontScale=1.3`; затем сменил на light и повторил. Реальные ADB screenshots `memory-font130-light.png` и `memory-font130-dark.png` показывают длинное описание, все фильтры и нижние вкладки. AZ-фильтры FlowRow переходят на вторую строку, текст/карточки не обрезаны; preview ожидаемо ограничен четырьмя строками с многоточием. Прокрутил архив: дата и `Dialoqu aç` доступны. Открыл точный synthetic turn из списка; длинный AlertDialog допускает внутреннюю прокрутку до ответа Memora, а кнопки закрытия/удаления остаются доступными. Android Back вернул на прежнюю позицию списка с выбранным фильтром. Удаление не нажималось.
+
+UIAutomator bounds при fontScale=1.3 на Android density 420: search clickable parent 371×73dp; chip `Söhbət tarixçəsi` 166×48dp; `Yeni qeyd` 371×48dp; нижние вкладки 76×80dp; в открытом диалоге кнопочные контейнеры `Bağla` 71×48dp и `Dialoqu sil` 110×48dp. Все проверенные hit targets ≥48dp. Существующие `ai.memora.app.ui.ThemeContrastTest` и `ai.memora.app.ThemeContrastTest`: 2 suites / 4 tests, 0 failures/errors (`:app:testDebugUnitTest --tests ... --offline` BUILD SUCCESSFUL). Это тест палитры плюс один экран, не полная видимая контрастная или TalkBack приёмка.
+
+После проверки восстановлены app theme=light, locale=AZ, system `fontScale=1.0`, system night mode=no; текущий выбранный Gemini model не менялся. Скриншоты и JSON отчёт остаются ignored в `apps/android/app/build/acceptance-lab/ACT-0284-memory-accessibility/`. Не менялись данные, код, schema, ledger, AI/provider, consent или permissions; сетевых/платных вызовов и физического устройства не было. Изменений кода нет, полный Gradle не запускался. LAB-07 остаётся partial из-за незакрытых экранов/contrast/TalkBack и подтверждённого golden mismatch `confirmation-light`. Следующий приоритет — локализовать этот mismatch, не менять golden/threshold без объяснённой ожидаемой разницы; затем продолжать матрицу экранов.
+
+### Предыдущий Git handoff ACT-0283
+
+`b0b2ca7fba91da7c2f42a36cb4922ec415b90b08` (`docs(acceptance): record 1000-turn archive traversal`) запушен в `origin/ui/redesign-v1`; `git fetch` подтвердил local HEAD=tracking ref=remote feature SHA. Remote `main`=`ac621919aca09ece6e292eae708d55cc09de16d7`. Включены только acceptance docs; ADR-012 оставлен untracked.
+
 ## ACT-0283 · 2026-11-19 · 1,000-turn Memory archive UI traversal (LAB-08 partial)
 
 После того как владелец освободил место, продолжил только в `ui/redesign-v1`; фактический HEAD `79a29d7`, единственная untracked запись — его ADR-012, не затрагивалась. Проверка выполнена на Android 14/API34 `emulator-5554`, synthetic Android user 11 `MemoraCleanInstallLab`, приложение v195. Никакой ADB-команды без явного serial не использовано; user 0/физический телефон не использовались.

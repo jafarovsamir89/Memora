@@ -1,3 +1,10 @@
+## ACT-0284 — 2026-11-20 — Memory AZ font-scale/theme and touch-target acceptance (LAB-07 partial)
+
+- Android 14/API34 `emulator-5554` only, verified `ro.hardware=ranchu`, synthetic user 11. ADB inventory showed only this emulator. Tested Memory in AZ at `fontScale=1.3` with app appearance set to light and dark. FlowRow wraps the filters; labels and bottom navigation remain visible; long previews ellipsize and stay scrollable. The exact-turn detail dialog can scroll internally to the assistant response. Back returned to the prior archive/filter position. No delete or write action was performed.
+- UIAutomator at 420 dpi: search clickable parent 371×73dp; conversation filter 166×48dp; `Yeni qeyd` 371×48dp; bottom-nav items 76×80dp; dialog `Bağla` 71×48dp and `Dialoqu sil` 110×48dp. Checked targets meet 48dp.
+- Existing light/dark palette contrast tests: `ai.memora.app.ui.ThemeContrastTest` + `ai.memora.app.ThemeContrastTest`, 2 suites / 4 tests, 0 failures/errors; targeted Gradle command BUILD SUCCESSFUL. Does not imply every screen has compliant realized contrast or that TalkBack passed.
+- Restored app theme=light, AZ locale, system fontScale=1.0, night mode=no. Gemini choice unchanged. Real screenshots and compact report are ignored in `apps/android/app/build/acceptance-lab/ACT-0284-memory-accessibility/`. No code/domain/ledger/schema/provider/consent/permission or synthetic data changes; no physical device, AI/network/mic/paid API. No full Gradle run because code was unchanged. LAB-07 stays partial; next investigate `confirmation-light` without editing goldens/thresholds.
+
 ## ACT-0283 — 2026-11-19 — Memory UI traversed the 1,000-turn archive (LAB-08 partial)
 
 - Environment: Android 14/API34 `emulator-5554`, synthetic Android user 11 `MemoraCleanInstallLab`, installed app v195, 1080×2400 Skia/OpenGL emulator. Every ADB command used the explicit emulator serial. No physical device or user 0.

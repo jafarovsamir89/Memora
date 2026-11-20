@@ -450,3 +450,27 @@ device and Macrobenchmark/Perfetto profiling NOT TESTED. Do not use these
 emulator values as a release threshold. Screenshots and the detailed report
 remain ignored under
 `apps/android/app/build/acceptance-lab/ACT-0283-memory-ui-scroll/`.
+
+## ACT-0284 — Memory at AZ fontScale 1.3, both themes
+
+On synthetic Android user 11, set the app locale to Azərbaycan, switch the
+app's own appearance setting between light and dark, and set only that
+synthetic user's system font scale to 1.3. Review the Memory header, search,
+filter chips, archive cards, detail dialog and bottom navigation. Check that
+filters may wrap instead of clipping and that long conversation details scroll
+inside their dialog while its actions remain visible. Use UIAutomator bounds to
+check at least 48dp for the search/filter/new-memory and bottom-navigation
+controls. Restore the original locale/theme/font scale after the run.
+
+On 2026-11-20, the AZ Memory screen was visually checked in both app themes.
+Filter chips wrapped to a second row without clipping. The preview remained
+clamped and scrollable; opening a synthetic row showed the exact turn, and the
+long dialog scrolled to the assistant response. Back preserved the archive
+filter/position. Measured targets at density 420 were search 371×73dp,
+conversation filter 166×48dp, new-memory action 371×48dp, bottom navigation
+76×80dp, dialog Close 71×48dp and Delete 110×48dp. Palette contrast tests
+passed 4/4. These results apply to the Memory screen and palette pairs only;
+they do not replace the full-screen accessibility audit or TalkBack check.
+App theme, AZ locale, font scale and system night mode were restored. Real
+screenshots and compact report stay ignored under
+`apps/android/app/build/acceptance-lab/ACT-0284-memory-accessibility/`.
