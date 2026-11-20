@@ -1,3 +1,26 @@
+## ACT-0314 · 2026-11-20 · Owner-requested Redmi APK install
+
+The owner explicitly requested installing Memora on the connected phone. The
+physical target was verified as Redmi `2201117SG`, Android 13; `ai.memora.app`
+was not installed before the attempt. I built the ordinary checked-in debug
+variant from `ui/redesign-v1` without the acceptance-version override:
+versionCode 106, versionName `1.1.84-case-filter-wrap`, APK SHA-256
+`b565e396d38eb335b32cdeea64d2eceaebab7545742b39f5f1c543d941250af4`.
+`:app:assembleDebug` passed. No tests were run.
+
+The first `adb install -r` was rejected as `INSTALL_FAILED_USER_RESTRICTED`.
+After the owner said they would confirm again, the same install command returned
+`Success`. Package metadata readback confirmed versionCode 106,
+versionName `1.1.84-case-filter-wrap`, and an installed APK path. The app was
+not launched. No app data existed to preserve or clear; no settings, permissions,
+security policy, Gemini, microphone or network request were changed or tested.
+No device serial was recorded.
+
+This was a narrowly owner-requested installation outside the emulator-only
+acceptance harness, not physical-device acceptance; LAB-03/05/07/08/09 and
+release readiness remain open/partial as recorded elsewhere. The APK remains an
+ignored local build output and was not committed.
+
 ## ACT-0313 · 2026-11-20 · 1,000-row table reachability
 
 On Android 14/API 34 synthetic user11, app v219, I opened More → Tables →

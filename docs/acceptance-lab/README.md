@@ -917,3 +917,14 @@ This confirms only that the UI reaches the list end. It is not an audit of all
 rows and provides no scroll-frame, memory, contrast or TalkBack measurement;
 LAB-07/08 remain partial. No source code, database, schema, domain logic or
 fixture changed, and no build/test was run in this slice.
+
+
+## ACT-0314 — Owner-requested install outside the acceptance harness
+
+At the owner's direct request, a normal checked-in debug APK (v106 /
+`1.1.84-case-filter-wrap`) was installed on the connected Redmi 2201117SG /
+Android 13 after a repeated device confirmation. `adb install -r` and package
+metadata readback succeeded. The app was not launched and no physical acceptance
+was performed. The acceptance runner remains emulator-only; this manual install
+does not change LAB status. APK SHA-256: `b565e396d38eb335b32cdeea64d2eceaebab7545742b39f5f1c543d941250af4`. The local APK stays
+ignored under `apps/android/app/build/outputs/apk/debug/`.
