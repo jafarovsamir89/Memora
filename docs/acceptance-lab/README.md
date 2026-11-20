@@ -568,3 +568,18 @@ No golden/threshold/source change remains; the ignored screenshot is diagnostic
 evidence only. Full Gradle is NOT TESTED. Preserve the baseline and continue a
 different independent test; do not repeat this insets variant without new
 evidence.
+
+
+## ACT-0290 — More, Tasks, Calendar and Notes at AZ fontScale=1.3
+
+Read-only UI slice on Android 14/API34 emulator, synthetic user 11, light theme.
+Tasks showed 0 assistant tasks and 1,000 local synthetic rows; the name field
+remained usable with IME open and no task was submitted. Calendar showed the
+correct zero-event empty state. Notes showed 30/1,000, exact synthetic search
+`0999`, then Load more advanced to 60/1,000. Large AZ text wrapped and checked
+controls remained reachable. Exact note detail navigation is BLOCKED for this
+volume fixture because its marker IDs are not UUIDs accepted by `AppRoute.target`;
+no production-route defect is inferred. Nine real screenshots and JSON report
+are under the ignored `apps/android/app/build/acceptance-lab/ACT-0290-more-screens-large-text/`.
+Font scale returned to 1.0 and Today was restored. Dark theme, TalkBack and full
+Gradle are NOT TESTED. No records or production code changed.

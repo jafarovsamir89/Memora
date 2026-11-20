@@ -1,3 +1,15 @@
+## ACT-0290 · 2026-11-20 · More, Tasks, Calendar and Notes at AZ fontScale=1.3
+
+На Android 14/API34 emulator, synthetic Android user 11, v200 / `acceptance-confirmation-baseline`, прошёл More → Tasks / Calendar / Notes в AZ при `fontScale=1.3`, light theme. В каталоге длинные описания переносились; Calendar и Notes оставались достижимы прокруткой.
+
+Tasks показал 0 задач AI-помощника и 1,000 локальных синтетических задач. Название и пояснение переносились; пустое поле удалось сфокусировать с открытой клавиатурой, действие добавления осталось над IME. Ничего не создавал, не менял и не завершал.
+
+Calendar корректно показал 0 событий и пустое состояние; фильтры и обновление были читаемы и доступны. События не создавал.
+
+Notes показал 30/1,000, поиск `0999` вернул точную синтетическую метку, очистка поиска восстановила первую страницу; после прокрутки кнопка загрузки увеличила список до 60/1,000. Проверка точного detail route BLOCKED несоответствием test fixture: `SyntheticDomainVolumeProbe` использует ID вида `synthetic-volume-note-0999`, а `AppRoute.target` допускает только UUID. Нажатие не перешло на detail; это не доказательство дефекта production-объектов с UUID. Для строгой проверки нужно использовать UUID-backed synthetic record, не подменять идентификатор и не объявлять route пройденным.
+
+Сохранил девять настоящих скриншотов и machine-readable report в ignored `apps/android/app/build/acceptance-lab/ACT-0290-more-screens-large-text/`. Вернул системный fontScale в 1.0, locale AZ, light theme, Today tab; текущий Android user — синтетический 11. Записи не менял; AI/network/mic/permission/paid API не использовал. Код, тесты, fixture, golden и threshold не менял; full Gradle и TalkBack NOT TESTED. LAB-07 остаётся partial/fail, LAB-08 не закрывается этим визуальным page check.
+
 ## ACT-0289 — 2026-11-20 — Bounded confirmation-sheet window/insets diagnosis
 
 - `ComponentGalleryActivity` hides `systemBars()`; live `dumpsys window` while confirmation is open shows a separate ModalBottomSheet dialog window controlling visible navigation bars at `[0,2274][1080,2400]` (48dp at 420dpi). Emulator mode is `navigation_mode=2` with gestural overlay. New evidence only; root cause remains unproven.
