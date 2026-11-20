@@ -1,3 +1,10 @@
+## ACT-0287 — 2026-11-20 — Today/More AZ large-text visual acceptance
+
+- Android 14/API34 `emulator-5554`, synthetic user 11, app v198. Read-only UI review at AZ `fontScale=1.3` in light and dark. Today title/date, voice card and metric labels readable; priority cards remain available by scroll. Voice target 52.2×52.2dp.
+- More catalog long descriptions wrap and remain readable; scrolled to Settings, backup, and the financial report with its explicit data-scope caveats. Observed card targets ≥48dp, header security action 48×48dp and bottom navigation 76.2×80dp. Finance data came only from the synthetic profile; no operation was executed.
+- Nine real captures and compact report are ignored at `apps/android/app/build/acceptance-lab/ACT-0287-today-large-text/`. Restored fontScale 1.0, light theme, AZ locale and Today tab; synthetic profile unchanged.
+- Targeted screen slice PASS. No code/tests changed; full Gradle, TalkBack, app-wide contrast and physical device NOT TESTED. LAB-07 remains partial/fail because `confirmation-light` and remaining screen matrix are open. Next: another independent visual/reliability slice; do not alter goldens/thresholds.
+
 ## ACT-0286 — 2026-11-20 — Secretary/Cases large-text and keyboard acceptance
 
 - Android 14/API34 `emulator-5554`, synthetic user 11 only, v198. `preflight` PASS. Secretary AZ/dark at fontScale 1.3: keyboard open, composer remains above IME; measured mic 52.2dp and disabled Send 48dp. Multiline AZ labels not clipped. Entered and cleared synthetic unsent draft; Send not activated.

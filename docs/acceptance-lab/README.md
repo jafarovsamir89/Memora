@@ -517,3 +517,22 @@ screenshots and a compact report are ignored under
 TalkBack, app-wide contrast, physical-device acceptance and full Gradle are
 NOT TESTED. This screen slice passes but does not close LAB-07: the
 `confirmation-light` golden mismatch remains unresolved.
+
+## ACT-0287 — Today and More at AZ fontScale 1.3
+
+On Android 14/API34 `emulator-5554`, synthetic Android user 11, checked Today
+and More at AZ `fontScale=1.3` in both light and dark appearance. Today’s
+large title, date, conversation card and metric labels remained readable; its
+52.2dp microphone control and priority cards were reachable. More’s long
+section descriptions wrapped without visible clipping, and scrolling reached
+Settings, backup, the financial report and its explicit scope caveats.
+Measured bottom-navigation targets were 76.2×80dp; the visible More cards and
+header security action exceeded or met 48dp. Finance data came from the
+synthetic test profile; no operation was executed.
+
+Nine genuine emulator screenshots and a compact report remain ignored under
+`apps/android/app/build/acceptance-lab/ACT-0287-today-large-text/`. Restored
+system font scale 1.0, app theme light, locale AZ and Today tab. No data writes,
+AI/network/microphone, owner user 0 or production changes. TalkBack, app-wide
+contrast, physical-device checks and full Gradle are NOT TESTED. This targeted
+slice does not close LAB-07: `confirmation-light` remains unresolved.
