@@ -1,3 +1,24 @@
+## ACT-0313 · 2026-11-20 · 1,000-row table reachability
+
+On Android 14/API 34 synthetic user11, app v219, I opened More → Tables →
+`Synthetic volume table` (1,000 rows, one column) and performed a read-only
+scroll from the first rows to the list end. The saved accessibility hierarchy
+showed rows 0000/0001 at the start and rows 0996–0999 at the end; the bottom
+navigation labels remained in the hierarchy. Real emulator screenshots of the
+table start, intermediate positions and end were visually reviewed. No row was
+added, edited or deleted; no export was started.
+
+Returned synthetic user11 to Today. Verified current user 11, package
+`acceptance-lab-v219`, AZ/light and system fontScale 1.0; the settled Today
+screenshot was visually reviewed. Evidence is ignored under
+`apps/android/app/build/acceptance-lab/ACT-0313-tables-full-scroll/`.
+
+This is end-reachability evidence, not an inspection of every intermediate row
+or a scroll/frame-time, memory, TalkBack or contrast measurement. No source,
+test, database, domain or production setting changed; no build or test was run.
+LAB-07/08 remain partial, and the known `confirmation-light` golden failure,
+physical-device acceptance, TalkBack and performance attribution remain open.
+
 ## ACT-0312 · 2026-11-20 · Full Gradle regression and post-build volume readback
 
 Ran the full emulator acceptance block on synthetic Android 14/API34 user11.

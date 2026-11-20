@@ -901,3 +901,19 @@ under `20261120T132709.372379Z/` and `20261120T133724.260778Z/`.
 
 LAB-05/08 remain partial. The known golden failure, physical-device/TalkBack,
 live AI/network/audio and release readiness remain open or NOT TESTED.
+
+
+## ACT-0313 — Synthetic table list-end reachability
+
+On Android 14/API 34 synthetic user11, app v219, the read-only UI path opened
+`Synthetic volume table` (1,000 rows) and scrolled from rows 0000/0001 through
+the final visible rows 0996–0999. The accessibility tree retained bottom-tab
+labels. Beginning, intermediate and end screenshots are genuine emulator
+captures, visually reviewed and ignored under
+`apps/android/app/build/acceptance-lab/ACT-0313-tables-full-scroll/`. No row
+mutation or export occurred. Returned to Today/AZ/light/fontScale 1.0.
+
+This confirms only that the UI reaches the list end. It is not an audit of all
+rows and provides no scroll-frame, memory, contrast or TalkBack measurement;
+LAB-07/08 remain partial. No source code, database, schema, domain logic or
+fixture changed, and no build/test was run in this slice.

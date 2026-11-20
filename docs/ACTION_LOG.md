@@ -2454,3 +2454,17 @@ ACT-0243 зафиксирован коммитом `1ae5a4c2eee4e8e3c55e995ead5b
 - Restored synthetic user11 Today/AZ/light/fontScale 1.0, portrait rotation 0, auto-rotation 1; final real screenshot reviewed. Ignored evidence: `apps/android/app/build/acceptance-lab/20261120T132709.372379Z/` and `20261120T133724.260778Z/`. LAB-05/08 remain partial; physical Redmi, TalkBack, live AI/network/audio NOT TESTED.
 
 ## ACT-0308 · 2026-11-20 · Git handoff for ACT-0307
+
+
+## ACT-0313 — Synthetic 1,000-row table reachability
+
+On Android 14/API 34 `emulator-5554`, synthetic user11/app v219, read-only UI
+traversal opened the 1,000-row `Synthetic volume table`, showed initial rows
+0000/0001 and reached rows 0996–0999. The bottom-navigation labels remained in
+the accessibility hierarchy. Genuine screenshots at the beginning, middle and
+end were manually reviewed under ignored
+`apps/android/app/build/acceptance-lab/ACT-0313-tables-full-scroll/`. No add,
+edit, delete or export action was used; no data changed. Returned to Today and
+verified user11, `acceptance-lab-v219`, AZ/light and fontScale 1.0. This proves
+list-end reachability only, not intermediate-row audit or performance/accessibility
+acceptance. No code/tests/build changes. LAB-07/08 remain partial.
