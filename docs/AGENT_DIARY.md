@@ -1,3 +1,11 @@
+## ACT-0295 · 2026-11-20 · Inbox/Backup dark-theme large-text slice
+
+Continued the read-only UI matrix on Android 14/API34 emulator `emulator-5554`, synthetic Android user 11, v203, Azerbaijani, `fontScale=1.3`. Used Settings → Appearance to select dark mode, leaving the Gemini model unchanged. Inbox heading/subtitle, New Note action, search, filters, empty state and import/export labels were readable in the captured view. Portable Backup showed the encrypted-backup note, the new explanation that Inbox captures/device tasks/Voice Memory are omitted, both password guidance fields and both actions. UIAutomator clickable parent bounds after scrolling were 126 px high at 420 dpi (48 dp) for Create Backup and Choose File. No password was entered and no backup/import/export/picker action was invoked.
+
+Restored appearance to light using the app UI, system fontScale to 1.0 and Today as the selected tab. Synthetic user 11 remained active; no database or profile data was changed, no network/AI/microphone or physical Redmi was used. Real screenshots and compact JSON are ignored under `apps/android/app/build/acceptance-lab/ACT-0295-inbox-backup-dark-large-text/`.
+
+Status: this targeted dark-theme visual/bounds slice PASS. No source or test change and therefore no automated tests in this package. This is not a computed contrast audit, TalkBack pass, keyboard-open dark-theme check, physical-device pass or app-wide acceptance. LAB-07 remains partial. Next: continue an independent matrix item; do not infer full accessibility from this screen review.
+
 ## ACT-0294 · 2026-11-20 · Inbox/Backup large-text review and backup-scope disclosure
 
 Reviewed the existing Inbox and Portable Backup user flows on Android 14/API34 emulator `emulator-5554`, named synthetic user 11, Azerbaijani locale, light appearance, system `fontScale=1.3`. Inbox entry/list/new-note/search/filter surfaces remained readable in the inspected viewport. Portable Backup displayed its AZ title, encrypted-backup note, password fields and actions. The keyboard can move lower actions out of the current viewport; dismissing it and scrolling exposes both actions. No password was entered and no create/import/export/picker action was invoked.

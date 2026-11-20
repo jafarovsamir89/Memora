@@ -1,3 +1,11 @@
+## ACT-0295 · 2026-11-20 · Inbox/Backup dark-theme large-text slice
+
+- Android 14/API34 `emulator-5554`, synthetic user 11, v203, AZ/dark, `fontScale=1.3`; Settings appearance, Inbox and Portable Backup inspected read-only.
+- PASS: title, AZ copy, search/filter/empty state, scope warning, password guidance and backup actions remained readable in sampled screens. After scrolling, both backup clickable parent targets measured 126 px = 48 dp at 420 dpi.
+- PASS: no model choice change, password entry, picker, backup create/import/export, data write, network/AI, mic, physical Redmi or user-0 data access.
+- Restored light appearance, fontScale 1.0, Today. Real screenshots/report are ignored under `apps/android/app/build/acceptance-lab/ACT-0295-inbox-backup-dark-large-text/`.
+- No source or test change; automated tests, contrast calculation, TalkBack, keyboard-open dark theme, physical device and app-wide accessibility are NOT TESTED. LAB-07 remains partial.
+
 ## ACT-0294 · 2026-11-20 · Inbox/Backup large-text review and backup-scope disclosure
 
 - Android 14/API34 `emulator-5554`, synthetic user 11, AZ/light, `fontScale=1.3`; Inbox and Portable Backup reviewed read-only. No password entry, file picker, backup creation/import, data write, AI/network, microphone, physical device or user-0 data access.

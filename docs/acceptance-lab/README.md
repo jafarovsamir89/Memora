@@ -617,6 +617,25 @@ ignored under
 Whole-app backup, TalkBack, dark-theme sweep, physical Redmi and owner
 acceptance remain open; LAB-06 and LAB-07 are partial.
 
+## ACT-0295 — Inbox and Portable Backup in dark theme at AZ fontScale=1.3
+
+On the same Android 14/API34 emulator, synthetic user 11, app v203, used the
+Settings appearance control to select dark mode and inspected Inbox and
+Portable Backup in Azerbaijani at `fontScale=1.3`. The Inbox heading, subtitle,
+new-note action, search, filters, empty state and import/export labels remained
+readable in the captured viewport. The backup title, encrypted-backup guidance,
+scope warning, password guidance and both actions also remained readable.
+After scrolling, UIAutomator reported the backup create/file clickable parents
+as `[116,1653][964,1779]` and `[116,1811][964,1937]`; each is 126 px / 48 dp at
+420 dpi. No password or action was used.
+
+Restored the app appearance to light, system font scale to 1.0, and Today tab.
+Real emulator screenshots and a compact report are ignored under
+`apps/android/app/build/acceptance-lab/ACT-0295-inbox-backup-dark-large-text/`.
+No code change or automated test was made. This is not a computed contrast,
+TalkBack, keyboard-open dark-theme, physical-device or whole-app accessibility
+pass; LAB-07 remains partial.
+
 ## ACT-0291 — People title duplication and Finance large-text slice
 
 At Android 14/API34, synthetic user 11, AZ `fontScale=1.3`, the v200 People
