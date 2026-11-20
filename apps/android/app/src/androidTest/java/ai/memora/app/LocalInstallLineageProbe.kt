@@ -5,6 +5,9 @@ import android.content.pm.ApplicationInfo
 import android.os.Build
 import android.os.Bundle
 import android.os.SystemClock
+import ai.memora.app.ai.GeminiAgentModel
+import ai.memora.app.data.AtomicAppearanceStore
+import ai.memora.app.data.GeminiAgentModelSelectionStore
 import ai.memora.app.data.LocalProfileInput
 import ai.memora.app.data.ProtectedLocalProfileStore
 import ai.memora.app.data.protectedstore.AgentDatabase
@@ -140,6 +143,7 @@ internal object LocalInstallLineageProbe {
                 check(marker.isFile && marker.readText(Charsets.UTF_8) == "complete") {
                     "existing_profile_was_not_recognized_after_update"
                 }
+                addSettingsReadback(context, result)
                 result.putString("status", "synthetic_lineage_verify_passed")
                 result.putBoolean("markerless_existing_profile_preserved", true)
             }
@@ -154,6 +158,35 @@ internal object LocalInstallLineageProbe {
             result.putString("status", "synthetic_lineage_failed")
             result.putString("stage_error", error.javaClass.simpleName.take(64))
             result
+        }
+    }
+
+    /** Reads only non-sensitive presentation/model choices and effective consent flags. */
+    private fun addSettingsReadback(context: Context, result: Bundle) {
+        val appearanceFile = File(context.filesDir, "appearance-settings-v1")
+        val appearance = AtomicAppearanceStore(appearanceFile).read()
+        result.putBoolean("appearance_file_present", appearanceFile.isFile)
+        result.putString("appearance_language", appearance.language)
+        result.putString("appearance_theme", appearance.theme)
+
+        val selectedModel = GeminiAgentModelSelectionStore(context).selectedModel()
+        check(selectedModel in GeminiAgentModel.entries) { "unknown_selected_gemini_model" }
+        val modelPreferences = context.getSharedPreferences("assistant-model-selection-v1", Context.MODE_PRIVATE)
+        result.putBoolean("model_selection_present", modelPreferences.contains("gemini-agent-model-id"))
+        result.putString("selected_gemini_model", selectedModel.modelId)
+
+        val preferences = context.getSharedPreferences("voice-first-consent", Context.MODE_PRIVATE)
+        val consentKeys = linkedMapOf(
+            "text" to "gemini-agent-text-and-answer-v2",
+            "voice" to "google-agent-audio-and-answer-v2",
+            "memory" to "gemini-persisted-memory-v1",
+            "audio_note" to "google-note-v1",
+            "live_voice" to "google-live-v1",
+            "legacy_audio" to "google-audio-and-answer-v1",
+        )
+        consentKeys.forEach { (name, key) ->
+            result.putBoolean("consent_${name}_present", preferences.contains(key))
+            result.putBoolean("consent_${name}_granted", preferences.getBoolean(key, false))
         }
     }
 

@@ -830,3 +830,30 @@ was restored and Today launched. Synthetic data only; no Gemini/network/mic,
 physical device, user0 or personal profile. LAB-03/05/07/08 remain partial;
 this is not live-model, physical-device, accessibility, full-persistence or
 release acceptance.
+
+## ACT-0309 — Settings and consent state across update/restart
+
+`device-lineage` now assembles and installs the current AndroidTest package for
+the named synthetic user before probing. Its read-only allowlist captures the
+appearance file/effective language and theme, Gemini model ID and explicit
+selection presence, and presence/effective state for six text/audio/memory
+consent keys including the legacy audio-note key. Raw preference XML, App Check tokens and identity IDs
+are excluded. The runner compares this snapshot before update and after launch,
+`adb install -r`, process restart and Activity rotation; missing fields or any
+difference fail the check.
+
+On API 34 user10, v213→v214 passed with all six existing sentinels and
+`firstInstallTime` unchanged. The actual profile had no appearance file (AZ and
+system theme defaults), no explicit model selection (effective default Gemini
+model), and all six consent keys
+absent/effectively false. This does not test custom saved settings or granted
+consent. All 17 snapshot fields matched through app launch, update, process
+restart and rotation. Because package code is shared across Android users,
+synthetic user11 was then checked at v214→v215: 1,000 Finance/Case/Note/Table/Task/conversation
+rows and 100 People retained stable counts/five digests; inserted rows were 0,
+conversation pagination was exact, and `firstInstallTime` stayed unchanged.
+Reports and genuine emulator screenshots are ignored under the two
+`apps/android/app/build/acceptance-lab/20261120T130223.737750Z/` and
+`20261120T130445.154180Z/` run directories. Python tooling 78/78 and
+AndroidTest assemble/Kotlin compile passed. Full JVM/lint, physical device,
+TalkBack and live AI/audio are NOT TESTED. LAB-05 remains partial.

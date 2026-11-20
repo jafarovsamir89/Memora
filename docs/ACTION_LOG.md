@@ -2425,3 +2425,13 @@ APK v96 / `1.1.74-entity-today-polish`, SHA-256 `b445f8ce7919af58befe49c3b967cdd
 ### Git handoff ACT-0244
 
 ACT-0243 зафиксирован коммитом `1ae5a4c2eee4e8e3c55e995ead5b1684ecb47e40` (`feat(ui): add entity details and dashboard`) и запушен в `origin/ui/redesign-v1`. После fetch local `HEAD`, `origin/ui/redesign-v1` и `git ls-remote origin refs/heads/ui/redesign-v1` совпали на указанном SHA. `main` не менялась: local `main`=`e627ab3dde4ae27ef866fad4c437ba59ebb94f5b`, remote `main`=`ac621919aca09ece6e292eae708d55cc09de16d7`. История не переписывалась. Owner-owned untracked `docs/adr/ADR-012-keystore-wrapping-key-rotation.md` оставлен нетронутым и не staged. APK, локальный API key и raw reports не отправлялись. Следующий пакет: Memory UI, затем More/дополнительные экраны в пределах владельческого разрешения.
+## ACT-0309 · 2026-11-20 · Settings/consent readback through update and restart
+
+- The synthetic user10 lineage instrumentation now exposes only a 17-field allowlist: appearance file/effective values, Gemini model ID and selection presence, and six consent-key presence/effective booleans (including the legacy audio-note key). It never returns raw preference XML, App Check tokens or identity IDs.
+- `device-lineage` rebuilds/reinstalls the current AndroidTest APK, then compares the snapshot before update and after launch, APK update, process restart and rotation. Any missing snapshot or mismatch fails the check.
+- Android 14 synthetic user10 v213→v214 passed; six existing sentinels remained count 1, `firstInstallTime` unchanged, and all 17 settings/consent snapshot fields matched across launch, install, restart and rotation. Actual values were only defaults/unset consent (appearance file absent; AZ/system, model selection absent/default, six consent keys absent/false), so custom saved values and positive consent are NOT TESTED.
+- Shared package update was checked independently on synthetic user11: v214→v215 `volume-probe --volume-count 1000` PASS; 1,000 Finance/Case/Note/Table/Task/conversation fixtures plus 100 People retained the same five digests, no rows inserted, exact conversation pagination, `firstInstallTime` unchanged. Returned to user11 Today/AZ/fontScale 1.0; actual screenshot visually reviewed.
+- Reports/screenshots are ignored under `apps/android/app/build/acceptance-lab/20261120T130223.737750Z/` and `20261120T130445.154180Z/`.
+- Verification: Python tooling tests 78/78; `py_compile`; `git diff --check`; AndroidTest assemble/Kotlin compile; both device probes PASS. Full JVM suite/lint, physical Redmi, TalkBack, AI/network/audio and production readiness NOT TESTED. LAB-05 remains partial.
+
+## ACT-0308 · 2026-11-20 · Git handoff for ACT-0307

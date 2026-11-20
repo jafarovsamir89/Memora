@@ -31,6 +31,16 @@ GRADLEW = ANDROID / "gradlew"
 PACKAGE = "ai.memora.app"
 TEST_PACKAGE = f"{PACKAGE}.test"
 LINEAGE_RUNNER = f"{TEST_PACKAGE}/ai.memora.app.GeminiSyntheticProbe"
+LINEAGE_SETTINGS_KEYS = (
+    "appearance_file_present", "appearance_language", "appearance_theme",
+    "model_selection_present", "selected_gemini_model",
+    "consent_text_present", "consent_text_granted",
+    "consent_voice_present", "consent_voice_granted",
+    "consent_memory_present", "consent_memory_granted",
+    "consent_audio_note_present", "consent_audio_note_granted",
+    "consent_live_voice_present", "consent_live_voice_granted",
+    "consent_legacy_audio_present", "consent_legacy_audio_granted",
+)
 SYNTHETIC_USER_NAME = "MemoraReliabilityLab"
 SYNTHETIC_VOLUME_USER_NAME = "MemoraCleanInstallLab"
 REPORT_ROOT = APP / "build/acceptance-lab"
@@ -961,6 +971,7 @@ def run_lineage_probe(serial: str, user_id: int, phase: str) -> dict[str, Any]:
         for key in ("profile_facts", "cases", "people", "money_events", "task_events", "action_cards")
         if fields.get(key, "").isdigit()
     }
+    settings_snapshot = {key: fields[key] for key in LINEAGE_SETTINGS_KEYS if key in fields}
     return {
         "name": f"synthetic_lineage_{phase}",
         "status": "PASS" if found and found.group(1) == expected else "FAIL",
@@ -970,6 +981,24 @@ def run_lineage_probe(serial: str, user_id: int, phase: str) -> dict[str, Any]:
             fields.get("markerless_existing_profile_preserved") == "true",
         "fresh_install_profile_empty": fields.get("profile_empty") == "true",
         "fresh_install_marker_new": fields.get("onboarding_marker_new") == "true",
+        "settings_snapshot": settings_snapshot if len(settings_snapshot) == len(LINEAGE_SETTINGS_KEYS) else None,
+    }
+
+
+def compare_lineage_settings(reference: dict[str, Any], actual: dict[str, Any], checkpoint: str) -> dict[str, Any]:
+    expected = reference.get("settings_snapshot")
+    observed = actual.get("settings_snapshot")
+    complete = isinstance(expected, dict) and isinstance(observed, dict) and \
+        set(expected) == set(LINEAGE_SETTINGS_KEYS) and set(observed) == set(LINEAGE_SETTINGS_KEYS)
+    unchanged = complete and expected == observed
+    return {
+        "name": f"settings_and_consents_{checkpoint}",
+        "status": "PASS" if unchanged else "FAIL",
+        "snapshot_complete": complete,
+        "unchanged_from_pre_update": unchanged,
+        "appearance_settings_present": observed.get("appearance_file_present") if complete else None,
+        "selected_gemini_model_id": observed.get("selected_gemini_model") if complete else None,
+        "only_allowlisted_consent_flags_captured": complete,
     }
 
 
@@ -1333,12 +1362,29 @@ def run_device_lineage(serial: str, user_id: int, seed_profile: bool,
         raise RuntimeError("both Memora and its AndroidTest package must be installed for the synthetic user")
     steps.append({"name": "synthetic_user_preflight", "status": "PASS", "synthetic_user_id": user_id})
 
+    instrumentation_build = run([
+        str(GRADLEW), ":app:assembleDebugAndroidTest",
+        "--no-daemon", "--console=plain", "--max-workers=1",
+    ], timeout=1200, env=env)
+    steps.append({"name": "assemble_lineage_instrumentation", **instrumentation_build})
+    if instrumentation_build["exit_code"] != 0:
+        return
+    test_apk = APP / "build/outputs/apk/androidTest/debug/app-debug-androidTest.apk"
+    if not test_apk.is_file():
+        steps.append({"name": "lineage_instrumentation_output", "status": "FAIL",
+                      "reason": "expected_test_apk_missing"})
+        return
+    test_install = adb(serial, "install", "--user", str(user_id), "-r", str(test_apk), timeout=300)
+    steps.append({"name": "install_lineage_instrumentation_for_synthetic_user", "status": "PASS",
+                  "result": scrub(test_install.stdout.strip())})
+
     if seed_profile:
         seed = run_lineage_probe(serial, user_id, "seed")
         steps.append(seed)
         if seed["status"] != "PASS":
             return
 
+    before: dict[str, Any] | None = None
     if not seed_profile:
         before = run_lineage_probe(serial, user_id, "verify")
         steps.append(before)
@@ -1352,6 +1398,11 @@ def run_device_lineage(serial: str, user_id: int, seed_profile: bool,
     readback = run_lineage_probe(serial, user_id, "verify")
     steps.append(readback)
     if readback["status"] != "PASS":
+        return
+    settings_baseline = before or readback
+    settings_check = compare_lineage_settings(settings_baseline, readback, "before_update_launch")
+    steps.append(settings_check)
+    if settings_check["status"] != "PASS":
         return
 
     initial_info = adb(serial, "shell", "dumpsys", "package", PACKAGE).stdout
@@ -1410,6 +1461,10 @@ def run_device_lineage(serial: str, user_id: int, seed_profile: bool,
     steps.append(readback)
     if readback["status"] != "PASS":
         return
+    settings_check = compare_lineage_settings(settings_baseline, readback, "after_update")
+    steps.append(settings_check)
+    if settings_check["status"] != "PASS":
+        return
 
     adb(serial, "shell", "am", "force-stop", "--user", str(user_id), PACKAGE)
     launch = run_user_launch(serial, user_id, out_dir, "main-after-process-restart.png")
@@ -1418,7 +1473,21 @@ def run_device_lineage(serial: str, user_id: int, seed_profile: bool,
         return
     readback = run_lineage_probe(serial, user_id, "verify")
     steps.append(readback)
-    steps.extend(run_rotation_recreation(serial, user_id, out_dir))
+    if readback["status"] != "PASS":
+        return
+    settings_check = compare_lineage_settings(settings_baseline, readback, "after_process_restart")
+    steps.append(settings_check)
+    if settings_check["status"] != "PASS":
+        return
+    rotation_steps = run_rotation_recreation(serial, user_id, out_dir)
+    steps.extend(rotation_steps)
+    if any(step.get("status") != "PASS" for step in rotation_steps):
+        return
+    readback = run_lineage_probe(serial, user_id, "verify")
+    steps.append(readback)
+    if readback["status"] != "PASS":
+        return
+    steps.append(compare_lineage_settings(settings_baseline, readback, "after_rotation"))
 
 
 def run_synthetic_volume_probe(serial: str, user_id: int, env: dict[str, str],

@@ -146,6 +146,40 @@ class ProcessDeathProbeTests(unittest.TestCase):
         self.assertFalse(checks["prepare_process_exited"])
         self.assertFalse(checks["recovery_ran_in_new_process"])
 
+
+class LineageSettingsReadbackTests(unittest.TestCase):
+    def test_settings_and_effective_consent_state_must_match_across_update(self) -> None:
+        snapshot = {
+            "appearance_file_present": "true",
+            "appearance_language": "az",
+            "appearance_theme": "dark",
+            "model_selection_present": "true",
+            "selected_gemini_model": "gemini-3.6-flash",
+            "consent_text_present": "true", "consent_text_granted": "false",
+            "consent_voice_present": "true", "consent_voice_granted": "false",
+            "consent_memory_present": "true", "consent_memory_granted": "false",
+            "consent_audio_note_present": "false", "consent_audio_note_granted": "false",
+            "consent_live_voice_present": "false", "consent_live_voice_granted": "false",
+            "consent_legacy_audio_present": "false", "consent_legacy_audio_granted": "false",
+        }
+        reference = {"settings_snapshot": snapshot}
+        actual = {"settings_snapshot": dict(snapshot)}
+        self.assertEqual(lab.compare_lineage_settings(reference, actual, "after_update")["status"], "PASS")
+
+        actual["settings_snapshot"]["consent_text_granted"] = "true"
+        check = lab.compare_lineage_settings(reference, actual, "after_update")
+        self.assertEqual(check["status"], "FAIL")
+        self.assertFalse(check["unchanged_from_pre_update"])
+
+    def test_incomplete_settings_readback_is_not_counted_as_pass(self) -> None:
+        check = lab.compare_lineage_settings(
+            {"settings_snapshot": {"appearance_theme": "dark"}},
+            {"settings_snapshot": {"appearance_theme": "dark"}},
+            "after_rotation",
+        )
+        self.assertEqual(check["status"], "FAIL")
+        self.assertFalse(check["snapshot_complete"])
+
     def test_fixture_preflight_uses_target_android_user_in_instrumentation(self) -> None:
         output = "INSTRUMENTATION_RESULT: status=synthetic_process_death_fixture_absent\n" \
             "INSTRUMENTATION_RESULT: named_test_files_absent=true\n" \
@@ -721,6 +755,32 @@ INSTRUMENTATION_RESULT: profile_empty=true
         self.assertEqual(result["status"], "PASS")
         self.assertTrue(result["fresh_install_marker_new"])
         self.assertTrue(result["fresh_install_profile_empty"])
+
+    def test_lineage_probe_captures_only_allowlisted_settings_and_consent_fields(self) -> None:
+        output = "INSTRUMENTATION_RESULT: status=synthetic_lineage_verify_passed\n" \
+            "INSTRUMENTATION_RESULT: appearance_file_present=true\n" \
+            "INSTRUMENTATION_RESULT: appearance_language=az\n" \
+            "INSTRUMENTATION_RESULT: appearance_theme=dark\n" \
+            "INSTRUMENTATION_RESULT: model_selection_present=true\n" \
+            "INSTRUMENTATION_RESULT: selected_gemini_model=gemini-3.6-flash\n" \
+            "INSTRUMENTATION_RESULT: consent_text_present=true\n" \
+            "INSTRUMENTATION_RESULT: consent_text_granted=false\n" \
+            "INSTRUMENTATION_RESULT: consent_voice_present=true\n" \
+            "INSTRUMENTATION_RESULT: consent_voice_granted=false\n" \
+            "INSTRUMENTATION_RESULT: consent_memory_present=true\n" \
+            "INSTRUMENTATION_RESULT: consent_memory_granted=false\n" \
+            "INSTRUMENTATION_RESULT: consent_audio_note_present=false\n" \
+            "INSTRUMENTATION_RESULT: consent_audio_note_granted=false\n" \
+            "INSTRUMENTATION_RESULT: consent_live_voice_present=false\n" \
+            "INSTRUMENTATION_RESULT: consent_live_voice_granted=false\n" \
+            "INSTRUMENTATION_RESULT: consent_legacy_audio_present=false\n" \
+            "INSTRUMENTATION_RESULT: consent_legacy_audio_granted=false\n"
+        with patch.object(lab, "adb", return_value=SimpleNamespace(stdout=output, stderr="")):
+            result = lab.run_lineage_probe("emulator-5556", 10, "verify")
+        self.assertEqual(result["status"], "PASS")
+        self.assertEqual(result["settings_snapshot"]["selected_gemini_model"], "gemini-3.6-flash")
+        self.assertEqual(result["settings_snapshot"]["consent_text_granted"], "false")
+        self.assertEqual(len(result["settings_snapshot"]), 17)
 
     def test_junit_totals_are_aggregated(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
