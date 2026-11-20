@@ -136,7 +136,7 @@ internal fun SavedObjectsScreen(kind: DomainKind, onOpenTarget: ((AppRoute) -> U
     ) {
         item(key = "saved_objects_heading") {
             Text(
-                s(ai.memora.app.R.string.saved_objects_subtitle),
+                s(ai.memora.app.R.string.people_hint),
                 color = colors.muted,
                 style = MaterialTheme.typography.bodyMedium,
             )

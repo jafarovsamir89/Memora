@@ -651,6 +651,22 @@ This was a manual visual/focus check only: TalkBack, form submission, keyboard
 button behavior, physical Redmi and owner acceptance are NOT TESTED. LAB-07
 remains partial.
 
+## ACT-0298 — People subtitle and related dark-theme large-text review
+
+On Android 14/API34 emulator `emulator-5554`, named synthetic user 11, APK v204, checked People, Cases and Finance in AZ/dark at `fontScale=1.3`. The People route had reused the localized saved-notes subtitle. It now reuses the existing `people_hint` resources; an integrated Compose regression requires that People text and rejects the old notes text. The existing finance exact-ID test uses UUIDs; this volume fixture's marker IDs are intentionally not UUIDs, so finance-item routing was not established by this visual check.
+
+- PASS: focused People subtitle regression.
+- PASS: full JVM suite, 84 suites / 434 tests / 0 failures / 0 errors / 1 opt-in live test skipped.
+- PASS: debug/AndroidTest APK builds, AndroidTest Kotlin compile, lint (0 errors / 90 warnings / 2 hints), and `git diff --check`.
+- PASS: v204 `adb install --user 11 -r` update; synthetic user11 `firstInstallTime` remained `2026-11-18 05:13:46`.
+- PASS: corrected People subtitle/cards, selected synthetic person detail, Cases list and selected case detail, and Finance AZ filters/expense cards remained readable in the inspected dark large-text views. No write/action was invoked.
+- Restored AZ/light/fontScale 1.0/Today. No user data, API, network, microphone, consent, permission or provider change.
+- NOT RUN: component golden suite for this package; latest known result remains 30/31 with `confirmation-light` failing at 9.020% / 9.942 mean RGB delta. TalkBack, calculated contrast, physical Redmi and owner acceptance remain NOT TESTED.
+
+Real screenshots and JSON report are ignored under
+`apps/android/app/build/acceptance-lab/ACT-0298-related-lists-dark-large-text/`.
+LAB-07 and LAB-06 remain partial; this is not production readiness.
+
 ## ACT-0297 — Secretary dark theme and keyboard at AZ fontScale=1.3
 
 On Android 14/API34 emulator `emulator-5554`, synthetic user 11, v203, the

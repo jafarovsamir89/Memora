@@ -456,7 +456,6 @@
     <string name="calendar_time_zone">Местное время · %1$s</string>
     <string name="calendar_zone_label">Часовой пояс</string>
     <string name="calendar_history_limit">Показаны последние 200 событий.</string>
-    <string name="saved_objects_subtitle">Записи из вашей памяти.</string>
     <string name="saved_objects_search">Поиск</string>
     <string name="saved_objects_empty">Пока записей нет. Попросите Memora добавить запись.</string>
     <string name="saved_objects_no_matches">По этому запросу ничего не найдено.</string>

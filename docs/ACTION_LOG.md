@@ -1,3 +1,14 @@
+## ACT-0298 · 2026-11-20 · People subtitle correction and dark AZ large-text review
+
+- Found and corrected the People screen's wrong “saved notes” subtitle by reusing the existing localized `people_hint`; removed obsolete duplicate resources in default/AZ/RU/EN.
+- Updated `UiShellTest.peopleRouteDoesNotRepeatItsTopBarTitleInsideThePage` to require the People subtitle and reject the notes subtitle.
+- Focused Compose regression PASS; full JVM 84 suites / 434 tests, 0 failures/errors, 1 opt-in live test skipped; debug and AndroidTest APK builds, AndroidTest Kotlin compile PASS; lint 0/90/2; `git diff --check` PASS.
+- Installed debug APK v204 `acceptance-people-subtitle` on Android 14/API34 synthetic user11 using `adb install --user 11 -r`; `firstInstallTime` unchanged at 2026-11-18 05:13:46.
+- Read-only visual inspection in AZ/dark at `fontScale=1.3`: corrected People subtitle and person detail; Cases list/detail; Finance filters and synthetic expense rows. Amount/currency/date/source are legible. Finance target navigation is NOT TESTED here because the volume-fixture IDs are marker strings, not UUIDs accepted by `AppRoute.target`; valid UUID route behavior remains covered by existing Compose tests.
+- Restored light/AZ/fontScale 1.0/Today. No profile records, domain state, permission, consent, provider, key, network or personal data changed/accessed.
+- Real screenshots and compact report are ignored under `apps/android/app/build/acceptance-lab/ACT-0298-related-lists-dark-large-text/`.
+- Golden visual suite not rerun; latest known result remains 30/31 with `confirmation-light` failing at 9.020% / mean RGB delta 9.942. TalkBack, computed contrast, physical Redmi and owner acceptance remain NOT TESTED; LAB-07 remains partial.
+
 ## ACT-0297 · 2026-11-20 · Secretary dark-theme and IME at AZ fontScale=1.3
 
 - Android 14/API34 `emulator-5554`, synthetic user11, APK v203, AZ/dark, `fontScale=1.3`; reviewed Secretary with synthetic history and empty composer.

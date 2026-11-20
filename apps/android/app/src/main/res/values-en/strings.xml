@@ -456,7 +456,6 @@
     <string name="calendar_time_zone">Local time · %1$s</string>
     <string name="calendar_zone_label">Time zone</string>
     <string name="calendar_history_limit">Showing the latest 200 events.</string>
-    <string name="saved_objects_subtitle">Records saved in your memory.</string>
     <string name="saved_objects_search">Search</string>
     <string name="saved_objects_empty">Nothing has been saved yet. You can ask Memora to add a record.</string>
     <string name="saved_objects_no_matches">No records match this search.</string>

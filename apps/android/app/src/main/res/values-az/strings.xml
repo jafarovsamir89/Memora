@@ -456,7 +456,6 @@
     <string name="calendar_time_zone">Yerli vaxt · %1$s</string>
     <string name="calendar_zone_label">Saat qurşağı</string>
     <string name="calendar_history_limit">Son 200 tədbir göstərilir.</string>
-    <string name="saved_objects_subtitle">Yaddaşda saxlanmış qeydlər.</string>
     <string name="saved_objects_search">Axtarış</string>
     <string name="saved_objects_empty">Hələlik heç nə yadda saxlanmayıb. Memora-dan qeyd etməsini istəyə bilərsiniz.</string>
     <string name="saved_objects_no_matches">Axtarışa uyğun qeyd tapılmadı.</string>

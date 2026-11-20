@@ -253,7 +253,8 @@ class UiShellTest {
         }
         // The More tab label is distinct; the People title should appear once.
         compose.onAllNodesWithText("İnsanlar").assertCountEquals(1)
-        compose.onNodeWithText("Yaddaşda saxlanmış qeydlər.").assertExists()
+        compose.onNodeWithText("Əlaqələrinizin konteksti").assertExists()
+        compose.onNodeWithText("Yaddaşda saxlanmış qeydlər.").assertDoesNotExist()
     }
 
     @Test fun moreCatalogPrecedesReportsAndKeepsAllFivePrimaryTabs() {
