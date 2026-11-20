@@ -881,3 +881,23 @@ Python tooling: 82/82; Python compilation, `git diff --check`, AndroidTest APK
 assembly and AndroidTest Kotlin compilation PASS. Full JVM/lint, positive
 consent persistence, physical device, TalkBack and live AI/network/audio are
 NOT TESTED. LAB-05 remains partial.
+
+## ACT-0312 — Comprehensive Gradle and volume readback
+
+Full Gradle on API 34 synthetic user11 completed 84 suites / 435 JVM tests with
+0 failures/errors and one opt-in live skip. Debug and AndroidTest builds,
+AndroidTest Kotlin compilation, and lint passed (0 lint errors, 90 warnings,
+2 hints). The aggregate check remains FAIL because the existing 31-state golden
+suite is 30/31: only `confirmation-light` failed at 9.020% changed pixels /
+9.942 mean RGB delta. The baseline and thresholds were not changed.
+
+The full build installed v218; following read-only volume run v218→v219 passed
+with five stable prior fixture digests, 1,000 rows in Finance/Case/Note/Table/
+Task/conversation, 100 People, zero insertions, exact pagination and unchanged
+`firstInstallTime`. Measurements are warm local repository reads only. The
+emulator was returned to synthetic user11 Today, AZ/light, fontScale 1.0 and
+portrait; the settled screenshot was reviewed. Reports/screenshots are ignored
+under `20261120T132709.372379Z/` and `20261120T133724.260778Z/`.
+
+LAB-05/08 remain partial. The known golden failure, physical-device/TalkBack,
+live AI/network/audio and release readiness remain open or NOT TESTED.

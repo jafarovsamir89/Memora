@@ -1,3 +1,30 @@
+## ACT-0312 · 2026-11-20 · Full Gradle regression and post-build volume readback
+
+Ran the full emulator acceptance block on synthetic Android 14/API34 user11.
+Fresh JUnit XML and the runner report show 84 suites / 435 tests, 0 failures,
+0 errors, 1 opt-in live test skipped. Debug and AndroidTest APKs plus
+AndroidTest Kotlin compilation passed. `lintDebug` completed with 0 errors,
+90 warnings and 2 hints. The aggregate runner status is FAIL solely because the
+existing 31-state visual regression reports 30 PASS and the known
+`confirmation-light` mismatch (9.020% changed pixels / mean RGB delta 9.942).
+No golden or threshold changed; no new root cause is claimed. Report:
+`apps/android/app/build/acceptance-lab/20261120T132709.372379Z/report.json`.
+
+The full Gradle task installed APK v218 on user11. A subsequent synthetic
+volume update v218→v219 passed: 1,000 Finance/Case/Note/Table/Task/conversation
+fixtures plus 100 People; all five digests remained identical, inserted rows
+were zero, pagination was exact and `firstInstallTime` was unchanged. Warm
+local p50/p95 were case search 265.966/347.553 ms, oldest conversation
+1,095/1,179 ms, table snapshot 2,625/3,392 µs, Finance analytics 157/217 ms,
+and encrypted task-store load 21/25 ms; none measures UI frame time, cold reads
+or peak memory. Final user11 screenshot shows Today in AZ/light; fontScale 1.0,
+rotation 0 and auto-rotation 1 are restored. Screenshot and report are ignored
+under `apps/android/app/build/acceptance-lab/20261120T133724.260778Z/`.
+
+This confirms that the previous user10/user11 settings-lineage and volume
+changes survive another shared-package update. LAB-05/08 remain partial. No
+physical Redmi, TalkBack, live AI/network/audio or owner data was used.
+
 ## ACT-0311 · 2026-11-20 · Explicit settings fixture survives APK update
 
 Closed the gap in ACT-0309 without touching production runtime: an opt-in
