@@ -497,3 +497,23 @@ they do not replace the full-screen accessibility audit or TalkBack check.
 App theme, AZ locale, font scale and system night mode were restored. Real
 screenshots and compact report stay ignored under
 `apps/android/app/build/acceptance-lab/ACT-0284-memory-accessibility/`.
+
+
+## ACT-0286 — Secretary and Cases at AZ fontScale 1.3
+
+On Android 14/API34 `emulator-5554`, synthetic Android user 11, inspected the
+Secretary composer with the keyboard open and the Cases list/search/detail
+flow. Secretary's composer remained above the IME; AZ labels wrapped, with
+48dp Send and 52.2dp voice targets. In Cases, filters wrapped to two rows,
+search for unique synthetic marker `0999` opened its detail, and Back restored
+the query/filter. Search target measured 363.4×73.1dp; all five filters were
+48dp high. Results below the open keyboard remain scrollable. An unsent
+synthetic composer draft was cleared without sending.
+
+System font scale was restored to 1.0; app theme is light, locale AZ, selected
+tab Today. v198 and its `firstInstallTime` remained unchanged. Six real
+screenshots and a compact report are ignored under
+`apps/android/app/build/acceptance-lab/ACT-0286-secretary-large-text-keyboard/`.
+TalkBack, app-wide contrast, physical-device acceptance and full Gradle are
+NOT TESTED. This screen slice passes but does not close LAB-07: the
+`confirmation-light` golden mismatch remains unresolved.

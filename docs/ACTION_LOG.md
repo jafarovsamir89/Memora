@@ -1,3 +1,10 @@
+## ACT-0286 — 2026-11-20 — Secretary/Cases large-text and keyboard acceptance
+
+- Android 14/API34 `emulator-5554`, synthetic user 11 only, v198. `preflight` PASS. Secretary AZ/dark at fontScale 1.3: keyboard open, composer remains above IME; measured mic 52.2dp and disabled Send 48dp. Multiline AZ labels not clipped. Entered and cleared synthetic unsent draft; Send not activated.
+- Cases AZ/light at fontScale 1.3: filters wrap; unique synthetic query `0999` opens matching visible detail; Android Back preserves query/filter. Search target 363.4×73.1dp; all five filter targets 48dp high. With IME open, results remain scrollable.
+- Six genuine emulator captures and compact report are ignored at `apps/android/app/build/acceptance-lab/ACT-0286-secretary-large-text-keyboard/`. Font scale restored to 1.0, light theme, AZ locale, Today tab; package remains v198 and `firstInstallTime` unchanged.
+- No lasting record writes, AI/network/mic/API, physical device or owner user 0. No code/tests changed; full Gradle, TalkBack and app-wide contrast NOT TESTED. Screen-slice PASS; LAB-07 remains partial/fail due the unresolved `confirmation-light` mismatch and incomplete matrix. Next: another independent acceptance slice; do not alter goldens or thresholds.
+
 ## ACT-0285 — 2026-11-20 — Bounded diagnosis of confirmation-light golden mismatch
 
 - Pinned Android 14/API34 `emulator-5554`, verified QEMU synthetic user 11, v198 final install. Targeted screenshot comparison of original source still FAIL: 9.020% changed pixels / mean RGB delta 9.942; sheet top y=1574 vs preserved golden y=1637 (63 px / 24 dp at 420 dpi).
