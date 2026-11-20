@@ -194,6 +194,30 @@ class UiHierarchyTests(unittest.TestCase):
         self.assertEqual(tree.call_count, 2)
         swipe.assert_called_once_with("emulator-5556", Path("/tmp"), "find-bmw-swipe-1", 0.50, 0.72, 0.50, 0.34)
 
+    def test_scroll_until_texts_supports_bounded_small_swipes_for_dense_chat_cards(self) -> None:
+        old = lab.ET.fromstring('<hierarchy><node text="Task card"/></hierarchy>')
+        target = lab.ET.fromstring('<hierarchy><node text="Finance action"/><node text="Exact advance"/></hierarchy>')
+        with patch.object(lab, "ui_tree", side_effect=[old, target]), \
+             patch.object(lab, "swipe_ui") as swipe:
+            result = lab.scroll_until_ui_texts(
+                "emulator-5556", Path("/tmp"), "find-finance-card",
+                {"Finance action", "Exact advance"}, "up", max_swipes=3,
+                swipe_start_y_fraction=0.68, swipe_end_y_fraction=0.42,
+            )
+
+        self.assertIs(result, target)
+        swipe.assert_called_once_with(
+            "emulator-5556", Path("/tmp"), "find-finance-card-swipe-1",
+            0.50, 0.68, 0.50, 0.42,
+        )
+
+    def test_scroll_until_texts_rejects_partial_custom_swipe_coordinates(self) -> None:
+        with self.assertRaisesRegex(ValueError, "provided together"):
+            lab.scroll_until_ui_texts(
+                "emulator-5556", Path("/tmp"), "find-finance-card",
+                {"Finance action"}, "up", swipe_start_y_fraction=0.68,
+            )
+
     def test_scroll_search_tries_the_other_direction_after_saved_state_boundary(self) -> None:
         target = lab.ET.fromstring('<hierarchy><node text="Exact BMW task"/></hierarchy>')
         with patch.object(lab, "scroll_until_ui_texts", side_effect=[RuntimeError("up boundary"), target]) as search:
@@ -226,7 +250,8 @@ class UiHierarchyTests(unittest.TestCase):
         directional_scroll.assert_called_once_with("emulator-5556", out_dir,
             "secretary-focus-bmw-finance-action",
             {"Bölməni aç Maliyyə", "Synthetic BMW repair advance received."},
-            direction="up", max_swipes=8)
+            direction="up", max_swipes=8,
+            swipe_start_y_fraction=0.68, swipe_end_y_fraction=0.42)
         self.assertEqual(wait.call_args_list, [
             call("emulator-5556", out_dir, "secretary-bmw-task-action", {
                 "Bölməni aç Tapşırıqlar", "Synthetic confirm BMW repair appointment",

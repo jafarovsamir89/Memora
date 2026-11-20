@@ -349,10 +349,19 @@ def launch_synthetic_today(serial: str, out_dir: Path) -> ET.Element:
 
 
 def scroll_until_ui_texts(serial: str, out_dir: Path, name: str, expected: set[str],
-                         direction: str, max_swipes: int = 8) -> ET.Element:
+                         direction: str, max_swipes: int = 8,
+                         swipe_start_y_fraction: float | None = None,
+                         swipe_end_y_fraction: float | None = None) -> ET.Element:
     if direction not in {"up", "down"} or max_swipes < 0:
         raise ValueError("scroll search requires a bounded up/down direction")
-    start_y, end_y = (0.72, 0.34) if direction == "up" else (0.34, 0.72)
+    if (swipe_start_y_fraction is None) != (swipe_end_y_fraction is None):
+        raise ValueError("custom swipe start and end fractions must be provided together")
+    if swipe_start_y_fraction is None:
+        start_y, end_y = (0.72, 0.34) if direction == "up" else (0.34, 0.72)
+    else:
+        start_y, end_y = swipe_start_y_fraction, swipe_end_y_fraction
+        if not (0.0 <= start_y <= 1.0 and 0.0 <= end_y <= 1.0 and start_y != end_y):
+            raise ValueError("custom swipe fractions must be distinct screen-relative positions")
     for attempt in range(max_swipes + 1):
         root = ui_tree(serial, out_dir, f"{name}-{attempt + 1}")
         if expected.issubset(ui_texts(root)):
@@ -400,6 +409,10 @@ def capture_bmw_conversation_action_screenshots(serial: str, out_dir: Path) -> l
     scroll_until_ui_texts(
         serial, out_dir, "secretary-focus-bmw-finance-action",
         {finance_action, finance_description}, direction="up", max_swipes=8,
+        # The finance description is initially visible while its action is below
+        # the pinned composer. Short upward swipes reveal the button without
+        # skipping the result card, unlike a full-height list swipe.
+        swipe_start_y_fraction=0.68, swipe_end_y_fraction=0.42,
     )
     wait_for_ui_texts(serial, out_dir, "secretary-bmw-finance-action",
                       {finance_action, finance_description}, stable_samples=2)

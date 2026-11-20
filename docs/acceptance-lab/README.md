@@ -801,3 +801,32 @@ On synthetic user10/v206, the initial AZ/light landscape viewport showed the fix
 ## ACT-0306 — Shared package version and synthetic volume retention
 
 A user-scoped install updates Android's shared package code version. After user10 v205→v206, the named synthetic user11 was explicitly checked and later updated v206→v207 through `volume-probe --volume-count 1000`. `firstInstallTime` stayed unchanged; Finance/Case/Note/Table/Task/conversation counts remained 1,000, People remained 100, all prior ACT-0293 fixture digests matched and every inserted-row counter was zero. Exact conversation pagination passed. The probe also builds the debug and AndroidTest APKs; its measurements are warm repository reads, not UI/cold/peak performance. Full JVM suite and lint were NOT RUN. Ignored runner report: `20261120T120603.446281Z`.
+
+## ACT-0307 — Secretary cross-domain UI journey
+
+On the named synthetic Android user10, acceptance APK v210→v211 updated in
+place and preserved `firstInstallTime`. Final `finance-ui-journey` report
+`20261120T123759.683269Z` is PASS. The actual Compose UI opened the exact
+synthetic 100 AZN advance from Secretary, followed exact scoped links through
+Finance → Case → Person → Finance → Task → source → original conversation,
+then verified Android Back restoration. The fixture readback identifies the
+300 AZN agreed amount, 100 AZN paid and 200 AZN outstanding. A separate
+ambiguous Ruslan flow remained `NEEDS_CONFIRMATION` with finance row count
+unchanged. A synthetic correction read back 45 AZN with one append-only -5 AZN
+event; UI prepared an exact-ID draft without sending it. Total: 20 real
+emulator screenshots, stored under the ignored run's `screenshots/` directory.
+
+The first isolated scroll adjustment moved the finance card in the wrong
+direction; the final bounded gesture is an upward swipe from 0.68 to 0.42 of
+screen height, which makes the exact advance description and its button visible
+together above the composer. One earlier diagnostic also overlapped a manual
+UIAutomator dump with the runner and exited 137; it was not counted as an app
+failure. `python3 -m unittest discover -s tools/tests` passed 75/75, Python
+compilation and `git diff --check` passed. Debug/AndroidTest APKs and AndroidTest
+Kotlin compilation passed through the runner; full Gradle/JVM and lint were NOT
+RUN. User11 was selected after install, its shared package version v211 and
+unchanged `firstInstallTime=2026-11-18 05:13:46` were verified, fontScale 1.0
+was restored and Today launched. Synthetic data only; no Gemini/network/mic,
+physical device, user0 or personal profile. LAB-03/05/07/08 remain partial;
+this is not live-model, physical-device, accessibility, full-persistence or
+release acceptance.

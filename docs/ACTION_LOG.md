@@ -1,3 +1,14 @@
+## ACT-0307 · 2026-11-20 · Synthetic Secretary cross-domain UI journey
+
+- Fixed only acceptance-runner scrolling: the 100 AZN result card's exact description and Finance action require a bounded upward 0.68→0.42 swipe to avoid the pinned composer. Added paired-fraction validation and unit cases; no production app/domain code changed.
+- Android 14/API34, `emulator-5554`, synthetic user10. Debug/AndroidTest APK v210→v211 installed over the seeded profile; lineage PASS and `firstInstallTime` unchanged.
+- Final report `apps/android/app/build/acceptance-lab/20261120T123759.683269Z/report.json`: overall PASS. Exact finance → case → person → finance → task → source → originating conversation route and Android Back; 15 real screenshots. Ambiguous Ruslan clarification/no-write PASS. Correction fixture readback and unsent exact-ID correction draft/history/Back PASS with four more screenshots. Total 20 screenshots, all ignored under the run directory.
+- Fixture readback: 300 AZN agreed obligation, 100 AZN advance applied, 200 AZN outstanding; exact IDs/links and source messages; ambiguous case stays un-targeted and finance count unchanged; one append-only -5 AZN adjustment produces the exact 45 AZN readback.
+- Two diagnostic runs: one UIAutomator dump raced with my manual dump and exited 137; the next isolated run showed the wrong swipe direction. The third run passed without concurrent device automation.
+- `python3 -m unittest discover -s tools/tests`: 75/75 PASS; Python compilation and `git diff --check` PASS. Debug + AndroidTest APK builds and AndroidTest Kotlin compilation PASS via runner. Full Gradle/JVM suite and lint NOT RUN.
+- After the user10 install, returned to synthetic user11, confirmed shared APK v211, unchanged `firstInstallTime=2026-11-18 05:13:46`, fontScale 1.0 and Today. Synthetic-only data; no user0, physical device, Gemini/network or mic.
+- LAB-03/05/07/08 remain partial; this is not live Gemini, physical Redmi/TalkBack, whole-profile persistence, app-wide accessibility/performance or release acceptance.
+
 ## ACT-0306 · 2026-11-20 · Verify second synthetic profile after shared APK update
 
 Android’s `adb install --user 10 -r` updated the package version shared with other enabled Android users. To verify the second synthetic profile rather than assuming its code remained at v205, ran `volume-probe --serial emulator-5554 --synthetic-user-id 11 --volume-count 1000`. The runner updated package v206→v207 (also built the AndroidTest APK) and `firstInstallTime` remained unchanged. Instrumentation PASS: 1,000 Finance, Case, Note, Table, Task and conversation fixtures plus 100 People read back; each of the five cross-store/person/conversation fixture digests matched ACT-0293; all inserted-row counters were 0; exact conversation pagination passed. Thus the v206 package update and v207 repeat preserved this synthetic profile.
