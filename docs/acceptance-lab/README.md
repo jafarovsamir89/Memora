@@ -651,6 +651,26 @@ This was a manual visual/focus check only: TalkBack, form submission, keyboard
 button behavior, physical Redmi and owner acceptance are NOT TESTED. LAB-07
 remains partial.
 
+## ACT-0301 — Tables in dark AZ large text with keyboard
+
+On Android 14/API34 emulator `emulator-5554`, synthetic user11, v205, reviewed
+the 1,000-row synthetic editable table in AZ/dark at `fontScale=1.3`.
+
+- PASS: Tables list create/search and 1,000-row metadata remained readable.
+- PASS: detail title/count, import/export, add-row, schema-history, deleted-row
+  toggle and visible row cards/actions remained readable.
+- PASS: opened an empty Add Row form and focused its empty field; the field and
+  Save/Cancel remained visible with the Android keyboard open. Cancelled without
+  typing or saving; no data changed.
+- UIAutomator reported visible control/action height 71 px (~61 dp at 420 dpi);
+  this is not a complete touch-target audit. Full table traversal not performed.
+- Restored AZ/light/fontScale 1.0/Today. No source change or automated tests.
+- NOT TESTED: TalkBack, computed contrast, import/export behavior, physical
+  Redmi and owner acceptance. LAB-07/LAB-08 remain partial.
+
+Real screenshots and JSON report are ignored under
+`apps/android/app/build/acceptance-lab/ACT-0301-tables-dark-large-text/`.
+
 ## ACT-0300 — Projects subtitle regression guard
 
 Verified the current route map: People uses `SavedObjectsScreen`, while

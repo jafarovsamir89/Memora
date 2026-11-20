@@ -1,3 +1,13 @@
+## ACT-0301 · 2026-11-20 · Tables dark theme, large AZ text and keyboard
+
+- Android 14/API34 emulator `emulator-5554`, synthetic user11, v205, AZ/dark, `fontScale=1.3`.
+- PASS: 1,000-row table list and detail title/count, create/search, import/export, schema-history, deleted-row toggle and visible rows/actions remained readable.
+- PASS: opened Add Row and focused an empty field. IME left field and Save/Cancel visible. Cancelled without text or save; no table data changed.
+- Visible buttons/actions measured 71 px (~61 dp) at 420 dpi; this is not a complete touch-target audit. Full 1,000-row traversal was not performed.
+- Restored light/AZ/fontScale 1.0/Today. Screenshots/report ignored under `apps/android/app/build/acceptance-lab/ACT-0301-tables-dark-large-text/`.
+- No production source change, automated tests, Gradle, import/export, network/model, microphone or permission action.
+- TalkBack, computed contrast, physical Redmi and owner acceptance remain NOT TESTED; LAB-07/LAB-08 partial.
+
 ## ACT-0300 · 2026-11-20 · Projects subtitle regression guard
 
 - Verified route map: People alone uses `SavedObjectsScreen`; Projects and Notes use `ProjectNotesScreen`, which selects `projects_hint` vs `notes_hint`. No runtime change needed; the earlier suspected project regression does not exist.
