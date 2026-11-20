@@ -1,3 +1,30 @@
+## ACT-0315 · 2026-11-20 · Secretary draft before Activity state save
+
+On Android 14/API 34 `emulator-5554`, explicitly current synthetic user11/app
+v219, confirmed the Secretary composer was empty, entered the unique synthetic
+string `SyntheticPreSaveDraft20261120`, and did not press Send. With Secretary
+still foreground and the IME open, issued `am force-stop --user 11
+ai.memora.app`; the old PID exited. Relaunching MainActivity opened Today. After
+navigating to Secretary, the composer was empty and the test string was not
+visible. The draft was not sent, no AI/network call occurred, and no domain
+record was created. This is a negative result for a foreground force-stop before
+an Activity saved-state handoff; it is not an OS low-memory kill simulation.
+
+The source currently holds composer text in Compose `rememberSaveable`. It is
+reasonable to infer that without Android's saved Activity bundle, the transient
+text is lost. No change was made to persist unsent text to disk: that would
+extend retention of user-entered content and needs a product-policy decision.
+This remains a recovery gap/limitation, not evidence that normal rotation or
+Android-saved-state restoration fails. An actual low-memory kill before saved
+state remains NOT TESTED.
+
+Real screenshots before force-stop, after reopening Secretary and after
+returning to Today were manually reviewed under ignored
+`apps/android/app/build/acceptance-lab/ACT-0315-pre-save-process-death/`.
+Returned synthetic user11 to Today/AZ/light/fontScale 1.0. No production source,
+test, DB, settings, consent, domain, ledger or schema changed; no build/tests
+were run. LAB-09 stays partial.
+
 ## ACT-0314 · 2026-11-20 · Owner-requested Redmi APK install
 
 The owner explicitly requested installing Memora on the connected phone. The

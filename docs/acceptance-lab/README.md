@@ -928,3 +928,19 @@ metadata readback succeeded. The app was not launched and no physical acceptance
 was performed. The acceptance runner remains emulator-only; this manual install
 does not change LAB status. APK SHA-256: `b565e396d38eb335b32cdeea64d2eceaebab7545742b39f5f1c543d941250af4`. The local APK stays
 ignored under `apps/android/app/build/outputs/apk/debug/`.
+
+
+## ACT-0315 — Foreground process stop before Activity saved state
+
+On Android 14/API34 synthetic user11/v219, verified an empty Secretary composer,
+entered a unique synthetic string and did not send it. With Secretary still in
+the foreground, `am force-stop --user 11 ai.memora.app` terminated the app PID.
+After launching MainActivity (which returned to Today) and opening Secretary,
+the composer was empty. This is a negative result for that explicit force-stop
+path. It is not a genuine OS low-memory kill, so LAB-09 low-memory behavior
+remains NOT TESTED. The text was never sent and no model/network/domain action
+occurred. No persistent draft storage was added because it would expand text
+retention beyond the current transient saved-state behavior. Real screenshots
+were reviewed under ignored
+`apps/android/app/build/acceptance-lab/ACT-0315-pre-save-process-death/`; the
+emulator was returned to synthetic user11 Today/AZ/light/fontScale 1.0.
