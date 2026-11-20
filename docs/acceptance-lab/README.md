@@ -451,6 +451,29 @@ emulator values as a release threshold. Screenshots and the detailed report
 remain ignored under
 `apps/android/app/build/acceptance-lab/ACT-0283-memory-ui-scroll/`.
 
+## ACT-0285 — Bounded diagnosis of the confirmation-sheet golden mismatch
+
+On Android 14/API34 `emulator-5554`, synthetic Android user 11, the original
+`confirmation-light` capture still fails against the reviewed golden: 9.020%
+changed pixels / mean RGB delta 9.942. The sheet begins at y=1574 versus y=1637
+in the golden, a 63 px / 24 dp vertical offset at 420 dpi.
+
+The capture produced after the old 0.85-second delay was byte-identical to the
+current settled original-source capture, so settle timing is not the cause. A
+temporary debug-only attempt to hide system bars and use edge-to-edge for the
+modal did not make the comparison pass (9.013% / 9.843) and was reverted.
+Removing manual `navigationBarsPadding()` had also been ineffective in an
+earlier bounded test. The actual root cause remains unproven. Preserve the
+golden and thresholds; do not update them. The original-source debug build v198
+was installed with `adb install --user 11 -r`; `firstInstallTime` remained
+`2026-11-15 16:15:34`. No runtime or profile data was changed.
+
+The screenshots and compact JSON report are ignored at
+`apps/android/app/build/acceptance-lab/ACT-0285-confirmation-golden-diagnostic/`.
+Status: this golden remains FAIL and LAB-07 remains partial. Continue other
+independent visual/accessibility checks; revisit only with a new diagnostic
+approach.
+
 ## ACT-0284 — Memory at AZ fontScale 1.3, both themes
 
 On synthetic Android user 11, set the app locale to Azərbaycan, switch the

@@ -1,3 +1,10 @@
+## ACT-0285 — 2026-11-20 — Bounded diagnosis of confirmation-light golden mismatch
+
+- Pinned Android 14/API34 `emulator-5554`, verified QEMU synthetic user 11, v198 final install. Targeted screenshot comparison of original source still FAIL: 9.020% changed pixels / mean RGB delta 9.942; sheet top y=1574 vs preserved golden y=1637 (63 px / 24 dp at 420 dpi).
+- A screenshot captured after the legacy 0.85 s delay was byte-identical to the current settled original-source screenshot, ruling out the runner settle wait as the explanation. A temporary debug-only attempt to hide system bars and set `decorFitsSystemWindows(false)` for the modal still failed at 9.013% / 9.843. It was reverted. The current source has no experiment changes. Previously removing manual `navigationBarsPadding()` was also ineffective. Root cause remains unknown; do not change or replace golden/threshold.
+- Original-source v198 debug assembly passed and `adb install --user 11 -r` succeeded; package `firstInstallTime` stayed `2026-11-15 16:15:34`. No user profile write, production/domain/ledger/schema/provider/consent/permission change, AI/network/mic/paid API, physical device, or user-0 access. No full Gradle suite; only debug builds and the targeted visual comparison were run. Screenshots/report are ignored under `apps/android/app/build/acceptance-lab/ACT-0285-confirmation-golden-diagnostic/`.
+- Status: LAB-07 remains partial/fail. Next: continue an independent screen acceptance slice instead of repeating the same inset hypothesis without new evidence.
+
 ## ACT-0284 — 2026-11-20 — Memory AZ font-scale/theme and touch-target acceptance (LAB-07 partial)
 
 - Android 14/API34 `emulator-5554` only, verified `ro.hardware=ranchu`, synthetic user 11. ADB inventory showed only this emulator. Tested Memory in AZ at `fontScale=1.3` with app appearance set to light and dark. FlowRow wraps the filters; labels and bottom navigation remain visible; long previews ellipsize and stay scrollable. The exact-turn detail dialog can scroll internally to the assistant response. Back returned to the prior archive/filter position. No delete or write action was performed.
