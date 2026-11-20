@@ -21,6 +21,10 @@ acceptance harness, not physical-device acceptance; LAB-03/05/07/08/09 and
 release readiness remain open/partial as recorded elsewhere. The APK remains an
 ignored local build output and was not committed.
 
+The build/install record was committed and pushed as `72086d1d063a5f2f583db319a56e8859f37515c8`. After fetch, local
+HEAD and `origin/ui/redesign-v1` matched; remote `main` stayed
+`ac621919aca09ece6e292eae708d55cc09de16d7`; owner ADR-012 remains untouched.
+
 ## ACT-0313 · 2026-11-20 · 1,000-row table reachability
 
 On Android 14/API 34 synthetic user11, app v219, I opened More → Tables →

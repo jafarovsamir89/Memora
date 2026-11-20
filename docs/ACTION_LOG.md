@@ -2501,3 +2501,12 @@ This was a narrowly owner-requested installation outside the emulator-only
 acceptance harness, not physical-device acceptance; LAB-03/05/07/08/09 and
 release readiness remain open/partial as recorded elsewhere. The APK remains an
 ignored local build output and was not committed.
+
+
+## ACT-0314 Git handoff
+
+The build/install record was committed as `72086d1d063a5f2f583db319a56e8859f37515c8` (`docs: record owner-requested
+Redmi install`) and pushed to `origin/ui/redesign-v1`. Fetch and `git ls-remote`
+confirmed the local and remote feature refs match. Remote `main` remains
+`ac621919aca09ece6e292eae708d55cc09de16d7`; owner-owned ADR-012 remains
+untracked, untouched and excluded.
