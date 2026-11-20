@@ -117,6 +117,8 @@
 
 **ACT-0302 LAB-07 Tasks dark/IME slice:** Synthetic user11/v205, AZ/dark `fontScale=1.3`: 0 assistant vs 1,000 local tasks remained distinguishable; field, disabled Add button and filters stayed visible with keyboard open, though first task row was partly occluded. No data change; restored light/AZ/fontScale 1.0/Today. No code/tests. Touch targets, TalkBack, contrast, full traversal, Redmi and owner acceptance NOT TESTED. Evidence: ACT-0302 diary/action log and ignored screenshots/report. LAB-07/LAB-08 remain partial.
 
+**ACT-0303 LAB-07/LAB-08 Tasks list-end slice:** At AZ/dark `fontScale=1.3`, repeated swipes on synthetic user11 reached tasks 0996–0999 and bottom export/delete-all controls; no action/data change. This proves list-end reachability, not full per-row review or performance. Restored Today/light/fontScale 1.0. Screenshots/report ignored; no source/tests. Intermediate rows, frame time, TalkBack, contrast, target sizes, Redmi and owner acceptance NOT TESTED. LAB-07/LAB-08 remain partial.
+
 Current startup evidence is limited to 20 force-stop process launches with warm emulator/storage cache (p50 1.270 s / p95 1.745 s); ActivityManager TotalTime does not prove all content has rendered. Cold OS boot and frame-ready latency remain NOT TESTED. Conversation archive search in ACT-0269 is ~1.1 s p50/~1.3 s p95 at repository level; do not infer UI jank without frame tracing. Visual readiness gating reduced the standalone golden run to the known confirmation-only mismatch; its 24 dp geometry difference has a plausible but unproven inset explanation.
 
 ## 00. Идея, границы и личные сценарии — E0

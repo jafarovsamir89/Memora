@@ -1,3 +1,9 @@
+## ACT-0303 · 2026-11-20 · Reach the end of the 1,000-task synthetic list
+
+On Android 14/API34 `emulator-5554`, synthetic user11/v205, continued the Tasks review in AZ/dark at `fontScale=1.3`. Repeated vertical swipes from the list top reached the final visible records, `Synthetic volume task 0996` through `0999`; the bottom also showed export and delete-all controls. Final labels/actions were readable. This demonstrates reaching the list end, not an item-by-item audit or a performance measurement. No checkbox, edit, delete, export or delete-all action was activated; no task data changed. Restored Today, light appearance and fontScale 1.0. Three real screenshots and JSON report are ignored under `apps/android/app/build/acceptance-lab/ACT-0303-tasks-full-scroll/`.
+
+Status: bounded list-end check PASS_LIMITED. No source/tests/Gradle. Intermediate-row review, scroll frame time, touch targets, TalkBack, computed contrast, physical Redmi and owner acceptance remain NOT TESTED; LAB-07/LAB-08 remain partial.
+
 ## ACT-0302 · 2026-11-20 · Tasks dark theme, AZ large text and keyboard
 
 On Android 14/API34 `emulator-5554`, synthetic user11/v205, reviewed Tasks in Azerbaijani/dark at `fontScale=1.3`. The screen clearly separated 0 assistant tasks from 1,000 device-local synthetic tasks; visible labels and rows remained readable. Focused the empty task-name field: the IME left the field, disabled Add task button and All/Open/Completed filters visible, while reducing the task-list viewport and covering part of the first row. Dismissed the keyboard; no text was entered and no task was created, edited, completed or deleted. Restored light appearance, AZ, system `fontScale=1.0` and Today. Four genuine screenshots and a compact JSON report are ignored under `apps/android/app/build/acceptance-lab/ACT-0302-tasks-dark-large-text/`.
