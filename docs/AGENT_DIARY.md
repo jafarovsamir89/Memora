@@ -1,3 +1,13 @@
+## ACT-0291 · 2026-11-20 · People title duplication and Finance large-text slice
+
+На Android 14/API34 emulator, synthetic Android user 11, v200, AZ `fontScale=1.3`, light theme, реальный People screenshot показал два одинаковых заголовка: `MemoraTopBar` уже показывает route title, а `SavedObjectsScreen` повторял его через `ScreenHeading`. Это визуально перегружало страницу при увеличенном шрифте. Заменил повторный in-page title на существующий описательный subtitle. Добавил integrated regression: название `İnsanlar` должно присутствовать ровно один раз. Сценарий был воспроизведён визуально до изменения и подтверждён после: один заголовок, subtitle, поиск и синтетические карточки читаемы.
+
+В том же synthetic профиле read-only проверил Finance: 1,000 локальных synthetic expense rows читаются при AZ `fontScale=1.3`; направление, контрагент, сумма, дата и источник видимы. Debt-фильтр показывает корректное empty state при отсутствии долгов и поясняет границы локальных записей; финансовые данные не менялись.
+
+Focused tests PASS: `UiShellTest.peopleRouteDoesNotRepeatItsTopBarTitleInsideThePage`, `CasesAndPersonCardTest.peopleListLazilyComposesStableIdsAndSearchFindsLastOfOneHundredRows`, `CasesAndPersonCardTest.personCardRequiresVisibleOwnerConfirmationBeforeShowingFinanceHistory` (3 tests). Debug v201 `acceptance-people-title` BUILD SUCCESSFUL. Установил через `adb install --user 11 -r`; `firstInstallTime=2026-11-15 16:15:34` сохранился. Сохранил реальные before/after screenshots и JSON report в ignored `apps/android/app/build/acceptance-lab/ACT-0291-people-title-finance-large-text/`.
+
+Вернул system fontScale 1.0, AZ locale, light theme, Today tab; current user остался synthetic 11. Записей не менял; AI/network/mic/permissions/paid API не использовал. Dark theme, TalkBack и full Gradle NOT TESTED. Код затронул только UI title и тест; домен, ledger, schema и provider не менялись. LAB-07/LAB-10 остаются partial; другие экраны и accessibility ещё открыты.
+
 ## ACT-0290 · 2026-11-20 · More, Tasks, Calendar and Notes at AZ fontScale=1.3
 
 На Android 14/API34 emulator, synthetic Android user 11, v200 / `acceptance-confirmation-baseline`, прошёл More → Tasks / Calendar / Notes в AZ при `fontScale=1.3`, light theme. В каталоге длинные описания переносились; Calendar и Notes оставались достижимы прокруткой.

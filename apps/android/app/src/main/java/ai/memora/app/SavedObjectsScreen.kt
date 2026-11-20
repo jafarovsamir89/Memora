@@ -16,6 +16,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.FilterChip
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -125,11 +126,6 @@ internal fun SavedObjectsScreen(kind: DomainKind, onOpenTarget: ((AppRoute) -> U
         needle.isEmpty() || record.title.lowercase().contains(needle) || record.body.orEmpty().lowercase().contains(needle)
     }
 
-    val titleId = when (kind) {
-        DomainKind.PERSON -> ai.memora.app.R.string.people
-        DomainKind.PROJECT -> ai.memora.app.R.string.projects
-        DomainKind.NOTE -> ai.memora.app.R.string.notes_title
-    }
     LazyColumn(
         state = listState,
         modifier = Modifier.fillMaxSize()
@@ -139,9 +135,10 @@ internal fun SavedObjectsScreen(kind: DomainKind, onOpenTarget: ((AppRoute) -> U
         verticalArrangement = Arrangement.spacedBy(MemoraSpacing.lg),
     ) {
         item(key = "saved_objects_heading") {
-            ScreenHeading(
-                s(titleId),
+            Text(
                 s(ai.memora.app.R.string.saved_objects_subtitle),
+                color = colors.muted,
+                style = MaterialTheme.typography.bodyMedium,
             )
         }
         item(key = "saved_objects_search") {

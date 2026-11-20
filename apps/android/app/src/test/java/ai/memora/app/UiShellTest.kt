@@ -221,6 +221,23 @@ class UiShellTest {
         compose.onNodeWithTag("secretary_voice_card").assertIsDisplayed()
     }
 
+    @Test fun peopleRouteDoesNotRepeatItsTopBarTitleInsideThePage() {
+        appearanceStore = AtomicAppearanceStore(File(ApplicationProvider.getApplicationContext<Context>().cacheDir,
+            "ui-people-settings-${UUID.randomUUID()}"), AppearanceSettings("az", "light"))
+        compose.setContent {
+            CompositionLocalProvider(LocalAgentDatabaseOverride provides agentDatabase.database) {
+                TestMemoraApp(initialTheme = "light", initialLanguage = "az", initialRoute = "people",
+                    capturePersistenceOverride = captureStore, appearanceStoreOverride = appearanceStore)
+            }
+        }
+        compose.waitUntil(10_000) {
+            compose.onAllNodesWithTag("saved_objects_list").fetchSemanticsNodes().isNotEmpty()
+        }
+        // The More tab label is distinct; the People title should appear once.
+        compose.onAllNodesWithText("İnsanlar").assertCountEquals(1)
+        compose.onNodeWithText("Yaddaşda saxlanmış qeydlər.").assertExists()
+    }
+
     @Test fun moreCatalogPrecedesReportsAndKeepsAllFivePrimaryTabs() {
         compose.setContent {
             CompositionLocalProvider(LocalAgentDatabaseOverride provides agentDatabase.database) {

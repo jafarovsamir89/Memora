@@ -583,3 +583,18 @@ no production-route defect is inferred. Nine real screenshots and JSON report
 are under the ignored `apps/android/app/build/acceptance-lab/ACT-0290-more-screens-large-text/`.
 Font scale returned to 1.0 and Today was restored. Dark theme, TalkBack and full
 Gradle are NOT TESTED. No records or production code changed.
+
+
+## ACT-0291 — People title duplication and Finance large-text slice
+
+At Android 14/API34, synthetic user 11, AZ `fontScale=1.3`, the v200 People
+screen showed the route title in both the top bar and page `ScreenHeading`.
+The duplicate page title was removed; the descriptive subtitle remains. An
+integrated single-title Compose regression and two person/card tests pass.
+Debug v201 assembled and was installed with `adb install --user 11 -r`;
+`firstInstallTime` remained unchanged. Finance list and empty debt-filter state
+were visually reviewed using synthetic records. Five real screenshots and a
+JSON report are under the ignored
+`apps/android/app/build/acceptance-lab/ACT-0291-people-title-finance-large-text/`.
+Font scale returned to 1.0 and Today was restored. Full Gradle, dark theme and
+TalkBack are NOT TESTED.
