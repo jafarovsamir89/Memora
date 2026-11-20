@@ -1,3 +1,11 @@
+## ACT-0296 · 2026-11-20 · Backup keyboard visibility in AZ/dark
+
+- Android 14/API34 `emulator-5554`, synthetic user11, v203, AZ/dark, `fontScale=1.3`; focused both empty password fields, entered no text.
+- PASS: IME opened; scope warning and first field remained visible; second field accepted focus from its visible upper portion.
+- OBSERVED: IME covers lower form/actions until dismissed; no action invoked. No API key/password, backup, import/export, network, AI, mic, data change, physical device or user-0 record access.
+- Restored light appearance, fontScale 1.0 and Today. Screenshots/report are ignored under `apps/android/app/build/acceptance-lab/ACT-0296-backup-ime-dark-large-text/`.
+- No source or automated test change. TalkBack, keyboard-open owner acceptance and physical Redmi are NOT TESTED; LAB-07 remains partial.
+
 ## ACT-0295 · 2026-11-20 · Inbox/Backup dark-theme large-text slice
 
 - Android 14/API34 `emulator-5554`, synthetic user 11, v203, AZ/dark, `fontScale=1.3`; Settings appearance, Inbox and Portable Backup inspected read-only.

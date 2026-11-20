@@ -1,3 +1,11 @@
+## ACT-0296 · 2026-11-20 · Backup keyboard visibility in AZ/dark
+
+On Android 14/API34 emulator `emulator-5554`, synthetic user 11, APK v203, inspected Portable Backup in Azerbaijani, dark appearance and `fontScale=1.3`. Tapped each empty password field without typing. The IME opened; the backup-scope warning and first password field stayed visible. The second field accepted focus from its visible upper area even while most of the control was behind the keyboard. The IME covers the lower guidance/actions; the form's actions require dismissing the keyboard before use. No action was invoked and no password, API token or other text was entered. This is a visual/interaction observation, not a keyboard automation or TalkBack test.
+
+Restored light appearance, system fontScale 1.0 and Today. Synthetic user 11 remains current; no data, network, AI, microphone or physical device was used. Screenshots/report are ignored under `apps/android/app/build/acceptance-lab/ACT-0296-backup-ime-dark-large-text/`.
+
+Status: focused fields remain usable with the IME; lower actions are predictably hidden until keyboard dismissal. No code change or automated tests. TalkBack and owner acceptance remain NOT TESTED; LAB-07 remains partial. Next: continue a distinct reliability/accessibility slice and preserve the documented disclosure.
+
 ## ACT-0295 · 2026-11-20 · Inbox/Backup dark-theme large-text slice
 
 Continued the read-only UI matrix on Android 14/API34 emulator `emulator-5554`, synthetic Android user 11, v203, Azerbaijani, `fontScale=1.3`. Used Settings → Appearance to select dark mode, leaving the Gemini model unchanged. Inbox heading/subtitle, New Note action, search, filters, empty state and import/export labels were readable in the captured view. Portable Backup showed the encrypted-backup note, the new explanation that Inbox captures/device tasks/Voice Memory are omitted, both password guidance fields and both actions. UIAutomator clickable parent bounds after scrolling were 126 px high at 420 dpi (48 dp) for Create Backup and Choose File. No password was entered and no backup/import/export/picker action was invoked.

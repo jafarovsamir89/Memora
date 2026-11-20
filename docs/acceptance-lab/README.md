@@ -636,6 +636,21 @@ No code change or automated test was made. This is not a computed contrast,
 TalkBack, keyboard-open dark-theme, physical-device or whole-app accessibility
 pass; LAB-07 remains partial.
 
+## ACT-0296 — Portable Backup fields with dark AZ keyboard open
+
+On Android 14/API34 `emulator-5554`, synthetic user 11, v203, dark theme and
+AZ `fontScale=1.3`, focused each empty backup password field without typing.
+The IME opened while the scope warning and first field remained visible; the
+second field could be focused from its visible upper portion. The keyboard
+covers lower guidance/actions until dismissed. No action or text submission
+occurred. Restored light appearance, fontScale 1.0 and Today.
+
+Real screenshots and a compact report are ignored under
+`apps/android/app/build/acceptance-lab/ACT-0296-backup-ime-dark-large-text/`.
+This was a manual visual/focus check only: TalkBack, form submission, keyboard
+button behavior, physical Redmi and owner acceptance are NOT TESTED. LAB-07
+remains partial.
+
 ## ACT-0291 — People title duplication and Finance large-text slice
 
 At Android 14/API34, synthetic user 11, AZ `fontScale=1.3`, the v200 People
